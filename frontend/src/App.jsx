@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+/* global Telegram */
+import React, { useState, useEffect } from "react";
 
 /* ===== КАРТЫ ===== */
 const BASE_DECK = [
@@ -26,201 +27,61 @@ function dealHands() {
     };
 }
 
-/* ===== НАПРАВЛЕНИЯ ===== */
-const DIRS = [
-    [-1, 0, "t", "b"],
-    [1, 0, "b", "t"],
-    [0, -1, "l", "r"],
-    [0, 1, "r", "l"],
-];
-
 export default function App() {
+    useEffect(() => {
+        if (window.Telegram?.WebApp) {
+            window.Telegram.WebApp.ready();
+            window.Telegram.WebApp.expand();
+        }
+    }, []);
+
     const [hands, setHands] = useState(dealHands());
     const [board, setBoard] = useState(Array(9).fill(null));
     const [current, setCurrent] = useState("red");
     const [selected, setSelected] = useState(null);
-    const [gameOver, setGameOver] = useState(false);
-    const [flipped, setFlipped] = useState([]);
-
-    /* ===== ДОБАВЬ ЭТО ПЕРЕД chainCapture ===== */
-
-    function checkSamePlus(board, index) {
-        const base = board[index];
-        const r = Math.floor(index / 3);
-        const c = index % 3;
-
-        let sameHits = [];
-        let plusMap = {};
-
-        DIRS.forEach(([dr, dc, a, b]) => {
-            const nr = r + dr;
-            const nc = c + dc;
-            if (nr < 0 || nr > 2 || nc < 0 || nc > 2) return;
-
-            const i = nr * 3 + nc;
-            const other = board[i];
-            if (!other || other.owner === base.owner) return;
-
-            // SAME
-            if (base[a] === other[b]) {
-                sameHits.push(i);
-            }
-
-            // PLUS
-            const sum = base[a] + other[b];
-            if (!plusMap[sum]) plusMap[sum] = [];
-            plusMap[sum].push(i);
-        });
-
-        let captured = [];
-
-        // SAME работает если 2+
-        if (sameHits.length >= 2) {
-            captured.push(...sameHits);
-        }
-
-        // PLUS работает если 2+
-        Object.values(plusMap).forEach((group) => {
-            if (group.length >= 2) {
-                captured.push(...group);
-            }
-        });
-
-        // Убираем дубликаты
-        return [...new Set(captured)];
-    }
-
-    /* ===== ЦЕПОЧКА ЗАХВАТОВ ===== */
-    function chainCapture(startBoard, startIndex) {
-        let boardCopy = [...startBoard];
-        let queue = [startIndex];
-        let flippedOrder = [];
-
-        while (queue.length > 0) {
-            const index = queue.shift();
-            const r = Math.floor(index / 3);
-            const c = index % 3;
-
-            DIRS.forEach(([dr, dc, a, b]) => {
-                const nr = r + dr;
-                const nc = c + dc;
-                if (nr < 0 || nr > 2 || nc < 0 || nc > 2) return;
-
-                const i = nr * 3 + nc;
-                const from = boardCopy[index];
-                const to = boardCopy[i];
-
-                if (!to || to.owner === from.owner) return;
-
-                if (from[a] > to[b]) {
-                    boardCopy[i] = { ...to, owner: from.owner };
-                    queue.push(i);
-                    flippedOrder.push(i);
-                }
-            });
-        }
-
-        return { board: boardCopy, flippedOrder };
-    }
 
     function place(index) {
-        if (board[index] || !selected || gameOver) return;
-        if (selected.owner !== current) return;
+        if (board[index] || !selected) return;
 
-        let newBoard = [...board];
+        const newBoard = [...board];
         newBoard[index] = selected;
 
-        // SAME / PLUS
-        const forced = checkSamePlus(newBoard, index);
-        forced.forEach((i) => {
-            newBoard[i] = { ...newBoard[i], owner: current };
-        });
-
-        // CHAIN
-        const { board: finalBoard, flippedOrder } = chainCapture(
-            newBoard,
-            index
-        );
-
-
-        // 🎬 анимация по очереди
-        flippedOrder.forEach((i, step) => {
-            setTimeout(() => {
-                setFlipped((prev) => [...prev, i]);
-            }, step * 250);
-        });
-
-        setTimeout(() => setFlipped([]), flippedOrder.length * 250 + 300);
-
-        setBoard(finalBoard);
+        setBoard(newBoard);
         setHands({
             ...hands,
             [current]: hands[current].filter((c) => c.id !== selected.id),
         });
-
         setSelected(null);
         setCurrent(current === "red" ? "blue" : "red");
-
-        if (finalBoard.every(Boolean)) setGameOver(true);
-    }
-
-    const redScore = board.filter((c) => c?.owner === "red").length;
-    const blueScore = board.filter((c) => c?.owner === "blue").length;
-
-    let winner = "";
-    if (gameOver) {
-        if (redScore > blueScore) winner = "🟥 Победил!";
-        else if (blueScore > redScore) winner = "🟦 Победил!";
-        else winner = "🤝 Ничья";
-    }
-
-    function resetGame() {
-        setHands(dealHands());
-        setBoard(Array(9).fill(null));
-        setCurrent("red");
-        setSelected(null);
-        setGameOver(false);
     }
 
     return (
-        <div style={styles.app}>
-            <h2>Card Clash</h2>
-            <p>Ход: {current === "red" ? "🟥" : "🟦"}</p>
-
+        <div style={styles.screen}>
             <div style={styles.game}>
                 <Hand
                     cards={hands.red}
                     active={current === "red"}
                     selected={selected}
                     onSelect={setSelected}
-                    color="#7f1d1d"
-                    score={redScore}
                 />
 
                 <div style={styles.board}>
-                    {board.map((card, i) => {
-                        const canPlace = selected && !card;
-                        return (
-                            <div
-                                key={i}
-                                onClick={() => place(i)}
-                                style={{
-                                    ...styles.cell,
-                                    background: card
-                                        ? card.owner === "red"
-                                            ? "#7f1d1d"
-                                            : "#1e3a8a"
-                                        : "#1e293b",
-                                    outline: canPlace ? "2px solid #facc15" : "none",
-                                    transform: flipped.includes(i)
-                                        ? "rotateY(180deg)"
-                                        : "rotateY(0deg)",
-                                }}
-                            >
-                                {card && <Numbers card={card} />}
-                            </div>
-                        );
-                    })}
+                    {board.map((card, i) => (
+                        <div
+                            key={i}
+                            onClick={() => place(i)}
+                            style={{
+                                ...styles.cell,
+                                background: card
+                                    ? card.owner === "red"
+                                        ? "#7f1d1d"
+                                        : "#1e3a8a"
+                                    : "#1e293b",
+                            }}
+                        >
+                            {card && <Numbers card={card} />}
+                        </div>
+                    ))}
                 </div>
 
                 <Hand
@@ -228,19 +89,8 @@ export default function App() {
                     active={current === "blue"}
                     selected={selected}
                     onSelect={setSelected}
-                    color="#1e3a8a"
-                    score={blueScore}
                 />
             </div>
-
-            {gameOver && (
-                <>
-                    <h2>{winner}</h2>
-                    <button onClick={resetGame} style={styles.button}>
-                        🔁 Новая игра
-                    </button>
-                </>
-            )}
         </div>
     );
 }
@@ -257,87 +107,73 @@ function Numbers({ card }) {
     );
 }
 
-function Hand({ cards, active, onSelect, color, score, selected }) {
+function Hand({ cards, active, onSelect, selected }) {
     return (
-        <div style={{ width: 90, textAlign: "center" }}>
-            <div style={{ position: "relative", height: 300 }}>
-                {cards.map((c, i) => {
-                    const isSelected = selected?.id === c.id;
-                    return (
-                        <div
-                            key={c.id}
-                            onClick={() => active && onSelect(c)}
-                            style={{
-                                ...styles.handCard,
-                                top: i * 30 - (isSelected ? 10 : 0),
-                                background: color,
-                                border: isSelected ? "3px solid gold" : "none",
-                                boxShadow: isSelected ? "0 0 10px gold" : "none",
-                                opacity: active ? 1 : 0.4,
-                            }}
-                        >
-                            <Numbers card={c} />
-                        </div>
-                    );
-                })}
-            </div>
-            <div style={{ marginTop: 10 }}>Счёт: {score}</div>
+        <div style={styles.hand}>
+            {cards.map((c) => (
+                <div
+                    key={c.id}
+                    onClick={() => active && onSelect(c)}
+                    style={{
+                        ...styles.handCard,
+                        border: selected?.id === c.id ? "2px solid gold" : "none",
+                        opacity: active ? 1 : 0.4,
+                    }}
+                >
+                    <Numbers card={c} />
+                </div>
+            ))}
         </div>
     );
 }
 
 /* ===== СТИЛИ ===== */
+
 const styles = {
-    app: {
-        minHeight: "100vh",
+    screen: {
+        width: "100vw",
+        height: "100vh",
         background: "#0f172a",
-        color: "white",
         display: "flex",
-        flexDirection: "column",
+        justifyContent: "center",
         alignItems: "center",
-        paddingTop: 10,
+        color: "white",
+        overflow: "hidden",
     },
     game: {
         display: "flex",
-        gap: 12,
+        gap: 8,
         alignItems: "center",
     },
     board: {
         display: "grid",
         gridTemplateColumns: "repeat(3, 90px)",
         gridTemplateRows: "repeat(3, 120px)",
-        gap: 8,
-        perspective: 800,
+        gap: 6,
     },
     cell: {
-        borderRadius: 12,
-        position: "relative",
-        cursor: "pointer",
-        transition: "all 0.3s ease",
-        transformStyle: "preserve-3d",
-    },
-    numbers: {
-        position: "absolute",
-        top: 6,
-        left: 6,
-        fontSize: 12,
-        fontWeight: "bold",
-        lineHeight: "14px",
-        transform: "rotateY(0deg)",
-    },
-    handCard: {
-        position: "absolute",
-        width: 70,
-        height: 100,
+        width: 90,
+        height: 120,
         borderRadius: 10,
         cursor: "pointer",
-        transition: "all 0.2s ease",
+        boxSizing: "border-box",
     },
-    button: {
-        marginTop: 10,
-        padding: "6px 12px",
-        borderRadius: 6,
-        border: "none",
+    hand: {
+        width: 80,
+    },
+    handCard: {
+        width: 70,
+        height: 100,
+        background: "#334155",
+        marginBottom: 6,
+        borderRadius: 8,
         cursor: "pointer",
+        boxSizing: "border-box",
+    },
+    numbers: {
+        padding: 6,
+        fontSize: 12,
+        lineHeight: "1.1",
+        pointerEvents: "none",
     },
 };
