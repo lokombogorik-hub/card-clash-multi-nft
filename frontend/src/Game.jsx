@@ -7,8 +7,15 @@ export default function Game({ onExit }) {
         <div style={styles.screen}>
             {/* ВРАГ */}
             <div style={styles.handTop}>
-                {cards.map((c) => (
-                    <div key={c} style={{ ...styles.card, background: "#dc2626" }}>
+                {cards.map((c, i) => (
+                    <div
+                        key={c}
+                        style={{
+                            ...styles.card,
+                            background: "#dc2626",
+                            marginLeft: i === 0 ? 0 : -20,
+                        }}
+                    >
                         {c}
                     </div>
                 ))}
@@ -23,8 +30,15 @@ export default function Game({ onExit }) {
 
             {/* ИГРОК */}
             <div style={styles.handBottom}>
-                {cards.map((c) => (
-                    <div key={c} style={{ ...styles.card, background: "#2563eb" }}>
+                {cards.map((c, i) => (
+                    <div
+                        key={c}
+                        style={{
+                            ...styles.card,
+                            background: "#2563eb",
+                            marginLeft: i === 0 ? 0 : -20,
+                        }}
+                    >
                         {c}
                     </div>
                 ))}
@@ -51,22 +65,23 @@ const styles = {
 
     handTop: {
         display: "flex",
-        gap: "10px",
+        marginBottom: "8px",
     },
 
     handBottom: {
         display: "flex",
-        gap: "10px",
+        marginTop: "8px",
     },
 
     card: {
-        width: "70px",
-        height: "100px",
-        borderRadius: "12px",
+        width: "80px",
+        height: "120px",
+        borderRadius: "14px",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        fontSize: "24px",
+        fontSize: "26px",
+        boxShadow: "0 6px 18px rgba(0,0,0,0.4)",
     },
 
     board: {
@@ -80,7 +95,7 @@ const styles = {
         width: "110px",
         height: "110px",
         background: "#1e293b",
-        borderRadius: "10px",
+        borderRadius: "12px",
     },
 
     exit: {
