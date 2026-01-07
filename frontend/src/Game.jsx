@@ -88,7 +88,7 @@ export default function Game() {
         const next = [...board];
         next[i] = selected;
 
-        tryFlip(i, selected, next);
+        tryFlip(i, selected, next, setFlippedIndex);
 
         setBoard(next);
 
@@ -100,6 +100,7 @@ export default function Game() {
 
         setSelected(null);
         setTurn(t => (t === "player" ? "enemy" : "player"));
+        setTimeout(() => setFlippedIndex(null), 600);
     };
 
     return (
@@ -126,14 +127,7 @@ export default function Game() {
                         className={`cell ${selected && !cell ? "highlight" : ""}`}
                         onClick={() => selected && !cell && placeCard(i)}
                     >
-                        {cell && (
-                            <Card
-                                card={cell}
-                                flipped={flippedIndex === i}
-                                placed
-                            />
-                        )}
-
+                        {cell && <Card card={cell} />}
                     </div>
                 ))}
             </div>
