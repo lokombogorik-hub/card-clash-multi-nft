@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 
-const CARD_SIZE = 90;
+const CARD_W = 90;
+const CARD_H = 130;
 
 const genCard = (owner, id) => ({
     id,
@@ -18,46 +19,35 @@ export default function Game() {
         Array.from({ length: 5 }, (_, i) => genCard("player", `p${i}`))
     );
 
-    const [board, setBoard] = useState(() => {
-        const b = Array(9).fill(null);
-        b[1] = genCard("enemy", "e1");
-        b[7] = genCard("enemy", "e2");
-        return b;
-    });
+    const [enemyHand] = useState(
+        Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`))
+    );
 
+    const [board] = useState(Array(9).fill(null));
     const [selected, setSelected] = useState(null);
 
-    const canPlace = (i) => board[i] === null && selected;
-
-    const place = (i) => {
-        if (!canPlace(i)) return;
-        const nb = [...board];
-        nb[i] = selected;
-        setBoard(nb);
-        setPlayerHand(playerHand.filter((c) => c.id !== selected.id));
-        setSelected(null);
-    };
-
     return (
-        <div className="screen">
-            <div className="board">
-                {board.map((cell, i) => (
-                    <div
-                        key={i}
-                        className={`cell ${canPlace(i) ? "cell-active" : ""}`}
-                        onClick={() => place(i)}
-                    >
-                        {cell && <Card card={cell} />}
+        <div className="game-root">
+            {/* ENEMY HAND */}
+            <div className="hand top">
+                {enemyHand.map((card, i) => (
+                    <div key={card.id} style={{ marginLeft: i ? -40 : 0 }}>
+                        <Card card={card} />
                     </div>
                 ))}
             </div>
 
+            {/* BOARD */}
+            <div className="board">
+                {board.map((_, i) => (
+                    <div key={i} className="cell" />
+                ))}
+            </div>
+
+            {/* PLAYER HAND */}
             <div className="hand bottom">
                 {playerHand.map((card, i) => (
-                    <div
-                        key={card.id}
-                        style={{ marginLeft: i === 0 ? 0 : -30 }}
-                    >
+                    <div key={card.id} style={{ marginLeft: i ? -40 : 0 }}>
                         <Card
                             card={card}
                             selected={selected?.id === card.id}
@@ -78,8 +68,8 @@ function Card({ card, onClick, selected }) {
             className={`card ${card.owner} ${selected ? "selected" : ""}`}
             onClick={onClick}
             style={{
-                width: CARD_SIZE,
-                height: CARD_SIZE,
+                width: CARD_W,
+                height: CARD_H,
             }}
         >
             <span style={num.top}>{card.values.top}</span>
@@ -100,8 +90,8 @@ const base = {
 };
 
 const num = {
-    top: { ...base, top: 4, left: "50%", transform: "translateX(-50%)" },
-    right: { ...base, right: 4, top: "50%", transform: "translateY(-50%)" },
-    bottom: { ...base, bottom: 4, left: "50%", transform: "translateX(-50%)" },
-    left: { ...base, left: 4, top: "50%", transform: "translateY(-50%)" },
+    top: { ...base, top: 6, left: "50%", transform: "translateX(-50%)" },
+    right: { ...base, right: 6, top: "50%", transform: "translateY(-50%)" },
+    bottom: { ...base, bottom: 6, left: "50%", transform: "translateX(-50%)" },
+    left: { ...base, left: 6, top: "50%", transform: "translateY(-50%)" },
 };

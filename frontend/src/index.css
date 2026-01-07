@@ -26,12 +26,14 @@ button {
     border: none;
 }
 
-.game {
+.game-root {
     height: 100vh;
     display: flex;
-    justify-content: center;
-    align-items: center;
-    position: relative;
+    flex-direction: column;
+    justify-content: space-between;
+    background: #0b1c2d;
+    padding: 12px;
+    box-sizing: border-box;
 }
 
 .exit {
@@ -92,6 +94,7 @@ button {
 
 .hand {
     display: flex;
+    justify-content: center;
     pointer-events: auto;
 }
 
@@ -104,51 +107,42 @@ button {
 }
 
 .card {
-    width: 115px;
-    height: 175px;
-    border-radius: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 28px;
-    font-weight: bold;
+    position: relative;
+    border-radius: 12px;
+    background: #1e3a5f;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, .5);
     cursor: pointer;
-    transition: transform 0.25s ease, box-shadow 0.25s ease;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+    transition: transform .2s;
 }
 
 .card:hover {
-    transform: translateY(-12px) scale(1.05);
-    z-index: 10;
-}
-
-.card.player {
-    background: linear-gradient(145deg, #2563eb, #1e40af);
+    transform: translateY(-8px);
 }
 
 .card.enemy {
-    background: linear-gradient(145deg, #dc2626, #7f1d1d);
+    background: #c0392b;
+}
+
+.card.enemy {
+    background: #c0392b;
 }
 
 .card.selected {
-    outline: 4px solid #22c55e;
-    transform: translateY(-18px) scale(1.08);
-    z-index: 20;
+    outline: 3px solid gold;
 }
+
 
 .board {
     display: grid;
-    grid-template-columns: repeat(3, 120px);
-    grid-template-rows: repeat(3, 120px);
-    gap: 14px;
+    grid-template-columns: repeat(3, 90px);
+    grid-template-rows: repeat(3, 130px);
+    gap: 8px;
+    justify-content: center;
 }
 
 .cell {
-    width: 120px;
-    height: 120px;
-    background: #1e293b;
-    border-radius: 14px;
-    transition: background 0.2s, box-shadow 0.2s;
+    border: 2px dashed rgba(255, 255, 255, 0.25);
+    border-radius: 10px;
 }
 
 .cell-active {
