@@ -1,27 +1,4 @@
 import React, { useState } from "react";
-
-const makeAIMove = () => {
-    const emptyCells = board
-        .map((c, i) => (c === null ? i : null))
-        .filter((i) => i !== null);
-
-    if (emptyCells.length === 0) return;
-    if (enemyHand.length === 0) return;
-
-    const cellIndex =
-        emptyCells[Math.floor(Math.random() * emptyCells.length)];
-    const card =
-        enemyHand[Math.floor(Math.random() * enemyHand.length)];
-
-    // ВАЖНО: используем ту же механику
-    const next = [...board];
-    next[cellIndex] = card;
-
-    tryFlip(cellIndex, card, next);
-
-    setBoard(next);
-};
-
 import { useEffect } from "react";
 const [flippingCards, setFlippingCards] = useState([]);
 const AI_PLAYER = "enemy";
@@ -64,6 +41,27 @@ export default function Game() {
     const [board, setBoard] = useState(Array(9).fill(null));
     const [selected, setSelected] = useState(null);
     const [turn, setTurn] = useState("player");
+    const makeAIMove = () => {
+        const emptyCells = board
+            .map((c, i) => (c === null ? i : null))
+            .filter((i) => i !== null);
+
+        if (emptyCells.length === 0) return;
+        if (enemyHand.length === 0) return;
+
+        const cellIndex =
+            emptyCells[Math.floor(Math.random() * emptyCells.length)];
+        const card =
+            enemyHand[Math.floor(Math.random() * enemyHand.length)];
+
+        const next = [...board];
+        next[cellIndex] = card;
+
+        tryFlip(cellIndex, card, next);
+
+        setBoard(next);
+    };
+
 
     /* ---------- FLIP ---------- */
 
