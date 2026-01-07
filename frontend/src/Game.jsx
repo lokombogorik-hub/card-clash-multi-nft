@@ -34,7 +34,7 @@ export default function Game() {
     const [playerHand, setPlayerHand] = useState(
         Array.from({ length: 5 }, (_, i) => genCard("player", `p${i}`))
     );
-    const [enemyHand] = useState(
+    const [enemyHand, setEnemyHand] = useState(
         Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`))
     );
 
@@ -60,6 +60,7 @@ export default function Game() {
         tryFlip(cellIndex, card, next);
 
         setBoard(next);
+        setEnemyHand((h) => h.filter((c) => c.id !== card.id));
     };
 
 
