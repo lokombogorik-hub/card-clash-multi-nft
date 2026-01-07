@@ -1,180 +1,148 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
-/* === КАРТЫ === */
-const BASE_DECK = [
-    { id: 1, t: 5, r: 3, b: 2, l: 4 },
-    { id: 2, t: 1, r: 6, b: 5, l: 2 },
-    { id: 3, t: 4, r: 4, b: 4, l: 4 },
-    { id: 4, t: 6, r: 2, b: 1, l: 5 },
-    { id: 5, t: 2, r: 5, b: 6, l: 1 },
-];
+const CARD_SIZE = 90;
 
-export default function Game() {
+export default function Game({ onExit }) {
     const [board, setBoard] = useState(Array(9).fill(null));
-    const [turn, setTurn] = useState("red");
-    const [selected, setSelected] = useState(null);
-    const [winner, setWinner] = useState("");
+    const [currentPlayer, setCurrentPlayer] = useState("🟥");
 
-    const [hands, setHands] = useState({
-        red: BASE_DECK.map(c => ({ ...c, owner: "red" })),
-        blue: BASE_DECK.map(c => ({ ...c, owner: "blue" })),
-    });
+    useEffect(() => {
+        if (window.Telegram?.WebApp) {
+            window.Telegram.WebApp.expand();
+        }
+    }, []);
 
-    const dirs = [
-        { dx: 0, dy: -1, a: "t", b: "b" },
-        { dx: 1, dy: 0, a: "r", b: "l" },
-        { dx: 0, dy: 1, a: "b", b: "t" },
-        { dx: -1, dy: 0, a: "l", b: "r" },
-    ];
-
-    function place(i) {
-        if (!selected || board[i] || winner) return;
+    function placeCard(index) {
+        if (board[index]) return;
 
         const newBoard = [...board];
-        const placed = { ...selected };
-        newBoard[i] = placed;
-
-        dirs.forEach(({ dx, dy, a, b }) => {
-            const x = (i % 3) + dx;
-            const y = Math.floor(i / 3) + dy;
-            if (x < 0 || x > 2 || y < 0 || y > 2) return;
-
-            const ni = y * 3 + x;
-            const n = newBoard[ni];
-            if (!n || n.owner === placed.owner) return;
-
-            if (placed[a] > n[b]) {
-                n.owner = placed.owner;
-                n.flipped = true;
-            }
-        });
+        newBoard[index] = {
+            owner: currentPlayer,
+            values: {
+                top: rand(),
+                right: rand(),
+                bottom: rand(),
+                left: rand(),
+            },
+        };
 
         setBoard(newBoard);
-        setHands(h => ({
-            ...h,
-            [turn]: h[turn].filter(c => c !== selected),
-        }));
-        setSelected(null);
-
-        if (newBoard.every(Boolean)) {
-            const r = newBoard.filter(c => c.owner === "red").length;
-            const b = newBoard.filter(c => c.owner === "blue").length;
-            setWinner(
-                r === b ? "🤝 Ничья" : r > b ? "🔴 RED победил" : "🔵 BLUE победил"
-            );
-        } else {
-            setTurn(turn === "red" ? "blue" : "red");
-        }
+        setCurrentPlayer(currentPlayer === "🟥" ? "🟦" : "🟥");
     }
 
-    const score = board.reduce(
-        (a, c) => {
-            if (c) a[c.owner]++;
-            return a;
-        },
-        { red: 0, blue: 0 }
-    );
+    const scoreRed = board.filter(c => c?.owner === "🟥").length;
+    const scoreBlue = board.filter(c => c?.owner === "🟦").length;
 
     return (
-        <div style={styles.root}>
-            <h3>Ход: {turn === "red" ? "🔴 RED" : "🔵 BLUE"}</h3>
+        <div style={styles.wrapper}>
+            <div style={styles.top}>
+                🟥 {scoreRed} : {scoreBlue} 🟦
+            </div>
 
-            <Hand cards={hands.red} active={turn === "red"} select={setSelected} />
-
-            <div style={styles.board}>
-                {board.map((c, i) => (
+            <div style={styles.grid}>
+                {board.map((card, i) => (
                     <div
                         key={i}
-                        style={{
-                            ...styles.cell,
-                            outline: selected && !c ? "2px solid gold" : "none",
-                        }}
-                        onClick={() => place(i)}
+                        style={styles.cell}
+                        onClick={() => placeCard(i)}
                     >
-                        {c && <Card card={c} />}
+                        {card && (
+                            <div
+                                style={{
+                                    ...styles.card,
+                                    background:
+                                        card.owner === "🟥"
+                                            ? "linear-gradient(135deg,#b71c1c,#ff5252)"
+                                            : "linear-gradient(135deg,#0d47a1,#42a5f5)",
+                                }}
+                            >
+                                <span style={styles.topNum}>{card.values.top}</span>
+                                <span style={styles.rightNum}>{card.values.right}</span>
+                                <span style={styles.bottomNum}>{card.values.bottom}</span>
+                                <span style={styles.leftNum}>{card.values.left}</span>
+                            </div>
+                        )}
                     </div>
                 ))}
             </div>
 
-            <Hand cards={hands.blue} active={turn === "blue"} select={setSelected} />
-
-            <div style={styles.score}>🔴 {score.red} : {score.blue} 🔵</div>
-
-            {winner && <h2>{winner}</h2>}
+            <button style={styles.exit} onClick={onExit}>
+                ⬅ В меню
+            </button>
         </div>
     );
 }
 
-/* === COMPONENTS === */
-
-function Hand({ cards, active, select }) {
-    return (
-        <div style={{ ...styles.hand, opacity: active ? 1 : 0.4 }}>
-            {cards.map(c => (
-                <Card key={c.id} card={c} onClick={() => active && select(c)} />
-            ))}
-        </div>
-    );
+function rand() {
+    return Math.floor(Math.random() * 9) + 1;
 }
-
-function Card({ card, onClick }) {
-    return (
-        <div
-            onClick={onClick}
-            style={{
-                ...styles.card,
-                borderColor: card.owner === "red" ? "crimson" : "dodgerblue",
-                transform: card.flipped ? "rotateY(180deg)" : "none",
-            }}
-        >
-            <div>{card.t}</div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span>{card.l}</span>
-                <span>{card.r}</span>
-            </div>
-            <div>{card.b}</div>
-        </div>
-    );
-}
-
-/* === STYLES === */
 
 const styles = {
-    root: {
-        background: "#0b0f1a",
-        color: "#fff",
+    wrapper: {
         minHeight: "100vh",
+        background: "#121212",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        padding: 8,
+        justifyContent: "space-between",
+        padding: "12px",
+        color: "white",
     },
-    board: {
+    top: {
+        fontSize: "20px",
+        marginBottom: "8px",
+    },
+    grid: {
         display: "grid",
-        gridTemplateColumns: "repeat(3, 90px)",
-        gap: 6,
-        margin: 10,
+        gridTemplateColumns: "repeat(3, 1fr)",
+        gap: "6px",
     },
     cell: {
-        width: 90,
-        height: 120,
-        border: "1px dashed #555",
+        width: CARD_SIZE,
+        height: CARD_SIZE,
+        background: "#222",
+        borderRadius: "10px",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
     },
     card: {
-        width: 80,
-        height: 110,
-        background: "#1e253f",
-        border: "2px solid",
-        borderRadius: 10,
-        padding: 4,
-        transition: "0.4s",
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "space-between",
+        width: "100%",
+        height: "100%",
+        borderRadius: "10px",
+        position: "relative",
+        color: "white",
+        fontWeight: "bold",
     },
-    hand: { display: "flex", gap: 6, margin: 6 },
-    score: { fontSize: 18, marginTop: 6 },
+    topNum: {
+        position: "absolute",
+        top: 4,
+        left: "50%",
+        transform: "translateX(-50%)",
+    },
+    rightNum: {
+        position: "absolute",
+        right: 4,
+        top: "50%",
+        transform: "translateY(-50%)",
+    },
+    bottomNum: {
+        position: "absolute",
+        bottom: 4,
+        left: "50%",
+        transform: "translateX(-50%)",
+    },
+    leftNum: {
+        position: "absolute",
+        left: 4,
+        top: "50%",
+        transform: "translateY(-50%)",
+    },
+    exit: {
+        padding: "10px 20px",
+        borderRadius: "10px",
+        border: "none",
+        background: "#333",
+        color: "white",
+    },
 };
