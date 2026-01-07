@@ -1,68 +1,69 @@
 import React, { useState } from "react";
 
-const createHand = (owner) =>
-    Array.from({ length: 5 }).map((_, i) => ({
-        id: `${owner}-${i}`,
-        owner,
-        values: {
-            top: Math.ceil(Math.random() * 9),
-            right: Math.ceil(Math.random() * 9),
-            bottom: Math.ceil(Math.random() * 9),
-            left: Math.ceil(Math.random() * 9),
-        },
-    }));
+const CARD_SIZE = 90;
+
+const genCard = (owner, id) => ({
+    id,
+    owner,
+    values: {
+        top: Math.ceil(Math.random() * 9),
+        right: Math.ceil(Math.random() * 9),
+        bottom: Math.ceil(Math.random() * 9),
+        left: Math.ceil(Math.random() * 9),
+    },
+});
 
 export default function Game() {
-    const [playerHand, setPlayerHand] = useState(createHand("player"));
-    const [enemyHand] = useState(createHand("enemy"));
+    const [playerHand, setPlayerHand] = useState(
+        Array.from({ length: 5 }, (_, i) => genCard("player", `p${i}`))
+    );
 
-    const [board, setBoard] = useState(Array(9).fill(null));
-    const [selectedCard, setSelectedCard] = useState(null);
+    const [board, setBoard] = useState(() => {
+        const b = Array(9).fill(null);
+        b[1] = genCard("enemy", "e1");
+        b[7] = genCard("enemy", "e2");
+        return b;
+    });
 
-    const canPlace = (index) => board[index] === null && selectedCard;
+    const [selected, setSelected] = useState(null);
 
-    const placeCard = (index) => {
-        if (!canPlace(index)) return;
+    const canPlace = (i) => board[i] === null && selected;
 
-        const newBoard = [...board];
-        newBoard[index] = selectedCard;
-
-        setBoard(newBoard);
-        setPlayerHand(playerHand.filter((c) => c.id !== selectedCard.id));
-        setSelectedCard(null);
+    const place = (i) => {
+        if (!canPlace(i)) return;
+        const nb = [...board];
+        nb[i] = selected;
+        setBoard(nb);
+        setPlayerHand(playerHand.filter((c) => c.id !== selected.id));
+        setSelected(null);
     };
 
     return (
         <div className="screen">
-            {/* ENEMY */}
-            <div className="hand top">
-                {enemyHand.map((card) => (
-                    <Card key={card.id} card={card} />
-                ))}
-            </div>
-
-            {/* BOARD */}
             <div className="board">
                 {board.map((cell, i) => (
                     <div
                         key={i}
                         className={`cell ${canPlace(i) ? "cell-active" : ""}`}
-                        onClick={() => placeCard(i)}
+                        onClick={() => place(i)}
                     >
-                        {cell && <Card card={cell} small />}
+                        {cell && <Card card={cell} />}
                     </div>
                 ))}
             </div>
 
-            {/* PLAYER */}
             <div className="hand bottom">
-                {playerHand.map((card) => (
-                    <Card
+                {playerHand.map((card, i) => (
+                    <div
                         key={card.id}
-                        card={card}
-                        selected={selectedCard?.id === card.id}
-                        onClick={() => setSelectedCard(card)}
-                    />
+                        style={{ marginLeft: i === 0 ? 0 : -30 }}
+                    >
+                        <Card
+                            card={card}
+                            selected={selected?.id === card.id}
+                            onClick={() => setSelected(card)}
+                        />
+                    </div>
                 ))}
             </div>
         </div>
@@ -71,33 +72,36 @@ export default function Game() {
 
 /* ---------------- CARD ---------------- */
 
-function Card({ card, onClick, selected, small }) {
+function Card({ card, onClick, selected }) {
     return (
         <div
             className={`card ${card.owner} ${selected ? "selected" : ""}`}
             onClick={onClick}
-            style={small ? { transform: "scale(0.85)" } : undefined}
+            style={{
+                width: CARD_SIZE,
+                height: CARD_SIZE,
+            }}
         >
-            <span style={numStyle.top}>{card.values.top}</span>
-            <span style={numStyle.right}>{card.values.right}</span>
-            <span style={numStyle.bottom}>{card.values.bottom}</span>
-            <span style={numStyle.left}>{card.values.left}</span>
+            <span style={num.top}>{card.values.top}</span>
+            <span style={num.right}>{card.values.right}</span>
+            <span style={num.bottom}>{card.values.bottom}</span>
+            <span style={num.left}>{card.values.left}</span>
         </div>
     );
 }
 
 /* ---------------- NUMBERS ---------------- */
 
-const baseNum = {
+const base = {
     position: "absolute",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "bold",
-    color: "white",
+    color: "#fff",
 };
 
-const numStyle = {
-    top: { ...baseNum, top: 6, left: "50%", transform: "translateX(-50%)" },
-    right: { ...baseNum, right: 6, top: "50%", transform: "translateY(-50%)" },
-    bottom: { ...baseNum, bottom: 6, left: "50%", transform: "translateX(-50%)" },
-    left: { ...baseNum, left: 6, top: "50%", transform: "translateY(-50%)" },
+const num = {
+    top: { ...base, top: 4, left: "50%", transform: "translateX(-50%)" },
+    right: { ...base, right: 4, top: "50%", transform: "translateY(-50%)" },
+    bottom: { ...base, bottom: 4, left: "50%", transform: "translateX(-50%)" },
+    left: { ...base, left: 4, top: "50%", transform: "translateY(-50%)" },
 };
