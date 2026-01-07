@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+const [flippingCards, setFlippingCards] = useState([]);
 
 /* ---------- CONFIG ---------- */
 
