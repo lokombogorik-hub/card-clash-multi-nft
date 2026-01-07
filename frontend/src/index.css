@@ -78,3 +78,87 @@ button {
     background: crimson;
     transform: rotateY(180deg);
 }
+
+.screen {
+    height: 100vh;
+    background: radial-gradient(circle at center, #0b1220, #020617);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px;
+    color: white;
+}
+
+.hand {
+    display: flex;
+    pointer-events: auto;
+}
+
+.hand.top {
+    margin-top: 6px;
+}
+
+.hand.bottom {
+    margin-bottom: 6px;
+}
+
+.card {
+    width: 115px;
+    height: 175px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+}
+
+.card:hover {
+    transform: translateY(-12px) scale(1.05);
+    z-index: 10;
+}
+
+.card.player {
+    background: linear-gradient(145deg, #2563eb, #1e40af);
+}
+
+.card.enemy {
+    background: linear-gradient(145deg, #dc2626, #7f1d1d);
+}
+
+.card.selected {
+    outline: 4px solid #22c55e;
+    transform: translateY(-18px) scale(1.08);
+    z-index: 20;
+}
+
+.board {
+    display: grid;
+    grid-template-columns: repeat(3, 120px);
+    grid-template-rows: repeat(3, 120px);
+    gap: 14px;
+}
+
+.cell {
+    width: 120px;
+    height: 120px;
+    background: #1e293b;
+    border-radius: 14px;
+    transition: background 0.2s, box-shadow 0.2s;
+}
+
+.cell-active {
+    background: #334155;
+    box-shadow: inset 0 0 0 3px rgba(34, 197, 94, 0.5);
+}
+
+.exit {
+    position: absolute;
+    left: 10px;
+    top: 10px;
+    padding: 6px 10px;
+}

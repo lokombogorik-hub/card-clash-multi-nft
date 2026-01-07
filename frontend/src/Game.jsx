@@ -1,20 +1,20 @@
-import React from "react";
+import React, { useState } from "react";
+import "./index.css";
 
 const cards = [1, 2, 3, 4, 5];
 
 export default function Game({ onExit }) {
+    const [selectedCard, setSelectedCard] = useState(null);
+
     return (
-        <div style={styles.screen}>
+        <div className="screen">
             {/* ВРАГ */}
-            <div style={styles.handTop}>
+            <div className="hand top">
                 {cards.map((c, i) => (
                     <div
                         key={c}
-                        style={{
-                            ...styles.card,
-                            background: "#dc2626",
-                            marginLeft: i === 0 ? 0 : -20,
-                        }}
+                        className="card enemy"
+                        style={{ marginLeft: i === 0 ? 0 : -24 }}
                     >
                         {c}
                     </div>
@@ -22,86 +22,36 @@ export default function Game({ onExit }) {
             </div>
 
             {/* ПОЛЕ */}
-            <div style={styles.board}>
+            <div className="board">
                 {Array.from({ length: 9 }).map((_, i) => (
-                    <div key={i} style={styles.cell} />
+                    <div
+                        key={i}
+                        className={`cell ${selectedCard !== null ? "cell-active" : ""
+                            }`}
+                    />
                 ))}
             </div>
 
             {/* ИГРОК */}
-            <div style={styles.handBottom}>
+            <div className="hand bottom">
                 {cards.map((c, i) => (
                     <div
                         key={c}
-                        style={{
-                            ...styles.card,
-                            background: "#2563eb",
-                            marginLeft: i === 0 ? 0 : -20,
-                        }}
+                        className={`card player ${selectedCard === c ? "selected" : ""
+                            }`}
+                        style={{ marginLeft: i === 0 ? 0 : -24 }}
+                        onClick={() =>
+                            setSelectedCard(selectedCard === c ? null : c)
+                        }
                     >
                         {c}
                     </div>
                 ))}
             </div>
 
-            <button style={styles.exit} onClick={onExit}>
+            <button className="exit" onClick={onExit}>
                 ⟵ Меню
             </button>
         </div>
     );
 }
-
-const styles = {
-    screen: {
-        height: "100vh",
-        background: "#0b1220",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "12px",
-        color: "white",
-    },
-
-    handTop: {
-        display: "flex",
-        marginBottom: "8px",
-    },
-
-    handBottom: {
-        display: "flex",
-        marginTop: "8px",
-    },
-
-    card: {
-        width: "100px",
-        height: "155px",
-        borderRadius: "14px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: "26px",
-        boxShadow: "0 6px 18px rgba(0,0,0,0.4)",
-    },
-
-    board: {
-        display: "grid",
-        gridTemplateColumns: "repeat(3, 110px)",
-        gridTemplateRows: "repeat(3, 110px)",
-        gap: "10px",
-    },
-
-    cell: {
-        width: "110px",
-        height: "110px",
-        background: "#1e293b",
-        borderRadius: "12px",
-    },
-
-    exit: {
-        position: "absolute",
-        left: 10,
-        top: 10,
-        padding: "6px 10px",
-    },
-};
