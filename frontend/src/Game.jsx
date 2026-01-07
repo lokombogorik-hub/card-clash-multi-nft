@@ -26,28 +26,6 @@ import { useEffect } from "react";
 const [flippingCards, setFlippingCards] = useState([]);
 const AI_PLAYER = "enemy";
 
-function makeAIMove() {
-    // свободные клетки
-    const emptyCells = board
-        .map((c, i) => (c === null ? i : null))
-        .filter((i) => i !== null);
-
-    if (emptyCells.length === 0) return;
-
-    // карты AI
-    const aiCards = enemyHand;
-    if (aiCards.length === 0) return;
-
-    // случайный выбор
-    const cellIndex =
-        emptyCells[Math.floor(Math.random() * emptyCells.length)];
-    const card =
-        aiCards[Math.floor(Math.random() * aiCards.length)];
-
-    // используем ТВОЮ же функцию хода
-    placeCard(card, cellIndex, AI_PLAYER);
-}
-
 /* ---------- CONFIG ---------- */
 
 const CARD_W = 120;
@@ -112,6 +90,17 @@ export default function Game() {
             }
         });
     };
+
+    useEffect(() => {
+        if (turn === "enemy") {
+            const t = setTimeout(() => {
+                makeAIMove();
+                setTurn("player");
+            }, 700);
+
+            return () => clearTimeout(t);
+        }
+    }, [turn]);
 
     /* ---------- PLACE ---------- */
 
