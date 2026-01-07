@@ -31,7 +31,7 @@ button {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    background: #0b1c2d;
+    background: radial-gradient(#1b2735, #090a0f);
     padding: 12px;
     box-sizing: border-box;
 }
@@ -111,7 +111,7 @@ button {
 .hand {
     display: flex;
     justify-content: center;
-    pointer-events: auto;
+    pointer-events: 10px;
 }
 
 .hand.top {
@@ -126,10 +126,9 @@ button {
 .card {
     position: relative;
     border-radius: 12px;
-    background: #222;
+    background: linear-gradient(135deg, #444, #222);
     cursor: pointer;
-    transform-style: preserve-3d;
-    transition: transform .2s, box-shadow .2s;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .card.flipped {
@@ -157,6 +156,11 @@ button {
     z-index: 5;
 }
 
+.card:hover:not(.disabled) {
+    transform: translateY(-8px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+}
+
 .card.enemy {
     background: #c0392b;
 }
@@ -169,11 +173,16 @@ button {
 
 /* Owner colors */
 .card.player {
-    background: linear-gradient(145deg, #2b6cff, #1b3fa0);
+    background: linear-gradient(135deg, #2a7cff, #174ea6);
 }
 
 .card.enemy {
-    background: linear-gradient(145deg, #ff3b3b, #8b1c1c);
+    background: linear-gradient(135deg, #ff4b4b, #a61717);
+}
+
+.card.disabled {
+    opacity: 0.7;
+    cursor: default;
 }
 
 /* Numbers */
@@ -184,17 +193,18 @@ button {
 
 .board {
     display: grid;
-    grid-template-columns: repeat(3, 120px);
-    grid-template-rows: repeat(3, 170px);
+    grid-template-columns: repeat(3, 1fr);
     gap: 10px;
-    background: #123;
-    padding: 15px;
-    border-radius: 12px;
+    width: 360px;
+    margin: 0 auto;
 }
 
 .cell {
-    border: 2px dashed rgba(255, 255, 255, 0.25);
+    width: 110px;
+    height: 150px;
     border-radius: 10px;
+    background: rgba(255, 255, 255, 0.08);
+    transition: background 0.2s;
 }
 
 .cell-active {
