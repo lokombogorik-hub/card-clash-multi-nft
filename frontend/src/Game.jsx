@@ -23,9 +23,25 @@ const genCard = (owner, id) => ({
 
 function rand() {
     return Math.ceil(Math.random() * 9);
+    function calculateScore(grid) {
+        let player = 0;
+        let enemy = 0;
+
+        grid.forEach(cell => {
+            if (!cell) return;
+            if (cell.owner === "player") player++;
+            if (cell.owner === "enemy") enemy++;
+        });
+
+        return { player, enemy };
+    }
 }
 
 export default function Game() {
+    const [score, setScore] = useState({ player: 0, enemy: 0 });
+    const [gameOver, setGameOver] = useState(false);
+    const [winner, setWinner] = useState(null);
+
     const [playerHand, setPlayerHand] = useState(
         Array.from({ length: 5 }, (_, i) => genCard("player", `p${i}`))
     );
