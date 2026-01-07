@@ -78,8 +78,17 @@ export default function Game() {
         setBoard(next);
         setPlayerHand((h) => h.filter((c) => c.id !== selected.id));
         setSelected(null);
-        setTurn("player");
+        setTurn("enemy");
     };
+    const score = board.reduce(
+        (acc, c) => {
+            if (!c) return acc;
+            acc[c.owner]++;
+            return acc;
+        },
+        { red: 0, blue: 0 }
+    );
+
 
     /* ---------- RENDER ---------- */
 
