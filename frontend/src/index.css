@@ -62,21 +62,21 @@ button {
 }
 
 /* Flip animation */
-.card.flipped {
-    animation: flip-card 0.45s ease;
+.card.flip {
+    animation: flipCard 0.4s ease;
 }
 
-@keyframes flip-card {
+@keyframes flipCard {
     0% {
-        transform: rotateY(0deg) scale(1);
+        transform: rotateY(0deg);
     }
 
     50% {
-        transform: rotateY(90deg) scale(1.08);
+        transform: rotateY(90deg);
     }
 
     100% {
-        transform: rotateY(0deg) scale(1);
+        transform: rotateY(0deg);
     }
 }
 
@@ -198,7 +198,7 @@ button {
 /* Selected card */
 .card.selected {
     outline: 3px solid gold;
-    transform: translateY(-10px) scale(1.05);
+    box-shadow: 0 0 15px gold;
 }
 
 /* Owner colors */
