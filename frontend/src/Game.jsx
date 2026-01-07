@@ -88,7 +88,14 @@ export default function Game() {
         },
         { red: 0, blue: 0 }
     );
+    const isGameOver = board.every(Boolean);
 
+    let winner = null;
+    if (isGameOver) {
+        if (score.red > score.blue) winner = "🟥 Победа!";
+        else if (score.blue > score.red) winner = "🟦 Победа!";
+        else winner = "🤝 Ничья";
+    }
 
     /* ---------- RENDER ---------- */
 
