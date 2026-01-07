@@ -90,20 +90,11 @@ export default function Game() {
         });
     };
 
-    useEffect(() => {
-        if (turn === "enemy") {
-            const t = setTimeout(() => {
-                makeAIMove();
-                setTurn("player");
-            }, 700);
-
-            return () => clearTimeout(t);
-        }
-    }, [turn]);
 
     /* ---------- PLACE ---------- */
 
     const placeCard = (i) => {
+        if (turn !== "player") return;
         if (!selected || board[i]) return;
 
         const next = [...board];
@@ -114,8 +105,16 @@ export default function Game() {
         setBoard(next);
         setPlayerHand((h) => h.filter((c) => c.id !== selected.id));
         setSelected(null);
+
+        // ⏳ AI ходит после игрока
         setTurn("enemy");
+
+        setTimeout(() => {
+            makeAIMove();
+            setTurn("player");
+        }, 700);
     };
+
     const score = board.reduce(
         (acc, c) => {
             if (!c) return acc;
