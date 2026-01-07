@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useEffect } from "react";
-const [flippingCards, setFlippingCards] = useState([]);
+
 const AI_PLAYER = "enemy";
 
 /* ---------- CONFIG ---------- */
@@ -119,11 +119,13 @@ export default function Game() {
     const score = board.reduce(
         (acc, c) => {
             if (!c) return acc;
-            acc[c.owner]++;
+            if (c.owner === "player") acc.blue++;
+            if (c.owner === "enemy") acc.red++;
             return acc;
         },
         { red: 0, blue: 0 }
     );
+
     const isGameOver = board.every(Boolean);
 
     let winner = null;
