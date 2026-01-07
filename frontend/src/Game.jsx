@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 
-const CARD_W = 90;
-const CARD_H = 130;
+const CARD_W = 100;
+const CARD_H = 140;
 
 const genCard = (owner, id) => ({
     id,
@@ -37,13 +37,13 @@ export default function Game() {
         setBoard(nextBoard);
 
         if (selected.owner === "player") {
-            setPlayerHand(playerHand.filter(c => c.id !== selected.id));
+            setPlayerHand(h => h.filter(c => c.id !== selected.id));
         } else {
-            setEnemyHand(enemyHand.filter(c => c.id !== selected.id));
+            setEnemyHand(h => h.filter(c => c.id !== selected.id));
         }
 
         setSelected(null);
-        setTurn(turn === "player" ? "enemy" : "player");
+        setTurn(t => (t === "player" ? "enemy" : "player"));
     };
 
     return (
@@ -52,8 +52,14 @@ export default function Game() {
             {/* ENEMY HAND */}
             <div className="hand top">
                 {enemyHand.map((card, i) => (
-                    <div key={card.id} style={{ marginLeft: i ? -40 : 0 }}>
-                        <Card card={card} />
+                    <div key={card.id} style={{ marginLeft: i ? -45 : 0 }}>
+                        <Card
+                            card={card}
+                            selected={selected?.id === card.id}
+                            onClick={() =>
+                                turn === "enemy" && setSelected(card)
+                            }
+                        />
                     </div>
                 ))}
             </div>
@@ -65,7 +71,9 @@ export default function Game() {
                         key={i}
                         className={`cell ${selected && !cell ? "highlight" : ""
                             }`}
-                        onClick={() => turn === selected?.owner && placeCard(i)}
+                        onClick={() =>
+                            selected && !cell && placeCard(i)
+                        }
                     >
                         {cell && <Card card={cell} />}
                     </div>
@@ -75,7 +83,7 @@ export default function Game() {
             {/* PLAYER HAND */}
             <div className="hand bottom">
                 {playerHand.map((card, i) => (
-                    <div key={card.id} style={{ marginLeft: i ? -40 : 0 }}>
+                    <div key={card.id} style={{ marginLeft: i ? -45 : 0 }}>
                         <Card
                             card={card}
                             selected={selected?.id === card.id}
