@@ -87,11 +87,16 @@ export default function Game() {
     useEffect(() => {
         if (turn !== "enemy") return;
 
+        if (!enemyHand.length) {
+            setTurn("player");
+            return;
+        }
+
         const empty = board
             .map((c, i) => (c === null ? i : null))
             .filter((i) => i !== null);
 
-        if (!empty.length || !enemyHand.length) {
+        if (!empty.length) {
             setTurn("player");
             return;
         }
@@ -101,16 +106,23 @@ export default function Game() {
         const placed = { ...card, owner: "enemy" };
 
         const next = [...board];
-        next[cell] = placed;
 
+        // 🔒 КРИТИЧЕСКАЯ ЗАЩИТА
+        if (next[cell]) {
+            setTurn("player");
+            return;
+        }
+
+        next[cell] = placed;
         tryFlip(cell, placed, next);
 
         setTimeout(() => {
             setBoard(next);
-            setEnemyHand((h) => h.filter((c) => c.id !== card.id));
+            setEnemyHand(h => h.filter(c => c.id !== card.id));
             setTurn("player");
         }, 500);
-    }, [turn]);
+    }, [turn, board, enemyHand]);
+
 
     /* ---------- SCORE ---------- */
 
