@@ -59,10 +59,10 @@ export default function Game() {
                 grid[ni] = {
                     ...target,
                     owner: placed.owner,
-                    flipped: true,
-                    flipKey: Math.random(),
+                    flipped: true, // флаг для анимации
                 };
             }
+
         });
     };
 
@@ -107,82 +107,81 @@ export default function Game() {
             <div className="hand top">
                 {enemyHand.map((c, i) => (
                     <div key={c.id} style={{ marginLeft: i ? -40 : 0 }}>
-                        <Card card={c} disabled />
-                    </div>
+                        <Card card={c} disabled />owner: currentPlayer
                 ))}
             </div>
             <div className="scorebar">
                 <span className="red">🟥 {score.red}</span>
                 <span className="blue">{score.blue} 🟦</span>
             </div>
-            {winner && (
-                <div className="winner">
-                    {winner}
+            { winner && (
+                        <div className="winner">
+                            {winner}
+                        </div>
+                    )}
+
+                {/* BOARD */}
+                <div className="board">
+                    {board.map((cell, i) => (
+                        <div
+                            key={i}
+                            className={`cell ${selected && !cell ? "highlight" : ""}`}
+                            onClick={() => placeCard(i)}
+                        >
+                            {cell && <Card card={cell} />}
+                        </div>
+                    ))}
                 </div>
-            )}
 
-            {/* BOARD */}
-            <div className="board">
-                {board.map((cell, i) => (
-                    <div
-                        key={i}
-                        className={`cell ${selected && !cell ? "highlight" : ""}`}
-                        onClick={() => placeCard(i)}
-                    >
-                        {cell && <Card card={cell} />}
-                    </div>
-                ))}
+                {/* PLAYER */}
+                <div className="hand bottom">
+                    {playerHand.map((c, i) => (
+                        <div key={c.id} style={{ marginLeft: i ? -40 : 0 }}>
+                            <Card
+                                card={c}
+                                selected={selected?.id === c.id}
+                                onClick={() => turn === "player" && setSelected(c)}
+                            />
+                        </div>
+                    ))}
+                </div>
             </div>
-
-            {/* PLAYER */}
-            <div className="hand bottom">
-                {playerHand.map((c, i) => (
-                    <div key={c.id} style={{ marginLeft: i ? -40 : 0 }}>
-                        <Card
-                            card={c}
-                            selected={selected?.id === c.id}
-                            onClick={() => turn === "player" && setSelected(c)}
-                        />
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
+            );
 }
 
-/* ---------- CARD ---------- */
+            /* ---------- CARD ---------- */
 
-function Card({ card, onClick, selected, disabled }) {
+            function Card({card, onClick, selected, disabled}) {
     return (
-        <div
-            className={`card ${card.owner} 
+            <div
+                className={`card ${card.owner} 
         ${selected ? "selected" : ""} 
         ${card.flipped ? "flipped" : ""} 
         ${disabled ? "disabled" : ""}`}
-            onClick={disabled ? undefined : onClick}
-            style={{ width: CARD_W, height: CARD_H }}
-        >
-            <span style={num.top}>{card.values.top}</span>
-            <span style={num.right}>{card.values.right}</span>
-            <span style={num.bottom}>{card.values.bottom}</span>
-            <span style={num.left}>{card.values.left}</span>
-        </div>
-    );
+                onClick={disabled ? undefined : onClick}
+                style={{ width: CARD_W, height: CARD_H }}
+            >
+                <span style={num.top}>{card.values.top}</span>
+                <span style={num.right}>{card.values.right}</span>
+                <span style={num.bottom}>{card.values.bottom}</span>
+                <span style={num.left}>{card.values.left}</span>
+            </div>
+            );
 }
 
-/* ---------- NUMBERS ---------- */
+            /* ---------- NUMBERS ---------- */
 
-const base = {
-    position: "absolute",
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#fff",
-    textShadow: "0 1px 2px #000",
+            const base = {
+                position: "absolute",
+            fontSize: 14,
+            fontWeight: "bold",
+            color: "#fff",
+            textShadow: "0 1px 2px #000",
 };
 
-const num = {
-    top: { ...base, top: 6, left: "50%", transform: "translateX(-50%)" },
-    right: { ...base, right: 6, top: "50%", transform: "translateY(-50%)" },
-    bottom: { ...base, bottom: 6, left: "50%", transform: "translateX(-50%)" },
-    left: { ...base, left: 6, top: "50%", transform: "translateY(-50%)" },
+            const num = {
+                top: {...base, top: 6, left: "50%", transform: "translateX(-50%)" },
+            right: {...base, right: 6, top: "50%", transform: "translateY(-50%)" },
+            bottom: {...base, bottom: 6, left: "50%", transform: "translateX(-50%)" },
+            left: {...base, left: 6, top: "50%", transform: "translateY(-50%)" },
 };
