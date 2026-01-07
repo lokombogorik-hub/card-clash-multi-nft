@@ -43,10 +43,15 @@ button {
 }
 
 .card {
-    width: 159px;
-    height: 189px;
-    perspective: 1000px;
+    width: 90px;
+    height: 120px;
+    border-radius: 12px;
+    background: #222;
+    color: white;
+    position: relative;
     cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transform-style: preserve-3d;
 }
 
 .card-inner {
@@ -177,9 +182,8 @@ button {
 
 /* Hover lift */
 .card:hover {
-    transform: translateY(-14px) scale(1.05);
-    box-shadow: 0 18px 35px rgba(0, 0, 0, .6);
-    z-index: 5;
+    transform: translateY(-6px) scale(1.03);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
 }
 
 .card:hover:not(.disabled) {
