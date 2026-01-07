@@ -43,8 +43,8 @@ button {
 }
 
 .card {
-    width: 120px;
-    height: 160px;
+    width: 159px;
+    height: 189px;
     perspective: 1000px;
     cursor: pointer;
 }
