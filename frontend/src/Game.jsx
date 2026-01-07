@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 
-const [flippedIndex, setFlippedIndex] = useState(null);
 const CARD_W = 110;
 const CARD_H = 150;
 
@@ -56,7 +55,7 @@ export default function Game() {
 
     /* ---------------- FLIP LOGIC ---------------- */
 
-    const tryFlip = (idx, placed, grid) => {
+    const tryFlip = (idx, placed, grid, setFlipped) => {
         const x = idx % 3;
         const y = Math.floor(idx / 3);
 
@@ -70,16 +69,12 @@ export default function Game() {
             if (!target || target.owner === placed.owner) return;
 
             if (placed.values[a] > target.values[b]) {
-                grid[ni] = {
-                    ...target,
-                    owner: placed.owner,
-                    flipped: true,
-                    flipId: Math.random()
-                };
-
+                setFlipped(ni); // 🔥 флип анимация
+                grid[ni] = { ...target, owner: placed.owner };
             }
         });
     };
+
 
     /* ---------------- PLACE CARD ---------------- */
 
