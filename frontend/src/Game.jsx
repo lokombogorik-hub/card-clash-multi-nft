@@ -114,6 +114,11 @@ export default function Game() {
                 <span className="red">🟥 {score.red}</span>
                 <span className="blue">{score.blue} 🟦</span>
             </div>
+            {winner && (
+                <div className="winner">
+                    {winner}
+                </div>
+            )}
 
             {/* BOARD */}
             <div className="board">
