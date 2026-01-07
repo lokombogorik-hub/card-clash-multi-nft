@@ -126,8 +126,9 @@ button {
 .card {
     position: relative;
     border-radius: 12px;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    transform-style: preserve-3d;
+    background: #222;
+    cursor: pointer;
+    transition: transform .2s, box-shadow .2s;
 }
 
 /* Hover lift */
@@ -163,10 +164,12 @@ button {
 
 .board {
     display: grid;
-    grid-template-columns: repeat(3, 90px);
-    grid-template-rows: repeat(3, 130px);
-    gap: 8px;
-    justify-content: center;
+    grid-template-columns: repeat(3, 120px);
+    grid-template-rows: repeat(3, 170px);
+    gap: 10px;
+    background: #123;
+    padding: 15px;
+    border-radius: 12px;
 }
 
 .cell {

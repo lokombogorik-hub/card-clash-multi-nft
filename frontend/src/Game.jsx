@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 
-const CARD_W = 110;
-const CARD_H = 150;
+/* ---------- CONSTANTS ---------- */
+const CARD_W = 120;
+const CARD_H = 170;
 
 const DIRS = [
     { dx: 0, dy: -1, a: "top", b: "bottom" },
@@ -9,6 +10,9 @@ const DIRS = [
     { dx: 0, dy: 1, a: "bottom", b: "top" },
     { dx: -1, dy: 0, a: "left", b: "right" },
 ];
+
+/* ---------- HELPERS ---------- */
+const rand = () => Math.ceil(Math.random() * 9);
 
 const genCard = (owner, id) => ({
     id,
@@ -21,40 +25,21 @@ const genCard = (owner, id) => ({
     },
 });
 
-function rand() {
-    return Math.ceil(Math.random() * 9);
-    function calculateScore(grid) {
-        let player = 0;
-        let enemy = 0;
-
-        grid.forEach(cell => {
-            if (!cell) return;
-            if (cell.owner === "player") player++;
-            if (cell.owner === "enemy") enemy++;
-        });
-
-        return { player, enemy };
-    }
-}
-
+/* ---------- GAME ---------- */
 export default function Game() {
-    const [score, setScore] = useState({ player: 0, enemy: 0 });
-    const [gameOver, setGameOver] = useState(false);
-    const [winner, setWinner] = useState(null);
+    const [turn, setTurn] = useState("player");
+    const [selected, setSelected] = useState(null);
+    const [board, setBoard] = useState(Array(9).fill(null));
 
     const [playerHand, setPlayerHand] = useState(
         Array.from({ length: 5 }, (_, i) => genCard("player", `p${i}`))
     );
+
     const [enemyHand, setEnemyHand] = useState(
         Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`))
     );
 
-    const [board, setBoard] = useState(Array(9).fill(null));
-    const [selected, setSelected] = useState(null);
-    const [turn, setTurn] = useState("player");
-
-    /* ---------------- FLIP LOGIC ---------------- */
-
+    /* ---------- FLIP ---------- */
     const tryFlip = (idx, placed, grid) => {
         const x = idx % 3;
         const y = Math.floor(idx / 3);
@@ -69,25 +54,17 @@ export default function Game() {
             if (!target || target.owner === placed.owner) return;
 
             if (placed.values[a] > target.values[b]) {
-                grid[ni] = {
-                    ...target,
-                    owner: placed.owner,
-                    flipped: true,
-                    flipId: Math.random()
-                };
-
+                grid[ni] = { ...target, owner: placed.owner };
             }
         });
     };
 
-    /* ---------------- PLACE CARD ---------------- */
-
+    /* ---------- PLACE ---------- */
     const placeCard = (i) => {
         if (!selected || board[i]) return;
 
         const next = [...board];
         next[i] = selected;
-
         tryFlip(i, selected, next);
 
         setBoard(next);
@@ -105,14 +82,14 @@ export default function Game() {
     return (
         <div className="game-root">
 
-            {/* ENEMY */}
-            <div className="hand top">
+            {/* ENEMY HAND */}
+            <div className="hand enemy">
                 {enemyHand.map((c, i) => (
-                    <div key={c.id} style={{ marginLeft: i ? -50 : 0 }}>
+                    <div key={c.id} style={{ marginLeft: i ? -60 : 0 }}>
                         <Card
                             card={c}
-                            onClick={() => turn === "enemy" && setSelected(c)}
                             selected={selected?.id === c.id}
+                            onClick={() => turn === "enemy" && setSelected(c)}
                         />
                     </div>
                 ))}
@@ -124,58 +101,42 @@ export default function Game() {
                     <div
                         key={i}
                         className={`cell ${selected && !cell ? "highlight" : ""}`}
-                        onClick={() => selected && !cell && placeCard(i)}
+                        onClick={() => placeCard(i)}
                     >
                         {cell && <Card card={cell} />}
                     </div>
                 ))}
             </div>
 
-            {/* PLAYER */}
-            <div className="hand bottom">
+            {/* PLAYER HAND */}
+            <div className="hand player">
                 {playerHand.map((c, i) => (
-                    <div key={c.id} style={{ marginLeft: i ? -50 : 0 }}>
+                    <div key={c.id} style={{ marginLeft: i ? -60 : 0 }}>
                         <Card
                             card={c}
-                            onClick={() => turn === "player" && setSelected(c)}
                             selected={selected?.id === c.id}
+                            onClick={() => turn === "player" && setSelected(c)}
                         />
                     </div>
                 ))}
             </div>
+
         </div>
     );
 }
 
-/* ---------------- CARD ---------------- */
-
+/* ---------- CARD ---------- */
 function Card({ card, onClick, selected }) {
     return (
         <div
-            className={`card ${card.owner} ${selected ? "selected" : ""} ${card.flipped ? "flipped" : ""}`}
+            className={`card ${card.owner} ${selected ? "selected" : ""}`}
             onClick={onClick}
             style={{ width: CARD_W, height: CARD_H }}
         >
-            <span style={num.top}>{card.values.top}</span>
-            <span style={num.right}>{card.values.right}</span>
-            <span style={num.bottom}>{card.values.bottom}</span>
-            <span style={num.left}>{card.values.left}</span>
+            <span className="num top">{card.values.top}</span>
+            <span className="num right">{card.values.right}</span>
+            <span className="num bottom">{card.values.bottom}</span>
+            <span className="num left">{card.values.left}</span>
         </div>
     );
 }
-
-/* ---------------- NUMBERS ---------------- */
-
-const base = {
-    position: "absolute",
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#fff",
-};
-
-const num = {
-    top: { ...base, top: 6, left: "50%", transform: "translateX(-50%)" },
-    right: { ...base, right: 6, top: "50%", transform: "translateY(-50%)" },
-    bottom: { ...base, bottom: 6, left: "50%", transform: "translateX(-50%)" },
-    left: { ...base, left: 6, top: "50%", transform: "translateY(-50%)" },
-};
