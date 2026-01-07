@@ -53,7 +53,13 @@ export default function Game() {
             if (!target || target.owner === placed.owner) return;
 
             if (placed.values[a] > target.values[b]) {
-                grid[ni] = { ...target, owner: placed.owner, flipped: true };
+                grid[ni] = {
+                    ...target,
+                    owner: placed.owner,
+                    flipped: true,
+                    flipId: Math.random()
+                };
+
             }
         });
     };
@@ -87,8 +93,7 @@ export default function Game() {
             <div className="hand top">
                 {enemyHand.map((c, i) => (
                     <div key={c.id} style={{ marginLeft: i ? -50 : 0 }}>
-                        <Card
-                            card={c}
+                        <Card key={cell.id + cell.flipId} card={cell}
                             onClick={() => turn === "enemy" && setSelected(c)}
                             selected={selected?.id === c.id}
                         />
