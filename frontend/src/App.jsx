@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 
 /* === БАЗОВЫЕ КАРТЫ === */
 const BASE_DECK = [
