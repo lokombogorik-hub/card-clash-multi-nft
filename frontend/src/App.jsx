@@ -1,5 +1,6 @@
-import Game from "./pages/Game.jsx";
+import Game from "./pages/Game";
 
 export default function App() {
     return <Game />;
 }
+

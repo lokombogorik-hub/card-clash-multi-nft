@@ -13,7 +13,7 @@ function clone(card) {
     return JSON.parse(JSON.stringify(card));
 }
 
-export default function App() {
+export default function Game() {
     const [board, setBoard] = useState(Array(9).fill(null));
     const [hands, setHands] = useState({
         red: BASE_DECK.map(c => ({ ...clone(c), owner: "red" })),
