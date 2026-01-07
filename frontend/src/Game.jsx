@@ -74,8 +74,8 @@ const styles = {
     },
 
     card: {
-        width: "80px",
-        height: "120px",
+        width: "90px",
+        height: "140px",
         borderRadius: "14px",
         display: "flex",
         alignItems: "center",
