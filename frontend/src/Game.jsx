@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 
-const [flippedIndex, setFlippedIndex] = useState(null);
 const CARD_W = 110;
 const CARD_H = 150;
 
@@ -89,7 +88,7 @@ export default function Game() {
         const next = [...board];
         next[i] = selected;
 
-        tryFlip(i, selected, next, setFlippedIndex);
+        tryFlip(i, selected, next);
 
         setBoard(next);
 
@@ -101,7 +100,6 @@ export default function Game() {
 
         setSelected(null);
         setTurn(t => (t === "player" ? "enemy" : "player"));
-        setTimeout(() => setFlippedIndex(null), 600);
     };
 
     return (
@@ -128,14 +126,7 @@ export default function Game() {
                         className={`cell ${selected && !cell ? "highlight" : ""}`}
                         onClick={() => selected && !cell && placeCard(i)}
                     >
-                        {cell && (
-                            <Card
-                                card={cell}
-                                flipped={flippedIndex === i}
-                                placed
-                            />
-                        )}
-
+                        {cell && <Card card={cell} />}
                     </div>
                 ))}
             </div>
