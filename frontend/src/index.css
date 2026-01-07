@@ -150,6 +150,12 @@ button {
     box-shadow: inset 0 0 0 3px rgba(34, 197, 94, 0.5);
 }
 
+.cell.highlight {
+    background: rgba(255, 215, 0, 0.15);
+    border-color: gold;
+    cursor: pointer;
+}
+
 .exit {
     position: absolute;
     left: 10px;

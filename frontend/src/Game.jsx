@@ -18,16 +18,37 @@ export default function Game() {
     const [playerHand, setPlayerHand] = useState(
         Array.from({ length: 5 }, (_, i) => genCard("player", `p${i}`))
     );
-
-    const [enemyHand] = useState(
+    const [enemyHand, setEnemyHand] = useState(
         Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`))
     );
 
-    const [board] = useState(Array(9).fill(null));
+    const [board, setBoard] = useState(Array(9).fill(null));
     const [selected, setSelected] = useState(null);
+    const [turn, setTurn] = useState("player");
+
+    /* ---------------- PLACE CARD ---------------- */
+
+    const placeCard = (index) => {
+        if (!selected || board[index]) return;
+
+        const nextBoard = [...board];
+        nextBoard[index] = selected;
+
+        setBoard(nextBoard);
+
+        if (selected.owner === "player") {
+            setPlayerHand(playerHand.filter(c => c.id !== selected.id));
+        } else {
+            setEnemyHand(enemyHand.filter(c => c.id !== selected.id));
+        }
+
+        setSelected(null);
+        setTurn(turn === "player" ? "enemy" : "player");
+    };
 
     return (
         <div className="game-root">
+
             {/* ENEMY HAND */}
             <div className="hand top">
                 {enemyHand.map((card, i) => (
@@ -39,8 +60,15 @@ export default function Game() {
 
             {/* BOARD */}
             <div className="board">
-                {board.map((_, i) => (
-                    <div key={i} className="cell" />
+                {board.map((cell, i) => (
+                    <div
+                        key={i}
+                        className={`cell ${selected && !cell ? "highlight" : ""
+                            }`}
+                        onClick={() => turn === selected?.owner && placeCard(i)}
+                    >
+                        {cell && <Card card={cell} />}
+                    </div>
                 ))}
             </div>
 
@@ -51,7 +79,9 @@ export default function Game() {
                         <Card
                             card={card}
                             selected={selected?.id === card.id}
-                            onClick={() => setSelected(card)}
+                            onClick={() =>
+                                turn === "player" && setSelected(card)
+                            }
                         />
                     </div>
                 ))}
@@ -67,10 +97,7 @@ function Card({ card, onClick, selected }) {
         <div
             className={`card ${card.owner} ${selected ? "selected" : ""}`}
             onClick={onClick}
-            style={{
-                width: CARD_W,
-                height: CARD_H,
-            }}
+            style={{ width: CARD_W, height: CARD_H }}
         >
             <span style={num.top}>{card.values.top}</span>
             <span style={num.right}>{card.values.right}</span>
