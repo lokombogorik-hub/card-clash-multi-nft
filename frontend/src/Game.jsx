@@ -50,16 +50,25 @@ export default function Game({ onExit }) {
                             <div
                                 style={{
                                     ...styles.card,
-                                    background:
-                                        card.owner === "🟥"
-                                            ? "linear-gradient(135deg,#b71c1c,#ff5252)"
-                                            : "linear-gradient(135deg,#0d47a1,#42a5f5)",
+                                    card: {
+                                        width: "100%",
+                                        height: "100%",
+                                        borderRadius: "14px",
+                                        position: "relative",
+                                        color: "white",
+                                        fontWeight: "bold",
+                                        boxShadow: "0 6px 14px rgba(0,0,0,0.6)",
+                                        border: "2px solid rgba(255,255,255,0.25)",
+                                        backgroundImage:
+                                            "radial-gradient(circle at top, rgba(255,255,255,0.2), rgba(0,0,0,0.4))",
+                                    },
+
                                 }}
                             >
-                                <span style={styles.topNum}>{card.values.top}</span>
-                                <span style={styles.rightNum}>{card.values.right}</span>
-                                <span style={styles.bottomNum}>{card.values.bottom}</span>
-                                <span style={styles.leftNum}>{card.values.left}</span>
+                                <span style={{ ...styles.num, ...styles.topNum }}>{card.values.top}</span>
+                                <span style={{ ...styles.num, ...styles.rightNum }}>{card.values.right}</span>
+                                <span style={{ ...styles.num, ...styles.bottomNum }}>{card.values.bottom}</span>
+                                <span style={{ ...styles.num, ...styles.leftNum }}>{card.values.left}</span>
                             </div>
                         )}
                     </div>
@@ -114,30 +123,22 @@ const styles = {
         color: "white",
         fontWeight: "bold",
     },
-    topNum: {
+    num: {
         position: "absolute",
-        top: 4,
-        left: "50%",
-        transform: "translateX(-50%)",
+        width: 22,
+        height: 22,
+        borderRadius: "50%",
+        background: "rgba(0,0,0,0.6)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: "12px",
     },
-    rightNum: {
-        position: "absolute",
-        right: 4,
-        top: "50%",
-        transform: "translateY(-50%)",
-    },
-    bottomNum: {
-        position: "absolute",
-        bottom: 4,
-        left: "50%",
-        transform: "translateX(-50%)",
-    },
-    leftNum: {
-        position: "absolute",
-        left: 4,
-        top: "50%",
-        transform: "translateY(-50%)",
-    },
+    topNum: { top: 4, left: "50%", transform: "translateX(-50%)" },
+    rightNum: { right: 4, top: "50%", transform: "translateY(-50%)" },
+    bottomNum: { bottom: 4, left: "50%", transform: "translateX(-50%)" },
+    leftNum: { left: 4, top: "50%", transform: "translateY(-50%)" },
+
     exit: {
         padding: "10px 20px",
         borderRadius: "10px",
