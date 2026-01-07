@@ -1,18 +1,29 @@
 import React, { useState } from "react";
 
-const CARD_W = 100;
-const CARD_H = 140;
+const CARD_W = 110;
+const CARD_H = 150;
+
+const DIRS = [
+    { dx: 0, dy: -1, a: "top", b: "bottom" },
+    { dx: 1, dy: 0, a: "right", b: "left" },
+    { dx: 0, dy: 1, a: "bottom", b: "top" },
+    { dx: -1, dy: 0, a: "left", b: "right" },
+];
 
 const genCard = (owner, id) => ({
     id,
     owner,
     values: {
-        top: Math.ceil(Math.random() * 9),
-        right: Math.ceil(Math.random() * 9),
-        bottom: Math.ceil(Math.random() * 9),
-        left: Math.ceil(Math.random() * 9),
+        top: rand(),
+        right: rand(),
+        bottom: rand(),
+        left: rand(),
     },
 });
+
+function rand() {
+    return Math.ceil(Math.random() * 9);
+}
 
 export default function Game() {
     const [playerHand, setPlayerHand] = useState(
@@ -26,15 +37,38 @@ export default function Game() {
     const [selected, setSelected] = useState(null);
     const [turn, setTurn] = useState("player");
 
+    /* ---------------- FLIP LOGIC ---------------- */
+
+    const tryFlip = (idx, placed, grid) => {
+        const x = idx % 3;
+        const y = Math.floor(idx / 3);
+
+        DIRS.forEach(({ dx, dy, a, b }) => {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || nx > 2 || ny < 0 || ny > 2) return;
+
+            const ni = ny * 3 + nx;
+            const target = grid[ni];
+            if (!target || target.owner === placed.owner) return;
+
+            if (placed.values[a] > target.values[b]) {
+                grid[ni] = { ...target, owner: placed.owner, flipped: true };
+            }
+        });
+    };
+
     /* ---------------- PLACE CARD ---------------- */
 
-    const placeCard = (index) => {
-        if (!selected || board[index]) return;
+    const placeCard = (i) => {
+        if (!selected || board[i]) return;
 
-        const nextBoard = [...board];
-        nextBoard[index] = selected;
+        const next = [...board];
+        next[i] = selected;
 
-        setBoard(nextBoard);
+        tryFlip(i, selected, next);
+
+        setBoard(next);
 
         if (selected.owner === "player") {
             setPlayerHand(h => h.filter(c => c.id !== selected.id));
@@ -49,16 +83,14 @@ export default function Game() {
     return (
         <div className="game-root">
 
-            {/* ENEMY HAND */}
+            {/* ENEMY */}
             <div className="hand top">
-                {enemyHand.map((card, i) => (
-                    <div key={card.id} style={{ marginLeft: i ? -45 : 0 }}>
+                {enemyHand.map((c, i) => (
+                    <div key={c.id} style={{ marginLeft: i ? -50 : 0 }}>
                         <Card
-                            card={card}
-                            selected={selected?.id === card.id}
-                            onClick={() =>
-                                turn === "enemy" && setSelected(card)
-                            }
+                            card={c}
+                            onClick={() => turn === "enemy" && setSelected(c)}
+                            selected={selected?.id === c.id}
                         />
                     </div>
                 ))}
@@ -69,27 +101,22 @@ export default function Game() {
                 {board.map((cell, i) => (
                     <div
                         key={i}
-                        className={`cell ${selected && !cell ? "highlight" : ""
-                            }`}
-                        onClick={() =>
-                            selected && !cell && placeCard(i)
-                        }
+                        className={`cell ${selected && !cell ? "highlight" : ""}`}
+                        onClick={() => selected && !cell && placeCard(i)}
                     >
                         {cell && <Card card={cell} />}
                     </div>
                 ))}
             </div>
 
-            {/* PLAYER HAND */}
+            {/* PLAYER */}
             <div className="hand bottom">
-                {playerHand.map((card, i) => (
-                    <div key={card.id} style={{ marginLeft: i ? -45 : 0 }}>
+                {playerHand.map((c, i) => (
+                    <div key={c.id} style={{ marginLeft: i ? -50 : 0 }}>
                         <Card
-                            card={card}
-                            selected={selected?.id === card.id}
-                            onClick={() =>
-                                turn === "player" && setSelected(card)
-                            }
+                            card={c}
+                            onClick={() => turn === "player" && setSelected(c)}
+                            selected={selected?.id === c.id}
                         />
                     </div>
                 ))}
@@ -103,7 +130,7 @@ export default function Game() {
 function Card({ card, onClick, selected }) {
     return (
         <div
-            className={`card ${card.owner} ${selected ? "selected" : ""}`}
+            className={`card ${card.owner} ${selected ? "selected" : ""} ${card.flipped ? "flipped" : ""}`}
             onClick={onClick}
             style={{ width: CARD_W, height: CARD_H }}
         >
