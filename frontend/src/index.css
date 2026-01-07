@@ -128,13 +128,33 @@ button {
     border-radius: 12px;
     background: #222;
     cursor: pointer;
+    transform-style: preserve-3d;
     transition: transform .2s, box-shadow .2s;
+}
+
+.card.flipped {
+    animation: flipCard .6s ease-in-out;
+}
+
+@keyframes flipCard {
+    0% {
+        transform: rotateY(0deg);
+    }
+
+    50% {
+        transform: rotateY(90deg) scale(1.1);
+    }
+
+    100% {
+        transform: rotateY(180deg);
+    }
 }
 
 /* Hover lift */
 .card:hover {
-    transform: translateY(-6px) scale(1.03);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+    transform: translateY(-14px) scale(1.05);
+    box-shadow: 0 18px 35px rgba(0, 0, 0, .6);
+    z-index: 5;
 }
 
 .card.enemy {
