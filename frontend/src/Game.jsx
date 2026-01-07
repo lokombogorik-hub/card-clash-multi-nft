@@ -110,6 +110,10 @@ export default function Game() {
                     </div>
                 ))}
             </div>
+            <div className="scorebar">
+                <span className="red">🟥 {score.red}</span>
+                <span className="blue">{score.blue} 🟦</span>
+            </div>
 
             {/* BOARD */}
             <div className="board">
