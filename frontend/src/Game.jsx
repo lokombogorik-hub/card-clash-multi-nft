@@ -78,7 +78,7 @@ export default function Game() {
         setBoard(next);
         setPlayerHand((h) => h.filter((c) => c.id !== selected.id));
         setSelected(null);
-        setTurn("enemy");
+        setTurn("player");
     };
 
     /* ---------- RENDER ---------- */
