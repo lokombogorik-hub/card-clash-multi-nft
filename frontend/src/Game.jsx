@@ -1,7 +1,4 @@
-import React, { useState } from "react";
-import { useEffect } from "react";
-
-const AI_PLAYER = "enemy";
+import React, { useState, useEffect } from "react";
 
 /* ---------- CONFIG ---------- */
 
@@ -41,28 +38,6 @@ export default function Game() {
     const [board, setBoard] = useState(Array(9).fill(null));
     const [selected, setSelected] = useState(null);
     const [turn, setTurn] = useState("player");
-    const makeAIMove = () => {
-        const emptyCells = board
-            .map((c, i) => (c === null ? i : null))
-            .filter((i) => i !== null);
-
-        if (emptyCells.length === 0) return;
-        if (enemyHand.length === 0) return;
-
-        const cellIndex =
-            emptyCells[Math.floor(Math.random() * emptyCells.length)];
-        const card =
-            enemyHand[Math.floor(Math.random() * enemyHand.length)];
-
-        const next = [...board];
-        next[cellIndex] = card;
-
-        tryFlip(cellIndex, card, next);
-
-        setBoard(next);
-        setEnemyHand((h) => h.filter((c) => c.id !== card.id));
-    };
-
 
     /* ---------- FLIP ---------- */
 
@@ -84,61 +59,74 @@ export default function Game() {
                     ...target,
                     owner: placed.owner,
                     flipped: true,
-                    flipKey: Math.random(),
                 };
             }
         });
     };
 
+    /* ---------- PLAYER MOVE ---------- */
 
-    /* ---------- PLACE ---------- */
-
-    const placeCard = (i) => {
+    const placeCard = (cellIndex) => {
         if (turn !== "player") return;
-        if (!selected || board[i]) return;
+        if (!selected || board[cellIndex]) return;
 
+        const placed = { ...selected, owner: "player" };
         const next = [...board];
-        next[i] = selected;
+        next[cellIndex] = placed;
 
-        tryFlip(i, selected, next);
+        tryFlip(cellIndex, placed, next);
 
         setBoard(next);
         setPlayerHand((h) => h.filter((c) => c.id !== selected.id));
         setSelected(null);
-
-        // ⏳ AI ходит после игрока
         setTurn("enemy");
-
-        setTimeout(() => {
-            makeAIMove();
-            setTurn("player");
-        }, 700);
     };
 
+    /* ---------- AI MOVE ---------- */
+
+    useEffect(() => {
+        if (turn !== "enemy") return;
+
+        const empty = board
+            .map((c, i) => (c === null ? i : null))
+            .filter((i) => i !== null);
+
+        if (!empty.length || !enemyHand.length) {
+            setTurn("player");
+            return;
+        }
+
+        const cell = empty[Math.floor(Math.random() * empty.length)];
+        const card = enemyHand[Math.floor(Math.random() * enemyHand.length)];
+        const placed = { ...card, owner: "enemy" };
+
+        const next = [...board];
+        next[cell] = placed;
+
+        tryFlip(cell, placed, next);
+
+        setTimeout(() => {
+            setBoard(next);
+            setEnemyHand((h) => h.filter((c) => c.id !== card.id));
+            setTurn("player");
+        }, 500);
+    }, [turn]);
+
+    /* ---------- SCORE ---------- */
+
     const score = board.reduce(
-        (acc, c) => {
-            if (!c) return acc;
-            if (c.owner === "player") acc.blue++;
-            if (c.owner === "enemy") acc.red++;
-            return acc;
+        (a, c) => {
+            if (!c) return a;
+            c.owner === "player" ? a.blue++ : a.red++;
+            return a;
         },
         { red: 0, blue: 0 }
     );
-
-    const isGameOver = board.every(Boolean);
-
-    let winner = null;
-    if (isGameOver) {
-        if (score.red > score.blue) winner = "🟥 Победа!";
-        else if (score.blue > score.red) winner = "🟦 Победа!";
-        else winner = "🤝 Ничья";
-    }
 
     /* ---------- RENDER ---------- */
 
     return (
         <div className="game-root">
-
             {/* ENEMY */}
             <div className="hand top">
                 {enemyHand.map((c, i) => (
@@ -147,15 +135,11 @@ export default function Game() {
                     </div>
                 ))}
             </div>
+
             <div className="scorebar">
                 <span className="red">🟥 {score.red}</span>
                 <span className="blue">{score.blue} 🟦</span>
             </div>
-            {winner && (
-                <div className="winner">
-                    {winner}
-                </div>
-            )}
 
             {/* BOARD */}
             <div className="board">
@@ -177,7 +161,7 @@ export default function Game() {
                         <Card
                             card={c}
                             selected={selected?.id === c.id}
-                            onClick={() => turn === "player" && setSelected(c)}
+                            onClick={() => setSelected(c)}
                         />
                     </div>
                 ))}
@@ -191,10 +175,8 @@ export default function Game() {
 function Card({ card, onClick, selected, disabled }) {
     return (
         <div
-            className={`card ${card.owner} 
-        ${selected ? "selected" : ""} 
-        ${card.flipped ? "flipped" : ""} 
-        ${disabled ? "disabled" : ""}`}
+            className={`card ${card.owner} ${selected ? "selected" : ""} ${card.flipped ? "flipped" : ""
+                }`}
             onClick={disabled ? undefined : onClick}
             style={{ width: CARD_W, height: CARD_H }}
         >
