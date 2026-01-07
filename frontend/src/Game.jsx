@@ -93,7 +93,8 @@ export default function Game() {
             <div className="hand top">
                 {enemyHand.map((c, i) => (
                     <div key={c.id} style={{ marginLeft: i ? -50 : 0 }}>
-                        <Card key={cell.id + cell.flipId} card={cell}
+                        <Card
+                            card={c}
                             onClick={() => turn === "enemy" && setSelected(c)}
                             selected={selected?.id === c.id}
                         />
