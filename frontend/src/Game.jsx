@@ -126,7 +126,14 @@ export default function Game() {
                         className={`cell ${selected && !cell ? "highlight" : ""}`}
                         onClick={() => selected && !cell && placeCard(i)}
                     >
-                        {cell && <Card card={cell} />}
+                        {cell && (
+                            <Card
+                                card={cell}
+                                flipped={flippedIndex === i}
+                                placed
+                            />
+                        )}
+
                     </div>
                 ))}
             </div>
