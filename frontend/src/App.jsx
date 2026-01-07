@@ -1,179 +1,215 @@
-/* global Telegram */
-import React, { useState, useEffect } from "react";
+import { useState } from "react";
 
-/* ===== КАРТЫ ===== */
+/* === БАЗОВЫЕ КАРТЫ === */
 const BASE_DECK = [
-    { id: 1, t: 5, r: 3, b: 4, l: 2 },
-    { id: 2, t: 2, r: 5, b: 3, l: 4 },
-    { id: 3, t: 4, r: 4, b: 2, l: 3 },
-    { id: 4, t: 6, r: 2, b: 3, l: 1 },
-    { id: 5, t: 3, r: 4, b: 5, l: 2 },
-    { id: 6, t: 2, r: 3, b: 6, l: 4 },
-    { id: 7, t: 4, r: 2, b: 4, l: 5 },
-    { id: 8, t: 5, r: 5, b: 1, l: 3 },
-    { id: 9, t: 4, r: 3, b: 5, l: 4 },
-    { id: 10, t: 3, r: 2, b: 4, l: 6 },
+    { id: 1, t: 5, r: 3, b: 2, l: 4 },
+    { id: 2, t: 1, r: 6, b: 5, l: 2 },
+    { id: 3, t: 4, r: 4, b: 4, l: 4 },
+    { id: 4, t: 6, r: 2, b: 1, l: 5 },
+    { id: 5, t: 2, r: 5, b: 6, l: 1 },
 ];
 
-function shuffle(arr) {
-    return [...arr].sort(() => Math.random() - 0.5);
-}
-
-function dealHands() {
-    const deck = shuffle(BASE_DECK);
-    return {
-        red: deck.slice(0, 5).map((c) => ({ ...c, owner: "red" })),
-        blue: deck.slice(5, 10).map((c) => ({ ...c, owner: "blue" })),
-    };
+function clone(card) {
+    return JSON.parse(JSON.stringify(card));
 }
 
 export default function App() {
-    useEffect(() => {
-        if (window.Telegram?.WebApp) {
-            window.Telegram.WebApp.ready();
-            window.Telegram.WebApp.expand();
-        }
-    }, []);
-
-    const [hands, setHands] = useState(dealHands());
     const [board, setBoard] = useState(Array(9).fill(null));
-    const [current, setCurrent] = useState("red");
+    const [hands, setHands] = useState({
+        red: BASE_DECK.map(c => ({ ...clone(c), owner: "red" })),
+        blue: BASE_DECK.map(c => ({ ...clone(c), owner: "blue" })),
+    });
+
+    const [turn, setTurn] = useState("red");
     const [selected, setSelected] = useState(null);
+    const [winner, setWinner] = useState(null);
+
+    const dirs = [
+        { dx: 0, dy: -1, a: "t", b: "b" },
+        { dx: 1, dy: 0, a: "r", b: "l" },
+        { dx: 0, dy: 1, a: "b", b: "t" },
+        { dx: -1, dy: 0, a: "l", b: "r" },
+    ];
 
     function place(index) {
-        if (board[index] || !selected) return;
+        if (!selected || board[index] || winner) return;
 
         const newBoard = [...board];
-        newBoard[index] = selected;
+        const placed = { ...selected };
+        newBoard[index] = placed;
+
+        dirs.forEach(({ dx, dy, a, b }) => {
+            const x = index % 3 + dx;
+            const y = Math.floor(index / 3) + dy;
+            if (x < 0 || x > 2 || y < 0 || y > 2) return;
+
+            const ni = y * 3 + x;
+            const n = newBoard[ni];
+            if (!n || n.owner === placed.owner) return;
+
+            if (placed[a] > n[b]) {
+                n.owner = placed.owner;
+                n.flipped = true; // ✨ ТРИГГЕР АНИМАЦИИ
+            }
+        });
 
         setBoard(newBoard);
-        setHands({
-            ...hands,
-            [current]: hands[current].filter((c) => c.id !== selected.id),
-        });
+        setHands(h => ({
+            ...h,
+            [turn]: h[turn].filter(c => c !== selected),
+        }));
         setSelected(null);
-        setCurrent(current === "red" ? "blue" : "red");
+
+        if (newBoard.every(Boolean)) {
+            const r = newBoard.filter(c => c.owner === "red").length;
+            const b = newBoard.filter(c => c.owner === "blue").length;
+            setWinner(r === b ? "Ничья" : r > b ? "🔴 RED победил" : "🔵 BLUE победил");
+        } else {
+            setTurn(turn === "red" ? "blue" : "red");
+        }
     }
 
+    const score = board.reduce(
+        (a, c) => {
+            if (!c) return a;
+            a[c.owner]++;
+            return a;
+        },
+        { red: 0, blue: 0 }
+    );
+
     return (
-        <div style={styles.screen}>
-            <div style={styles.game}>
-                <Hand
-                    cards={hands.red}
-                    active={current === "red"}
-                    selected={selected}
-                    onSelect={setSelected}
-                />
+        <div style={styles.root}>
+            <h2>Ход: {turn === "red" ? "🔴 RED" : "🔵 BLUE"}</h2>
 
-                <div style={styles.board}>
-                    {board.map((card, i) => (
-                        <div
-                            key={i}
-                            onClick={() => place(i)}
-                            style={{
-                                ...styles.cell,
-                                background: card
-                                    ? card.owner === "red"
-                                        ? "#7f1d1d"
-                                        : "#1e3a8a"
-                                    : "#1e293b",
-                            }}
-                        >
-                            {card && <Numbers card={card} />}
-                        </div>
-                    ))}
-                </div>
+            <Hand
+                cards={hands.red}
+                active={turn === "red"}
+                selected={selected}
+                onSelect={setSelected}
+            />
 
-                <Hand
-                    cards={hands.blue}
-                    active={current === "blue"}
-                    selected={selected}
-                    onSelect={setSelected}
-                />
+            <div style={styles.board}>
+                {board.map((c, i) => (
+                    <div
+                        key={i}
+                        style={{
+                            ...styles.cell,
+                            outline: selected && !c ? "2px solid gold" : "none",
+                        }}
+                        onClick={() => place(i)}
+                    >
+                        {c && <Card card={c} />}
+                    </div>
+                ))}
             </div>
+
+            <Hand
+                cards={hands.blue}
+                active={turn === "blue"}
+                selected={selected}
+                onSelect={setSelected}
+            />
+
+            <div style={styles.score}>
+                🔴 {score.red} : {score.blue} 🔵
+            </div>
+
+            {winner && <h2>{winner}</h2>}
         </div>
     );
 }
 
-/* ===== КОМПОНЕНТЫ ===== */
+/* === КОМПОНЕНТЫ === */
 
-function Numbers({ card }) {
+function Hand({ cards, active, selected, onSelect }) {
     return (
-        <div style={styles.numbers}>
-            {card.t} {card.r}
-            <br />
-            {card.l} {card.b}
-        </div>
-    );
-}
-
-function Hand({ cards, active, onSelect, selected }) {
-    return (
-        <div style={styles.hand}>
-            {cards.map((c) => (
-                <div
+        <div style={{ ...styles.hand, opacity: active ? 1 : 0.4 }}>
+            {cards.map(c => (
+                <Card
                     key={c.id}
+                    card={c}
+                    selected={c === selected}
                     onClick={() => active && onSelect(c)}
-                    style={{
-                        ...styles.handCard,
-                        border: selected?.id === c.id ? "2px solid gold" : "none",
-                        opacity: active ? 1 : 0.4,
-                    }}
-                >
-                    <Numbers card={c} />
-                </div>
+                />
             ))}
         </div>
     );
 }
 
-/* ===== СТИЛИ ===== */
+function Card({ card, onClick, selected }) {
+    return (
+        <div
+            onClick={onClick}
+            style={{
+                ...styles.card,
+                borderColor: card.owner === "red" ? "crimson" : "dodgerblue",
+                transform: card.flipped ? "rotateY(180deg)" : "none",
+                outline: selected ? "3px solid gold" : "none",
+            }}
+        >
+            <div style={styles.top}>{card.t}</div>
+            <div style={styles.middle}>
+                <span>{card.l}</span>
+                <span>{card.r}</span>
+            </div>
+            <div style={styles.bottom}>{card.b}</div>
+        </div>
+    );
+}
+
+/* === СТИЛИ === */
 
 const styles = {
-    screen: {
-        width: "100vw",
-        height: "100vh",
-        background: "#0f172a",
+    root: {
+        background: "#0b0f1a",
+        color: "#fff",
+        minHeight: "100vh",
         display: "flex",
-        justifyContent: "center",
+        flexDirection: "column",
         alignItems: "center",
-        color: "white",
-        overflow: "hidden",
-    },
-    game: {
-        display: "flex",
-        gap: 8,
-        alignItems: "center",
+        padding: 8,
     },
     board: {
         display: "grid",
         gridTemplateColumns: "repeat(3, 90px)",
-        gridTemplateRows: "repeat(3, 120px)",
         gap: 6,
+        margin: 10,
     },
     cell: {
         width: 90,
         height: 120,
-        borderRadius: 10,
-        cursor: "pointer",
-        boxSizing: "border-box",
+        border: "1px dashed #555",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
     },
-    hand: {
+    card: {
         width: 80,
+        height: 110,
+        background: "#1e253f",
+        border: "2px solid",
+        borderRadius: 10,
+        padding: 4,
+        fontSize: 14,
+        transition: "all 0.4s",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
     },
-    handCard: {
-        width: 70,
-        height: 100,
-        background: "#334155",
-        marginBottom: 6,
-        borderRadius: 8,
-        cursor: "pointer",
-        boxSizing: "border-box",
+    top: { textAlign: "center" },
+    middle: {
+        display: "flex",
+        justifyContent: "space-between",
     },
-    numbers: {
-        padding: 6,
-        fontSize: 12,
-        lineHeight: "1.1",
-        pointerEvents: "none",
+    bottom: { textAlign: "center" },
+    hand: {
+        display: "flex",
+        gap: 6,
+        margin: 6,
+    },
+    score: {
+        fontSize: 18,
+        marginTop: 6,
     },
 };
