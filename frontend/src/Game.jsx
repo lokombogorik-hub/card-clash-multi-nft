@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 
+const [flippedIndex, setFlippedIndex] = useState(null);
 const CARD_W = 110;
 const CARD_H = 150;
 
@@ -55,7 +56,7 @@ export default function Game() {
 
     /* ---------------- FLIP LOGIC ---------------- */
 
-    const tryFlip = (idx, placed, grid) => {
+    const tryFlip = (idx, placed, grid, setFlipped) => {
         const x = idx % 3;
         const y = Math.floor(idx / 3);
 
@@ -69,16 +70,12 @@ export default function Game() {
             if (!target || target.owner === placed.owner) return;
 
             if (placed.values[a] > target.values[b]) {
-                grid[ni] = {
-                    ...target,
-                    owner: placed.owner,
-                    flipped: true,
-                    flipId: Math.random()
-                };
-
+                setFlipped(ni); // 🔥 флип анимация
+                grid[ni] = { ...target, owner: placed.owner };
             }
         });
     };
+
 
     /* ---------------- PLACE CARD ---------------- */
 
@@ -88,7 +85,7 @@ export default function Game() {
         const next = [...board];
         next[i] = selected;
 
-        tryFlip(i, selected, next);
+        tryFlip(i, selected, next, setFlippedIndex);
 
         setBoard(next);
 
@@ -100,6 +97,7 @@ export default function Game() {
 
         setSelected(null);
         setTurn(t => (t === "player" ? "enemy" : "player"));
+        setTimeout(() => setFlippedIndex(null), 600);
     };
 
     return (
@@ -126,7 +124,14 @@ export default function Game() {
                         className={`cell ${selected && !cell ? "highlight" : ""}`}
                         onClick={() => selected && !cell && placeCard(i)}
                     >
-                        {cell && <Card card={cell} />}
+                        {cell && (
+                            <Card
+                                card={cell}
+                                flipped={flippedIndex === i}
+                                placed
+                            />
+                        )}
+
                     </div>
                 ))}
             </div>
@@ -149,17 +154,20 @@ export default function Game() {
 
 /* ---------------- CARD ---------------- */
 
-function Card({ card, onClick, selected }) {
+function Card({ card, onClick, selected, flipped, placed }) {
     return (
         <div
-            className={`card ${card.owner} ${selected ? "selected" : ""} ${card.flipped ? "flipped" : ""}`}
+            className={`card ${card.owner}
+        ${selected ? "selected" : ""}
+        ${flipped ? "flipped" : ""}
+        ${placed ? "placed" : ""}
+      `}
             onClick={onClick}
-            style={{ width: CARD_W, height: CARD_H }}
         >
-            <span style={num.top}>{card.values.top}</span>
-            <span style={num.right}>{card.values.right}</span>
-            <span style={num.bottom}>{card.values.bottom}</span>
-            <span style={num.left}>{card.values.left}</span>
+            <span className="num top">{card.values.top}</span>
+            <span className="num right">{card.values.right}</span>
+            <span className="num bottom">{card.values.bottom}</span>
+            <span className="num left">{card.values.left}</span>
         </div>
     );
 }
