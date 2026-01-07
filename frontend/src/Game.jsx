@@ -63,6 +63,16 @@ export default function Game() {
     const [board, setBoard] = useState(Array(9).fill(null));
     const [selected, setSelected] = useState(null);
     const [turn, setTurn] = useState("player");
+    useEffect(() => {
+        if (turn === "enemy") {
+            const t = setTimeout(() => {
+                makeAIMove();
+                setTurn("player");
+            }, 700);
+
+            return () => clearTimeout(t);
+        }
+    }, [turn]);
 
     /* ---------- FLIP ---------- */
 
@@ -89,17 +99,6 @@ export default function Game() {
             }
         });
     };
-
-    useEffect(() => {
-        if (turn === "enemy") {
-            const t = setTimeout(() => {
-                makeAIMove();
-                setTurn("player");
-            }, 700);
-
-            return () => clearTimeout(t);
-        }
-    }, [turn]);
 
     /* ---------- PLACE ---------- */
 
