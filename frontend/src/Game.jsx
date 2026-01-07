@@ -56,7 +56,7 @@ export default function Game() {
 
     /* ---------------- FLIP LOGIC ---------------- */
 
-    const tryFlip = (idx, placed, grid, setFlipped) => {
+    const tryFlip = (idx, placed, grid) => {
         const x = idx % 3;
         const y = Math.floor(idx / 3);
 
@@ -70,12 +70,16 @@ export default function Game() {
             if (!target || target.owner === placed.owner) return;
 
             if (placed.values[a] > target.values[b]) {
-                setFlipped(ni); // 🔥 флип анимация
-                grid[ni] = { ...target, owner: placed.owner };
+                grid[ni] = {
+                    ...target,
+                    owner: placed.owner,
+                    flipped: true,
+                    flipId: Math.random()
+                };
+
             }
         });
     };
-
 
     /* ---------------- PLACE CARD ---------------- */
 
