@@ -122,6 +122,32 @@ button {
     margin-bottom: 6px;
 }
 
+.scorebar {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 360px;
+    margin: 8px auto;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.scorebar .red {
+    color: #ff5555;
+}
+
+.scorebar .blue {
+    color: #4da6ff;
+}
+
+.winner {
+    margin-top: 10px;
+    font-size: 22px;
+    font-weight: bold;
+    text-align: center;
+}
+
+
 /* ---------------- CARD ANIMATION ---------------- */
 .card {
     position: relative;
