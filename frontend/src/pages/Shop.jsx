@@ -1,10 +1,10 @@
 import React from "react";
 
-export default function DeckBuilder({ go }) {
+export default function Shop({ go }) {
     return (
         <div style={styles.screen}>
-            <h2>🃏 Выбор колоды</h2>
-            <p>Скоро здесь будет выбор карт</p>
+            <h2>🛒 Магазин</h2>
+            <p>Кейсы будут здесь</p>
 
             <button onClick={() => go("menu")}>⬅ Назад</button>
         </div>
@@ -14,7 +14,7 @@ export default function DeckBuilder({ go }) {
 const styles = {
     screen: {
         minHeight: "100vh",
-        background: "#0b0f1a",
+        background: "#111",
         color: "#fff",
         display: "flex",
         flexDirection: "column",
