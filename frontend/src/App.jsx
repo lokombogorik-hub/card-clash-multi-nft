@@ -1,6 +1,5 @@
-import Game from "./pages/Game";
+import Game from "./Game";
 
 export default function App() {
     return <Game />;
 }
-
