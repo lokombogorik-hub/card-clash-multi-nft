@@ -11,6 +11,86 @@ const DIRS = [
     { dx: 0, dy: 1, a: "bottom", b: "top" },
     { dx: -1, dy: 0, a: "left", b: "right" },
 ];
+function checkSame(placedCard, x, y, board) {
+    const matches = [];
+
+    const neighbors = [
+        { dx: 0, dy: -1, a: "top", b: "bottom" },
+        { dx: 0, dy: 1, a: "bottom", b: "top" },
+        { dx: -1, dy: 0, a: "left", b: "right" },
+        { dx: 1, dy: 0, a: "right", b: "left" },
+    ];
+
+    neighbors.forEach(({ dx, dy, a, b }) => {
+        const n = board[y + dy]?.[x + dx];
+        if (!n) return;
+        if (placedCard.values[a] === n.values[b]) {
+            matches.push(n);
+        }
+    });
+
+    if (matches.length >= 2) {
+        matches.forEach(c => (c.owner = placedCard.owner));
+        return matches;
+    }
+
+    return [];
+}
+function checkPlus(placedCard, x, y, board) {
+    const sums = {};
+    const hits = [];
+
+    const neighbors = [
+        { dx: 0, dy: -1, a: "top", b: "bottom" },
+        { dx: 0, dy: 1, a: "bottom", b: "top" },
+        { dx: -1, dy: 0, a: "left", b: "right" },
+        { dx: 1, dy: 0, a: "right", b: "left" },
+    ];
+
+    neighbors.forEach(({ dx, dy, a, b }) => {
+        const n = board[y + dy]?.[x + dx];
+        if (!n) return;
+
+        const sum = placedCard.values[a] + n.values[b];
+        sums[sum] = sums[sum] || [];
+        sums[sum].push(n);
+    });
+
+    Object.values(sums).forEach(group => {
+        if (group.length >= 2) {
+            group.forEach(c => hits.push(c));
+        }
+    });
+
+    hits.forEach(c => (c.owner = placedCard.owner));
+    return hits;
+}
+function chainReaction(startCards, board) {
+    const queue = [...startCards];
+
+    while (queue.length) {
+        const card = queue.shift();
+
+        const { x, y } = card.position;
+
+        const neighbors = [
+            { dx: 0, dy: -1, a: "top", b: "bottom" },
+            { dx: 0, dy: 1, a: "bottom", b: "top" },
+            { dx: -1, dy: 0, a: "left", b: "right" },
+            { dx: 1, dy: 0, a: "right", b: "left" },
+        ];
+
+        neighbors.forEach(({ dx, dy, a, b }) => {
+            const n = board[y + dy]?.[x + dx];
+            if (!n || n.owner === card.owner) return;
+
+            if (card.values[a] > n.values[b]) {
+                n.owner = card.owner;
+                queue.push(n);
+            }
+        });
+    }
+}
 
 const rand = () => Math.ceil(Math.random() * 9);
 
