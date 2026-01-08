@@ -245,8 +245,8 @@ button {
 /* 🔺 Треугольник (фон) */
 .tt-badge {
     position: absolute;
-    top: 6px;
-    left: 6px;
+    top: 46px;
+    left: 46px;
     width: 46px;
     height: 46px;
     background: rgba(0, 0, 0, 0.7);
