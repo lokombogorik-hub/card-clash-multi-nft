@@ -245,10 +245,10 @@ button {
 /* 🔺 ромб (фон) */
 .tt-badge {
     position: absolute;
-    top: 3px;
-    left: 12px;
-    width: 32px;
-    height: 32px;
+    top: 8px;
+    left: 14px;
+    width: 48px;
+    height: 48px;
     background: rgba(0, 0, 0, 0.7);
     transform: rotate(45deg);
     z-index: 1;
