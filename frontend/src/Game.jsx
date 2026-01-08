@@ -193,9 +193,10 @@ export default function Game() {
 function Card({ card, onClick, selected, disabled }) {
     return (
         <div
-            className={`card ${card.owner === "player" ? "blue" : "red"} jump`}>
-            onClick={disabled ? undefined : onClick}
+            className={`card ${card.owner === "player" ? "blue" : "red"} jump`}
 
+            onClick={disabled ? undefined : onClick}
+        >
             {/* Треугольный бейдж */}
             <div className="tt-badge" />
 
