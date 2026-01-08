@@ -246,7 +246,7 @@ button {
 .tt-badge {
     position: absolute;
     top: 9px;
-    left: 12px;
+    left: 10px;
     width: 42px;
     height: 42px;
     background: rgba(0, 0, 0, 0.7);
