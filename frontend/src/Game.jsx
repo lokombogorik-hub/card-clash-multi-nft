@@ -2,6 +2,9 @@ import React, { useState, useEffect } from "react";
 
 /* ---------- CONFIG ---------- */
 
+const CARD_W = 120;
+const CARD_H = 165;
+
 const DIRS = [
     { dx: 0, dy: -1, a: "top", b: "bottom" },
     { dx: 1, dy: 0, a: "right", b: "left" },
@@ -11,101 +14,68 @@ const DIRS = [
 
 const rand = () => Math.ceil(Math.random() * 9);
 
-/* ---------- HELPERS ---------- */
-
-const toMatrix = (board) => [
-    board.slice(0, 3),
-    board.slice(3, 6),
-    board.slice(6, 9),
-];
-
-const fromMatrix = (m) => m.flat();
-
-function checkSame(card, x, y, m) {
-    const hits = [];
-    DIRS.forEach(({ dx, dy, a, b }) => {
-        const n = m[y + dy]?.[x + dx];
-        if (n && card.values[a] === n.values[b]) hits.push(n);
-    });
-    if (hits.length >= 2) hits.forEach(c => c.owner = card.owner);
-    return hits;
-}
-
-function checkPlus(card, x, y, m) {
-    const sums = {};
-    DIRS.forEach(({ dx, dy, a, b }) => {
-        const n = m[y + dy]?.[x + dx];
-        if (!n) return;
-        const s = card.values[a] + n.values[b];
-        sums[s] ??= [];
-        sums[s].push(n);
-    });
-    const hits = Object.values(sums).filter(g => g.length >= 2).flat();
-    hits.forEach(c => c.owner = card.owner);
-    return hits;
-}
-
-function chainReaction(start, m) {
-    const q = [...start];
-    while (q.length) {
-        const c = q.shift();
-        const { x, y } = c.position;
-        DIRS.forEach(({ dx, dy, a, b }) => {
-            const n = m[y + dy]?.[x + dx];
-            if (!n || n.owner === c.owner) return;
-            if (c.values[a] > n.values[b]) {
-                n.owner = c.owner;
-                q.push(n);
-            }
-        });
-    }
-}
+const genCard = (owner, id) => ({
+    id,
+    owner,
+    values: {
+        top: rand(),
+        right: rand(),
+        bottom: rand(),
+        left: rand(),
+    },
+});
 
 /* ---------- GAME ---------- */
 
 export default function Game() {
     const [playerHand, setPlayerHand] = useState(
-        Array.from({ length: 5 }, (_, i) => ({
-            id: `p${i}`,
-            owner: "player",
-            values: { top: rand(), right: rand(), bottom: rand(), left: rand() }
-        }))
+        Array.from({ length: 5 }, (_, i) => genCard("player", `p${i}`))
     );
-
     const [enemyHand, setEnemyHand] = useState(
-        Array.from({ length: 5 }, (_, i) => ({
-            id: `e${i}`,
-            owner: "enemy",
-            values: { top: rand(), right: rand(), bottom: rand(), left: rand() }
-        }))
+        Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`))
     );
 
     const [board, setBoard] = useState(Array(9).fill(null));
     const [selected, setSelected] = useState(null);
     const [turn, setTurn] = useState("player");
 
+    const [gameOver, setGameOver] = useState(false);
+    const [winner, setWinner] = useState(null);
+
+    /* ---------- FLIP ---------- */
+
+    const tryFlip = (idx, placed, grid) => {
+        const x = idx % 3;
+        const y = Math.floor(idx / 3);
+
+        DIRS.forEach(({ dx, dy, a, b }) => {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx < 0 || nx > 2 || ny < 0 || ny > 2) return;
+
+            const ni = ny * 3 + nx;
+            const target = grid[ni];
+            if (!target || target.owner === placed.owner) return;
+
+            if (placed.values[a] > target.values[b]) {
+                grid[ni] = { ...target, owner: placed.owner, flipped: true };
+            }
+        });
+    };
+
     /* ---------- PLAYER MOVE ---------- */
 
     const placeCard = (i) => {
-        if (turn !== "player" || !selected || board[i]) return;
+        if (turn !== "player") return;
+        if (!selected || board[i]) return;
 
         const next = [...board];
-        const placed = {
-            ...selected,
-            owner: "player",
-            position: { x: i % 3, y: Math.floor(i / 3) }
-        };
+        const placed = { ...selected, owner: "player" };
+
         next[i] = placed;
+        tryFlip(i, placed, next);
 
-        let m = toMatrix(next);
-
-        const same = checkSame(placed, placed.position.x, placed.position.y, m);
-        const plus = checkPlus(placed, placed.position.x, placed.position.y, m);
-
-        const hits = [...new Set([...same, ...plus])];
-        if (hits.length) chainReaction(hits, m);
-
-        setBoard(fromMatrix(m));
+        setBoard(next);
         setPlayerHand(h => h.filter(c => c.id !== selected.id));
         setSelected(null);
         setTurn("enemy");
@@ -114,52 +84,104 @@ export default function Game() {
     /* ---------- AI MOVE ---------- */
 
     useEffect(() => {
-        if (turn !== "enemy") return;
+        if (turn !== "enemy" || gameOver) return;
 
-        const empty = board.map((c, i) => c ? null : i).filter(i => i !== null);
-        if (!empty.length) return;
+        const empty = board
+            .map((c, i) => (c === null ? i : null))
+            .filter(i => i !== null);
+
+        if (!empty.length || !enemyHand.length) {
+            setTurn("player");
+            return;
+        }
 
         const cell = empty[Math.floor(Math.random() * empty.length)];
-        const card = enemyHand[0];
+        const card = enemyHand[Math.floor(Math.random() * enemyHand.length)];
 
         const next = [...board];
-        next[cell] = {
-            ...card,
-            owner: "enemy",
-            position: { x: cell % 3, y: Math.floor(cell / 3) }
-        };
+        const placed = { ...card, owner: "enemy" };
+
+        next[cell] = placed;
+        tryFlip(cell, placed, next);
 
         setTimeout(() => {
             setBoard(next);
-            setEnemyHand(h => h.slice(1));
+            setEnemyHand(h => h.filter(c => c.id !== card.id));
             setTurn("player");
         }, 500);
     }, [turn]);
+
+    /* ---------- GAME OVER ---------- */
+
+    useEffect(() => {
+        if (board.some(c => c === null)) return;
+
+        const p = board.filter(c => c.owner === "player").length;
+        const e = board.filter(c => c.owner === "enemy").length;
+
+        setWinner(p > e ? "player" : e > p ? "enemy" : "draw");
+        setGameOver(true);
+    }, [board]);
+
+    /* ---------- SCORE ---------- */
+
+    const score = board.reduce(
+        (a, c) => {
+            if (!c) return a;
+            c.owner === "player" ? a.blue++ : a.red++;
+            return a;
+        },
+        { red: 0, blue: 0 }
+    );
 
     /* ---------- RENDER ---------- */
 
     return (
         <div className="game-root">
+            {gameOver && (
+                <div className="game-over">
+                    <h2>
+                        {winner === "player" && "🏆 Победа"}
+                        {winner === "enemy" && "💀 Поражение"}
+                        {winner === "draw" && "🤝 Ничья"}
+                    </h2>
+                    <button onClick={() => window.location.reload()}>🔄 Заново</button>
+                </div>
+            )}
+
             <div className="hand top">
-                {enemyHand.map(c => <Card key={c.id} card={c} disabled />)}
+                {enemyHand.map((c, i) => (
+                    <div key={c.id} style={{ marginLeft: i ? -40 : 0 }}>
+                        <Card card={c} disabled />
+                    </div>
+                ))}
+            </div>
+
+            <div className="scorebar">
+                🟥 {score.red} : {score.blue} 🟦
             </div>
 
             <div className="board">
                 {board.map((cell, i) => (
-                    <div key={i} className="cell" onClick={() => placeCard(i)}>
+                    <div
+                        key={i}
+                        className={`cell ${selected && !cell ? "highlight" : ""}`}
+                        onClick={() => placeCard(i)}
+                    >
                         {cell && <Card card={cell} />}
                     </div>
                 ))}
             </div>
 
             <div className="hand bottom">
-                {playerHand.map(c => (
-                    <Card
-                        key={c.id}
-                        card={c}
-                        selected={selected?.id === c.id}
-                        onClick={() => setSelected(c)}
-                    />
+                {playerHand.map((c, i) => (
+                    <div key={c.id} style={{ marginLeft: i ? -40 : 0 }}>
+                        <Card
+                            card={c}
+                            selected={selected?.id === c.id}
+                            onClick={() => setSelected(c)}
+                        />
+                    </div>
                 ))}
             </div>
         </div>
@@ -174,10 +196,32 @@ function Card({ card, onClick, selected, disabled }) {
             className={`card ${card.owner} ${selected ? "selected" : ""}`}
             onClick={disabled ? undefined : onClick}
         >
+            {/* Треугольный бейдж */}
+            <div className="tt-badge" />
+
+            {/* Цифры как в Triple Triad */}
             <span className="tt-num top">{card.values.top}</span>
+            <span className="tt-num left">{card.values.left}</span>
             <span className="tt-num right">{card.values.right}</span>
             <span className="tt-num bottom">{card.values.bottom}</span>
-            <span className="tt-num left">{card.values.left}</span>
         </div>
     );
 }
+
+
+/* ---------- NUMBERS ---------- */
+
+const base = {
+    position: "absolute",
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#fff",
+    textShadow: "0 1px 2px #000",
+};
+
+const num = {
+    top: { ...base, top: 6, left: "50%", transform: "translateX(-50%)" },
+    right: { ...base, right: 6, top: "50%", transform: "translateY(-50%)" },
+    bottom: { ...base, bottom: 6, left: "50%", transform: "translateX(-50%)" },
+    left: { ...base, left: 6, top: "50%", transform: "translateY(-50%)" },
+};
