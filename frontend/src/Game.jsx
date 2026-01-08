@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
 
-/* ---------------- CONFIG ---------------- */
+/* ---------- CONFIG ---------- */
+
+const CARD_W = 120;
+const CARD_H = 165;
 
 const DIRS = [
     { dx: 0, dy: -1, a: "top", b: "bottom" },
@@ -20,10 +23,9 @@ const genCard = (owner, id) => ({
         bottom: rand(),
         left: rand(),
     },
-    flipping: false,
 });
 
-/* ---------------- GAME ---------------- */
+/* ---------- GAME ---------- */
 
 export default function Game() {
     const [playerHand, setPlayerHand] = useState(
@@ -36,50 +38,15 @@ export default function Game() {
     const [board, setBoard] = useState(Array(9).fill(null));
     const [selected, setSelected] = useState(null);
     const [turn, setTurn] = useState("player");
+
     const [gameOver, setGameOver] = useState(false);
+    const [winner, setWinner] = useState(null);
 
-    /* -------- CHAIN FLIP ENGINE -------- */
+    /* ---------- FLIP ---------- */
 
-    const resolveFlips = (startIdx, grid) => {
-        const queue = [startIdx];
-
-        while (queue.length) {
-            const idx = queue.shift();
-            const card = grid[idx];
-            if (!card) continue;
-
-            const x = idx % 3;
-            const y = Math.floor(idx / 3);
-
-            DIRS.forEach(({ dx, dy, a, b }) => {
-                const nx = x + dx;
-                const ny = y + dy;
-                if (nx < 0 || nx > 2 || ny < 0 || ny > 2) return;
-
-                const ni = ny * 3 + nx;
-                const target = grid[ni];
-                if (!target || target.owner === card.owner) return;
-
-                if (card.values[a] > target.values[b]) {
-                    grid[ni] = {
-                        ...target,
-                        owner: card.owner,
-                        flipping: true,
-                    };
-                    queue.push(ni);
-                }
-            });
-        }
-    };
-
-    /* -------- SAME + PLUS -------- */
-
-    const applySamePlus = (idx, placed, grid) => {
+    const tryFlip = (idx, placed, grid) => {
         const x = idx % 3;
         const y = Math.floor(idx / 3);
-
-        let same = [];
-        let plus = {};
 
         DIRS.forEach(({ dx, dy, a, b }) => {
             const nx = x + dx;
@@ -87,45 +54,26 @@ export default function Game() {
             if (nx < 0 || nx > 2 || ny < 0 || ny > 2) return;
 
             const ni = ny * 3 + nx;
-            const t = grid[ni];
-            if (!t || t.owner === placed.owner) return;
+            const target = grid[ni];
+            if (!target || target.owner === placed.owner) return;
 
-            if (placed.values[a] === t.values[b]) same.push(ni);
-
-            const sum = placed.values[a] + t.values[b];
-            plus[sum] = plus[sum] ? [...plus[sum], ni] : [ni];
+            if (placed.values[a] > target.values[b]) {
+                grid[ni] = { ...target, owner: placed.owner, flipped: true };
+            }
         });
-
-        const hits = new Set();
-
-        if (same.length >= 2) same.forEach(i => hits.add(i));
-        Object.values(plus).forEach(arr => {
-            if (arr.length >= 2) arr.forEach(i => hits.add(i));
-        });
-
-        hits.forEach(i => {
-            grid[i] = {
-                ...grid[i],
-                owner: placed.owner,
-                flipping: true,
-            };
-        });
-
-        hits.forEach(i => resolveFlips(i, grid));
     };
 
-    /* -------- PLAYER MOVE -------- */
+    /* ---------- PLAYER MOVE ---------- */
 
     const placeCard = (i) => {
-        if (turn !== "player" || !selected || board[i]) return;
+        if (turn !== "player") return;
+        if (!selected || board[i]) return;
 
         const next = [...board];
-        const placed = { ...selected };
+        const placed = { ...selected, owner: "player" };
 
         next[i] = placed;
-
-        applySamePlus(i, placed, next);
-        resolveFlips(i, next);
+        tryFlip(i, placed, next);
 
         setBoard(next);
         setPlayerHand(h => h.filter(c => c.id !== selected.id));
@@ -133,22 +81,28 @@ export default function Game() {
         setTurn("enemy");
     };
 
-    /* -------- AI MOVE -------- */
+    /* ---------- AI MOVE ---------- */
 
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
 
-        const empty = board.map((c, i) => (c ? null : i)).filter(i => i !== null);
-        if (!empty.length || !enemyHand.length) return;
+        const empty = board
+            .map((c, i) => (c === null ? i : null))
+            .filter(i => i !== null);
+
+        if (!empty.length || !enemyHand.length) {
+            setTurn("player");
+            return;
+        }
 
         const cell = empty[Math.floor(Math.random() * empty.length)];
         const card = enemyHand[Math.floor(Math.random() * enemyHand.length)];
 
         const next = [...board];
-        next[cell] = card;
+        const placed = { ...card, owner: "enemy" };
 
-        applySamePlus(cell, card, next);
-        resolveFlips(cell, next);
+        next[cell] = placed;
+        tryFlip(cell, placed, next);
 
         setTimeout(() => {
             setBoard(next);
@@ -157,14 +111,19 @@ export default function Game() {
         }, 500);
     }, [turn]);
 
-    /* -------- GAME OVER -------- */
+    /* ---------- GAME OVER ---------- */
 
     useEffect(() => {
         if (board.some(c => c === null)) return;
+
+        const p = board.filter(c => c.owner === "player").length;
+        const e = board.filter(c => c.owner === "enemy").length;
+
+        setWinner(p > e ? "player" : e > p ? "enemy" : "draw");
         setGameOver(true);
     }, [board]);
 
-    /* -------- SCORE -------- */
+    /* ---------- SCORE ---------- */
 
     const score = board.reduce(
         (a, c) => {
@@ -175,13 +134,16 @@ export default function Game() {
         { red: 0, blue: 0 }
     );
 
+    /* ---------- RENDER ---------- */
+
     return (
         <div className="game-root">
             {gameOver && (
                 <div className="game-over">
                     <h2>
-                        {score.blue > score.red ? "🏆 Победа" :
-                            score.red > score.blue ? "💀 Поражение" : "🤝 Ничья"}
+                        {winner === "player" && "🏆 Победа"}
+                        {winner === "enemy" && "💀 Поражение"}
+                        {winner === "draw" && "🤝 Ничья"}
                     </h2>
                     <button onClick={() => window.location.reload()}>🔄 Заново</button>
                 </div>
@@ -195,7 +157,9 @@ export default function Game() {
                 ))}
             </div>
 
-            <div className="scorebar">🟥 {score.red} : {score.blue} 🟦</div>
+            <div className="scorebar">
+                🟥 {score.red} : {score.blue} 🟦
+            </div>
 
             <div className="board">
                 {board.map((cell, i) => (
@@ -224,22 +188,38 @@ export default function Game() {
     );
 }
 
-/* ---------------- CARD ---------------- */
+/* ---------- CARD ---------- */
 
 function Card({ card, onClick, selected, disabled }) {
     return (
         <div
-            className={`card ${card.owner} ${selected ? "selected" : ""} ${card.flipping ? "flip" : ""
-                }`}
+            className={`card ${card.owner} ${selected ? "selected" : ""}`}
             onClick={disabled ? undefined : onClick}
         >
+            {/* 🔺 Треугольник как в Triple Triad */}
             <div className="tt-triangle">
-                <span className="tt-num top">{card.values.top}</span>
-                <span className="tt-num left">{card.values.left}</span>
-                <span className="tt-num right">{card.values.right}</span>
-                <span className="tt-num bottom">{card.values.bottom}</span>
+                <span className="t">{card.values.top}</span>
+                <span className="l">{card.values.left}</span>
+                <span className="r">{card.values.right}</span>
+                <span className="b">{card.values.bottom}</span>
             </div>
         </div>
     );
 }
 
+/* ---------- NUMBERS ---------- */
+
+const base = {
+    position: "absolute",
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#fff",
+    textShadow: "0 1px 2px #000",
+};
+
+const num = {
+    top: { ...base, top: 6, left: "50%", transform: "translateX(-50%)" },
+    right: { ...base, right: 6, top: "50%", transform: "translateY(-50%)" },
+    bottom: { ...base, bottom: 6, left: "50%", transform: "translateX(-50%)" },
+    left: { ...base, left: 6, top: "50%", transform: "translateY(-50%)" },
+};
