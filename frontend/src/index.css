@@ -247,8 +247,8 @@ button {
     position: absolute;
     top: 8px;
     left: 14px;
-    width: 48px;
-    height: 48px;
+    width: 36px;
+    height: 36px;
     background: rgba(0, 0, 0, 0.7);
     transform: rotate(45deg);
     z-index: 1;
