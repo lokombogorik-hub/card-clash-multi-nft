@@ -62,20 +62,16 @@ button {
 
 /* Flip animation */
 .card.flip {
-    animation: flipCard 0.4s ease;
+    animation: flip 0.4s ease;
 }
 
-@keyframes flipCard {
+@keyframes flip {
     0% {
         transform: rotateY(0deg);
     }
 
-    50% {
-        transform: rotateY(90deg);
-    }
-
     100% {
-        transform: rotateY(0deg);
+        transform: rotateY(180deg);
     }
 }
 
@@ -110,6 +106,14 @@ button {
     justify-content: space-between;
     padding: 14px;
     color: white;
+}
+
+.card.blue {
+    box-shadow: 0 0 15px rgba(0, 180, 255, 0.6);
+}
+
+.card.red {
+    box-shadow: 0 0 15px rgba(255, 80, 80, 0.6);
 }
 
 .hand {
