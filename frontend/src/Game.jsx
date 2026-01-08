@@ -233,12 +233,13 @@ function Card({ card, onClick, selected, disabled }) {
                 }`}
             onClick={disabled ? undefined : onClick}
         >
-            <div className="tt-diamond">
-                <span className="n top">{card.values.top}</span>
-                <span className="n left">{card.values.left}</span>
-                <span className="n right">{card.values.right}</span>
-                <span className="n bottom">{card.values.bottom}</span>
+            <div className="tt-triangle">
+                <span className="tt-num top">{card.values.top}</span>
+                <span className="tt-num left">{card.values.left}</span>
+                <span className="tt-num right">{card.values.right}</span>
+                <span className="tt-num bottom">{card.values.bottom}</span>
             </div>
         </div>
     );
 }
+
