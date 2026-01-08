@@ -36,46 +36,6 @@ button {
     box-sizing: border-box;
 }
 
-/* ===== TRIPLE TRIAD VALUES ===== */
-
-.tt-values {
-    position: absolute;
-    top: 6px;
-    left: 6px;
-    width: 46px;
-    height: 46px;
-    background: rgba(0, 0, 0, 0.65);
-    clip-path: polygon(0 0, 100% 0, 0 100%);
-    color: white;
-    font-weight: bold;
-    font-size: 12px;
-    pointer-events: none;
-}
-
-.tt-top {
-    position: absolute;
-    top: 2px;
-    left: 18px;
-}
-
-.tt-left {
-    position: absolute;
-    top: 18px;
-    left: 2px;
-}
-
-.tt-right {
-    position: absolute;
-    top: 18px;
-    right: 2px;
-}
-
-.tt-bottom {
-    position: absolute;
-    bottom: 2px;
-    left: 18px;
-}
-
 .exit {
     position: absolute;
     top: 20px;
@@ -279,6 +239,45 @@ button {
 .card.selected {
     outline: 3px solid gold;
     box-shadow: 0 0 15px gold;
+}
+
+/* ===== TRIPLE TRIAD VALUES ===== */
+
+.tt-triangle {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    width: 42px;
+    height: 42px;
+    background: rgba(0, 0, 0, 0.6);
+    clip-path: polygon(0 0, 100% 0, 0 100%);
+    font-size: 11px;
+    font-weight: bold;
+    color: #fff;
+}
+
+.tt-triangle .t {
+    position: absolute;
+    top: 2px;
+    left: 18px;
+}
+
+.tt-triangle .l {
+    position: absolute;
+    top: 18px;
+    left: 4px;
+}
+
+.tt-triangle .r {
+    position: absolute;
+    top: 18px;
+    left: 28px;
+}
+
+.tt-triangle .b {
+    position: absolute;
+    top: 28px;
+    left: 18px;
 }
 
 /* Owner colors */

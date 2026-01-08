@@ -192,13 +192,18 @@ export default function Game() {
 
 function Card({ card, onClick, selected, disabled }) {
     return (
-        <div className="tt-values">
-            <span className="tt-top">{card.values.top}</span>
-            <span className="tt-left">{card.values.left}</span>
-            <span className="tt-right">{card.values.right}</span>
-            <span className="tt-bottom">{card.values.bottom}</span>
+        <div
+            className={`card ${card.owner} ${selected ? "selected" : ""}`}
+            onClick={disabled ? undefined : onClick}
+        >
+            {/* 🔺 Треугольник как в Triple Triad */}
+            <div className="tt-triangle">
+                <span className="t">{card.values.top}</span>
+                <span className="l">{card.values.left}</span>
+                <span className="r">{card.values.right}</span>
+                <span className="b">{card.values.bottom}</span>
+            </div>
         </div>
-
     );
 }
 
