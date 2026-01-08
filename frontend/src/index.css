@@ -36,6 +36,46 @@ button {
     box-sizing: border-box;
 }
 
+/* ===== TRIPLE TRIAD VALUES ===== */
+
+.tt-values {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    width: 46px;
+    height: 46px;
+    background: rgba(0, 0, 0, 0.65);
+    clip-path: polygon(0 0, 100% 0, 0 100%);
+    color: white;
+    font-weight: bold;
+    font-size: 12px;
+    pointer-events: none;
+}
+
+.tt-top {
+    position: absolute;
+    top: 2px;
+    left: 18px;
+}
+
+.tt-left {
+    position: absolute;
+    top: 18px;
+    left: 2px;
+}
+
+.tt-right {
+    position: absolute;
+    top: 18px;
+    right: 2px;
+}
+
+.tt-bottom {
+    position: absolute;
+    bottom: 2px;
+    left: 18px;
+}
+
 .exit {
     position: absolute;
     top: 20px;

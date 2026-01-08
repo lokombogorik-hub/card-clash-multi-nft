@@ -192,16 +192,13 @@ export default function Game() {
 
 function Card({ card, onClick, selected, disabled }) {
     return (
-        <div
-            className={`card ${card.owner} ${selected ? "selected" : ""} ${card.flipped ? "flipped" : ""}`}
-            onClick={disabled ? undefined : onClick}
-            style={{ width: CARD_W, height: CARD_H }}
-        >
-            <span style={num.top}>{card.values.top}</span>
-            <span style={num.right}>{card.values.right}</span>
-            <span style={num.bottom}>{card.values.bottom}</span>
-            <span style={num.left}>{card.values.left}</span>
+        <div className="tt-values">
+            <span className="tt-top">{card.values.top}</span>
+            <span className="tt-left">{card.values.left}</span>
+            <span className="tt-right">{card.values.right}</span>
+            <span className="tt-bottom">{card.values.bottom}</span>
         </div>
+
     );
 }
 
