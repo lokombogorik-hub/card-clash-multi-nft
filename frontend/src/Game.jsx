@@ -192,7 +192,8 @@ export default function Game() {
 
 function Card({ card, onClick, selected, disabled }) {
     return (
-        <div className={`card ${card.owner === "player" ? "blue" : "red"} flip`}
+        <div
+            className={`card ${card.owner} ${selected ? "selected" : ""}`}
             onClick={disabled ? undefined : onClick}
         >
             {/* Треугольный бейдж */}
