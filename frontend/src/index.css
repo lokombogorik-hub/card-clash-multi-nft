@@ -245,8 +245,8 @@ button {
 /* 🔺 ромб (фон) */
 .tt-badge {
     position: absolute;
-    top: 46px;
-    left: 46px;
+    top: 3px;
+    left: 12px;
     width: 32px;
     height: 32px;
     background: rgba(0, 0, 0, 0.7);
