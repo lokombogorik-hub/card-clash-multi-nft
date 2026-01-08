@@ -196,16 +196,18 @@ function Card({ card, onClick, selected, disabled }) {
             className={`card ${card.owner} ${selected ? "selected" : ""}`}
             onClick={disabled ? undefined : onClick}
         >
-            {/* 🔺 Треугольник как в Triple Triad */}
-            <div className="tt-triangle">
-                <span className="t">{card.values.top}</span>
-                <span className="l">{card.values.left}</span>
-                <span className="r">{card.values.right}</span>
-                <span className="b">{card.values.bottom}</span>
-            </div>
+            {/* Треугольный бейдж */}
+            <div className="tt-badge" />
+
+            {/* Цифры как в Triple Triad */}
+            <span className="tt-num top">{card.values.top}</span>
+            <span className="tt-num left">{card.values.left}</span>
+            <span className="tt-num right">{card.values.right}</span>
+            <span className="tt-num bottom">{card.values.bottom}</span>
         </div>
     );
 }
+
 
 /* ---------- NUMBERS ---------- */
 

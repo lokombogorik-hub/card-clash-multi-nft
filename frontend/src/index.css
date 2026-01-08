@@ -243,41 +243,46 @@ button {
 
 /* ===== TRIPLE TRIAD VALUES ===== */
 
-.tt-triangle {
+/* 🔺 Треугольник (фон) */
+.tt-badge {
     position: absolute;
     top: 6px;
     left: 6px;
-    width: 42px;
-    height: 42px;
-    background: rgba(0, 0, 0, 0.6);
+    width: 46px;
+    height: 46px;
+    background: rgba(0, 0, 0, 0.7);
     clip-path: polygon(0 0, 100% 0, 0 100%);
-    font-size: 11px;
+    z-index: 1;
+}
+
+/* 🔢 Цифры */
+.tt-num {
+    position: absolute;
+    font-size: 12px;
     font-weight: bold;
     color: #fff;
+    z-index: 2;
+    text-shadow: 0 1px 2px #000;
 }
 
-.tt-triangle .t {
-    position: absolute;
-    top: 2px;
-    left: 18px;
-}
-
-.tt-triangle .l {
-    position: absolute;
-    top: 18px;
-    left: 4px;
-}
-
-.tt-triangle .r {
-    position: absolute;
-    top: 18px;
+.tt-num.top {
+    top: 4px;
     left: 28px;
 }
 
-.tt-triangle .b {
-    position: absolute;
-    top: 28px;
-    left: 18px;
+.tt-num.left {
+    top: 24px;
+    left: 6px;
+}
+
+.tt-num.right {
+    top: 24px;
+    left: 42px;
+}
+
+.tt-num.bottom {
+    top: 42px;
+    left: 28px;
 }
 
 /* Owner colors */
