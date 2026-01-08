@@ -243,45 +243,47 @@ button {
 
 /* ===== TRIPLE TRIAD VALUES ===== */
 
-/* 🔺 Треугольник Triple Triad */
-.tt-triangle {
+/* 🔺 ромб (фон) */
+.tt-badge {
     position: absolute;
-    top: 8px;
-    left: 8px;
-    width: 52px;
-    height: 52px;
-    background: rgba(0, 0, 0, 0.75);
-    clip-path: polygon(0 0, 100% 0, 0 100%);
-    z-index: 2;
+    top: 9px;
+    left: 10px;
+    width: 42px;
+    height: 42px;
+    background: rgba(0, 0, 0, 0.7);
+    transform: rotate(45deg);
+    z-index: 1;
+    border-radius: 4px;
 }
 
-/* цифры внутри */
+/* 🔢 Цифры */
 .tt-num {
     position: absolute;
-    color: #fff;
     font-size: 12px;
     font-weight: bold;
-    text-shadow: 0 0 2px #000;
+    color: #fff;
+    z-index: 2;
+    text-shadow: 0 1px 2px #000;
 }
 
 .tt-num.top {
-    top: 4px;
-    left: 22px;
+    top: 6px;
+    left: 28px;
 }
 
 .tt-num.left {
-    top: 22px;
-    left: 4px;
+    top: 24px;
+    left: 14px;
 }
 
 .tt-num.right {
-    top: 22px;
-    left: 36px;
+    top: 24px;
+    left: 42px;
 }
 
 .tt-num.bottom {
-    top: 36px;
-    left: 22px;
+    top: 40px;
+    left: 28px;
 }
 
 /* Owner colors */
