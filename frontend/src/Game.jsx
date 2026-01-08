@@ -150,12 +150,30 @@ export default function Game() {
         if (!selected || board[i]) return;
 
         const next = [...board];
-        const placed = { ...selected, owner: "player" };
+        const placed = {
+            ...selected,
+            owner: "player",
+            position: { x: i % 3, y: Math.floor(i / 3) }
+        };
 
         next[i] = placed;
-        tryFlip(i, placed, next);
 
-        setBoard(next);
+        // 🔥 SAME
+        const sameHits = checkSame(placed, placed.position.x, placed.position.y, toMatrix(next));
+
+        // 🔥 PLUS
+        const plusHits = checkPlus(placed, placed.position.x, placed.position.y, toMatrix(next));
+
+        const allHits = [...sameHits, ...plusHits];
+
+        // 🔥 CHAIN REACTION
+        if (allHits.length) {
+            chainReaction(allHits, toMatrix(next));
+        } else {
+            tryFlip(i, placed, next); // обычное правило
+        }
+
+        setBoard([...next]);
         setPlayerHand(h => h.filter(c => c.id !== selected.id));
         setSelected(null);
         setTurn("enemy");
