@@ -43,11 +43,10 @@ button {
 }
 
 .card {
-    width: 90px;
-    height: 120px;
+    width: 120px;
+    height: 165px;
     border-radius: 12px;
-    background: #222;
-    color: white;
+    background: linear-gradient(145deg, #222, #111);
     position: relative;
     cursor: pointer;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -287,11 +286,11 @@ button {
 
 /* Owner colors */
 .card.player {
-    background: linear-gradient(135deg, #2a7cff, #174ea6);
+    border: 2px solid #2a6bff;
 }
 
 .card.enemy {
-    background: linear-gradient(135deg, #ff4b4b, #a61717);
+    border: 2px solid #ff2a2a;
 }
 
 .card.disabled {
