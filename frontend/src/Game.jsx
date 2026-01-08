@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from "react";
+const [gameOver, setGameOver] = useState(false);
+const [winner, setWinner] = useState(null); // "player" | "enemy" | "draw"
+
 
 /* ---------- CONFIG ---------- */
+
+const CARD_W = 120;
+const CARD_H = 165;
 
 const DIRS = [
     { dx: 0, dy: -1, a: "top", b: "bottom" },
@@ -20,7 +26,6 @@ const genCard = (owner, id) => ({
         bottom: rand(),
         left: rand(),
     },
-    flipped: false,
 });
 
 /* ---------- GAME ---------- */
@@ -37,7 +42,37 @@ export default function Game() {
     const [selected, setSelected] = useState(null);
     const [turn, setTurn] = useState("player");
 
-    /* ---------- FLIP LOGIC ---------- */
+    {
+        gameOver && (
+            <div className="game-over">
+                <div className="game-over-box">
+                    <h2>
+                        {winner === "player" && "🏆 Ты победил!"}
+                        {winner === "enemy" && "💀 Ты проиграл"}
+                        {winner === "draw" && "🤝 Ничья"}
+                    </h2>
+
+                    <p>
+                        Ты: {board.filter(c => c.owner === "player").length} —
+                        ИИ: {board.filter(c => c.owner === "enemy").length}
+                    </p>
+
+                    <div className="game-over-buttons">
+                        <button onClick={() => window.location.reload()}>
+                            🔄 Сыграть ещё
+                        </button>
+
+                        <button onClick={() => setMode("menu")}>
+                            ⬅ В меню
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+
+    /* ---------- FLIP ---------- */
 
     const tryFlip = (idx, placed, grid) => {
         const x = idx % 3;
@@ -56,7 +91,7 @@ export default function Game() {
                 grid[ni] = {
                     ...target,
                     owner: placed.owner,
-                    flipped: true, // ✅ флип ТОЛЬКО при захвате
+                    flipped: true,
                 };
             }
         });
@@ -64,15 +99,15 @@ export default function Game() {
 
     /* ---------- PLAYER MOVE ---------- */
 
-    const placeCard = (i) => {
+    const placeCard = (cellIndex) => {
         if (turn !== "player") return;
-        if (!selected || board[i]) return;
+        if (!selected || board[cellIndex]) return;
 
+        const placed = { ...selected, owner: "player" };
         const next = [...board];
-        const placed = { ...selected, flipped: false };
+        next[cellIndex] = placed;
 
-        next[i] = placed;
-        tryFlip(i, placed, next);
+        tryFlip(cellIndex, placed, next);
 
         setBoard(next);
         setPlayerHand((h) => h.filter((c) => c.id !== selected.id));
@@ -85,30 +120,56 @@ export default function Game() {
     useEffect(() => {
         if (turn !== "enemy") return;
 
+        if (!enemyHand.length) {
+            setTurn("player");
+            return;
+        }
+
         const empty = board
             .map((c, i) => (c === null ? i : null))
             .filter((i) => i !== null);
 
-        if (!empty.length || !enemyHand.length) {
+        if (!empty.length) {
             setTurn("player");
             return;
         }
 
         const cell = empty[Math.floor(Math.random() * empty.length)];
         const card = enemyHand[Math.floor(Math.random() * enemyHand.length)];
+        const placed = { ...card, owner: "enemy" };
 
         const next = [...board];
-        const placed = { ...card, flipped: false };
+
+        useEffect(() => {
+            if (board.every(cell => cell !== null)) {
+                const playerScore = board.filter(c => c.owner === "player").length;
+                const enemyScore = board.filter(c => c.owner === "enemy").length;
+
+                if (playerScore > enemyScore) setWinner("player");
+                else if (enemyScore > playerScore) setWinner("enemy");
+                else setWinner("draw");
+
+                setGameOver(true);
+            }
+        }, [board]);
+
+
+        // 🔒 КРИТИЧЕСКАЯ ЗАЩИТА
+        if (next[cell]) {
+            setTurn("player");
+            return;
+        }
 
         next[cell] = placed;
         tryFlip(cell, placed, next);
 
         setTimeout(() => {
             setBoard(next);
-            setEnemyHand((h) => h.filter((c) => c.id !== card.id));
+            setEnemyHand(h => h.filter(c => c.id !== card.id));
             setTurn("player");
-        }, 600);
-    }, [turn]);
+        }, 500);
+    }, [turn, board, enemyHand]);
+
 
     /* ---------- SCORE ---------- */
 
@@ -125,6 +186,7 @@ export default function Game() {
 
     return (
         <div className="game-root">
+            {/* ENEMY */}
             <div className="hand top">
                 {enemyHand.map((c, i) => (
                     <div key={c.id} style={{ marginLeft: i ? -40 : 0 }}>
@@ -134,9 +196,11 @@ export default function Game() {
             </div>
 
             <div className="scorebar">
-                🟥 {score.red} : {score.blue} 🟦
+                <span className="red">🟥 {score.red}</span>
+                <span className="blue">{score.blue} 🟦</span>
             </div>
 
+            {/* BOARD */}
             <div className="board">
                 {board.map((cell, i) => (
                     <div
@@ -149,6 +213,7 @@ export default function Game() {
                 ))}
             </div>
 
+            {/* PLAYER */}
             <div className="hand bottom">
                 {playerHand.map((c, i) => (
                     <div key={c.id} style={{ marginLeft: i ? -40 : 0 }}>
@@ -169,16 +234,32 @@ export default function Game() {
 function Card({ card, onClick, selected, disabled }) {
     return (
         <div
-            className={`card ${card.owner} ${card.flipped ? "flip" : ""
-                } ${selected ? "selected" : ""}`}
+            className={`card ${card.owner} ${selected ? "selected" : ""} ${card.flipped ? "flipped" : ""
+                }`}
             onClick={disabled ? undefined : onClick}
+            style={{ width: CARD_W, height: CARD_H }}
         >
-            <div className="tt-badge" />
-
-            <span className="tt-num top">{card.values.top}</span>
-            <span className="tt-num left">{card.values.left}</span>
-            <span className="tt-num right">{card.values.right}</span>
-            <span className="tt-num bottom">{card.values.bottom}</span>
+            <span style={num.top}>{card.values.top}</span>
+            <span style={num.right}>{card.values.right}</span>
+            <span style={num.bottom}>{card.values.bottom}</span>
+            <span style={num.left}>{card.values.left}</span>
         </div>
     );
 }
+
+/* ---------- NUMBERS ---------- */
+
+const base = {
+    position: "absolute",
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#fff",
+    textShadow: "0 1px 2px #000",
+};
+
+const num = {
+    top: { ...base, top: 6, left: "50%", transform: "translateX(-50%)" },
+    right: { ...base, right: 6, top: "50%", transform: "translateY(-50%)" },
+    bottom: { ...base, bottom: 6, left: "50%", transform: "translateX(-50%)" },
+    left: { ...base, left: 6, top: "50%", transform: "translateY(-50%)" },
+};
