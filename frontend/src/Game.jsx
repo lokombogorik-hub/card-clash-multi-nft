@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from "react";
+const [gameOver, setGameOver] = useState(false);
+const [winner, setWinner] = useState(null); // "player" | "enemy" | "draw"
+
 
 /* ---------- CONFIG ---------- */
 
@@ -38,6 +41,35 @@ export default function Game() {
     const [board, setBoard] = useState(Array(9).fill(null));
     const [selected, setSelected] = useState(null);
     const [turn, setTurn] = useState("player");
+    {
+        gameOver && (
+            <div className="game-over">
+                <div className="game-over-box">
+                    <h2>
+                        {winner === "player" && "🏆 Ты победил!"}
+                        {winner === "enemy" && "💀 Ты проиграл"}
+                        {winner === "draw" && "🤝 Ничья"}
+                    </h2>
+
+                    <p>
+                        Ты: {board.filter(c => c.owner === "player").length} —
+                        ИИ: {board.filter(c => c.owner === "enemy").length}
+                    </p>
+
+                    <div className="game-over-buttons">
+                        <button onClick={() => window.location.reload()}>
+                            🔄 Сыграть ещё
+                        </button>
+
+                        <button onClick={() => setMode("menu")}>
+                            ⬅ В меню
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
 
     /* ---------- FLIP ---------- */
 
@@ -106,6 +138,20 @@ export default function Game() {
         const placed = { ...card, owner: "enemy" };
 
         const next = [...board];
+
+        useEffect(() => {
+            if (board.every(cell => cell !== null)) {
+                const playerScore = board.filter(c => c.owner === "player").length;
+                const enemyScore = board.filter(c => c.owner === "enemy").length;
+
+                if (playerScore > enemyScore) setWinner("player");
+                else if (enemyScore > playerScore) setWinner("enemy");
+                else setWinner("draw");
+
+                setGameOver(true);
+            }
+        }, [board]);
+
 
         // 🔒 КРИТИЧЕСКАЯ ЗАЩИТА
         if (next[cell]) {

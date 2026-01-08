@@ -152,6 +152,46 @@ button {
     text-align: center;
 }
 
+.game-over {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+}
+
+.game-over-box {
+    background: #1e1e2f;
+    padding: 24px 32px;
+    border-radius: 16px;
+    text-align: center;
+    color: white;
+    min-width: 260px;
+}
+
+.game-over-box h2 {
+    margin-bottom: 12px;
+}
+
+.game-over-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 16px;
+}
+
+.game-over-buttons button {
+    padding: 8px 14px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    background: #3b82f6;
+    color: white;
+    font-weight: 600;
+}
+
 
 /* ---------------- CARD ANIMATION ---------------- */
 .card {
