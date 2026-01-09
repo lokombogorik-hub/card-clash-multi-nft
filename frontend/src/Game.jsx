@@ -193,13 +193,6 @@ export default function Game() {
 function Card({ card, onClick, selected, disabled }) {
     return (
         <div
-
-            img
-            src="/card.jpg"
-            alt="card"
-            className="card-image"
-
-
             className={`card ${card.owner === "player" ? "blue" : "red"} jump`}
 
             onClick={disabled ? undefined : onClick}

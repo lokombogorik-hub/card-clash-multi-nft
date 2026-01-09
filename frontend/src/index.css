@@ -26,14 +26,26 @@ button {
     border: none;
 }
 
+/* Живой стол */
 .game-root {
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    background: radial-gradient(#1b2735, #090a0f);
-    padding: 12px;
-    box-sizing: border-box;
+    background-image: url("/table.jpg");
+    background-size: cover;
+    background-position: center;
+    animation: tablePulse 8s ease-in-out infinite;
+}
+
+@keyframes tablePulse {
+    0% {
+        filter: brightness(0.95) saturate(1);
+    }
+
+    50% {
+        filter: brightness(1.05) saturate(1.1);
+    }
+
+    100% {
+        filter: brightness(0.95) saturate(1);
+    }
 }
 
 .exit {
@@ -204,24 +216,8 @@ button {
     cursor: pointer;
     transition: transform 0.4s;
     transform-style: preserve-3d;
-    /* === Картинка внутри карты === */
-    position: relative;
-    overflow: hidden;
-}
-
-.card-image {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    z-index: 0;
-}
-
-/* всё что было (цифры, рамка, свечение) — поверх */
-.card>*:not(.card-image) {
-    position: relative;
-    z-index: 2;
+    width: clamp(80px, 16vw, 140px);
+    height: calc(clamp(80px, 16vw, 140px) * 1.4);
 }
 
 .card.flipped {
@@ -321,6 +317,19 @@ button {
     opacity: 0.7;
     cursor: default;
 }
+
+@media (orientation: portrait) {
+    .board {
+        transform: scale(0.9);
+    }
+}
+
+@media (orientation: landscape) {
+    .board {
+        transform: scale(1);
+    }
+}
+
 
 /* Numbers */
 .card span {
