@@ -146,9 +146,7 @@ button {
 
 /* ---------- CARD ---------- */
 .card {
-    width: var(--card-w);
-    height: var(--card-h);
-    border-radius: 12px;
+
     position: relative;
     overflow: hidden;
 
@@ -162,20 +160,28 @@ button {
 }
 
 /* слой арта (ВАЖНО) */
-.card-art {
+.card-art-img {
     position: absolute;
-    inset: 8px;
+    left: 8px;
+    top: 8px;
+    width: calc(100% - 16px);
+    height: calc(100% - 16px);
+    object-fit: cover;
     border-radius: 10px;
-
-    /* если --art не задан, всё равно покажем картинку, чтобы ты видел что работает */
-    background-image: var(--art, url("/cards/card1.jpg"));
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-
-    filter: saturate(1.12) contrast(1.05);
-
+    z-index: 1;
 }
+
+/* цифры/бейдж поверх картинки */
+.tt-badge {
+    z-index: 4;
+    position: absolute;
+}
+
+.tt-num {
+    z-index: 5;
+    position: absolute;
+}
+
 
 /* блеск “как в ККИ” */
 .card::after {

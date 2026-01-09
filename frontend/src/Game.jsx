@@ -7,14 +7,19 @@ const DIRS = [
     { dx: -1, dy: 0, a: "left", b: "right" },
 ];
 
-const rand = () => Math.ceil(Math.random() * 9);
-
-const ART = ["/cards/card1.jpg", "/cards/card2.jpg", "/cards/card3.jpg", "/cards/card4.jpg",
-    "/cards/card5.jpg",
-    "/cards/card6.jpg",
-    "/cards/card7.jpg",
-    "/cards/card8.jpg",
-    "/cards/card9.jpg"];
+const BASE = import.meta.env.BASE_URL; // обычно "/"
+const ART = [
+    "cards/card.jpg",
+    "cards/card1.jpg",
+    "cards/card2.jpg",
+    "cards/card3.jpg",
+    "cards/card4.jpg",
+    "cards/card5.jpg",
+    "cards/card6.jpg",
+    "cards/card7.jpg",
+    "cards/card8.jpg",
+    "cards/card9.jpg",
+].map((p) => BASE + p);
 
 const genCard = (owner, id) => ({
     id,
@@ -218,21 +223,28 @@ function Card({ card, onClick, selected, disabled }) {
     const ownerClass = card.owner === "player" ? "player" : "enemy";
     const rarityClass = card.rarity ? `rarity-${card.rarity}` : "";
 
-    return (
-        <div
-            className={`card ${card.owner === "player" ? "player" : "enemy"} ${selected ? "selected" : ""} ${disabled ? "disabled" : ""}`}
-            onClick={disabled ? undefined : onClick}
-            style={{ "--art": `url(${card.imageUrl})` }}
-        >
+    function Card({ card, onClick, selected, disabled }) {
+        return (
             <div
-                className="card-art"
-                style={{ backgroundImage: `url("${card.imageUrl}")` }}
-            />
-            <div className="tt-badge" />
-            <span className="tt-num top">{card.values.top}</span>
-            <span className="tt-num left">{card.values.left}</span>
-            <span className="tt-num right">{card.values.right}</span>
-            <span className="tt-num bottom">{card.values.bottom}</span>
-        </div>
-    );
+                className={`card ${card.owner === "player" ? "player" : "enemy"} ${selected ? "selected" : ""} ${disabled ? "disabled" : ""}`}
+                onClick={disabled ? undefined : onClick}
+            >
+                <img
+                    className="card-art-img"
+                    src={card.imageUrl}
+                    alt=""
+                    draggable="false"
+                    onError={() => {
+                        console.error("Не загрузилась картинка карты:", card.imageUrl);
+                    }}
+                />
+
+                <div className="tt-badge" />
+                <span className="tt-num top">{card.values.top}</span>
+                <span className="tt-num left">{card.values.left}</span>
+                <span className="tt-num right">{card.values.right}</span>
+                <span className="tt-num bottom">{card.values.bottom}</span>
+            </div>
+        );
+    }
 }
