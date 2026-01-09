@@ -9,7 +9,6 @@ body {
     color: white;
 }
 
-/* ---------- MENU ---------- */
 .app {
     height: 100vh;
     display: flex;
@@ -27,7 +26,6 @@ button {
     border: none;
 }
 
-/* ---------- RESPONSIVE SIZING ---------- */
 :root {
     --ui-pad: clamp(10px, 2.2vw, 16px);
     --gap: clamp(6px, 2vw, 10px);
@@ -36,36 +34,19 @@ button {
             calc((100vw - (var(--ui-pad) * 2) - (var(--gap) * 2)) / 3),
             122px);
     --card-h: calc(var(--card-w) * 1.375);
-
     --hand-overlap: 0.34;
 }
 
-/* ---------- TABLE ---------- */
+/* ---------- TABLE ROOT ---------- */
 .game-root {
-    .table-video {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-
-        /* видео под UI, но над background-картинкой */
-        z-index: -1;
-
-        pointer-events: none;
-
-        /* чуть “сочно”, можно убрать */
-        filter: saturate(1.15) contrast(1.05);
-    }
-
     min-height: 100vh;
     width: 100%;
     padding: var(--ui-pad);
     padding-top: calc(var(--ui-pad) + env(safe-area-inset-top, 0px));
     padding-bottom: calc(var(--ui-pad) + env(safe-area-inset-bottom, 0px));
 
-    background: url("/table.mp4") center/cover no-repeat;
-    isolation: isolate;
+    /* УБРАЛИ background-картинку, чтобы не “возвращался старый фон” */
+    background: #050a12;
 
     display: flex;
     flex-direction: column;
@@ -73,9 +54,26 @@ button {
 
     position: relative;
     overflow: hidden;
+    isolation: isolate;
 }
 
-/* “горящие элементы” стола */
+/* ВИДЕО-ФОН */
+.table-video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+
+    /* важно: НЕ отрицательный z-index, иначе уйдёт под фон элемента */
+    z-index: 0;
+
+    pointer-events: none;
+
+    filter: saturate(1.15) contrast(1.05);
+}
+
+/* Glow-слой поверх видео */
 .game-root::before {
     content: "";
     position: absolute;
@@ -87,7 +85,7 @@ button {
     animation: tableGlow 8s ease-in-out infinite;
     pointer-events: none;
     mix-blend-mode: screen;
-    z-index: 0;
+    z-index: 1;
 }
 
 @keyframes tableGlow {
@@ -110,9 +108,10 @@ button {
     }
 }
 
-.game-root>* {
+/* Весь UI поверх видео и glow */
+.game-root> :not(.table-video) {
     position: relative;
-    z-index: 1;
+    z-index: 2;
 }
 
 .exit {
@@ -210,7 +209,6 @@ button {
     transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
 }
 
-/* wrapper for animations (so hover doesn’t fight with placement/capture) */
 .card-anim {
     position: absolute;
     inset: 0;
@@ -227,7 +225,6 @@ button {
     z-index: 1;
 }
 
-/* Пульсирующее свечение вокруг карты */
 .card.player {
     --aura: rgba(0, 180, 255, 0.55);
 }
@@ -257,7 +254,6 @@ button {
     }
 }
 
-/* “огненный” вращающийся ореол */
 .card::before {
     content: "";
     position: absolute;
@@ -295,15 +291,11 @@ button {
             rgba(255, 80, 80, 0.00));
 }
 
-/* Блик */
 .card::after {
     content: "";
     position: absolute;
     inset: -40%;
-    background: linear-gradient(120deg,
-            transparent 35%,
-            rgba(255, 255, 255, 0.18) 50%,
-            transparent 65%);
+    background: linear-gradient(120deg, transparent 35%, rgba(255, 255, 255, 0.18) 50%, transparent 65%);
     transform: translateX(-30%) rotate(10deg);
     opacity: 0;
     transition: opacity 0.18s ease, transform 0.45s ease;
@@ -331,8 +323,7 @@ button {
     box-shadow: 0 0 28px rgba(255, 215, 0, 0.32);
 }
 
-/* ---------- ANIMATIONS ---------- */
-/* плавная постановка */
+/* animations */
 .card.is-placed .card-anim {
     animation: placeSmooth 380ms cubic-bezier(.2, .9, .2, 1);
 }
@@ -340,21 +331,20 @@ button {
 @keyframes placeSmooth {
     0% {
         transform: translateY(22px) scale(0.95);
-        opacity: 0.0;
+        opacity: 0;
     }
 
     70% {
         transform: translateY(-4px) scale(1.03);
-        opacity: 1.0;
+        opacity: 1;
     }
 
     100% {
         transform: translateY(0) scale(1);
-        opacity: 1.0;
+        opacity: 1;
     }
 }
 
-/* захват: подпрыгивание */
 .card.is-captured .card-anim {
     animation: captureBounce 360ms cubic-bezier(.2, .9, .2, 1);
 }
@@ -377,7 +367,6 @@ button {
     }
 }
 
-/* Same/Plus flash на поставленной карте */
 .card.is-special {
     animation: specialRing 520ms ease-out;
 }
@@ -411,7 +400,7 @@ button {
         0 14px 28px rgba(0, 0, 0, 0.35);
 }
 
-/* ---------- TRIPLE TRIAD NUMBERS ---------- */
+/* numbers */
 .tt-badge {
     position: absolute;
     top: 9px;
@@ -453,7 +442,7 @@ button {
     left: 28px;
 }
 
-/* ---------- GAME OVER ---------- */
+/* game over */
 .game-over {
     position: fixed;
     inset: 0;
@@ -489,7 +478,6 @@ button {
     font-weight: 700;
 }
 
-/* ---------- TOUCH / LOW HEIGHT ---------- */
 @media (hover: none) {
     .card:hover:not(.disabled) {
         transform: none;
@@ -500,13 +488,6 @@ button {
     }
 }
 
-@media (max-height: 520px) {
-    :root {
-        --card-w: clamp(64px, calc((100vw - 24px - (var(--gap) * 2)) / 3), 96px);
-    }
-}
-
-/* ---------- REDUCED MOTION ---------- */
 @media (prefers-reduced-motion: reduce) {
     .game-root::before {
         animation: none !important;
@@ -514,11 +495,6 @@ button {
 
     .card::before {
         animation: none !important;
-    }
-
-    .card,
-    .card::after {
-        transition: none !important;
     }
 
     .card.player,
