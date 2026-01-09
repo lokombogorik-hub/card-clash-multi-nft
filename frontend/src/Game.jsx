@@ -7,7 +7,16 @@ const DIRS = [
     { dx: -1, dy: 0, a: "left", b: "right" },
 ];
 
-const BASE = import.meta.env.BASE_URL; // обычно "/"
+const rand = () => Math.ceil(Math.random() * 9);
+
+const BASE = import.meta.env.BASE_URL || "/";
+// чтобы BASE работал и с "/" и с "/subpath/"
+const withBase = (p) => {
+    const base = BASE.endsWith("/") ? BASE : BASE + "/";
+    const path = p.startsWith("/") ? p.slice(1) : p;
+    return base + path;
+};
+
 const ART = [
     "cards/card.jpg",
     "cards/card1.jpg",
@@ -19,7 +28,7 @@ const ART = [
     "cards/card7.jpg",
     "cards/card8.jpg",
     "cards/card9.jpg",
-].map((p) => BASE + p);
+].map(withBase);
 
 const genCard = (owner, id) => ({
     id,
@@ -74,7 +83,7 @@ export default function Game({ onExit }) {
                 grid[ni] = {
                     ...target,
                     owner: placed.owner,
-                    flipKey: (target.flipKey || 0) + 1, // <-- триггер анимации
+                    flipKey: (target.flipKey || 0) + 1,
                 };
             }
         }
@@ -98,10 +107,8 @@ export default function Game({ onExit }) {
         aiTurnGuard.current = { turnId: aiTurnGuard.current.turnId + 1, handled: false };
     };
 
-    // AI ход: один раз на один enemy-turn (фикс StrictMode)
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
-
         if (aiTurnGuard.current.handled) return;
         aiTurnGuard.current.handled = true;
 
@@ -220,31 +227,30 @@ function Card({ card, onClick, selected, disabled }) {
         return () => clearTimeout(t);
     }, [card?.flipKey]);
 
-    const ownerClass = card.owner === "player" ? "player" : "enemy";
-    const rarityClass = card.rarity ? `rarity-${card.rarity}` : "";
+    return (
+        <div
+            className={[
+                "card",
+                card.owner === "player" ? "player" : "enemy",
+                selected ? "selected" : "",
+                disabled ? "disabled" : "",
+                isFlipping ? "is-flipping" : "",
+            ].join(" ")}
+            onClick={disabled ? undefined : onClick}
+        >
+            <img
+                className="card-art-img"
+                src={card.imageUrl}
+                alt=""
+                draggable="false"
+                onError={() => console.error("Не загрузилась картинка карты:", card.imageUrl)}
+            />
 
-    function Card({ card, onClick, selected, disabled }) {
-        return (
-            <div
-                className={`card ${card.owner === "player" ? "player" : "enemy"} ${selected ? "selected" : ""} ${disabled ? "disabled" : ""}`}
-                onClick={disabled ? undefined : onClick}
-            >
-                <img
-                    className="card-art-img"
-                    src={card.imageUrl}
-                    alt=""
-                    draggable="false"
-                    onError={() => {
-                        console.error("Не загрузилась картинка карты:", card.imageUrl);
-                    }}
-                />
-
-                <div className="tt-badge" />
-                <span className="tt-num top">{card.values.top}</span>
-                <span className="tt-num left">{card.values.left}</span>
-                <span className="tt-num right">{card.values.right}</span>
-                <span className="tt-num bottom">{card.values.bottom}</span>
-            </div>
-        );
-    }
+            <div className="tt-badge" />
+            <span className="tt-num top">{card.values.top}</span>
+            <span className="tt-num left">{card.values.left}</span>
+            <span className="tt-num right">{card.values.right}</span>
+            <span className="tt-num bottom">{card.values.bottom}</span>
+        </div>
+    );
 }

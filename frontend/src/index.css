@@ -145,7 +145,11 @@ button {
 }
 
 /* ---------- CARD ---------- */
+
 .card {
+    width: var(--card-w);
+    height: var(--card-h);
+    border-radius: 12px;
 
     position: relative;
     overflow: hidden;
