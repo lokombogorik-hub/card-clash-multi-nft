@@ -28,7 +28,7 @@ button {
 
 /* Живой стол */
 .game-root {
-    background-image: url("/table.jpg");
+    background-image: url("src\public/table.jpg");
     background-size: cover;
     background-position: center;
     animation: tablePulse 8s ease-in-out infinite;
@@ -216,8 +216,6 @@ button {
     cursor: pointer;
     transition: transform 0.4s;
     transform-style: preserve-3d;
-    width: clamp(80px, 16vw, 140px);
-    height: calc(clamp(80px, 16vw, 140px) * 1.4);
 }
 
 .card.flipped {
@@ -317,19 +315,6 @@ button {
     opacity: 0.7;
     cursor: default;
 }
-
-@media (orientation: portrait) {
-    .board {
-        transform: scale(0.9);
-    }
-}
-
-@media (orientation: landscape) {
-    .board {
-        transform: scale(1);
-    }
-}
-
 
 /* Numbers */
 .card span {
