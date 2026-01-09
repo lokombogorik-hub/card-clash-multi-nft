@@ -1,357 +1,113 @@
-* {
-    box-sizing: border-box;
-    font-family: sans-serif;
-}
-
-body {
-    margin: 0;
-    background: #0b1220;
-    color: white;
-}
-
-.app {
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    justify-content: center;
-    align-items: center;
-}
-
-button {
-    padding: 12px 20px;
-    font-size: 16px;
-    cursor: pointer;
-    border-radius: 10px;
-    border: none;
-}
-
-/* Живой стол */
+/* ===== BACKGROUND TABLE ===== */
 .game-root {
-    background-image: url("src\public/table.jpg");
+    background-image: url("/table.jpg");
     background-size: cover;
     background-position: center;
-    animation: tablePulse 8s ease-in-out infinite;
+    animation: tableGlow 10s ease-in-out infinite;
 }
 
-@keyframes tablePulse {
+@keyframes tableGlow {
     0% {
-        filter: brightness(0.95) saturate(1);
+        filter: brightness(0.9);
     }
 
     50% {
-        filter: brightness(1.05) saturate(1.1);
+        filter: brightness(1.05);
     }
 
     100% {
-        filter: brightness(0.95) saturate(1);
+        filter: brightness(0.9);
     }
 }
 
-.exit {
-    position: absolute;
-    top: 20px;
-    left: 20px;
-}
-
-.card {
-    width: 120px;
-    height: 165px;
-    border-radius: 12px;
-    background: linear-gradient(145deg, #222, #111);
-    position: relative;
-    cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    transform-style: preserve-3d;
-}
-
-.card-inner {
-    width: 100%;
-    height: 100%;
-    transition: transform 0.6s;
-    transform-style: preserve-3d;
-}
-
-/* Flip animation */
-.card.flip {
-    animation: flip 0.4s ease;
-}
-
-@keyframes flip {
-    0% {
-        transform: rotateY(0deg);
-    }
-
-    100% {
-        transform: rotateY(180deg);
-    }
-}
-
-
-.card-front,
-.card-back {
-    position: absolute;
-    inset: 0;
-    border-radius: 12px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 32px;
-    backface-visibility: hidden;
-}
-
-.card-front {
-    background: #1e293b;
-}
-
-.card-back {
-    background: crimson;
-    transform: rotateY(180deg);
-}
-
+/* ===== LAYOUT ===== */
 .screen {
-    height: 100vh;
-    background: radial-gradient(circle at center, #0b1220, #020617);
+    min-height: 100vh;
     display: flex;
     flex-direction: column;
-    align-items: center;
     justify-content: space-between;
-    padding: 14px;
-    color: white;
-}
-
-.card.blue {
-    box-shadow: 0 0 15px rgba(0, 180, 255, 0.6);
-}
-
-.card.red {
-    box-shadow: 0 0 15px rgba(255, 80, 80, 0.6);
+    padding: 12px;
 }
 
 .hand {
     display: flex;
     justify-content: center;
-    pointer-events: 10px;
-}
-
-.hand.top {
-    margin-top: 6px;
-}
-
-.hand.bottom {
-    margin-bottom: 6px;
-}
-
-.scorebar {
-    display: flex;
-    justify-content: space-between;
-    width: 100%;
-    max-width: 360px;
-    margin: 8px auto;
-    font-size: 18px;
-    font-weight: bold;
-}
-
-.scorebar .red {
-    color: #ff5555;
-}
-
-.scorebar .blue {
-    color: #4da6ff;
-}
-
-.winner {
-    margin-top: 10px;
-    font-size: 22px;
-    font-weight: bold;
-    text-align: center;
-}
-
-.game-over {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 999;
-}
-
-.game-over-box {
-    background: #1e1e2f;
-    padding: 24px 32px;
-    border-radius: 16px;
-    text-align: center;
-    color: white;
-    min-width: 260px;
-}
-
-.game-over-box h2 {
-    margin-bottom: 12px;
-}
-
-.game-over-buttons {
-    display: flex;
     gap: 12px;
-    justify-content: center;
-    margin-top: 16px;
 }
-
-.game-over-buttons button {
-    padding: 8px 14px;
-    border-radius: 10px;
-    border: none;
-    cursor: pointer;
-    background: #3b82f6;
-    color: white;
-    font-weight: 600;
-}
-
-
-/* ---------------- CARD ANIMATION ---------------- */
-.card {
-    position: relative;
-    border-radius: 12px;
-    background: linear-gradient(135deg, #444, #222);
-    cursor: pointer;
-    transition: transform 0.4s;
-    transform-style: preserve-3d;
-}
-
-.card.flipped {
-    animation: flip 0.4s ease;
-}
-
-@keyframes flipCard {
-    0% {
-        transform: rotateY(0deg);
-    }
-
-    50% {
-        transform: rotateY(90deg) scale(1.1);
-    }
-
-    100% {
-        transform: rotateY(180deg);
-    }
-}
-
-/* Hover lift */
-.card:hover {
-    transform: translateY(-6px) scale(1.03);
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
-}
-
-.card:hover:not(.disabled) {
-    transform: translateY(-8px);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
-}
-
-.card.enemy {
-    background: #c0392b;
-}
-
-/* Selected card */
-.card.selected {
-    outline: 3px solid gold;
-    box-shadow: 0 0 15px gold;
-}
-
-/* ===== TRIPLE TRIAD VALUES ===== */
-
-/* 🔺 ромб (фон) */
-.tt-badge {
-    position: absolute;
-    top: 9px;
-    left: 10px;
-    width: 42px;
-    height: 42px;
-    background: rgba(0, 0, 0, 0.7);
-    transform: rotate(45deg);
-    z-index: 1;
-    border-radius: 4px;
-}
-
-/* 🔢 Цифры */
-.tt-num {
-    position: absolute;
-    font-size: 12px;
-    font-weight: bold;
-    color: #fff;
-    z-index: 2;
-    text-shadow: 0 1px 2px #000;
-}
-
-.tt-num.top {
-    top: 6px;
-    left: 28px;
-}
-
-.tt-num.left {
-    top: 24px;
-    left: 14px;
-}
-
-.tt-num.right {
-    top: 24px;
-    left: 42px;
-}
-
-.tt-num.bottom {
-    top: 40px;
-    left: 28px;
-}
-
-/* Owner colors */
-.card.player {
-    border: 2px solid #2a6bff;
-}
-
-.card.enemy {
-    border: 2px solid #ff2a2a;
-}
-
-.card.disabled {
-    opacity: 0.7;
-    cursor: default;
-}
-
-/* Numbers */
-.card span {
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.7);
-}
-
 
 .board {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, 110px);
+    grid-template-rows: repeat(3, 150px);
     gap: 10px;
-    width: 360px;
-    margin: 0 auto;
+    justify-content: center;
 }
 
+/* ===== BOARD CELL ===== */
 .cell {
-    width: 110px;
-    height: 150px;
-    border-radius: 10px;
     background: rgba(255, 255, 255, 0.08);
-    transition: background 0.2s;
-}
-
-.cell-active {
-    background: #334155;
-    box-shadow: inset 0 0 0 3px rgba(34, 197, 94, 0.5);
+    border-radius: 10px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .cell.highlight {
-    background: rgba(255, 215, 0, 0.15);
-    border-color: gold;
+    outline: 2px solid gold;
     cursor: pointer;
 }
 
-.exit {
-    position: absolute;
-    left: 10px;
-    top: 10px;
-    padding: 6px 10px;
+/* ===== CARD ===== */
+.card {
+    width: 110px;
+    height: 150px;
+    border-radius: 14px;
+    position: relative;
+    cursor: pointer;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.card:hover {
+    transform: translateY(-8px) scale(1.05);
+}
+
+.card.player {
+    box-shadow: 0 0 18px rgba(0, 150, 255, 0.6);
+}
+
+.card.enemy {
+    box-shadow: 0 0 18px rgba(255, 80, 80, 0.6);
+}
+
+/* ===== IMAGE INSIDE CARD ===== */
+.card-image {
+    width: 100%;
+    height: 100%;
+    border-radius: 14px;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+/* Enemy back */
+.enemy-back {
+    background-image: url("/card-back.png");
+}
+
+/* ===== SELECTED ===== */
+.card.selected {
+    outline: 3px solid gold;
+    box-shadow: 0 0 25px gold;
+}
+
+/* ===== MOBILE ===== */
+@media (max-width: 600px) {
+    .board {
+        transform: scale(0.9);
+    }
+
+    .card {
+        width: 90px;
+        height: 130px;
+    }
 }
