@@ -159,6 +159,23 @@ function resolveCombo(queue, grid, rules) {
 }
 
 export default function Game({ onExit }) {
+    const videoRef = useRef(null);
+
+    useEffect(() => {
+        const v = videoRef.current;
+        if (!v) return;
+
+        // принудительный play() (если autoplay иногда не стартует)
+        const tryPlay = async () => {
+            try {
+                await v.play();
+            } catch (e) {
+                console.warn("BG video autoplay blocked or failed:", e);
+            }
+        };
+        tryPlay();
+    }, []);
+
     const makeHands = () => ({
         player: Array.from({ length: 5 }, (_, i) => genCard("player", `p${i}`)),
         enemy: Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`)),
@@ -195,7 +212,6 @@ export default function Game({ onExit }) {
         };
 
         const { flipped, specialType } = resolvePlacementFlips(i, next, RULES);
-
         if (specialType) {
             next[i] = {
                 ...next[i],
@@ -239,7 +255,6 @@ export default function Game({ onExit }) {
         };
 
         const { flipped, specialType } = resolvePlacementFlips(cell, next, RULES);
-
         if (specialType) {
             next[cell] = {
                 ...next[cell],
@@ -280,68 +295,77 @@ export default function Game({ onExit }) {
 
     return (
         <div className="game-root">
-            {/* ВИДЕО-ФОН (MP4) */}
-            <video
-                className="table-video"
-                autoPlay
-                loop
-                muted
-                playsInline
-                preload="auto"
-            >
-                <source src={withBase("table.mp4")} type="video/mp4" />
-            </video>
+            {/* Видео-фон отдельным слоем */}
+            <div className="table-bg" aria-hidden="true">
+                <video
+                    ref={videoRef}
+                    className="table-video"
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    preload="auto"
+                    onError={(e) => {
+                        console.error("BG video error:", e?.currentTarget?.error);
+                    }}
+                >
+                    <source src={withBase("table.mp4")} type="video/mp4" />
+                </video>
+            </div>
 
-            <button className="exit" onClick={onExit}>← Меню</button>
+            {/* UI слой */}
+            <div className="game-ui">
+                <button className="exit" onClick={onExit}>← Меню</button>
 
-            {gameOver && (
-                <div className="game-over">
-                    <div className="game-over-box">
-                        <h2>
-                            {winner === "player" && "Победа"}
-                            {winner === "enemy" && "Поражение"}
-                            {winner === "draw" && "Ничья"}
-                        </h2>
-                        <div className="game-over-buttons">
-                            <button onClick={reset}>Заново</button>
-                            <button onClick={onExit}>Меню</button>
+                {gameOver && (
+                    <div className="game-over">
+                        <div className="game-over-box">
+                            <h2>
+                                {winner === "player" && "Победа"}
+                                {winner === "enemy" && "Поражение"}
+                                {winner === "draw" && "Ничья"}
+                            </h2>
+                            <div className="game-over-buttons">
+                                <button onClick={reset}>Заново</button>
+                                <button onClick={onExit}>Меню</button>
+                            </div>
                         </div>
                     </div>
+                )}
+
+                <div className="hand top">
+                    {enemy.map((c) => (
+                        <div key={c.id} className="hand-slot">
+                            <Card card={c} disabled />
+                        </div>
+                    ))}
                 </div>
-            )}
 
-            <div className="hand top">
-                {enemy.map((c) => (
-                    <div key={c.id} className="hand-slot">
-                        <Card card={c} disabled />
-                    </div>
-                ))}
-            </div>
+                <div className="scorebar">🟥 {score.red} : {score.blue} 🟦</div>
 
-            <div className="scorebar">🟥 {score.red} : {score.blue} 🟦</div>
+                <div className="board">
+                    {board.map((cell, i) => (
+                        <div
+                            key={i}
+                            className={`cell ${selected && !cell ? "highlight" : ""}`}
+                            onClick={() => placeCard(i)}
+                        >
+                            {cell && <Card card={cell} />}
+                        </div>
+                    ))}
+                </div>
 
-            <div className="board">
-                {board.map((cell, i) => (
-                    <div
-                        key={i}
-                        className={`cell ${selected && !cell ? "highlight" : ""}`}
-                        onClick={() => placeCard(i)}
-                    >
-                        {cell && <Card card={cell} />}
-                    </div>
-                ))}
-            </div>
-
-            <div className="hand bottom">
-                {player.map((c) => (
-                    <div key={c.id} className="hand-slot">
-                        <Card
-                            card={c}
-                            selected={selected?.id === c.id}
-                            onClick={() => setSelected(c)}
-                        />
-                    </div>
-                ))}
+                <div className="hand bottom">
+                    {player.map((c) => (
+                        <div key={c.id} className="hand-slot">
+                            <Card
+                                card={c}
+                                selected={selected?.id === c.id}
+                                onClick={() => setSelected(c)}
+                            />
+                        </div>
+                    ))}
+                </div>
             </div>
         </div>
     );
