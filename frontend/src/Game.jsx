@@ -1,9 +1,4 @@
-import React, { useState, useEffect } from "react";
-
-/* ---------- CONFIG ---------- */
-
-const CARD_W = 120;
-const CARD_H = 165;
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 const DIRS = [
     { dx: 0, dy: -1, a: "top", b: "bottom" },
@@ -17,24 +12,19 @@ const rand = () => Math.ceil(Math.random() * 9);
 const genCard = (owner, id) => ({
     id,
     owner,
-    values: {
-        top: rand(),
-        right: rand(),
-        bottom: rand(),
-        left: rand(),
-    },
+    values: { top: rand(), right: rand(), bottom: rand(), left: rand() },
+    imageUrl: "/cards/default.webp",
+    rarity: "common",
+    flipKey: 0,
 });
 
-/* ---------- GAME ---------- */
+export default function Game({ onExit }) {
+    const makeHands = () => ({
+        player: Array.from({ length: 5 }, (_, i) => genCard("player", `p${i}`)),
+        enemy: Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`)),
+    });
 
-export default function Game() {
-    const [playerHand, setPlayerHand] = useState(
-        Array.from({ length: 5 }, (_, i) => genCard("player", `p${i}`))
-    );
-    const [enemyHand, setEnemyHand] = useState(
-        Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`))
-    );
-
+    const [{ player, enemy }, setHands] = useState(makeHands);
     const [board, setBoard] = useState(Array(9).fill(null));
     const [selected, setSelected] = useState(null);
     const [turn, setTurn] = useState("player");
@@ -42,28 +32,41 @@ export default function Game() {
     const [gameOver, setGameOver] = useState(false);
     const [winner, setWinner] = useState(null);
 
-    /* ---------- FLIP ---------- */
+    const aiTurnGuard = useRef({ turnId: 0, handled: false });
+
+    const reset = () => {
+        const h = makeHands();
+        setHands(h);
+        setBoard(Array(9).fill(null));
+        setSelected(null);
+        setTurn("player");
+        setGameOver(false);
+        setWinner(null);
+        aiTurnGuard.current = { turnId: 0, handled: false };
+    };
 
     const tryFlip = (idx, placed, grid) => {
         const x = idx % 3;
         const y = Math.floor(idx / 3);
 
-        DIRS.forEach(({ dx, dy, a, b }) => {
+        for (const { dx, dy, a, b } of DIRS) {
             const nx = x + dx;
             const ny = y + dy;
-            if (nx < 0 || nx > 2 || ny < 0 || ny > 2) return;
+            if (nx < 0 || nx > 2 || ny < 0 || ny > 2) continue;
 
             const ni = ny * 3 + nx;
             const target = grid[ni];
-            if (!target || target.owner === placed.owner) return;
+            if (!target || target.owner === placed.owner) continue;
 
             if (placed.values[a] > target.values[b]) {
-                grid[ni] = { ...target, owner: placed.owner, flipped: true };
+                grid[ni] = {
+                    ...target,
+                    owner: placed.owner,
+                    flipKey: (target.flipKey || 0) + 1, // <-- триггер анимации
+                };
             }
-        });
+        }
     };
-
-    /* ---------- PLAYER MOVE ---------- */
 
     const placeCard = (i) => {
         if (turn !== "player") return;
@@ -76,27 +79,31 @@ export default function Game() {
         tryFlip(i, placed, next);
 
         setBoard(next);
-        setPlayerHand(h => h.filter(c => c.id !== selected.id));
+        setHands((h) => ({ ...h, player: h.player.filter((c) => c.id !== selected.id) }));
         setSelected(null);
         setTurn("enemy");
+
+        aiTurnGuard.current = { turnId: aiTurnGuard.current.turnId + 1, handled: false };
     };
 
-    /* ---------- AI MOVE ---------- */
-
+    // AI ход: один раз на один enemy-turn (фикс StrictMode)
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
 
+        if (aiTurnGuard.current.handled) return;
+        aiTurnGuard.current.handled = true;
+
         const empty = board
             .map((c, i) => (c === null ? i : null))
-            .filter(i => i !== null);
+            .filter((v) => v !== null);
 
-        if (!empty.length || !enemyHand.length) {
+        if (!empty.length || !enemy.length) {
             setTurn("player");
             return;
         }
 
         const cell = empty[Math.floor(Math.random() * empty.length)];
-        const card = enemyHand[Math.floor(Math.random() * enemyHand.length)];
+        const card = enemy[Math.floor(Math.random() * enemy.length)];
 
         const next = [...board];
         const placed = { ...card, owner: "enemy" };
@@ -104,62 +111,65 @@ export default function Game() {
         next[cell] = placed;
         tryFlip(cell, placed, next);
 
-        setTimeout(() => {
+        const t = setTimeout(() => {
             setBoard(next);
-            setEnemyHand(h => h.filter(c => c.id !== card.id));
+            setHands((h) => ({ ...h, enemy: h.enemy.filter((c) => c.id !== card.id) }));
             setTurn("player");
-        }, 500);
-    }, [turn]);
+        }, 450);
 
-    /* ---------- GAME OVER ---------- */
+        return () => clearTimeout(t);
+    }, [turn, gameOver, board, enemy]);
 
     useEffect(() => {
-        if (board.some(c => c === null)) return;
+        if (board.some((c) => c === null)) return;
 
-        const p = board.filter(c => c.owner === "player").length;
-        const e = board.filter(c => c.owner === "enemy").length;
+        const p = board.filter((c) => c.owner === "player").length;
+        const e = board.filter((c) => c.owner === "enemy").length;
 
         setWinner(p > e ? "player" : e > p ? "enemy" : "draw");
         setGameOver(true);
     }, [board]);
 
-    /* ---------- SCORE ---------- */
-
-    const score = board.reduce(
-        (a, c) => {
-            if (!c) return a;
-            c.owner === "player" ? a.blue++ : a.red++;
-            return a;
-        },
-        { red: 0, blue: 0 }
-    );
-
-    /* ---------- RENDER ---------- */
+    const score = useMemo(() => {
+        return board.reduce(
+            (a, c) => {
+                if (!c) return a;
+                c.owner === "player" ? a.blue++ : a.red++;
+                return a;
+            },
+            { red: 0, blue: 0 }
+        );
+    }, [board]);
 
     return (
         <div className="game-root">
+            <button className="exit" onClick={onExit}>← Меню</button>
+
             {gameOver && (
                 <div className="game-over">
-                    <h2>
-                        {winner === "player" && "🏆 Победа"}
-                        {winner === "enemy" && "💀 Поражение"}
-                        {winner === "draw" && "🤝 Ничья"}
-                    </h2>
-                    <button onClick={() => window.location.reload()}>🔄 Заново</button>
+                    <div className="game-over-box">
+                        <h2>
+                            {winner === "player" && "Победа"}
+                            {winner === "enemy" && "Поражение"}
+                            {winner === "draw" && "Ничья"}
+                        </h2>
+                        <div className="game-over-buttons">
+                            <button onClick={reset}>Заново</button>
+                            <button onClick={onExit}>Меню</button>
+                        </div>
+                    </div>
                 </div>
             )}
 
             <div className="hand top">
-                {enemyHand.map((c, i) => (
+                {enemy.map((c, i) => (
                     <div key={c.id} style={{ marginLeft: i ? -40 : 0 }}>
                         <Card card={c} disabled />
                     </div>
                 ))}
             </div>
 
-            <div className="scorebar">
-                🟥 {score.red} : {score.blue} 🟦
-            </div>
+            <div className="scorebar">🟥 {score.red} : {score.blue} 🟦</div>
 
             <div className="board">
                 {board.map((cell, i) => (
@@ -174,7 +184,7 @@ export default function Game() {
             </div>
 
             <div className="hand bottom">
-                {playerHand.map((c, i) => (
+                {player.map((c, i) => (
                     <div key={c.id} style={{ marginLeft: i ? -40 : 0 }}>
                         <Card
                             card={c}
@@ -188,19 +198,34 @@ export default function Game() {
     );
 }
 
-/* ---------- CARD ---------- */
-
 function Card({ card, onClick, selected, disabled }) {
+    const [isFlipping, setIsFlipping] = useState(false);
+
+    useEffect(() => {
+        if (!card?.flipKey) return;
+        setIsFlipping(true);
+        const t = setTimeout(() => setIsFlipping(false), 420);
+        return () => clearTimeout(t);
+    }, [card?.flipKey]);
+
+    const ownerClass = card.owner === "player" ? "player" : "enemy";
+    const rarityClass = card.rarity ? `rarity-${card.rarity}` : "";
+
     return (
         <div
-            className={`card ${card.owner === "player" ? "blue" : "red"} jump`}
-
+            className={[
+                "card",
+                ownerClass,
+                rarityClass,
+                selected ? "selected" : "",
+                disabled ? "disabled" : "",
+                isFlipping ? "is-flipping" : "",
+            ].join(" ")}
             onClick={disabled ? undefined : onClick}
+            style={{ "--art": card.imageUrl ? `url(${card.imageUrl})` : "none" }}
         >
-            {/* Треугольный бейдж */}
+            <div className="card-art" />
             <div className="tt-badge" />
-
-            {/* Цифры как в Triple Triad */}
             <span className="tt-num top">{card.values.top}</span>
             <span className="tt-num left">{card.values.left}</span>
             <span className="tt-num right">{card.values.right}</span>
@@ -208,21 +233,3 @@ function Card({ card, onClick, selected, disabled }) {
         </div>
     );
 }
-
-
-/* ---------- NUMBERS ---------- */
-
-const base = {
-    position: "absolute",
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#fff",
-    textShadow: "0 1px 2px #000",
-};
-
-const num = {
-    top: { ...base, top: 6, left: "50%", transform: "translateX(-50%)" },
-    right: { ...base, right: 6, top: "50%", transform: "translateY(-50%)" },
-    bottom: { ...base, bottom: 6, left: "50%", transform: "translateX(-50%)" },
-    left: { ...base, left: 6, top: "50%", transform: "translateY(-50%)" },
-};
