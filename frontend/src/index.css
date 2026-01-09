@@ -29,33 +29,21 @@ button {
     border: none;
 }
 
-/* ---------- RESPONSIVE SIZING ---------- */
+/* ---------- GAME LAYOUT ---------- */
 :root {
-    --ui-pad: clamp(10px, 2.2vw, 16px);
-    --gap: clamp(6px, 2vw, 10px);
-
-    /* 3 карты + 2 гэпа должны влезать по ширине */
-    --card-w: clamp(76px,
-            calc((100vw - (var(--ui-pad) * 2) - (var(--gap) * 2)) / 3),
-            120px);
-
-    /* 165/120 = 1.375 */
-    --card-h: calc(var(--card-w) * 1.375);
-
-    /* перекрытие карт в руке */
-    --hand-overlap: 0.34;
+    --card-w: 120px;
+    --card-h: 165px;
 }
 
-/* ---------- GAME ROOT ---------- */
 .game-root {
     min-height: 100vh;
     width: 100%;
-    padding: var(--ui-pad);
-    padding-top: calc(var(--ui-pad) + env(safe-area-inset-top, 0px));
-    padding-bottom: calc(var(--ui-pad) + env(safe-area-inset-bottom, 0px));
+    padding: 14px;
 
+    /* стол */
     background: url("/table.jpg") center/cover no-repeat;
 
+    /* раскладка */
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -64,7 +52,7 @@ button {
     overflow: hidden;
 }
 
-/* “живой” свет по столу */
+/* лёгкий “живой” свет по столу */
 .game-root::before {
     content: "";
     position: absolute;
@@ -75,7 +63,6 @@ button {
     animation: tableGlow 10s ease-in-out infinite;
     pointer-events: none;
     mix-blend-mode: screen;
-    z-index: 0;
 }
 
 @keyframes tableGlow {
@@ -95,12 +82,6 @@ button {
     }
 }
 
-/* чтобы контент был поверх свечения */
-.game-root>* {
-    position: relative;
-    z-index: 1;
-}
-
 .exit {
     position: absolute;
     left: 10px;
@@ -113,19 +94,12 @@ button {
     backdrop-filter: blur(6px);
 }
 
-/* ---------- HAND / SCORE ---------- */
+/* ---------- HANDS / SCORE ---------- */
 .hand {
     display: flex;
     justify-content: center;
-    width: 100%;
-
-    /* если на очень узких экранах не влезает — можно скроллить */
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-
-    padding: 6px 0;
     pointer-events: auto;
+    /* было 10px — это ошибка */
 }
 
 .hand.top {
@@ -134,16 +108,6 @@ button {
 
 .hand.bottom {
     margin-bottom: 6px;
-}
-
-/* перекрытие карт в руке */
-.hand-slot {
-    margin-left: calc(var(--card-w) * -1 * var(--hand-overlap));
-    flex: 0 0 auto;
-}
-
-.hand-slot:first-child {
-    margin-left: 0;
 }
 
 .scorebar {
@@ -160,7 +124,7 @@ button {
 .board {
     display: grid;
     grid-template-columns: repeat(3, var(--card-w));
-    gap: var(--gap);
+    gap: 10px;
     justify-content: center;
     margin: 0 auto;
 }
@@ -181,6 +145,7 @@ button {
 }
 
 /* ---------- CARD ---------- */
+
 .card {
     width: var(--card-w);
     height: var(--card-h);
@@ -193,10 +158,12 @@ button {
     transform-style: preserve-3d;
     transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
 
+    /* базовая рамка/фон под арт */
     background: linear-gradient(145deg, #1a2232, #0f1625);
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
 }
 
+/* слой арта (ВАЖНО) */
 .card-art-img {
     position: absolute;
     left: 8px;
@@ -208,7 +175,19 @@ button {
     z-index: 1;
 }
 
-/* блеск */
+/* цифры/бейдж поверх картинки */
+.tt-badge {
+    z-index: 4;
+    position: absolute;
+}
+
+.tt-num {
+    z-index: 5;
+    position: absolute;
+}
+
+
+/* блеск “как в ККИ” */
 .card::after {
     content: "";
     position: absolute;
@@ -222,7 +201,6 @@ button {
     transition: opacity 0.18s ease, transform 0.45s ease;
     pointer-events: none;
     mix-blend-mode: screen;
-    z-index: 2;
 }
 
 .card:hover:not(.disabled) {
@@ -240,13 +218,15 @@ button {
     cursor: default;
 }
 
-/* owner colors */
-.card.player {
+/* поддержка обоих вариантов классов владельца: blue/red и player/enemy */
+.card.player,
+.card.blue {
     border: 2px solid rgba(42, 107, 255, 0.95);
     box-shadow: 0 0 0 2px rgba(70, 140, 255, 0.30), 0 0 18px rgba(0, 180, 255, 0.35);
 }
 
-.card.enemy {
+.card.enemy,
+.card.red {
     border: 2px solid rgba(255, 42, 42, 0.95);
     box-shadow: 0 0 0 2px rgba(255, 70, 70, 0.30), 0 0 18px rgba(255, 80, 80, 0.35);
 }
@@ -256,7 +236,7 @@ button {
     box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.35), 0 0 22px rgba(255, 215, 0, 0.35);
 }
 
-/* flip effect */
+/* Flip (если ты добавлял класс is-flipping из кода) */
 .card.is-flipping {
     animation: ownerFlip 420ms cubic-bezier(.2, .8, .2, 1);
 }
@@ -285,7 +265,7 @@ button {
     background: rgba(0, 0, 0, 0.65);
     transform: rotate(45deg);
     border-radius: 4px;
-    z-index: 4;
+    /* поверх арта */
 }
 
 .tt-num {
@@ -295,6 +275,7 @@ button {
     color: #fff;
     text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85);
     z-index: 5;
+    /* поверх арта */
 }
 
 .tt-num.top {
@@ -325,7 +306,6 @@ button {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 999;
 }
 
 .game-over-box {
@@ -359,26 +339,7 @@ button {
     font-weight: 600;
 }
 
-/* ---------- MOBILE / LOW HEIGHT ---------- */
-@media (max-height: 520px) {
-    :root {
-        --card-w: clamp(64px, calc((100vw - 24px - (var(--gap) * 2)) / 3), 96px);
-    }
-}
-
-/* на тач-устройствах hover не нужен */
-@media (hover: none) {
-    .card:hover:not(.disabled) {
-        transform: none;
-        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
-    }
-
-    .card::after {
-        display: none;
-    }
-}
-
-/* reduced motion */
+/* ---------- REDUCED MOTION ---------- */
 @media (prefers-reduced-motion: reduce) {
     .game-root::before {
         animation: none !important;
