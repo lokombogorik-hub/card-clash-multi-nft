@@ -9,11 +9,13 @@ const DIRS = [
 
 const rand = () => Math.ceil(Math.random() * 9);
 
+const ART = ["/cards/card1.jpg", "/cards/card2.jpg", "/cards/card3.jpg"];
+
 const genCard = (owner, id) => ({
     id,
     owner,
     values: { top: rand(), right: rand(), bottom: rand(), left: rand() },
-    imageUrl: "/cards/default.webp",
+    imageUrl: ART[Math.floor(Math.random() * ART.length)],
     rarity: "common",
     flipKey: 0,
 });

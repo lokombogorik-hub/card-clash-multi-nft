@@ -28,10 +28,10 @@ button {
 
 /* Живой стол */
 .game-root {
-    background-image: url("/table.jpg");
-    background-size: cover;
-    background-position: center;
-    animation: tablePulse 8s ease-in-out infinite;
+    min-height: 100vh;
+    width: 100%;
+    padding: 14px;
+    background: url("/table.jpg") center/cover no-repeat;
 }
 
 @keyframes tablePulse {
@@ -46,6 +46,27 @@ button {
     100% {
         filter: brightness(0.95) saturate(1);
     }
+}
+
+.card {
+    position: relative;
+    overflow: hidden;
+}
+
+.card-art {
+    position: absolute;
+    inset: 8px;
+    border-radius: 10px;
+    background-image: var(--art);
+    background-size: cover;
+    background-position: center;
+    z-index: 1;
+}
+
+/* цифры и badge должны быть выше арта */
+.tt-badge,
+.tt-num {
+    z-index: 3;
 }
 
 .exit {
