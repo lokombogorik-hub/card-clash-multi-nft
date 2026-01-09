@@ -230,14 +230,6 @@ button {
 
 
 /* ---------------- CARD ANIMATION ---------------- */
-.card {
-    position: relative;
-    border-radius: 12px;
-    background: linear-gradient(135deg, #444, #222);
-    cursor: pointer;
-    transition: transform 0.4s;
-    transform-style: preserve-3d;
-}
 
 .card.flipped {
     animation: flip 0.4s ease;

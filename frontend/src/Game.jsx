@@ -215,18 +215,12 @@ function Card({ card, onClick, selected, disabled }) {
 
     return (
         <div
-            className={[
-                "card",
-                ownerClass,
-                rarityClass,
-                selected ? "selected" : "",
-                disabled ? "disabled" : "",
-                isFlipping ? "is-flipping" : "",
-            ].join(" ")}
+            className={`card ${card.owner === "player" ? "player" : "enemy"} ${selected ? "selected" : ""} ${disabled ? "disabled" : ""}`}
             onClick={disabled ? undefined : onClick}
-            style={{ "--art": card.imageUrl ? `url(${card.imageUrl})` : "none" }}
+            style={{ "--art": `url(${card.imageUrl})` }}
         >
             <div className="card-art" />
+
             <div className="tt-badge" />
             <span className="tt-num top">{card.values.top}</span>
             <span className="tt-num left">{card.values.left}</span>
