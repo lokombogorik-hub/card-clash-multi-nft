@@ -13,6 +13,7 @@ const DIRS = [
 
 const rand = () => Math.ceil(Math.random() * 9);
 
+// Vite base URL (для деплоя в подпапку)
 const BASE = import.meta.env.BASE_URL || "/";
 const withBase = (p) => {
     const base = BASE.endsWith("/") ? BASE : BASE + "/";
@@ -20,6 +21,7 @@ const withBase = (p) => {
     return base + path;
 };
 
+// арты (можешь заменить/расширить)
 const ART = [
     "cards/card.jpg",
     "cards/card1.jpg",
@@ -33,7 +35,11 @@ const ART = [
     "cards/card9.jpg",
 ].map(withBase);
 
-const RULES = { combo: true, same: true, plus: true };
+const RULES = {
+    combo: true,
+    same: true,
+    plus: true,
+};
 
 const genCard = (owner, id) => ({
     id,
@@ -41,15 +47,18 @@ const genCard = (owner, id) => ({
     values: { top: rand(), right: rand(), bottom: rand(), left: rand() },
     imageUrl: ART[Math.floor(Math.random() * ART.length)],
     rarity: "common",
-    placeKey: 0,
-    captureKey: 0,
-    specialKey: 0,
-    specialType: "",
+
+    // keys for animations
+    placeKey: 0,    // when card is placed on board
+    captureKey: 0,  // when card is captured (bounce)
+    specialKey: 0,  // when Same/Plus triggers on placed card
+    specialType: "", // "same" | "plus" | "both"
 });
 
 function neighborsOf(idx) {
     const x = idx % 3;
     const y = Math.floor(idx / 3);
+
     const res = [];
     for (const { dx, dy, a, b } of DIRS) {
         const nx = x + dx;
@@ -60,6 +69,9 @@ function neighborsOf(idx) {
     return res;
 }
 
+/**
+ * Capture helper (flip target card to newOwner with animation key bump)
+ */
 function flipToOwner(grid, ni, newOwner) {
     const t = grid[ni];
     if (!t) return false;
@@ -73,28 +85,43 @@ function flipToOwner(grid, ni, newOwner) {
     return true;
 }
 
+/**
+ * Resolve a placement using Power + Same + Plus (conditions computed from snapshot),
+ * returns indices of flipped cards (direct flips only).
+ */
 function resolvePlacementFlips(placedIdx, grid, rules) {
     const placed = grid[placedIdx];
     if (!placed) return { flipped: [], specialType: "" };
 
+    // snapshot neighbor values/owners at the moment of placement
     const infos = neighborsOf(placedIdx)
         .map(({ ni, a, b }) => {
             const target = grid[ni];
             if (!target) return null;
             const p = placed.values[a];
             const q = target.values[b];
-            return { ni, placedSide: p, targetSide: q, sum: p + q };
+            return {
+                ni,
+                a,
+                b,
+                placedSide: p,
+                targetSide: q,
+                sum: p + q,
+                targetOwner: target.owner,
+            };
         })
         .filter(Boolean);
 
     const toFlip = new Set();
 
-    // Power
+    // 1) Power rule
     for (const info of infos) {
-        if (info.placedSide > info.targetSide) toFlip.add(info.ni);
+        if (info.placedSide > info.targetSide) {
+            toFlip.add(info.ni);
+        }
     }
 
-    // Same
+    // 2) Same rule (condition can be satisfied by any adjacent cards; flip only opponents)
     let sameTriggered = false;
     if (rules.same) {
         const eq = infos.filter((i) => i.placedSide === i.targetSide);
@@ -104,14 +131,15 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
         }
     }
 
-    // Plus
+    // 3) Plus rule (group by equal sums; if any sum appears >=2 -> triggers)
     let plusTriggered = false;
     if (rules.plus) {
         const groups = new Map();
         for (const i of infos) {
-            const arr = groups.get(i.sum) || [];
+            const key = i.sum;
+            const arr = groups.get(key) || [];
             arr.push(i);
-            groups.set(i.sum, arr);
+            groups.set(key, arr);
         }
         for (const [, arr] of groups) {
             if (arr.length >= 2) {
@@ -124,6 +152,7 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
     const specialType =
         sameTriggered && plusTriggered ? "both" : sameTriggered ? "same" : plusTriggered ? "plus" : "";
 
+    // Apply flips (only if opponent)
     const flipped = [];
     for (const ni of toFlip) {
         if (flipToOwner(grid, ni, placed.owner)) flipped.push(ni);
@@ -132,6 +161,11 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
     return { flipped, specialType };
 }
 
+/**
+ * Combo propagation:
+ * In Triple Triad, combo typically propagates using the normal Power rule
+ * from cards that were captured by Same/Plus/Power.
+ */
 function captureByPowerFrom(idx, grid) {
     const src = grid[idx];
     if (!src) return [];
@@ -141,6 +175,7 @@ function captureByPowerFrom(idx, grid) {
         const t = grid[ni];
         if (!t) continue;
         if (t.owner === src.owner) continue;
+
         if (src.values[a] > t.values[b]) {
             if (flipToOwner(grid, ni, src.owner)) flipped.push(ni);
         }
@@ -150,6 +185,7 @@ function captureByPowerFrom(idx, grid) {
 
 function resolveCombo(queue, grid, rules) {
     if (!rules.combo) return;
+
     const q = [...queue];
     while (q.length) {
         const idx = q.shift();
@@ -159,23 +195,6 @@ function resolveCombo(queue, grid, rules) {
 }
 
 export default function Game({ onExit }) {
-    const videoRef = useRef(null);
-
-    useEffect(() => {
-        const v = videoRef.current;
-        if (!v) return;
-
-        // принудительный play() (если autoplay иногда не стартует)
-        const tryPlay = async () => {
-            try {
-                await v.play();
-            } catch (e) {
-                console.warn("BG video autoplay blocked or failed:", e);
-            }
-        };
-        tryPlay();
-    }, []);
-
     const makeHands = () => ({
         player: Array.from({ length: 5 }, (_, i) => genCard("player", `p${i}`)),
         enemy: Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`)),
@@ -185,9 +204,11 @@ export default function Game({ onExit }) {
     const [board, setBoard] = useState(Array(9).fill(null));
     const [selected, setSelected] = useState(null);
     const [turn, setTurn] = useState("player");
+
     const [gameOver, setGameOver] = useState(false);
     const [winner, setWinner] = useState(null);
 
+    // guard for StrictMode (dev) to avoid double AI move
     const aiGuard = useRef({ handled: false });
 
     const reset = () => {
@@ -205,13 +226,18 @@ export default function Game({ onExit }) {
         if (!selected || board[i]) return;
 
         const next = [...board];
-        next[i] = {
+        const placed = {
             ...selected,
             owner: "player",
             placeKey: (selected.placeKey || 0) + 1,
         };
 
+        next[i] = placed;
+
+        // resolve placement (Power + Same + Plus)
         const { flipped, specialType } = resolvePlacementFlips(i, next, RULES);
+
+        // mark special on the placed card (for flash animation)
         if (specialType) {
             next[i] = {
                 ...next[i],
@@ -220,6 +246,7 @@ export default function Game({ onExit }) {
             };
         }
 
+        // combo propagation (power rule only) from all flipped cards
         resolveCombo(flipped, next, RULES);
 
         setBoard(next);
@@ -230,6 +257,7 @@ export default function Game({ onExit }) {
         setTurn("enemy");
     };
 
+    // AI (рандом)
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
         if (aiGuard.current.handled) return;
@@ -255,6 +283,7 @@ export default function Game({ onExit }) {
         };
 
         const { flipped, specialType } = resolvePlacementFlips(cell, next, RULES);
+
         if (specialType) {
             next[cell] = {
                 ...next[cell],
@@ -274,10 +303,13 @@ export default function Game({ onExit }) {
         return () => clearTimeout(t);
     }, [turn, gameOver, board, enemy]);
 
+    // Game over
     useEffect(() => {
         if (board.some((c) => c === null)) return;
+
         const p = board.filter((c) => c.owner === "player").length;
         const e = board.filter((c) => c.owner === "enemy").length;
+
         setWinner(p > e ? "player" : e > p ? "enemy" : "draw");
         setGameOver(true);
     }, [board]);
@@ -295,77 +327,56 @@ export default function Game({ onExit }) {
 
     return (
         <div className="game-root">
-            {/* Видео-фон отдельным слоем */}
-            <div className="table-bg" aria-hidden="true">
-                <video
-                    ref={videoRef}
-                    className="table-video"
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    preload="auto"
-                    onError={(e) => {
-                        console.error("BG video error:", e?.currentTarget?.error);
-                    }}
-                >
-                    <source src={withBase("table.mp4")} type="video/mp4" />
-                </video>
-            </div>
+            <button className="exit" onClick={onExit}>← Меню</button>
 
-            {/* UI слой */}
-            <div className="game-ui">
-                <button className="exit" onClick={onExit}>← Меню</button>
-
-                {gameOver && (
-                    <div className="game-over">
-                        <div className="game-over-box">
-                            <h2>
-                                {winner === "player" && "Победа"}
-                                {winner === "enemy" && "Поражение"}
-                                {winner === "draw" && "Ничья"}
-                            </h2>
-                            <div className="game-over-buttons">
-                                <button onClick={reset}>Заново</button>
-                                <button onClick={onExit}>Меню</button>
-                            </div>
+            {gameOver && (
+                <div className="game-over">
+                    <div className="game-over-box">
+                        <h2>
+                            {winner === "player" && "Победа"}
+                            {winner === "enemy" && "Поражение"}
+                            {winner === "draw" && "Ничья"}
+                        </h2>
+                        <div className="game-over-buttons">
+                            <button onClick={reset}>Заново</button>
+                            <button onClick={onExit}>Меню</button>
                         </div>
                     </div>
-                )}
-
-                <div className="hand top">
-                    {enemy.map((c) => (
-                        <div key={c.id} className="hand-slot">
-                            <Card card={c} disabled />
-                        </div>
-                    ))}
                 </div>
+            )}
 
-                <div className="scorebar">🟥 {score.red} : {score.blue} 🟦</div>
+            <div className="hand top">
+                {enemy.map((c) => (
+                    <div key={c.id} className="hand-slot">
+                        <Card card={c} disabled />
+                    </div>
+                ))}
+            </div>
 
-                <div className="board">
-                    {board.map((cell, i) => (
-                        <div
-                            key={i}
-                            className={`cell ${selected && !cell ? "highlight" : ""}`}
-                            onClick={() => placeCard(i)}
-                        >
-                            {cell && <Card card={cell} />}
-                        </div>
-                    ))}
-                </div>
+            <div className="scorebar">🟥 {score.red} : {score.blue} 🟦</div>
 
-                <div className="hand bottom">
-                    {player.map((c) => (
-                        <div key={c.id} className="hand-slot">
-                            <Card
-                                card={c}
-                                selected={selected?.id === c.id}
-                                onClick={() => setSelected(c)}
-                            />
-                        </div>
-                    ))}
-                </div>
+            <div className="board">
+                {board.map((cell, i) => (
+                    <div
+                        key={i}
+                        className={`cell ${selected && !cell ? "highlight" : ""}`}
+                        onClick={() => placeCard(i)}
+                    >
+                        {cell && <Card card={cell} />}
+                    </div>
+                ))}
+            </div>
+
+            <div className="hand bottom">
+                {player.map((c) => (
+                    <div key={c.id} className="hand-slot">
+                        <Card
+                            card={c}
+                            selected={selected?.id === c.id}
+                            onClick={() => setSelected(c)}
+                        />
+                    </div>
+                ))}
             </div>
         </div>
     );
@@ -421,7 +432,13 @@ function Card({ card, onClick, selected, disabled }) {
             onClick={disabled ? undefined : onClick}
         >
             <div className="card-anim">
-                <img className="card-art-img" src={card.imageUrl} alt="" draggable="false" />
+                <img
+                    className="card-art-img"
+                    src={card.imageUrl}
+                    alt=""
+                    draggable="false"
+                />
+
                 <div className="tt-badge" />
                 <span className="tt-num top">{card.values.top}</span>
                 <span className="tt-num left">{card.values.left}</span>
