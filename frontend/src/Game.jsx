@@ -9,8 +9,8 @@ const DIRS = [
 
 const rand = () => Math.ceil(Math.random() * 9);
 
+// base url (важно для деплоя в подпапку)
 const BASE = import.meta.env.BASE_URL || "/";
-// чтобы BASE работал и с "/" и с "/subpath/"
 const withBase = (p) => {
     const base = BASE.endsWith("/") ? BASE : BASE + "/";
     const path = p.startsWith("/") ? p.slice(1) : p;
@@ -30,14 +30,95 @@ const ART = [
     "cards/card9.jpg",
 ].map(withBase);
 
+/**
+ * RULES:
+ * - combo: цепочка захватов (Combo). Включено.
+ * При желании позже добавим Same/Plus/Elemental.
+ */
+const RULES = {
+    combo: true,
+};
+
 const genCard = (owner, id) => ({
     id,
     owner,
     values: { top: rand(), right: rand(), bottom: rand(), left: rand() },
     imageUrl: ART[Math.floor(Math.random() * ART.length)],
     rarity: "common",
-    flipKey: 0,
+    placeKey: 0,   // для анимации выкладывания
+    captureKey: 0, // для анимации захвата (подпрыгивание)
 });
+
+function getNeighbors(idx) {
+    const x = idx % 3;
+    const y = Math.floor(idx / 3);
+
+    const res = [];
+    for (const { dx, dy, a, b } of DIRS) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || nx > 2 || ny < 0 || ny > 2) continue;
+        const ni = ny * 3 + nx;
+        res.push({ ni, a, b });
+    }
+    return res;
+}
+
+/**
+ * Захват по базовому правилу: если side(placed) > opposite(side(neighbor)) → захват.
+ * Возвращает массив индексов захваченных карт.
+ */
+function captureByPower(sourceIdx, grid) {
+    const source = grid[sourceIdx];
+    if (!source) return [];
+
+    const flipped = [];
+
+    for (const { ni, a, b } of getNeighbors(sourceIdx)) {
+        const target = grid[ni];
+        if (!target) continue;
+        if (target.owner === source.owner) continue;
+
+        if (source.values[a] > target.values[b]) {
+            grid[ni] = {
+                ...target,
+                owner: source.owner,
+                captureKey: (target.captureKey || 0) + 1,
+            };
+            flipped.push(ni);
+        }
+    }
+
+    return flipped;
+}
+
+/**
+ * Полное разрешение хода с Combo:
+ * 1) захваты от поставленной карты
+ * 2) если включено combo → каждый захваченный может дальше захватывать и т.д.
+ */
+function resolveMoveCaptures(placedIdx, grid, rules) {
+    const allFlipped = [];
+    const queue = [];
+
+    const first = captureByPower(placedIdx, grid);
+    allFlipped.push(...first);
+    queue.push(...first);
+
+    if (!rules.combo) return allFlipped;
+
+    // Combo: захваченные карты тоже захватывают дальше
+    while (queue.length) {
+        const idx = queue.shift();
+        const more = captureByPower(idx, grid);
+        if (more.length) {
+            allFlipped.push(...more);
+            queue.push(...more);
+        }
+    }
+
+    return allFlipped;
+}
 
 export default function Game({ onExit }) {
     const makeHands = () => ({
@@ -53,7 +134,8 @@ export default function Game({ onExit }) {
     const [gameOver, setGameOver] = useState(false);
     const [winner, setWinner] = useState(null);
 
-    const aiTurnGuard = useRef({ turnId: 0, handled: false });
+    // защита от двойного AI-хода в dev из-за StrictMode
+    const aiGuard = useRef({ handled: false });
 
     const reset = () => {
         const h = makeHands();
@@ -63,30 +145,7 @@ export default function Game({ onExit }) {
         setTurn("player");
         setGameOver(false);
         setWinner(null);
-        aiTurnGuard.current = { turnId: 0, handled: false };
-    };
-
-    const tryFlip = (idx, placed, grid) => {
-        const x = idx % 3;
-        const y = Math.floor(idx / 3);
-
-        for (const { dx, dy, a, b } of DIRS) {
-            const nx = x + dx;
-            const ny = y + dy;
-            if (nx < 0 || nx > 2 || ny < 0 || ny > 2) continue;
-
-            const ni = ny * 3 + nx;
-            const target = grid[ni];
-            if (!target || target.owner === placed.owner) continue;
-
-            if (placed.values[a] > target.values[b]) {
-                grid[ni] = {
-                    ...target,
-                    owner: placed.owner,
-                    flipKey: (target.flipKey || 0) + 1,
-                };
-            }
-        }
+        aiGuard.current.handled = false;
     };
 
     const placeCard = (i) => {
@@ -94,26 +153,33 @@ export default function Game({ onExit }) {
         if (!selected || board[i]) return;
 
         const next = [...board];
-        const placed = { ...selected, owner: "player" };
+        const placed = {
+            ...selected,
+            owner: "player",
+            placeKey: (selected.placeKey || 0) + 1,
+        };
 
         next[i] = placed;
-        tryFlip(i, placed, next);
+
+        // захваты + цепочки
+        resolveMoveCaptures(i, next, RULES);
 
         setBoard(next);
         setHands((h) => ({ ...h, player: h.player.filter((c) => c.id !== selected.id) }));
         setSelected(null);
-        setTurn("enemy");
 
-        aiTurnGuard.current = { turnId: aiTurnGuard.current.turnId + 1, handled: false };
+        aiGuard.current.handled = false;
+        setTurn("enemy");
     };
 
+    // AI (пока рандом, позже сделаем “умный”)
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
-        if (aiTurnGuard.current.handled) return;
-        aiTurnGuard.current.handled = true;
+        if (aiGuard.current.handled) return;
+        aiGuard.current.handled = true;
 
         const empty = board
-            .map((c, i) => (c === null ? i : null))
+            .map((c, idx) => (c === null ? idx : null))
             .filter((v) => v !== null);
 
         if (!empty.length || !enemy.length) {
@@ -125,10 +191,15 @@ export default function Game({ onExit }) {
         const card = enemy[Math.floor(Math.random() * enemy.length)];
 
         const next = [...board];
-        const placed = { ...card, owner: "enemy" };
+        const placed = {
+            ...card,
+            owner: "enemy",
+            placeKey: (card.placeKey || 0) + 1,
+        };
 
         next[cell] = placed;
-        tryFlip(cell, placed, next);
+
+        resolveMoveCaptures(cell, next, RULES);
 
         const t = setTimeout(() => {
             setBoard(next);
@@ -181,8 +252,8 @@ export default function Game({ onExit }) {
             )}
 
             <div className="hand top">
-                {enemy.map((c, i) => (
-                    <div key={c.id} style={{ marginLeft: i ? -40 : 0 }}>
+                {enemy.map((c) => (
+                    <div key={c.id} className="hand-slot">
                         <Card card={c} disabled />
                     </div>
                 ))}
@@ -203,8 +274,8 @@ export default function Game({ onExit }) {
             </div>
 
             <div className="hand bottom">
-                {player.map((c, i) => (
-                    <div key={c.id} style={{ marginLeft: i ? -40 : 0 }}>
+                {player.map((c) => (
+                    <div key={c.id} className="hand-slot">
                         <Card
                             card={c}
                             selected={selected?.id === c.id}
@@ -218,14 +289,22 @@ export default function Game({ onExit }) {
 }
 
 function Card({ card, onClick, selected, disabled }) {
-    const [isFlipping, setIsFlipping] = useState(false);
+    const [placedAnim, setPlacedAnim] = useState(false);
+    const [capturedAnim, setCapturedAnim] = useState(false);
 
     useEffect(() => {
-        if (!card?.flipKey) return;
-        setIsFlipping(true);
-        const t = setTimeout(() => setIsFlipping(false), 420);
+        if (!card?.placeKey) return;
+        setPlacedAnim(true);
+        const t = setTimeout(() => setPlacedAnim(false), 260);
         return () => clearTimeout(t);
-    }, [card?.flipKey]);
+    }, [card?.placeKey]);
+
+    useEffect(() => {
+        if (!card?.captureKey) return;
+        setCapturedAnim(true);
+        const t = setTimeout(() => setCapturedAnim(false), 320);
+        return () => clearTimeout(t);
+    }, [card?.captureKey]);
 
     return (
         <div
@@ -234,23 +313,26 @@ function Card({ card, onClick, selected, disabled }) {
                 card.owner === "player" ? "player" : "enemy",
                 selected ? "selected" : "",
                 disabled ? "disabled" : "",
-                isFlipping ? "is-flipping" : "",
+                placedAnim ? "is-placed" : "",
+                capturedAnim ? "is-captured" : "",
             ].join(" ")}
             onClick={disabled ? undefined : onClick}
         >
-            <img
-                className="card-art-img"
-                src={card.imageUrl}
-                alt=""
-                draggable="false"
-                onError={() => console.error("Не загрузилась картинка карты:", card.imageUrl)}
-            />
+            <div className="card-anim">
+                <img
+                    className="card-art-img"
+                    src={card.imageUrl}
+                    alt=""
+                    draggable="false"
+                    onError={() => console.error("Не загрузилась картинка карты:", card.imageUrl)}
+                />
 
-            <div className="tt-badge" />
-            <span className="tt-num top">{card.values.top}</span>
-            <span className="tt-num left">{card.values.left}</span>
-            <span className="tt-num right">{card.values.right}</span>
-            <span className="tt-num bottom">{card.values.bottom}</span>
+                <div className="tt-badge" />
+                <span className="tt-num top">{card.values.top}</span>
+                <span className="tt-num left">{card.values.left}</span>
+                <span className="tt-num right">{card.values.right}</span>
+                <span className="tt-num bottom">{card.values.bottom}</span>
+            </div>
         </div>
     );
 }
