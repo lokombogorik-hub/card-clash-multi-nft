@@ -9,7 +9,12 @@ const DIRS = [
 
 const rand = () => Math.ceil(Math.random() * 9);
 
-const ART = ["/cards/card1.jpg", "/cards/card2.jpg", "/cards/card3.jpg"];
+const ART = ["/cards/card1.jpg", "/cards/card2.jpg", "/cards/card3.jpg", "/cards/card4.jpg",
+    "/cards/card5.jpg",
+    "/cards/card6.jpg",
+    "/cards/card7.jpg",
+    "/cards/card8.jpg",
+    "/cards/card9.jpg"];
 
 const genCard = (owner, id) => ({
     id,
@@ -219,8 +224,10 @@ function Card({ card, onClick, selected, disabled }) {
             onClick={disabled ? undefined : onClick}
             style={{ "--art": `url(${card.imageUrl})` }}
         >
-            <div className="card-art" />
-
+            <div
+                className="card-art"
+                style={{ backgroundImage: `url("${card.imageUrl}")` }}
+            />
             <div className="tt-badge" />
             <span className="tt-num top">{card.values.top}</span>
             <span className="tt-num left">{card.values.left}</span>

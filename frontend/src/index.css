@@ -174,7 +174,7 @@ button {
     background-repeat: no-repeat;
 
     filter: saturate(1.12) contrast(1.05);
-    z-index: 1;
+
 }
 
 /* блеск “как в ККИ” */
@@ -191,7 +191,6 @@ button {
     transition: opacity 0.18s ease, transform 0.45s ease;
     pointer-events: none;
     mix-blend-mode: screen;
-    z-index: 2;
 }
 
 .card:hover:not(.disabled) {
@@ -256,7 +255,6 @@ button {
     background: rgba(0, 0, 0, 0.65);
     transform: rotate(45deg);
     border-radius: 4px;
-    z-index: 4;
     /* поверх арта */
 }
 
@@ -298,7 +296,6 @@ button {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 999;
 }
 
 .game-over-box {
