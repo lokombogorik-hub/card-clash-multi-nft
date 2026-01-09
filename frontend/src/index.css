@@ -1,3 +1,5 @@
+/* frontend/src/index.css */
+
 * {
     box-sizing: border-box;
     font-family: sans-serif;
@@ -9,6 +11,7 @@ body {
     color: white;
 }
 
+/* ---------- MENU ---------- */
 .app {
     height: 100vh;
     display: flex;
@@ -26,133 +29,77 @@ button {
     border: none;
 }
 
-/* Живой стол */
+/* ---------- GAME LAYOUT ---------- */
+:root {
+    --card-w: 120px;
+    --card-h: 165px;
+}
+
 .game-root {
     min-height: 100vh;
     width: 100%;
     padding: 14px;
+
+    /* стол */
     background: url("/table.jpg") center/cover no-repeat;
-}
 
-@keyframes tablePulse {
-    0% {
-        filter: brightness(0.95) saturate(1);
-    }
+    /* раскладка */
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
 
-    50% {
-        filter: brightness(1.05) saturate(1.1);
-    }
-
-    100% {
-        filter: brightness(0.95) saturate(1);
-    }
-}
-
-.card {
     position: relative;
     overflow: hidden;
 }
 
-.card-art {
+/* лёгкий “живой” свет по столу */
+.game-root::before {
+    content: "";
     position: absolute;
-    inset: 8px;
-    border-radius: 10px;
-    background-image: var(--art);
-    background-size: cover;
-    background-position: center;
-    z-index: 1;
+    inset: -30%;
+    background:
+        radial-gradient(circle at 25% 30%, rgba(255, 255, 255, 0.10), transparent 45%),
+        radial-gradient(circle at 70% 60%, rgba(80, 180, 255, 0.10), transparent 45%);
+    animation: tableGlow 10s ease-in-out infinite;
+    pointer-events: none;
+    mix-blend-mode: screen;
 }
 
-/* цифры и badge должны быть выше арта */
-.tt-badge,
-.tt-num {
-    z-index: 3;
+@keyframes tableGlow {
+    0% {
+        transform: translate3d(-1%, -1%, 0) scale(1);
+        opacity: .65;
+    }
+
+    50% {
+        transform: translate3d(1%, 1%, 0) scale(1.02);
+        opacity: .95;
+    }
+
+    100% {
+        transform: translate3d(-1%, -1%, 0) scale(1);
+        opacity: .65;
+    }
 }
 
 .exit {
     position: absolute;
-    top: 20px;
-    left: 20px;
+    left: 10px;
+    top: 10px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.35);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(6px);
 }
 
-.card {
-    width: 120px;
-    height: 165px;
-    border-radius: 12px;
-    background: linear-gradient(145deg, #222, #111);
-    position: relative;
-    cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    transform-style: preserve-3d;
-}
-
-.card-inner {
-    width: 100%;
-    height: 100%;
-    transition: transform 0.6s;
-    transform-style: preserve-3d;
-}
-
-/* Flip animation */
-.card.flip {
-    animation: flip 0.4s ease;
-}
-
-@keyframes flip {
-    0% {
-        transform: rotateY(0deg);
-    }
-
-    100% {
-        transform: rotateY(180deg);
-    }
-}
-
-
-.card-front,
-.card-back {
-    position: absolute;
-    inset: 0;
-    border-radius: 12px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 32px;
-    backface-visibility: hidden;
-}
-
-.card-front {
-    background: #1e293b;
-}
-
-.card-back {
-    background: crimson;
-    transform: rotateY(180deg);
-}
-
-.screen {
-    height: 100vh;
-    background: radial-gradient(circle at center, #0b1220, #020617);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px;
-    color: white;
-}
-
-.card.blue {
-    box-shadow: 0 0 15px rgba(0, 180, 255, 0.6);
-}
-
-.card.red {
-    box-shadow: 0 0 15px rgba(255, 80, 80, 0.6);
-}
-
+/* ---------- HANDS / SCORE ---------- */
 .hand {
     display: flex;
     justify-content: center;
-    pointer-events: 10px;
+    pointer-events: auto;
+    /* было 10px — это ошибка */
 }
 
 .hand.top {
@@ -164,135 +111,163 @@ button {
 }
 
 .scorebar {
-    display: flex;
-    justify-content: space-between;
     width: 100%;
     max-width: 360px;
     margin: 8px auto;
     font-size: 18px;
     font-weight: bold;
-}
-
-.scorebar .red {
-    color: #ff5555;
-}
-
-.scorebar .blue {
-    color: #4da6ff;
-}
-
-.winner {
-    margin-top: 10px;
-    font-size: 22px;
-    font-weight: bold;
     text-align: center;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
 }
 
-.game-over {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    align-items: center;
+/* ---------- BOARD ---------- */
+.board {
+    display: grid;
+    grid-template-columns: repeat(3, var(--card-w));
+    gap: 10px;
     justify-content: center;
-    z-index: 999;
+    margin: 0 auto;
 }
 
-.game-over-box {
-    background: #1e1e2f;
-    padding: 24px 32px;
-    border-radius: 16px;
-    text-align: center;
-    color: white;
-    min-width: 260px;
+.cell {
+    width: var(--card-w);
+    height: var(--card-h);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
+    transition: background 0.2s, box-shadow 0.2s;
 }
 
-.game-over-box h2 {
-    margin-bottom: 12px;
-}
-
-.game-over-buttons {
-    display: flex;
-    gap: 12px;
-    justify-content: center;
-    margin-top: 16px;
-}
-
-.game-over-buttons button {
-    padding: 8px 14px;
-    border-radius: 10px;
-    border: none;
+.cell.highlight {
+    background: rgba(255, 215, 0, 0.15);
+    box-shadow: inset 0 0 0 2px rgba(255, 215, 0, 0.45);
     cursor: pointer;
-    background: #3b82f6;
-    color: white;
-    font-weight: 600;
 }
 
+/* ---------- CARD ---------- */
+.card {
+    width: var(--card-w);
+    height: var(--card-h);
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
 
-/* ---------------- CARD ANIMATION ---------------- */
+    cursor: pointer;
+    transform-style: preserve-3d;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
 
-.card.flipped {
-    animation: flip 0.4s ease;
+    /* базовая рамка/фон под арт */
+    background: linear-gradient(145deg, #1a2232, #0f1625);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
 }
 
-@keyframes flipCard {
-    0% {
-        transform: rotateY(0deg);
-    }
+/* слой арта (ВАЖНО) */
+.card-art {
+    position: absolute;
+    inset: 8px;
+    border-radius: 10px;
 
-    50% {
-        transform: rotateY(90deg) scale(1.1);
-    }
+    /* если --art не задан, всё равно покажем картинку, чтобы ты видел что работает */
+    background-image: var(--art, url("/cards/card1.jpg"));
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
 
-    100% {
-        transform: rotateY(180deg);
-    }
+    filter: saturate(1.12) contrast(1.05);
+    z-index: 1;
 }
 
-/* Hover lift */
-.card:hover {
-    transform: translateY(-6px) scale(1.03);
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+/* блеск “как в ККИ” */
+.card::after {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    background: linear-gradient(120deg,
+            transparent 35%,
+            rgba(255, 255, 255, 0.20) 50%,
+            transparent 65%);
+    transform: translateX(-30%) rotate(10deg);
+    opacity: 0;
+    transition: opacity 0.18s ease, transform 0.45s ease;
+    pointer-events: none;
+    mix-blend-mode: screen;
+    z-index: 2;
 }
 
 .card:hover:not(.disabled) {
-    transform: translateY(-8px);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+    transform: translateY(-8px) scale(1.03);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
 }
 
-.card.enemy {
-    background: #c0392b;
+.card:hover:not(.disabled)::after {
+    opacity: 1;
+    transform: translateX(30%) rotate(10deg);
 }
 
-/* Selected card */
+.card.disabled {
+    opacity: 0.7;
+    cursor: default;
+}
+
+/* поддержка обоих вариантов классов владельца: blue/red и player/enemy */
+.card.player,
+.card.blue {
+    border: 2px solid rgba(42, 107, 255, 0.95);
+    box-shadow: 0 0 0 2px rgba(70, 140, 255, 0.30), 0 0 18px rgba(0, 180, 255, 0.35);
+}
+
+.card.enemy,
+.card.red {
+    border: 2px solid rgba(255, 42, 42, 0.95);
+    box-shadow: 0 0 0 2px rgba(255, 70, 70, 0.30), 0 0 18px rgba(255, 80, 80, 0.35);
+}
+
 .card.selected {
-    outline: 3px solid gold;
-    box-shadow: 0 0 15px gold;
+    outline: 3px solid rgba(255, 215, 0, 0.95);
+    box-shadow: 0 0 0 2px rgba(255, 215, 0, 0.35), 0 0 22px rgba(255, 215, 0, 0.35);
 }
 
-/* ===== TRIPLE TRIAD VALUES ===== */
+/* Flip (если ты добавлял класс is-flipping из кода) */
+.card.is-flipping {
+    animation: ownerFlip 420ms cubic-bezier(.2, .8, .2, 1);
+}
 
-/* 🔺 ромб (фон) */
+@keyframes ownerFlip {
+    0% {
+        transform: rotateY(0deg) scale(1);
+    }
+
+    50% {
+        transform: rotateY(90deg) scale(1.08);
+    }
+
+    100% {
+        transform: rotateY(180deg) scale(1);
+    }
+}
+
+/* ---------- TRIPLE TRIAD UI ---------- */
 .tt-badge {
     position: absolute;
     top: 9px;
     left: 10px;
     width: 42px;
     height: 42px;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.65);
     transform: rotate(45deg);
-    z-index: 1;
     border-radius: 4px;
+    z-index: 4;
+    /* поверх арта */
 }
 
-/* 🔢 Цифры */
 .tt-num {
     position: absolute;
     font-size: 12px;
-    font-weight: bold;
+    font-weight: 800;
     color: #fff;
-    z-index: 2;
-    text-shadow: 0 1px 2px #000;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85);
+    z-index: 5;
+    /* поверх арта */
 }
 
 .tt-num.top {
@@ -315,56 +290,60 @@ button {
     left: 28px;
 }
 
-/* Owner colors */
-.card.player {
-    border: 2px solid #2a6bff;
+/* ---------- GAME OVER ---------- */
+.game-over {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.70);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
 }
 
-.card.enemy {
-    border: 2px solid #ff2a2a;
+.game-over-box {
+    background: #1e1e2f;
+    padding: 24px 32px;
+    border-radius: 16px;
+    text-align: center;
+    color: white;
+    min-width: 260px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-.card.disabled {
-    opacity: 0.7;
-    cursor: default;
+.game-over-box h2 {
+    margin: 0 0 12px;
 }
 
-/* Numbers */
-.card span {
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.7);
+.game-over-buttons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 16px;
 }
 
-
-.board {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    width: 360px;
-    margin: 0 auto;
-}
-
-.cell {
-    width: 110px;
-    height: 150px;
+.game-over-buttons button {
+    padding: 8px 14px;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.08);
-    transition: background 0.2s;
-}
-
-.cell-active {
-    background: #334155;
-    box-shadow: inset 0 0 0 3px rgba(34, 197, 94, 0.5);
-}
-
-.cell.highlight {
-    background: rgba(255, 215, 0, 0.15);
-    border-color: gold;
+    border: none;
     cursor: pointer;
+    background: #3b82f6;
+    color: white;
+    font-weight: 600;
 }
 
-.exit {
-    position: absolute;
-    left: 10px;
-    top: 10px;
-    padding: 6px 10px;
+/* ---------- REDUCED MOTION ---------- */
+@media (prefers-reduced-motion: reduce) {
+    .game-root::before {
+        animation: none !important;
+    }
+
+    .card,
+    .card::after {
+        transition: none !important;
+    }
+
+    .card.is-flipping {
+        animation: none !important;
+    }
 }
