@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
+/**
+ * Triple Triad directions:
+ * placed.values[a] compares vs neighbor.values[b]
+ */
 const DIRS = [
     { dx: 0, dy: -1, a: "top", b: "bottom" },
     { dx: 1, dy: 0, a: "right", b: "left" },
@@ -9,7 +13,7 @@ const DIRS = [
 
 const rand = () => Math.ceil(Math.random() * 9);
 
-// base url (важно для деплоя в подпапку)
+// Vite base URL (для деплоя в подпапку)
 const BASE = import.meta.env.BASE_URL || "/";
 const withBase = (p) => {
     const base = BASE.endsWith("/") ? BASE : BASE + "/";
@@ -17,6 +21,7 @@ const withBase = (p) => {
     return base + path;
 };
 
+// арты (можешь заменить/расширить)
 const ART = [
     "cards/card.jpg",
     "cards/card1.jpg",
@@ -30,13 +35,10 @@ const ART = [
     "cards/card9.jpg",
 ].map(withBase);
 
-/**
- * RULES:
- * - combo: цепочка захватов (Combo). Включено.
- * При желании позже добавим Same/Plus/Elemental.
- */
 const RULES = {
     combo: true,
+    same: true,
+    plus: true,
 };
 
 const genCard = (owner, id) => ({
@@ -45,11 +47,15 @@ const genCard = (owner, id) => ({
     values: { top: rand(), right: rand(), bottom: rand(), left: rand() },
     imageUrl: ART[Math.floor(Math.random() * ART.length)],
     rarity: "common",
-    placeKey: 0,   // для анимации выкладывания
-    captureKey: 0, // для анимации захвата (подпрыгивание)
+
+    // keys for animations
+    placeKey: 0,    // when card is placed on board
+    captureKey: 0,  // when card is captured (bounce)
+    specialKey: 0,  // when Same/Plus triggers on placed card
+    specialType: "", // "same" | "plus" | "both"
 });
 
-function getNeighbors(idx) {
+function neighborsOf(idx) {
     const x = idx % 3;
     const y = Math.floor(idx / 3);
 
@@ -58,66 +64,134 @@ function getNeighbors(idx) {
         const nx = x + dx;
         const ny = y + dy;
         if (nx < 0 || nx > 2 || ny < 0 || ny > 2) continue;
-        const ni = ny * 3 + nx;
-        res.push({ ni, a, b });
+        res.push({ ni: ny * 3 + nx, a, b });
     }
     return res;
 }
 
 /**
- * Захват по базовому правилу: если side(placed) > opposite(side(neighbor)) → захват.
- * Возвращает массив индексов захваченных карт.
+ * Capture helper (flip target card to newOwner with animation key bump)
  */
-function captureByPower(sourceIdx, grid) {
-    const source = grid[sourceIdx];
-    if (!source) return [];
+function flipToOwner(grid, ni, newOwner) {
+    const t = grid[ni];
+    if (!t) return false;
+    if (t.owner === newOwner) return false;
 
-    const flipped = [];
-
-    for (const { ni, a, b } of getNeighbors(sourceIdx)) {
-        const target = grid[ni];
-        if (!target) continue;
-        if (target.owner === source.owner) continue;
-
-        if (source.values[a] > target.values[b]) {
-            grid[ni] = {
-                ...target,
-                owner: source.owner,
-                captureKey: (target.captureKey || 0) + 1,
-            };
-            flipped.push(ni);
-        }
-    }
-
-    return flipped;
+    grid[ni] = {
+        ...t,
+        owner: newOwner,
+        captureKey: (t.captureKey || 0) + 1,
+    };
+    return true;
 }
 
 /**
- * Полное разрешение хода с Combo:
- * 1) захваты от поставленной карты
- * 2) если включено combo → каждый захваченный может дальше захватывать и т.д.
+ * Resolve a placement using Power + Same + Plus (conditions computed from snapshot),
+ * returns indices of flipped cards (direct flips only).
  */
-function resolveMoveCaptures(placedIdx, grid, rules) {
-    const allFlipped = [];
-    const queue = [];
+function resolvePlacementFlips(placedIdx, grid, rules) {
+    const placed = grid[placedIdx];
+    if (!placed) return { flipped: [], specialType: "" };
 
-    const first = captureByPower(placedIdx, grid);
-    allFlipped.push(...first);
-    queue.push(...first);
+    // snapshot neighbor values/owners at the moment of placement
+    const infos = neighborsOf(placedIdx)
+        .map(({ ni, a, b }) => {
+            const target = grid[ni];
+            if (!target) return null;
+            const p = placed.values[a];
+            const q = target.values[b];
+            return {
+                ni,
+                a,
+                b,
+                placedSide: p,
+                targetSide: q,
+                sum: p + q,
+                targetOwner: target.owner,
+            };
+        })
+        .filter(Boolean);
 
-    if (!rules.combo) return allFlipped;
+    const toFlip = new Set();
 
-    // Combo: захваченные карты тоже захватывают дальше
-    while (queue.length) {
-        const idx = queue.shift();
-        const more = captureByPower(idx, grid);
-        if (more.length) {
-            allFlipped.push(...more);
-            queue.push(...more);
+    // 1) Power rule
+    for (const info of infos) {
+        if (info.placedSide > info.targetSide) {
+            toFlip.add(info.ni);
         }
     }
 
-    return allFlipped;
+    // 2) Same rule (condition can be satisfied by any adjacent cards; flip only opponents)
+    let sameTriggered = false;
+    if (rules.same) {
+        const eq = infos.filter((i) => i.placedSide === i.targetSide);
+        if (eq.length >= 2) {
+            sameTriggered = true;
+            for (const i of eq) toFlip.add(i.ni);
+        }
+    }
+
+    // 3) Plus rule (group by equal sums; if any sum appears >=2 -> triggers)
+    let plusTriggered = false;
+    if (rules.plus) {
+        const groups = new Map();
+        for (const i of infos) {
+            const key = i.sum;
+            const arr = groups.get(key) || [];
+            arr.push(i);
+            groups.set(key, arr);
+        }
+        for (const [, arr] of groups) {
+            if (arr.length >= 2) {
+                plusTriggered = true;
+                for (const i of arr) toFlip.add(i.ni);
+            }
+        }
+    }
+
+    const specialType =
+        sameTriggered && plusTriggered ? "both" : sameTriggered ? "same" : plusTriggered ? "plus" : "";
+
+    // Apply flips (only if opponent)
+    const flipped = [];
+    for (const ni of toFlip) {
+        if (flipToOwner(grid, ni, placed.owner)) flipped.push(ni);
+    }
+
+    return { flipped, specialType };
+}
+
+/**
+ * Combo propagation:
+ * In Triple Triad, combo typically propagates using the normal Power rule
+ * from cards that were captured by Same/Plus/Power.
+ */
+function captureByPowerFrom(idx, grid) {
+    const src = grid[idx];
+    if (!src) return [];
+
+    const flipped = [];
+    for (const { ni, a, b } of neighborsOf(idx)) {
+        const t = grid[ni];
+        if (!t) continue;
+        if (t.owner === src.owner) continue;
+
+        if (src.values[a] > t.values[b]) {
+            if (flipToOwner(grid, ni, src.owner)) flipped.push(ni);
+        }
+    }
+    return flipped;
+}
+
+function resolveCombo(queue, grid, rules) {
+    if (!rules.combo) return;
+
+    const q = [...queue];
+    while (q.length) {
+        const idx = q.shift();
+        const more = captureByPowerFrom(idx, grid);
+        if (more.length) q.push(...more);
+    }
 }
 
 export default function Game({ onExit }) {
@@ -134,12 +208,11 @@ export default function Game({ onExit }) {
     const [gameOver, setGameOver] = useState(false);
     const [winner, setWinner] = useState(null);
 
-    // защита от двойного AI-хода в dev из-за StrictMode
+    // guard for StrictMode (dev) to avoid double AI move
     const aiGuard = useRef({ handled: false });
 
     const reset = () => {
-        const h = makeHands();
-        setHands(h);
+        setHands(makeHands());
         setBoard(Array(9).fill(null));
         setSelected(null);
         setTurn("player");
@@ -161,8 +234,20 @@ export default function Game({ onExit }) {
 
         next[i] = placed;
 
-        // захваты + цепочки
-        resolveMoveCaptures(i, next, RULES);
+        // resolve placement (Power + Same + Plus)
+        const { flipped, specialType } = resolvePlacementFlips(i, next, RULES);
+
+        // mark special on the placed card (for flash animation)
+        if (specialType) {
+            next[i] = {
+                ...next[i],
+                specialType,
+                specialKey: (next[i].specialKey || 0) + 1,
+            };
+        }
+
+        // combo propagation (power rule only) from all flipped cards
+        resolveCombo(flipped, next, RULES);
 
         setBoard(next);
         setHands((h) => ({ ...h, player: h.player.filter((c) => c.id !== selected.id) }));
@@ -172,7 +257,7 @@ export default function Game({ onExit }) {
         setTurn("enemy");
     };
 
-    // AI (пока рандом, позже сделаем “умный”)
+    // AI (рандом)
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
         if (aiGuard.current.handled) return;
@@ -191,15 +276,23 @@ export default function Game({ onExit }) {
         const card = enemy[Math.floor(Math.random() * enemy.length)];
 
         const next = [...board];
-        const placed = {
+        next[cell] = {
             ...card,
             owner: "enemy",
             placeKey: (card.placeKey || 0) + 1,
         };
 
-        next[cell] = placed;
+        const { flipped, specialType } = resolvePlacementFlips(cell, next, RULES);
 
-        resolveMoveCaptures(cell, next, RULES);
+        if (specialType) {
+            next[cell] = {
+                ...next[cell],
+                specialType,
+                specialKey: (next[cell].specialKey || 0) + 1,
+            };
+        }
+
+        resolveCombo(flipped, next, RULES);
 
         const t = setTimeout(() => {
             setBoard(next);
@@ -210,6 +303,7 @@ export default function Game({ onExit }) {
         return () => clearTimeout(t);
     }, [turn, gameOver, board, enemy]);
 
+    // Game over
     useEffect(() => {
         if (board.some((c) => c === null)) return;
 
@@ -291,20 +385,37 @@ export default function Game({ onExit }) {
 function Card({ card, onClick, selected, disabled }) {
     const [placedAnim, setPlacedAnim] = useState(false);
     const [capturedAnim, setCapturedAnim] = useState(false);
+    const [specialAnim, setSpecialAnim] = useState(false);
 
     useEffect(() => {
         if (!card?.placeKey) return;
         setPlacedAnim(true);
-        const t = setTimeout(() => setPlacedAnim(false), 260);
+        const t = setTimeout(() => setPlacedAnim(false), 380);
         return () => clearTimeout(t);
     }, [card?.placeKey]);
 
     useEffect(() => {
         if (!card?.captureKey) return;
         setCapturedAnim(true);
-        const t = setTimeout(() => setCapturedAnim(false), 320);
+        const t = setTimeout(() => setCapturedAnim(false), 360);
         return () => clearTimeout(t);
     }, [card?.captureKey]);
+
+    useEffect(() => {
+        if (!card?.specialKey) return;
+        setSpecialAnim(true);
+        const t = setTimeout(() => setSpecialAnim(false), 520);
+        return () => clearTimeout(t);
+    }, [card?.specialKey]);
+
+    const specialClass =
+        card.specialType === "both"
+            ? "special-both"
+            : card.specialType === "same"
+                ? "special-same"
+                : card.specialType === "plus"
+                    ? "special-plus"
+                    : "";
 
     return (
         <div
@@ -315,6 +426,8 @@ function Card({ card, onClick, selected, disabled }) {
                 disabled ? "disabled" : "",
                 placedAnim ? "is-placed" : "",
                 capturedAnim ? "is-captured" : "",
+                specialAnim ? "is-special" : "",
+                specialClass,
             ].join(" ")}
             onClick={disabled ? undefined : onClick}
         >
@@ -324,7 +437,6 @@ function Card({ card, onClick, selected, disabled }) {
                     src={card.imageUrl}
                     alt=""
                     draggable="false"
-                    onError={() => console.error("Не загрузилась картинка карты:", card.imageUrl)}
                 />
 
                 <div className="tt-badge" />
