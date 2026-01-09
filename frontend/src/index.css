@@ -48,7 +48,7 @@ button {
     padding-top: calc(var(--ui-pad) + env(safe-area-inset-top, 0px));
     padding-bottom: calc(var(--ui-pad) + env(safe-area-inset-bottom, 0px));
 
-    background: url("/table.jpg") center/cover no-repeat;
+    background: url("/table.MP4") center/cover no-repeat;
 
     display: flex;
     flex-direction: column;
