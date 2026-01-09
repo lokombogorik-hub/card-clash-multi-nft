@@ -9,8 +9,8 @@ const DIRS = [
 
 const rand = () => Math.ceil(Math.random() * 9);
 
+// Vite base URL (нужно для деплоя в подпапку)
 const BASE = import.meta.env.BASE_URL || "/";
-// чтобы BASE работал и с "/" и с "/subpath/"
 const withBase = (p) => {
     const base = BASE.endsWith("/") ? BASE : BASE + "/";
     const path = p.startsWith("/") ? p.slice(1) : p;
@@ -53,7 +53,8 @@ export default function Game({ onExit }) {
     const [gameOver, setGameOver] = useState(false);
     const [winner, setWinner] = useState(null);
 
-    const aiTurnGuard = useRef({ turnId: 0, handled: false });
+    // Защита от повторных вызовов эффекта в dev-режиме
+    const aiTurnGuard = useRef({ handled: false });
 
     const reset = () => {
         const h = makeHands();
@@ -63,7 +64,7 @@ export default function Game({ onExit }) {
         setTurn("player");
         setGameOver(false);
         setWinner(null);
-        aiTurnGuard.current = { turnId: 0, handled: false };
+        aiTurnGuard.current = { handled: false };
     };
 
     const tryFlip = (idx, placed, grid) => {
@@ -102,11 +103,12 @@ export default function Game({ onExit }) {
         setBoard(next);
         setHands((h) => ({ ...h, player: h.player.filter((c) => c.id !== selected.id) }));
         setSelected(null);
-        setTurn("enemy");
 
-        aiTurnGuard.current = { turnId: aiTurnGuard.current.turnId + 1, handled: false };
+        aiTurnGuard.current.handled = false;
+        setTurn("enemy");
     };
 
+    // AI ход
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
         if (aiTurnGuard.current.handled) return;
@@ -139,6 +141,7 @@ export default function Game({ onExit }) {
         return () => clearTimeout(t);
     }, [turn, gameOver, board, enemy]);
 
+    // Game over
     useEffect(() => {
         if (board.some((c) => c === null)) return;
 
@@ -181,8 +184,8 @@ export default function Game({ onExit }) {
             )}
 
             <div className="hand top">
-                {enemy.map((c, i) => (
-                    <div key={c.id} style={{ marginLeft: i ? -40 : 0 }}>
+                {enemy.map((c) => (
+                    <div key={c.id} className="hand-slot">
                         <Card card={c} disabled />
                     </div>
                 ))}
@@ -203,8 +206,8 @@ export default function Game({ onExit }) {
             </div>
 
             <div className="hand bottom">
-                {player.map((c, i) => (
-                    <div key={c.id} style={{ marginLeft: i ? -40 : 0 }}>
+                {player.map((c) => (
+                    <div key={c.id} className="hand-slot">
                         <Card
                             card={c}
                             selected={selected?.id === c.id}
