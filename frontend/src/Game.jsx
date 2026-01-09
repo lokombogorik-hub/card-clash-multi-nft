@@ -327,8 +327,19 @@ export default function Game({ onExit }) {
 
     return (
         <div className="game-root">
-            <button className="exit" onClick={onExit}>← Меню</button>
 
+            <button className="exit" onClick={onExit}>← Меню</button>
+            <video
+                className="table-video"
+                autoPlay
+                loop
+                muted
+                playsInline
+                preload="auto"
+                poster={`${import.meta.env.BASE_URL}table.jpg`}
+            >
+                <source src={`${import.meta.env.BASE_URL}table.mp4`} type="video/mp4" />
+            </video>
             {gameOver && (
                 <div className="game-over">
                     <div className="game-over-box">

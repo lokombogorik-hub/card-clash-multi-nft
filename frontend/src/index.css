@@ -42,13 +42,30 @@ button {
 
 /* ---------- TABLE ---------- */
 .game-root {
+    .table-video {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+
+        /* видео под UI, но над background-картинкой */
+        z-index: -1;
+
+        pointer-events: none;
+
+        /* чуть “сочно”, можно убрать */
+        filter: saturate(1.15) contrast(1.05);
+    }
+
     min-height: 100vh;
     width: 100%;
     padding: var(--ui-pad);
     padding-top: calc(var(--ui-pad) + env(safe-area-inset-top, 0px));
     padding-bottom: calc(var(--ui-pad) + env(safe-area-inset-bottom, 0px));
 
-    background: url("/table.MP4") center/cover no-repeat;
+    background: url("/table.jpg") center/cover no-repeat;
+    isolation: isolate;
 
     display: flex;
     flex-direction: column;
