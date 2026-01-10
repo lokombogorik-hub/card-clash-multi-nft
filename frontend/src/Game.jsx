@@ -287,31 +287,6 @@ export default function Game({ onExit }) {
             <div className="game-ui">
                 <button className="exit" onClick={onExit}>← Меню</button>
 
-                {/* HUD слева: счёт + тумблер хода */}
-                <div className="hud-left">
-                    <div className="hud-score red">🟥 {score.red}</div>
-                    <div className={`hud-turn ${turn}`}>
-                        <div className="hud-dot" />
-                    </div>
-                    <div className="hud-score blue">{score.blue} 🟦</div>
-                </div>
-
-                {gameOver && (
-                    <div className="game-over">
-                        <div className="game-over-box">
-                            <h2>
-                                {winner === "player" && "Победа"}
-                                {winner === "enemy" && "Поражение"}
-                                {winner === "draw" && "Ничья"}
-                            </h2>
-                            <div className="game-over-buttons">
-                                <button onClick={reset}>Заново</button>
-                                <button onClick={onExit}>Меню</button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
                 {/* TOP HAND */}
                 <div className="hand top">
                     <div className="hand-scroll">
@@ -321,6 +296,17 @@ export default function Game({ onExit }) {
                             </div>
                         ))}
                     </div>
+                </div>
+
+                {/* HUD под картами противника */}
+                <div className="hud-top">
+                    <div className="hud-score red">🟥 {score.red}</div>
+
+                    <div className={`hud-turn ${turn}`}>
+                        <div className="hud-dot" />
+                    </div>
+
+                    <div className="hud-score blue">{score.blue} 🟦</div>
                 </div>
 
                 {/* BOARD */}
@@ -355,7 +341,50 @@ export default function Game({ onExit }) {
                     </div>
                 </div>
             </div>
+            {/* TOP HAND */}
+            <div className="hand top">
+                <div className="hand-scroll">
+                    {enemy.map((c, i) => (
+                        <div key={c.id} className="hand-slot" style={{ zIndex: i }}>
+                            <Card card={c} disabled />
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* BOARD */}
+            <div className="board">
+                {board.map((cell, i) => (
+                    <div
+                        key={i}
+                        className={`cell ${selected && !cell ? "highlight" : ""}`}
+                        onClick={() => placeCard(i)}
+                    >
+                        {cell && <Card card={cell} />}
+                    </div>
+                ))}
+            </div>
+
+            {/* BOTTOM HAND */}
+            <div className="hand bottom">
+                <div className="hand-scroll">
+                    {player.map((c, i) => (
+                        <div
+                            key={c.id}
+                            className="hand-slot"
+                            style={{ zIndex: selected?.id === c.id ? 9999 : i }}
+                        >
+                            <Card
+                                card={c}
+                                selected={selected?.id === c.id}
+                                onClick={() => setSelected(c)}
+                            />
+                        </div>
+                    ))}
+                </div>
+            </div>
         </div>
+
     );
 }
 

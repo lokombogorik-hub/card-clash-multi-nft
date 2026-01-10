@@ -1,4 +1,4 @@
-/* Clean Telegram WebApp UI: sideways scroll hands, stable board, visible HUD */
+/* Clean Telegram WebApp UI: stable board, big cards, HUD under enemy hand */
 
 * {
     box-sizing: border-box;
@@ -46,17 +46,21 @@ button {
     /* задаётся из main.jsx через window.innerHeight */
     --lift: 22px;
     /* подъём выбранной карты */
-    --hud-w: 62px;
-    /* ширина зоны HUD слева (чтобы не перекрывал карты) */
+
+    /* HUD row under enemy hand */
+    --hud-h: 44px;
 
     /* card size: fit by width AND height */
-    --card-w-vw: calc((100vw - (var(--ui-pad) * 2) - var(--hud-w) - (var(--gap) * 2)) / 3);
-    --available-h: calc(var(--app-h) - (var(--ui-pad) * 2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - (var(--gap) * 6));
-    /* topHand + board(3h) + bottomHand ≈ 5.2 * cardH (чуть запас) */
+    /* board: 3 cards + 2 gaps + board padding (gap*2) => gaps total = 4*gap */
+    --card-w-vw: calc((100vw - (var(--ui-pad) * 2) - (var(--gap) * 4)) / 3);
+
+    /* available height: topHand + HUD + board(3h) + bottomHand ≈ 5.2 * cardH */
+    --available-h: calc(var(--app-h) - (var(--ui-pad) * 2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - (var(--gap) * 7) - var(--hud-h));
+
     --card-h-fit: calc(var(--available-h) / 5.2);
     --card-w-fit: calc(var(--card-h-fit) / 1.375);
 
-    --card-w: clamp(60px, min(var(--card-w-vw), var(--card-w-fit)), 124px);
+    --card-w: clamp(60px, min(var(--card-w-vw), var(--card-w-fit)), 140px);
     --card-h: calc(var(--card-w) * 1.375);
 
     /* fixed row heights (NO jumping) */
@@ -156,11 +160,10 @@ button {
     height: 100%;
 
     display: grid;
-    grid-template-rows: var(--hand-top-h) 1fr var(--hand-bottom-h);
+    grid-template-columns: 1fr;
+    grid-template-rows: var(--hand-top-h) var(--hud-h) 1fr var(--hand-bottom-h);
     gap: var(--gap);
 
-    /* место под HUD слева, чтобы он не был “на картах” */
-    padding-left: var(--hud-w);
     min-height: 0;
 }
 
@@ -177,23 +180,21 @@ button {
     z-index: 50;
 }
 
-/* ---------- HUD (visible, not on cards) ---------- */
-.hud-left {
-    position: absolute;
-    left: max(6px, env(safe-area-inset-left, 0px));
-    top: calc(env(safe-area-inset-top, 0px) + 10px);
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
-    width: calc(var(--hud-w) - 8px);
-    z-index: 60;
-    pointer-events: none;
+/* ---------- HUD (row under enemy hand) ---------- */
+/* ВАЖНО: в JSX используй <div className="hud-top"> ... */
+.hud-top {
+    grid-row: 2;
     display: flex;
-    flex-direction: column;
+    align-items: center;
     justify-content: space-between;
+    gap: 10px;
+
+    pointer-events: none;
     filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.35));
 }
 
 .hud-score {
-    width: 100%;
+    width: 64px;
     padding: 8px 6px;
     border-radius: 14px;
     text-align: center;
@@ -211,33 +212,34 @@ button {
     box-shadow: 0 0 18px rgba(0, 180, 255, 0.22);
 }
 
+/* horizontal turn pill */
 .hud-turn {
-    width: 22px;
-    height: 78px;
-    margin: 0 auto;
+    width: 78px;
+    height: 22px;
     border-radius: 999px;
     background: rgba(0, 0, 0, 0.40);
     border: 1px solid rgba(255, 255, 255, 0.12);
+    display: flex;
+    align-items: center;
 }
 
 .hud-dot {
     width: 14px;
     height: 14px;
     border-radius: 50%;
-    margin: 0 auto;
-    transform: translateY(6px);
+    margin-left: 6px;
     transition: transform 220ms ease, background 220ms ease;
     box-shadow: 0 0 18px rgba(255, 255, 255, 0.20);
 }
 
 .hud-turn.enemy .hud-dot {
     background: rgba(255, 80, 80, 0.95);
-    transform: translateY(6px);
+    transform: translateX(0);
 }
 
 .hud-turn.player .hud-dot {
     background: rgba(0, 180, 255, 0.95);
-    transform: translateY(calc(78px - 20px));
+    transform: translateX(calc(78px - 20px));
 }
 
 /* ---------- HANDS (side scroll always) ---------- */
@@ -246,6 +248,18 @@ button {
     z-index: 10;
     min-height: 0;
     overflow: hidden;
+}
+
+.hand.top {
+    grid-row: 1;
+}
+
+.board {
+    grid-row: 3;
+}
+
+.hand.bottom {
+    grid-row: 4;
 }
 
 .hand-scroll {
@@ -352,7 +366,9 @@ button {
 
 .cell.highlight {
     background: rgba(24, 231, 255, 0.12);
-    box-shadow: inset 0 0 0 2px rgba(24, 231, 255, 0.40), 0 0 26px rgba(24, 231, 255, 0.20);
+    box-shadow:
+        inset 0 0 0 2px rgba(24, 231, 255, 0.40),
+        0 0 26px rgba(24, 231, 255, 0.20);
     cursor: pointer;
 }
 
@@ -388,18 +404,24 @@ button {
 .hand.bottom .card.selected {
     transform: translateY(calc(-1 * var(--lift))) scale(1.04);
     z-index: 9999;
-    box-shadow: 0 0 22px rgba(255, 215, 0, 0.25), 0 18px 40px rgba(0, 0, 0, 0.55);
+    box-shadow:
+        0 0 22px rgba(255, 215, 0, 0.25),
+        0 18px 40px rgba(0, 0, 0, 0.55);
 }
 
 /* owner */
 .card.player {
     border: 2px solid rgba(42, 107, 255, 0.98);
-    box-shadow: 0 0 22px rgba(0, 180, 255, 0.40), 0 14px 30px rgba(0, 0, 0, 0.45);
+    box-shadow:
+        0 0 22px rgba(0, 180, 255, 0.40),
+        0 14px 30px rgba(0, 0, 0, 0.45);
 }
 
 .card.enemy {
     border: 2px solid rgba(255, 42, 42, 0.98);
-    box-shadow: 0 0 22px rgba(255, 80, 80, 0.34), 0 14px 30px rgba(0, 0, 0, 0.45);
+    box-shadow:
+        0 0 22px rgba(255, 80, 80, 0.34),
+        0 14px 30px rgba(0, 0, 0, 0.45);
 }
 
 /* enemy hand not transparent */
@@ -563,72 +585,4 @@ button {
     .card.is-captured .card-anim {
         animation: none !important;
     }
-}
-
-/* ===== HUD WITHOUT SHIFT & WITHOUT OVERLAP (symmetry columns) ===== */
-
-/* 1) задаём ширину колонки HUD и пересчитываем ширину карты по ширине экрана */
-:root {
-    --hud-w: 40px;
-    /* можешь менять */
-    --card-w-vw: calc((100vw - (var(--ui-pad) * 2) - (var(--gap) * 2) - (var(--hud-w) * 2)) / 3);
-}
-
-/* 2) game-ui: 3 колонки (HUD слева, игра по центру, пустой отступ справа) */
-.game-ui {
-    padding-left: 0 !important;
-    display: grid !important;
-    grid-template-columns: var(--hud-w) 1fr var(--hud-w) !important;
-    grid-template-rows: var(--hand-top-h) 1fr var(--hand-bottom-h) !important;
-    column-gap: 8px !important;
-    gap: var(--gap) !important;
-}
-
-/* (на всякий) создаём правый “пустой” элемент, чтобы колонка точно держалась */
-.game-ui::after {
-    content: "";
-    grid-column: 3;
-    grid-row: 1 / 4;
-}
-
-/* 3) HUD занимает левую колонку и НЕ перекрывает поле */
-.hud-left {
-    position: relative !important;
-    grid-column: 1 !important;
-    grid-row: 1 / 4 !important;
-
-    width: var(--hud-w) !important;
-    z-index: 30 !important;
-    pointer-events: none !important;
-
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: space-between !important;
-}
-
-/* 4) Игра (руки+поле) в центральной колонке */
-.hand.top {
-    grid-column: 2 !important;
-    grid-row: 1 !important;
-}
-
-.board {
-    grid-column: 2 !important;
-    grid-row: 2 !important;
-}
-
-.hand.bottom {
-    grid-column: 2 !important;
-    grid-row: 3 !important;
-}
-
-/* 5) Чтобы ничего не прилипало к HUD — нормальные паддинги ленты */
-.hand-scroll {
-    padding-left: 6px !important;
-    padding-right: 6px !important;
-}
-
-/* 6) Кнопка выхода — в правой “пустой” зоне (чтобы не мешала) */
-.exit {
-    right: calc(10px + var(--hud-w)) !important;
 }
