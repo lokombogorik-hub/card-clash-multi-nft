@@ -192,7 +192,7 @@ export default function Game({ onExit }) {
                 particleCount: 8,
                 spread: 75,
                 startVelocity: 28,
-                origin: { x: 0.2, y: 0.2 },
+                origin: { x: 0.5, y: 0.35 },
             });
             if (Date.now() < end) requestAnimationFrame(tick);
         };
