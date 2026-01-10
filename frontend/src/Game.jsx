@@ -31,11 +31,8 @@ const genCard = (owner, id) => ({
     owner,
     values: { top: rand(), right: rand(), bottom: rand(), left: rand() },
     imageUrl: ART[Math.floor(Math.random() * ART.length)],
-
     placeKey: 0,
     captureKey: 0,
-    specialKey: 0,
-    specialType: "",
 });
 
 function neighborsOf(idx) {
@@ -59,7 +56,7 @@ function flipToOwner(grid, ni, newOwner) {
     grid[ni] = {
         ...t,
         owner: newOwner,
-        captureKey: (t.captureKey || 0) + 1, // <-- триггер bounce
+        captureKey: (t.captureKey || 0) + 1,
     };
     return true;
 }
@@ -141,7 +138,6 @@ function captureByPowerFrom(idx, grid) {
             if (flipToOwner(grid, ni, src.owner)) flipped.push(ni);
         }
     }
-
     return flipped;
 }
 
@@ -182,17 +178,22 @@ export default function Game({ onExit }) {
         aiGuard.current.handled = false;
     };
 
-    // Победа: конфетти
+    // если игра закончилась — сброс выбора
+    useEffect(() => {
+        if (gameOver) setSelected(null);
+    }, [gameOver]);
+
+    // Победа: конфетти по центру
     useEffect(() => {
         if (!gameOver || winner !== "player") return;
 
         const end = Date.now() + 1400;
         const tick = () => {
             confetti({
-                particleCount: 8,
-                spread: 75,
-                startVelocity: 28,
-                origin: { x: 0.5, y: 0.35 },
+                particleCount: 10,
+                spread: 80,
+                startVelocity: 30,
+                origin: { x: 0.5, y: 0.35 }, // центр
             });
             if (Date.now() < end) requestAnimationFrame(tick);
         };
@@ -200,6 +201,7 @@ export default function Game({ onExit }) {
     }, [gameOver, winner]);
 
     const placeCard = (i) => {
+        if (gameOver) return;
         if (turn !== "player") return;
         if (!selected || board[i]) return;
 
@@ -258,7 +260,7 @@ export default function Game({ onExit }) {
         return () => clearTimeout(t);
     }, [turn, gameOver, board, enemy]);
 
-    // Конец игры
+    // Конец игры (когда доска заполнена)
     useEffect(() => {
         if (board.some((c) => c === null)) return;
 
@@ -280,6 +282,9 @@ export default function Game({ onExit }) {
         );
     }, [board]);
 
+    const winnerText =
+        winner === "player" ? "Победа" : winner === "enemy" ? "Поражение" : "Ничья";
+
     return (
         <div className="game-root">
             {gameOver && winner === "enemy" && <DiceRain />}
@@ -298,14 +303,12 @@ export default function Game({ onExit }) {
                     </div>
                 </div>
 
-                {/* HUD под картами противника */}
+                {/* HUD under enemy hand */}
                 <div className="hud-top">
                     <div className="hud-score red">🟥 {score.red}</div>
-
                     <div className={`hud-turn ${turn}`}>
                         <div className="hud-dot" />
                     </div>
-
                     <div className="hud-score blue">{score.blue} 🟦</div>
                 </div>
 
@@ -314,7 +317,7 @@ export default function Game({ onExit }) {
                     {board.map((cell, i) => (
                         <div
                             key={i}
-                            className={`cell ${selected && !cell ? "highlight" : ""}`}
+                            className={`cell ${!gameOver && selected && !cell ? "highlight" : ""}`}
                             onClick={() => placeCard(i)}
                         >
                             {cell && <Card card={cell} />}
@@ -334,57 +337,30 @@ export default function Game({ onExit }) {
                                 <Card
                                     card={c}
                                     selected={selected?.id === c.id}
-                                    onClick={() => setSelected(c)}
+                                    disabled={gameOver || turn !== "player"}
+                                    onClick={() =>
+                                        setSelected((prev) => (prev?.id === c.id ? null : c))
+                                    }
                                 />
                             </div>
                         ))}
                     </div>
                 </div>
-            </div>
-            {/* TOP HAND */}
-            <div className="hand top">
-                <div className="hand-scroll">
-                    {enemy.map((c, i) => (
-                        <div key={c.id} className="hand-slot" style={{ zIndex: i }}>
-                            <Card card={c} disabled />
-                        </div>
-                    ))}
-                </div>
-            </div>
 
-            {/* BOARD */}
-            <div className="board">
-                {board.map((cell, i) => (
-                    <div
-                        key={i}
-                        className={`cell ${selected && !cell ? "highlight" : ""}`}
-                        onClick={() => placeCard(i)}
-                    >
-                        {cell && <Card card={cell} />}
+                {/* GAME OVER OVERLAY */}
+                {gameOver && (
+                    <div className="game-over">
+                        <div className="game-over-box">
+                            <h2>{winnerText}</h2>
+                            <div className="game-over-buttons">
+                                <button onClick={reset}>Заново</button>
+                                <button onClick={onExit}>Меню</button>
+                            </div>
+                        </div>
                     </div>
-                ))}
-            </div>
-
-            {/* BOTTOM HAND */}
-            <div className="hand bottom">
-                <div className="hand-scroll">
-                    {player.map((c, i) => (
-                        <div
-                            key={c.id}
-                            className="hand-slot"
-                            style={{ zIndex: selected?.id === c.id ? 9999 : i }}
-                        >
-                            <Card
-                                card={c}
-                                selected={selected?.id === c.id}
-                                onClick={() => setSelected(c)}
-                            />
-                        </div>
-                    ))}
-                </div>
+                )}
             </div>
         </div>
-
     );
 }
 
@@ -417,6 +393,7 @@ function Card({ card, onClick, selected, disabled }) {
                 capturedAnim ? "is-captured" : "",
             ].join(" ")}
             onClick={disabled ? undefined : onClick}
+            role={disabled ? undefined : "button"}
         >
             <div className="card-anim">
                 <img className="card-art-img" src={card.imageUrl} alt="" draggable="false" />
