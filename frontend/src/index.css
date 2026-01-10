@@ -1,4 +1,4 @@
-/* frontend/src/index.css — Telegram WebApp friendly (NO VIDEO), fits by height */
+/* frontend/src/index.css — Telegram WebApp fit + Neon Cosmos (NO VIDEO) */
 
 * {
     box-sizing: border-box;
@@ -15,7 +15,6 @@ body {
     margin: 0;
     background: #0b1220;
     color: white;
-    overflow: hidden;
 }
 
 /* ---------- MENU ---------- */
@@ -36,41 +35,42 @@ button {
     border: none;
 }
 
-/* ---------- VIEWPORT / SIZING ---------- */
+/* ---------- RESPONSIVE BASE ---------- */
 :root {
     --ui-pad: clamp(10px, 2.2vw, 16px);
     --gap: clamp(6px, 2vw, 10px);
     --hand-overlap: 0.34;
 
-    /* fallback */
-    --vh: 100vh;
+    /* будет выставляться из JS (window.innerHeight) */
+    --app-h: 100vh;
+
+    --space-0: #050611;
+    --space-1: #070a18;
 }
 
-@supports (height: 100dvh) {
-    :root {
-        --vh: 100dvh;
-    }
-}
-
-/* Размер карты рассчитываем так, чтобы:
-   1) по ширине влезло 3 колонки
-   2) по высоте влезло: верхняя рука + board + нижняя рука + scorebar */
+/* Размер карты: учитываем И ширину, И высоту.
+   Вся сцена примерно: topHand + score + board(3 карты) + bottomHand.
+   Это ~ 5 * cardH + 7 * gap + score(28px) должно влезть в app-h. */
 :root {
-    --hud-h: 84px;
-    /* примерная высота scorebar + отступы */
+    --score-h: 28px;
 
     --card-w-vw: calc((100vw - (var(--ui-pad) * 2) - (var(--gap) * 2)) / 3);
-    --card-h-vh: calc((var(--vh) - (var(--ui-pad) * 2) - var(--hud-h) - (var(--gap) * 4)) / 3);
-    --card-w-vh: calc(var(--card-h-vh) / 1.375);
 
-    --card-w: clamp(66px, min(var(--card-w-vw), var(--card-w-vh)), 118px);
+    --available-h: calc(var(--app-h) - (var(--ui-pad) * 2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - var(--score-h) - (var(--gap) * 7));
+
+    --card-h-fit: calc(var(--available-h) / 5);
+    --card-w-fit: calc(var(--card-h-fit) / 1.375);
+
+    --card-w: clamp(58px, min(var(--card-w-vw), var(--card-w-fit)), 118px);
     --card-h: calc(var(--card-w) * 1.375);
 }
 
-/* ---------- GAME ROOT (NO VIDEO) ---------- */
+/* ---------- GAME ROOT ---------- */
 .game-root {
-    height: var(--vh);
+    height: var(--app-h);
+    min-height: var(--app-h);
     width: 100%;
+
     padding: var(--ui-pad);
     padding-top: calc(var(--ui-pad) + env(safe-area-inset-top, 0px));
     padding-bottom: calc(var(--ui-pad) + env(safe-area-inset-bottom, 0px));
@@ -80,19 +80,19 @@ button {
     isolation: isolate;
 
     background:
-        radial-gradient(70vmax 55vmax at 18% 10%, rgba(124, 58, 237, 0.30), transparent 62%),
-        radial-gradient(75vmax 60vmax at 88% 30%, rgba(24, 231, 255, 0.24), transparent 62%),
-        radial-gradient(65vmax 50vmax at 50% 98%, rgba(255, 61, 242, 0.20), transparent 58%),
-        linear-gradient(180deg, #070a18, #050611);
+        radial-gradient(70vmax 55vmax at 18% 10%, rgba(124, 58, 237, 0.34), transparent 62%),
+        radial-gradient(75vmax 60vmax at 88% 30%, rgba(24, 231, 255, 0.26), transparent 62%),
+        radial-gradient(65vmax 50vmax at 50% 98%, rgba(255, 61, 242, 0.22), transparent 58%),
+        linear-gradient(180deg, var(--space-1), var(--space-0));
 }
 
-/* на всякий случай скрываем видео-слой, если он остался в JSX */
+/* прячем видео-слой, если остался */
 .table-bg,
 .table-video {
     display: none !important;
 }
 
-/* звёзды/шум */
+/* звезды */
 .game-root::before {
     content: "";
     position: absolute;
@@ -117,20 +117,20 @@ button {
     }
 }
 
-/* яркое свечение (без mix-blend-mode — в Telegram видно стабильно) */
+/* яркое свечение (без mix-blend-mode — Telegram-friendly) */
 .game-root::after {
     content: "";
     position: absolute;
     inset: -35%;
     background:
-        radial-gradient(55vmax 40vmax at 25% 45%, rgba(24, 231, 255, 0.22), transparent 62%),
-        radial-gradient(60vmax 45vmax at 70% 55%, rgba(255, 61, 242, 0.18), transparent 64%),
-        radial-gradient(70vmax 50vmax at 55% 18%, rgba(124, 58, 237, 0.20), transparent 62%),
+        radial-gradient(55vmax 40vmax at 25% 45%, rgba(24, 231, 255, 0.24), transparent 62%),
+        radial-gradient(60vmax 45vmax at 70% 55%, rgba(255, 61, 242, 0.20), transparent 64%),
+        radial-gradient(70vmax 50vmax at 55% 18%, rgba(124, 58, 237, 0.22), transparent 62%),
         linear-gradient(115deg,
             rgba(24, 231, 255, 0.00) 0%,
-            rgba(24, 231, 255, 0.12) 20%,
-            rgba(255, 61, 242, 0.10) 52%,
-            rgba(124, 58, 237, 0.10) 78%,
+            rgba(24, 231, 255, 0.14) 20%,
+            rgba(255, 61, 242, 0.12) 52%,
+            rgba(124, 58, 237, 0.12) 78%,
             rgba(24, 231, 255, 0.00) 100%);
     filter: blur(18px) saturate(1.2);
     opacity: 0.95;
@@ -156,20 +156,18 @@ button {
     }
 }
 
-/* ---------- LAYOUT ---------- */
+/* ---------- UI LAYOUT ---------- */
 .game-ui {
     position: relative;
     z-index: 3;
 
     height: 100%;
     display: grid;
-    grid-template-rows: auto auto 1fr auto;
-    /* top-hand, score, board, bottom-hand */
+    grid-template-rows: auto var(--score-h) 1fr auto;
+    /* topHand, score, board, bottomHand */
     gap: var(--gap);
-    align-content: space-between;
 }
 
-/* кнопка меню */
 .exit {
     position: absolute;
     left: 10px;
@@ -185,11 +183,15 @@ button {
 .hand {
     display: flex;
     justify-content: center;
+    align-items: center;
     width: 100%;
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     padding: 4px 0;
+
+    /* критично: чтобы рука не “обрезалась” */
+    min-height: calc(var(--card-h) + 8px);
 }
 
 .hand-slot {
@@ -212,7 +214,7 @@ button {
 
 /* ---------- SCORE ---------- */
 .scorebar {
-    height: 28px;
+    height: var(--score-h);
     width: 100%;
     max-width: 520px;
     margin: 0 auto;
@@ -286,17 +288,16 @@ button {
     border-radius: 16px;
     pointer-events: none;
     z-index: 0;
-
     background:
         repeating-linear-gradient(90deg,
             rgba(24, 231, 255, 0.00) 0,
             rgba(24, 231, 255, 0.00) calc(var(--step-x) - 2px),
-            rgba(24, 231, 255, 0.42) calc(var(--step-x) - 2px),
+            rgba(24, 231, 255, 0.40) calc(var(--step-x) - 2px),
             rgba(24, 231, 255, 0.00) var(--step-x)),
         repeating-linear-gradient(0deg,
             rgba(255, 61, 242, 0.00) 0,
             rgba(255, 61, 242, 0.00) calc(var(--step-y) - 2px),
-            rgba(255, 61, 242, 0.34) calc(var(--step-y) - 2px),
+            rgba(255, 61, 242, 0.32) calc(var(--step-y) - 2px),
             rgba(255, 61, 242, 0.00) var(--step-y));
     filter: drop-shadow(0 0 22px rgba(24, 231, 255, 0.22));
     opacity: 0.9;
@@ -326,7 +327,6 @@ button {
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.05);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
-    transition: background .2s, box-shadow .2s;
 }
 
 .cell.highlight {
