@@ -693,3 +693,33 @@ button {
         animation: none !important;
     }
 }
+
+/* ===== Telegram WebView friendly glow patch ===== */
+
+/* стабильная высота в мобильных webview */
+.game-root {
+    min-height: 100dvh;
+    height: 100dvh;
+}
+
+/* убираем зависимость от mix-blend-mode — делаем заметный glow “обычным” способом */
+.game-root::after {
+    mix-blend-mode: normal !important;
+    opacity: 0.80 !important;
+    filter: blur(16px) saturate(1.15) !important;
+}
+
+/* если mix-blend-mode реально поддерживается — включаем “красивый” режим */
+@supports (mix-blend-mode: screen) {
+    .game-root::after {
+        mix-blend-mode: screen !important;
+        opacity: 0.90 !important;
+    }
+}
+
+/* backdrop-filter часто ломает картинку в Telegram Android: делаем fallback */
+@supports not (backdrop-filter: blur(1px)) {
+    .cell {
+        backdrop-filter: none !important;
+    }
+}
