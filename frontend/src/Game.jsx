@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
-import tableVideo from "./assets/table.mp4";
 
 const DIRS = [
     { dx: 0, dy: -1, a: "top", b: "bottom" },
@@ -32,7 +31,6 @@ const genCard = (owner, id) => ({
     owner,
     values: { top: rand(), right: rand(), bottom: rand(), left: rand() },
     imageUrl: ART[Math.floor(Math.random() * ART.length)],
-
     placeKey: 0,
     captureKey: 0,
     specialKey: 0,
@@ -125,21 +123,24 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
 function captureByPowerFrom(idx, grid) {
     const src = grid[idx];
     if (!src) return [];
-    const flipped = [];
 
+    const flipped = [];
     for (const { ni, a, b } of neighborsOf(idx)) {
         const t = grid[ni];
         if (!t) continue;
         if (t.owner === src.owner) continue;
+
         if (src.values[a] > t.values[b]) {
             if (flipToOwner(grid, ni, src.owner)) flipped.push(ni);
         }
     }
+
     return flipped;
 }
 
 function resolveCombo(queue, grid, rules) {
     if (!rules.combo) return;
+
     const q = [...queue];
     while (q.length) {
         const idx = q.shift();
@@ -149,7 +150,6 @@ function resolveCombo(queue, grid, rules) {
 }
 
 export default function Game({ onExit }) {
-    const videoRef = useRef(null);
     const aiGuard = useRef({ handled: false });
 
     const makeHands = () => ({
@@ -165,24 +165,9 @@ export default function Game({ onExit }) {
     const [gameOver, setGameOver] = useState(false);
     const [winner, setWinner] = useState(null);
 
-    // запуск видео + запуск по первому клику (если autoplay блокнут)
+    // Победа: конфетти
     useEffect(() => {
-        const v = videoRef.current;
-        if (!v) return;
-
-        v.muted = true;
-        v.playsInline = true;
-        v.play().catch(() => { });
-
-        const start = () => v.play().catch(() => { });
-        window.addEventListener("pointerdown", start, { once: true });
-        return () => window.removeEventListener("pointerdown", start);
-    }, []);
-
-    // победа: конфетти
-    useEffect(() => {
-        if (!gameOver) return;
-        if (winner !== "player") return;
+        if (!gameOver || winner !== "player") return;
 
         const end = Date.now() + 1400;
         const tick = () => {
@@ -190,7 +175,7 @@ export default function Game({ onExit }) {
                 particleCount: 8,
                 spread: 75,
                 startVelocity: 28,
-                origin: { x: 0.5, y: 0.2 },
+                origin: { x: 0.2, y: 0.2 },
             });
             if (Date.now() < end) requestAnimationFrame(tick);
         };
@@ -201,11 +186,9 @@ export default function Game({ onExit }) {
         setHands(makeHands());
         setBoard(Array(9).fill(null));
         setSelected(null);
-
         setTurn(randomFirstTurn());
         setGameOver(false);
         setWinner(null);
-
         aiGuard.current.handled = false;
     };
 
@@ -214,12 +197,21 @@ export default function Game({ onExit }) {
         if (!selected || board[i]) return;
 
         const next = [...board];
-        next[i] = { ...selected, owner: "player", placeKey: (selected.placeKey || 0) + 1 };
+        next[i] = {
+            ...selected,
+            owner: "player",
+            placeKey: (selected.placeKey || 0) + 1,
+        };
 
         const { flipped, specialType } = resolvePlacementFlips(i, next, RULES);
         if (specialType) {
-            next[i] = { ...next[i], specialType, specialKey: (next[i].specialKey || 0) + 1 };
+            next[i] = {
+                ...next[i],
+                specialType,
+                specialKey: (next[i].specialKey || 0) + 1,
+            };
         }
+
         resolveCombo(flipped, next, RULES);
 
         setBoard(next);
@@ -230,7 +222,7 @@ export default function Game({ onExit }) {
         setTurn("enemy");
     };
 
-    // AI
+    // AI ход (рандом)
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
         if (aiGuard.current.handled) return;
@@ -249,12 +241,21 @@ export default function Game({ onExit }) {
         const card = enemy[Math.floor(Math.random() * enemy.length)];
 
         const next = [...board];
-        next[cell] = { ...card, owner: "enemy", placeKey: (card.placeKey || 0) + 1 };
+        next[cell] = {
+            ...card,
+            owner: "enemy",
+            placeKey: (card.placeKey || 0) + 1,
+        };
 
         const { flipped, specialType } = resolvePlacementFlips(cell, next, RULES);
         if (specialType) {
-            next[cell] = { ...next[cell], specialType, specialKey: (next[cell].specialKey || 0) + 1 };
+            next[cell] = {
+                ...next[cell],
+                specialType,
+                specialKey: (next[cell].specialKey || 0) + 1,
+            };
         }
+
         resolveCombo(flipped, next, RULES);
 
         const t = setTimeout(() => {
@@ -266,11 +267,13 @@ export default function Game({ onExit }) {
         return () => clearTimeout(t);
     }, [turn, gameOver, board, enemy]);
 
-    // конец игры
+    // Конец игры
     useEffect(() => {
         if (board.some((c) => c === null)) return;
+
         const p = board.filter((c) => c.owner === "player").length;
         const e = board.filter((c) => c.owner === "enemy").length;
+
         setWinner(p > e ? "player" : e > p ? "enemy" : "draw");
         setGameOver(true);
     }, [board]);
@@ -288,26 +291,19 @@ export default function Game({ onExit }) {
 
     return (
         <div className="game-root">
-            {/* видео-стол */}
-            <div className="table-bg" aria-hidden="true">
-                <video
-                    ref={videoRef}
-                    className="table-video"
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    preload="auto"
-                >
-                    <source src={tableVideo} type="video/mp4" />
-                </video>
-            </div>
-
-            {/* кости при проигрыше */}
             {gameOver && winner === "enemy" && <DiceRain />}
 
             <div className="game-ui">
                 <button className="exit" onClick={onExit}>← Меню</button>
+
+                {/* ЛЕВЫЕ ЗНАЧКИ + ТУМБЛЕР */}
+                <div className="hud-left">
+                    <div className="hud-score red">🟥 {score.red}</div>
+                    <div className={`hud-turn ${turn}`}>
+                        <div className="hud-dot" />
+                    </div>
+                    <div className="hud-score blue">{score.blue} 🟦</div>
+                </div>
 
                 {gameOver && (
                     <div className="game-over">
@@ -325,22 +321,18 @@ export default function Game({ onExit }) {
                     </div>
                 )}
 
+                {/* TOP HAND */}
                 <div className="hand top">
-                    {enemy.map((c, i) => (
-                        <div key={c.id} className="hand-slot" style={{ zIndex: i }}>
-                            <Card card={c} disabled />
-                        </div>
-                    ))}
-                </div>
-
-                <div className="scorebar">
-                    <span className="score red">🟥 {score.red}</span>
-                    <div className={`turn-pill ${turn}`} aria-label="turn">
-                        <div className="turn-dot" />
+                    <div className="hand-scroll">
+                        {enemy.map((c, i) => (
+                            <div key={c.id} className="hand-slot" style={{ zIndex: i }}>
+                                <Card card={c} disabled />
+                            </div>
+                        ))}
                     </div>
-                    <span className="score blue">{score.blue} 🟦</span>
                 </div>
 
+                {/* BOARD */}
                 <div className="board">
                     {board.map((cell, i) => (
                         <div
@@ -353,16 +345,23 @@ export default function Game({ onExit }) {
                     ))}
                 </div>
 
+                {/* BOTTOM HAND */}
                 <div className="hand bottom">
-                    {player.map((c, i) => (
-                        <div key={c.id} className="hand-slot" style={{ zIndex: i }}>
-                            <Card
-                                card={c}
-                                selected={selected?.id === c.id}
-                                onClick={() => setSelected(c)}
-                            />
-                        </div>
-                    ))}
+                    <div className="hand-scroll">
+                        {player.map((c, i) => (
+                            <div
+                                key={c.id}
+                                className="hand-slot"
+                                style={{ zIndex: selected?.id === c.id ? 9999 : i }}
+                            >
+                                <Card
+                                    card={c}
+                                    selected={selected?.id === c.id}
+                                    onClick={() => setSelected(c)}
+                                />
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
         </div>
