@@ -563,3 +563,60 @@ button {
         opacity: 0.95;
     }
 }
+
+/* ===== FIX: HUD does NOT shift layout (overlay at left edge, above cards) ===== */
+
+/* 1) Возвращаем game-ui в одну колонку (убираем сдвиг вправо) */
+.game-ui {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto 1fr auto !important;
+    column-gap: 0 !important;
+}
+
+/* 2) HUD делаем overlay слева (не влияет на layout) */
+.hud-left {
+    position: absolute !important;
+    left: max(6px, env(safe-area-inset-left, 0px)) !important;
+    top: calc(env(safe-area-inset-top, 0px) + 8px) !important;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px) !important;
+
+    width: 54px !important;
+    z-index: 60 !important;
+    pointer-events: none !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+
+    /* чтобы выглядело “выше” и не рядом с картами */
+    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.35));
+}
+
+/* 3) Убираем любые привязки к колонкам (если они были) */
+.hand.top,
+.board,
+.hand.bottom {
+    grid-column: 1 !important;
+}
+
+/* 4) Чтобы лента руки/доска не "съезжали" из-за старого padding-left */
+.hand-scroll {
+    padding-left: 6px !important;
+}
+
+/* 5) (опционально) чуть уменьшим квадраты, чтобы аккуратно сидели у края */
+.hud-score {
+    width: 54px !important;
+    border-radius: 14px !important;
+    font-size: 13px !important;
+    padding: 7px 6px !important;
+}
+
+.hud-turn {
+    width: 22px !important;
+    height: 78px !important;
+}
+
+.hud-turn.player .hud-dot {
+    transform: translate(-50%, calc(78px - 20px)) !important;
+}
