@@ -189,11 +189,15 @@ export default function Game({ onExit }) {
 
         const origin = { x: 0.5, y: 0.35 }; // центр
         const timers = [];
+        const confettiApi = useRef(null);
 
+        useEffect(() => {
+            confettiApi.current = confetti.create(undefined, { resize: true, useWorker: true });
+        }, []);
         const fire = (delay, opts) => {
             timers.push(
                 setTimeout(() => {
-                    confetti({
+                    confettiApi.current({
                         ...opts,
                         origin,
                         ticks: 140,
