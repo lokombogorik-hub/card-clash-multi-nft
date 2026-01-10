@@ -1,4 +1,4 @@
-/* frontend/src/index.css — clean version: hands scroll sideways, board does NOT jump */
+/* Clean Telegram WebApp UI: sideways scroll hands, stable board, visible HUD */
 
 * {
     box-sizing: border-box;
@@ -37,7 +37,7 @@ button {
     border: none;
 }
 
-/* SIZING */
+/* ---------- VARIABLES ---------- */
 :root {
     --ui-pad: clamp(10px, 2.2vw, 16px);
     --gap: clamp(6px, 2vw, 10px);
@@ -46,24 +46,25 @@ button {
     /* задаётся из main.jsx через window.innerHeight */
     --lift: 22px;
     /* подъём выбранной карты */
+    --hud-w: 62px;
+    /* ширина зоны HUD слева (чтобы не перекрывал карты) */
 
-    --card-w-vw: calc((100vw - (var(--ui-pad) * 2) - (var(--gap) * 2)) / 3);
-
-    /* topHand + board(3h) + bottomHand ≈ 5 * cardH */
+    /* card size: fit by width AND height */
+    --card-w-vw: calc((100vw - (var(--ui-pad) * 2) - var(--hud-w) - (var(--gap) * 2)) / 3);
     --available-h: calc(var(--app-h) - (var(--ui-pad) * 2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - (var(--gap) * 6));
-
-    --card-h-fit: calc(var(--available-h) / 5.05);
+    /* topHand + board(3h) + bottomHand ≈ 5.2 * cardH (чуть запас) */
+    --card-h-fit: calc(var(--available-h) / 5.2);
     --card-w-fit: calc(var(--card-h-fit) / 1.375);
 
-    --card-w: clamp(62px, min(var(--card-w-vw), var(--card-w-fit)), 126px);
+    --card-w: clamp(60px, min(var(--card-w-vw), var(--card-w-fit)), 124px);
     --card-h: calc(var(--card-w) * 1.375);
 
-    /* фиксированные высоты строк (чтобы board не прыгал) */
+    /* fixed row heights (NO jumping) */
     --hand-top-h: calc(var(--card-h) + 10px);
     --hand-bottom-h: calc(var(--card-h) + var(--lift) + 10px);
 }
 
-/* ROOT */
+/* ---------- ROOT TABLE (NO VIDEO) ---------- */
 .game-root {
     position: fixed;
     inset: 0;
@@ -148,7 +149,7 @@ button {
     }
 }
 
-/* UI */
+/* ---------- UI LAYOUT (stable) ---------- */
 .game-ui {
     position: relative;
     z-index: 3;
@@ -157,10 +158,12 @@ button {
     display: grid;
     grid-template-rows: var(--hand-top-h) 1fr var(--hand-bottom-h);
     gap: var(--gap);
+
+    /* место под HUD слева, чтобы он не был “на картах” */
+    padding-left: var(--hud-w);
     min-height: 0;
 }
 
-/* exit */
 .exit {
     position: absolute;
     right: 10px;
@@ -174,13 +177,13 @@ button {
     z-index: 50;
 }
 
-/* HUD overlay (если используешь hud-left) */
+/* ---------- HUD (visible, not on cards) ---------- */
 .hud-left {
     position: absolute;
     left: max(6px, env(safe-area-inset-left, 0px));
-    top: calc(env(safe-area-inset-top, 0px) + 8px);
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
-    width: 54px;
+    top: calc(env(safe-area-inset-top, 0px) + 10px);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+    width: calc(var(--hud-w) - 8px);
     z-index: 60;
     pointer-events: none;
     display: flex;
@@ -189,27 +192,70 @@ button {
     filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.35));
 }
 
-/* HANDS */
+.hud-score {
+    width: 100%;
+    padding: 8px 6px;
+    border-radius: 14px;
+    text-align: center;
+    font-weight: 900;
+    font-size: 14px;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.hud-score.red {
+    box-shadow: 0 0 18px rgba(255, 80, 80, 0.22);
+}
+
+.hud-score.blue {
+    box-shadow: 0 0 18px rgba(0, 180, 255, 0.22);
+}
+
+.hud-turn {
+    width: 22px;
+    height: 78px;
+    margin: 0 auto;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.40);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.hud-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    margin: 0 auto;
+    transform: translateY(6px);
+    transition: transform 220ms ease, background 220ms ease;
+    box-shadow: 0 0 18px rgba(255, 255, 255, 0.20);
+}
+
+.hud-turn.enemy .hud-dot {
+    background: rgba(255, 80, 80, 0.95);
+    transform: translateY(6px);
+}
+
+.hud-turn.player .hud-dot {
+    background: rgba(0, 180, 255, 0.95);
+    transform: translateY(calc(78px - 20px));
+}
+
+/* ---------- HANDS (side scroll always) ---------- */
 .hand {
     position: relative;
     z-index: 10;
     min-height: 0;
-    /* важно для grid */
     overflow: hidden;
-    /* внешний контейнер без скролла */
 }
 
-/* SCROLL STRIP — вот тут боковой скролл */
 .hand-scroll {
-    display: flex;
-    gap: 10px;
-    align-items: flex-end;
-
     height: 100%;
     min-height: 100%;
+    display: flex;
+    gap: 10px;
 
     overflow-x: scroll;
-    /* ВСЕГДА scroll → не прыгает при auto */
+    /* ALWAYS scroll -> no jump */
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
 
@@ -222,21 +268,19 @@ button {
     display: none;
 }
 
-/* top hand */
 .hand.top .hand-scroll {
     align-items: flex-start;
 }
 
-/* bottom hand: делаем “карман”, чтобы выбранная карта НЕ уходила под доску */
 .hand.bottom .hand-scroll {
     padding-top: var(--lift);
+    /* “карман” для подъёма */
+    align-items: flex-end;
 }
 
-/* slots */
 .hand-slot {
-    position: relative;
-    flex: 0 0 auto;
     width: var(--card-w);
+    flex: 0 0 auto;
     pointer-events: none;
 }
 
@@ -244,7 +288,7 @@ button {
     pointer-events: auto;
 }
 
-/* BOARD */
+/* ---------- BOARD (center, stable) ---------- */
 .board {
     position: relative;
     z-index: 3;
@@ -312,7 +356,7 @@ button {
     cursor: pointer;
 }
 
-/* CARD */
+/* ---------- CARD (with capture animation) ---------- */
 .card {
     width: var(--card-w);
     height: var(--card-h);
@@ -321,7 +365,6 @@ button {
     overflow: hidden;
     cursor: pointer;
     background: linear-gradient(145deg, #1a2232, #0f1625);
-    transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
     will-change: transform;
 }
 
@@ -341,14 +384,14 @@ button {
     z-index: 1;
 }
 
-/* selected lift (inside pocket, no “under table”) */
+/* selected (inside pocket) */
 .hand.bottom .card.selected {
     transform: translateY(calc(-1 * var(--lift))) scale(1.04);
     z-index: 9999;
     box-shadow: 0 0 22px rgba(255, 215, 0, 0.25), 0 18px 40px rgba(0, 0, 0, 0.55);
 }
 
-/* owner colors */
+/* owner */
 .card.player {
     border: 2px solid rgba(42, 107, 255, 0.98);
     box-shadow: 0 0 22px rgba(0, 180, 255, 0.40), 0 14px 30px rgba(0, 0, 0, 0.45);
@@ -367,6 +410,45 @@ button {
 
 .hand.top .card.disabled {
     opacity: 1 !important;
+}
+
+/* place / capture animations */
+.card.is-placed .card-anim {
+    animation: placeSmooth 380ms cubic-bezier(.2, .9, .2, 1);
+}
+
+@keyframes placeSmooth {
+    0% {
+        transform: translateY(18px) scale(.96);
+        opacity: 0;
+    }
+
+    100% {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
+}
+
+.card.is-captured .card-anim {
+    animation: captureBounce 360ms cubic-bezier(.2, .9, .2, 1);
+}
+
+@keyframes captureBounce {
+    0% {
+        transform: translateY(0) scale(1);
+    }
+
+    35% {
+        transform: translateY(-10px) scale(1.05);
+    }
+
+    70% {
+        transform: translateY(0) scale(.99);
+    }
+
+    100% {
+        transform: translateY(0) scale(1);
+    }
 }
 
 /* TT numbers */
@@ -411,12 +493,74 @@ button {
     left: 28px;
 }
 
-/* Reduced motion */
+/* GAME OVER */
+.game-over {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.70);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+}
+
+.game-over-box {
+    background: #1e1e2f;
+    padding: 24px 32px;
+    border-radius: 16px;
+    text-align: center;
+    min-width: 260px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* DICE RAIN (nice) */
+.dice-rain {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.die {
+    position: absolute;
+    top: -12vh;
+    line-height: 1;
+    /* fixes “crooked” emoji */
+    font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+    transform-origin: center;
+    filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
+    animation-name: diceFall;
+    animation-timing-function: linear;
+    animation-iteration-count: 1;
+}
+
+@keyframes diceFall {
+    0% {
+        transform: translate3d(0, -10vh, 0) rotate(0deg);
+        opacity: 0;
+    }
+
+    12% {
+        opacity: 1;
+    }
+
+    100% {
+        transform: translate3d(0, 115vh, 0) rotate(var(--rot));
+        opacity: 0.95;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
 
     .game-root::before,
     .game-root::after,
     .board::before {
+        animation: none !important;
+    }
+
+    .card.is-placed .card-anim,
+    .card.is-captured .card-anim {
         animation: none !important;
     }
 }

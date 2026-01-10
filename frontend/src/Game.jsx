@@ -31,6 +31,7 @@ const genCard = (owner, id) => ({
     owner,
     values: { top: rand(), right: rand(), bottom: rand(), left: rand() },
     imageUrl: ART[Math.floor(Math.random() * ART.length)],
+
     placeKey: 0,
     captureKey: 0,
     specialKey: 0,
@@ -58,7 +59,7 @@ function flipToOwner(grid, ni, newOwner) {
     grid[ni] = {
         ...t,
         owner: newOwner,
-        captureKey: (t.captureKey || 0) + 1,
+        captureKey: (t.captureKey || 0) + 1, // <-- триггер bounce
     };
     return true;
 }
@@ -110,7 +111,13 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
     }
 
     const specialType =
-        sameTriggered && plusTriggered ? "both" : sameTriggered ? "same" : plusTriggered ? "plus" : "";
+        sameTriggered && plusTriggered
+            ? "both"
+            : sameTriggered
+                ? "same"
+                : plusTriggered
+                    ? "plus"
+                    : "";
 
     const flipped = [];
     for (const ni of toFlip) {
@@ -165,6 +172,16 @@ export default function Game({ onExit }) {
     const [gameOver, setGameOver] = useState(false);
     const [winner, setWinner] = useState(null);
 
+    const reset = () => {
+        setHands(makeHands());
+        setBoard(Array(9).fill(null));
+        setSelected(null);
+        setTurn(randomFirstTurn());
+        setGameOver(false);
+        setWinner(null);
+        aiGuard.current.handled = false;
+    };
+
     // Победа: конфетти
     useEffect(() => {
         if (!gameOver || winner !== "player") return;
@@ -182,16 +199,6 @@ export default function Game({ onExit }) {
         tick();
     }, [gameOver, winner]);
 
-    const reset = () => {
-        setHands(makeHands());
-        setBoard(Array(9).fill(null));
-        setSelected(null);
-        setTurn(randomFirstTurn());
-        setGameOver(false);
-        setWinner(null);
-        aiGuard.current.handled = false;
-    };
-
     const placeCard = (i) => {
         if (turn !== "player") return;
         if (!selected || board[i]) return;
@@ -203,15 +210,7 @@ export default function Game({ onExit }) {
             placeKey: (selected.placeKey || 0) + 1,
         };
 
-        const { flipped, specialType } = resolvePlacementFlips(i, next, RULES);
-        if (specialType) {
-            next[i] = {
-                ...next[i],
-                specialType,
-                specialKey: (next[i].specialKey || 0) + 1,
-            };
-        }
-
+        const { flipped } = resolvePlacementFlips(i, next, RULES);
         resolveCombo(flipped, next, RULES);
 
         setBoard(next);
@@ -222,7 +221,7 @@ export default function Game({ onExit }) {
         setTurn("enemy");
     };
 
-    // AI ход (рандом)
+    // AI (рандом)
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
         if (aiGuard.current.handled) return;
@@ -247,15 +246,7 @@ export default function Game({ onExit }) {
             placeKey: (card.placeKey || 0) + 1,
         };
 
-        const { flipped, specialType } = resolvePlacementFlips(cell, next, RULES);
-        if (specialType) {
-            next[cell] = {
-                ...next[cell],
-                specialType,
-                specialKey: (next[cell].specialKey || 0) + 1,
-            };
-        }
-
+        const { flipped } = resolvePlacementFlips(cell, next, RULES);
         resolveCombo(flipped, next, RULES);
 
         const t = setTimeout(() => {
@@ -296,7 +287,7 @@ export default function Game({ onExit }) {
             <div className="game-ui">
                 <button className="exit" onClick={onExit}>← Меню</button>
 
-                {/* ЛЕВЫЕ ЗНАЧКИ + ТУМБЛЕР */}
+                {/* HUD слева: счёт + тумблер хода */}
                 <div className="hud-left">
                     <div className="hud-score red">🟥 {score.red}</div>
                     <div className={`hud-turn ${turn}`}>
