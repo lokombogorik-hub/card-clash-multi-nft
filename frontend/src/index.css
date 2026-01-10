@@ -1,4 +1,4 @@
-/* frontend/src/index.css — Telegram WebApp friendly, neon-cosmos, hands fit */
+/* frontend/src/index.css — Telegram WebApp fit + hands to edges + selected lift */
 
 * {
     box-sizing: border-box;
@@ -11,10 +11,13 @@ body,
     height: 100%;
 }
 
+/* запрет вертикального скролла (иначе "мои карты появляются после свайпа") */
 body {
     margin: 0;
     background: #0b1220;
     color: white;
+    overflow: hidden;
+    overscroll-behavior: none;
 }
 
 /* ---------- MENU ---------- */
@@ -40,29 +43,23 @@ button {
     --ui-pad: clamp(10px, 2.2vw, 16px);
     --gap: clamp(6px, 2vw, 10px);
 
-    --hand-overlap-top: 0.34;
-    /* верх: накладка */
-    --hand-overlap-bottom: 0.00;
-    /* низ: без накладки, будем раздвигать */
-
     --score-h: 26px;
 
-    /* будет выставляться из JS (window.innerHeight) */
+    /* будет выставляться из JS: --app-h = window.innerHeight + 'px' */
     --app-h: 100vh;
 
     --space-0: #050611;
     --space-1: #070a18;
 }
 
-/* Карты считаем так, чтобы влезло:
-   top hand + score + board (3h) + bottom hand */
+/* Размер карты: чтобы точно влезали 2 руки + board + score */
 :root {
     --card-w-vw: calc((100vw - (var(--ui-pad) * 2) - (var(--gap) * 2)) / 3);
 
     --available-h: calc(var(--app-h) - (var(--ui-pad) * 2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - var(--score-h) - (var(--gap) * 7));
 
-    /* 5.25 вместо 5 — чуть меньше карты, чтобы низ точно влез в Telegram */
-    --card-h-fit: calc(var(--available-h) / 5.25);
+    /* чуть запас, чтобы в Telegram не резало низ */
+    --card-h-fit: calc(var(--available-h) / 5.35);
     --card-w-fit: calc(var(--card-h-fit) / 1.375);
 
     --card-w: clamp(56px, min(var(--card-w-vw), var(--card-w-fit)), 118px);
@@ -71,15 +68,16 @@ button {
 
 /* ---------- GAME ROOT (NO VIDEO) ---------- */
 .game-root {
-    height: var(--app-h);
-    min-height: var(--app-h);
-    width: 100%;
+    /* фиксируем игру к экрану — убирает вертикальный скролл */
+    position: fixed;
+    inset: 0;
 
+    height: var(--app-h);
+    width: 100%;
     padding: var(--ui-pad);
     padding-top: calc(var(--ui-pad) + env(safe-area-inset-top, 0px));
     padding-bottom: calc(var(--ui-pad) + env(safe-area-inset-bottom, 0px));
 
-    position: relative;
     overflow: hidden;
     isolation: isolate;
 
@@ -121,7 +119,7 @@ button {
     }
 }
 
-/* туманность/свечение (Telegram-friendly, без mix-blend-mode) */
+/* туманность/свечение (Telegram-friendly) */
 .game-root::after {
     content: "";
     position: absolute;
@@ -169,9 +167,6 @@ button {
     display: grid;
     grid-template-rows: auto var(--score-h) 1fr auto;
     gap: var(--gap);
-
-    /* чуть “подняли” всю сцену, чтобы нижняя рука не резалась */
-    transform: translateY(-4px);
 }
 
 .exit {
@@ -185,33 +180,24 @@ button {
     border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
-/* ---------- HANDS ---------- */
+/* ---------- HANDS (оба к краям) ---------- */
 .hand {
     display: flex;
     align-items: center;
     width: 100%;
-    overflow-x: auto;
+    padding: 2px 2px;
+
+    overflow-x: hidden;
+    /* нам не нужен горизонтальный скролл */
     overflow-y: visible;
-    /* важно: чтобы выбранная карта могла подниматься */
-    -webkit-overflow-scrolling: touch;
-    padding: 2px 0;
+    /* нужно, чтобы выбранная карта поднималась */
+    min-height: calc(var(--card-h) + 12px);
 
-    min-height: calc(var(--card-h) + 10px);
-}
-
-/* верх: можно слегка центрировать */
-.hand.top {
-    justify-content: center;
-}
-
-/* низ: раздвигаем почти до краёв */
-.hand.bottom {
     justify-content: space-between;
-    padding-left: 2px;
-    padding-right: 2px;
+    /* и верх, и низ — к краям */
 }
 
-/* слоты */
+/* слоты одинаковые */
 .hand-slot {
     position: relative;
     width: var(--card-w);
@@ -219,12 +205,11 @@ button {
     overflow: visible;
 }
 
-/* верхняя рука: накладываем карты друг на друга */
+/* убираем наложение вообще (иначе "половина видна") */
 .hand.top .hand-slot+.hand-slot {
-    margin-left: calc(var(--card-w) * -1 * var(--hand-overlap-top));
+    margin-left: 0;
 }
 
-/* нижняя рука: НЕ накладываем, чтобы раздвинуть */
 .hand.bottom .hand-slot+.hand-slot {
     margin-left: 0;
 }
@@ -389,7 +374,7 @@ button {
     z-index: 1;
 }
 
-/* выбранная карта (внизу) поднимается вверх */
+/* выбранная карта выходит вверх */
 .hand.bottom .card.selected {
     transform: translateY(calc(-1 * (var(--card-h) * 0.18))) scale(1.04);
     z-index: 50;
@@ -407,13 +392,13 @@ button {
     box-shadow: 0 0 22px rgba(255, 80, 80, 0.34), 0 14px 30px rgba(0, 0, 0, 0.45);
 }
 
-/* disabled по умолчанию */
+/* disabled */
 .card.disabled {
     opacity: 0.7;
     cursor: default;
 }
 
-/* НО у противника в руке (верх) пусть НЕ будет прозрачности */
+/* враг в руке не прозрачный */
 .hand.top .card.disabled {
     opacity: 1 !important;
 }
@@ -569,12 +554,6 @@ button {
 }
 
 /* ---------- TOUCH / MOTION ---------- */
-@media (hover:none) {
-    .card:hover:not(.disabled) {
-        transform: none;
-    }
-}
-
 @media (prefers-reduced-motion: reduce) {
 
     .game-root::before,
