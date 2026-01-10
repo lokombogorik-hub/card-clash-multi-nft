@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
-import tableVideo from "./assets/table.mp4"; // <-- ВАЖНО: видео в src/assets
+import tableVideo from "./assets/table.mp4"; // <-- ВАЖНО: видео тут
 
 const DIRS = [
     { dx: 0, dy: -1, a: "top", b: "bottom" },
@@ -10,7 +10,6 @@ const DIRS = [
 ];
 
 const RULES = { combo: true, same: true, plus: true };
-
 const rand = () => Math.ceil(Math.random() * 9);
 
 const ART = [
@@ -33,7 +32,6 @@ const genCard = (owner, id) => ({
     owner,
     values: { top: rand(), right: rand(), bottom: rand(), left: rand() },
     imageUrl: ART[Math.floor(Math.random() * ART.length)],
-
     placeKey: 0,
     captureKey: 0,
     specialKey: 0,
@@ -61,7 +59,7 @@ function flipToOwner(grid, ni, newOwner) {
     grid[ni] = {
         ...t,
         owner: newOwner,
-        captureKey: (t.captureKey || 0) + 1, // подпрыгивание при захвате
+        captureKey: (t.captureKey || 0) + 1, // подпрыгивание
     };
     return true;
 }
@@ -132,7 +130,6 @@ function captureByPowerFrom(idx, grid) {
         const t = grid[ni];
         if (!t) continue;
         if (t.owner === src.owner) continue;
-
         if (src.values[a] > t.values[b]) {
             if (flipToOwner(grid, ni, src.owner)) flipped.push(ni);
         }
@@ -152,6 +149,7 @@ function resolveCombo(queue, grid, rules) {
 
 export default function Game({ onExit }) {
     const videoRef = useRef(null);
+    const aiGuard = useRef({ handled: false });
 
     const makeHands = () => ({
         player: Array.from({ length: 5 }, (_, i) => genCard("player", `p${i}`)),
@@ -162,16 +160,11 @@ export default function Game({ onExit }) {
     const [board, setBoard] = useState(Array(9).fill(null));
     const [selected, setSelected] = useState(null);
 
-    // Рандом кто начинает
     const [turn, setTurn] = useState(() => randomFirstTurn());
-
     const [gameOver, setGameOver] = useState(false);
     const [winner, setWinner] = useState(null);
 
-    // guard от двойного AI в StrictMode
-    const aiGuard = useRef({ handled: false });
-
-    // старт видео (если autoplay блокнут — всё равно будет fallback)
+    // автозапуск (если браузер блокнет — ок, будет просто стоп-кадр)
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
@@ -180,18 +173,17 @@ export default function Game({ onExit }) {
         v.play().catch(() => { });
     }, []);
 
-    // конфетти / поражение
+    // победа: конфетти
     useEffect(() => {
         if (!gameOver) return;
+        if (winner !== "player") return;
 
-        if (winner === "player") {
-            const end = Date.now() + 1400;
-            const tick = () => {
-                confetti({ particleCount: 7, spread: 75, startVelocity: 28, origin: { x: 0.5, y: 0.2 } });
-                if (Date.now() < end) requestAnimationFrame(tick);
-            };
-            tick();
-        }
+        const end = Date.now() + 1400;
+        const tick = () => {
+            confetti({ particleCount: 8, spread: 75, startVelocity: 28, origin: { x: 0.5, y: 0.2 } });
+            if (Date.now() < end) requestAnimationFrame(tick);
+        };
+        tick();
     }, [gameOver, winner]);
 
     const reset = () => {
@@ -202,7 +194,6 @@ export default function Game({ onExit }) {
         setTurn(randomFirstTurn()); // снова рандом
         setGameOver(false);
         setWinner(null);
-
         aiGuard.current.handled = false;
     };
 
@@ -211,23 +202,12 @@ export default function Game({ onExit }) {
         if (!selected || board[i]) return;
 
         const next = [...board];
-
-        next[i] = {
-            ...selected,
-            owner: "player",
-            placeKey: (selected.placeKey || 0) + 1, // плавная постановка
-        };
+        next[i] = { ...selected, owner: "player", placeKey: (selected.placeKey || 0) + 1 };
 
         const { flipped, specialType } = resolvePlacementFlips(i, next, RULES);
-
         if (specialType) {
-            next[i] = {
-                ...next[i],
-                specialType,
-                specialKey: (next[i].specialKey || 0) + 1,
-            };
+            next[i] = { ...next[i], specialType, specialKey: (next[i].specialKey || 0) + 1 };
         }
-
         resolveCombo(flipped, next, RULES);
 
         setBoard(next);
@@ -238,7 +218,7 @@ export default function Game({ onExit }) {
         setTurn("enemy");
     };
 
-    // AI ход (рандом)
+    // AI
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
         if (aiGuard.current.handled) return;
@@ -257,22 +237,12 @@ export default function Game({ onExit }) {
         const card = enemy[Math.floor(Math.random() * enemy.length)];
 
         const next = [...board];
-        next[cell] = {
-            ...card,
-            owner: "enemy",
-            placeKey: (card.placeKey || 0) + 1,
-        };
+        next[cell] = { ...card, owner: "enemy", placeKey: (card.placeKey || 0) + 1 };
 
         const { flipped, specialType } = resolvePlacementFlips(cell, next, RULES);
-
         if (specialType) {
-            next[cell] = {
-                ...next[cell],
-                specialType,
-                specialKey: (next[cell].specialKey || 0) + 1,
-            };
+            next[cell] = { ...next[cell], specialType, specialKey: (next[cell].specialKey || 0) + 1 };
         }
-
         resolveCombo(flipped, next, RULES);
 
         const t = setTimeout(() => {
@@ -284,13 +254,11 @@ export default function Game({ onExit }) {
         return () => clearTimeout(t);
     }, [turn, gameOver, board, enemy]);
 
-    // конец игры
+    // end
     useEffect(() => {
         if (board.some((c) => c === null)) return;
-
         const p = board.filter((c) => c.owner === "player").length;
         const e = board.filter((c) => c.owner === "enemy").length;
-
         setWinner(p > e ? "player" : e > p ? "enemy" : "draw");
         setGameOver(true);
     }, [board]);
@@ -308,15 +276,15 @@ export default function Game({ onExit }) {
 
     return (
         <div className={`game-root ${gameOver && winner === "enemy" ? "defeat" : ""}`}>
-            {/* Видео-стол */}
+            {/* видео-стол */}
             <div className="table-bg" aria-hidden="true">
                 <video ref={videoRef} className="table-video" autoPlay loop muted playsInline preload="auto">
                     <source src={tableVideo} type="video/mp4" />
                 </video>
             </div>
 
-            {/* эффект поражения */}
-            {gameOver && winner === "enemy" && <div className="defeat-overlay" />}
+            {/* кости при проигрыше */}
+            {gameOver && winner === "enemy" && <DiceRain />}
 
             <div className="game-ui">
                 <button className="exit" onClick={onExit}>← Меню</button>
@@ -338,15 +306,22 @@ export default function Game({ onExit }) {
                 )}
 
                 <div className="hand top">
-                    {enemy.map((c) => (
-                        <div key={c.id} className="hand-slot">
+                    {enemy.map((c, i) => (
+                        <div key={c.id} className="hand-slot" style={{ zIndex: i }}>
                             <Card card={c} disabled />
                         </div>
                     ))}
                 </div>
 
                 <div className="scorebar">
-                    🟥 {score.red} : {score.blue} 🟦 • Ход: {turn === "player" ? "ты" : "враг"}
+                    <span className="score red">🟥 {score.red}</span>
+
+                    {/* индикатор хода: точка ездит */}
+                    <div className={`turn-pill ${turn}`} aria-label="turn">
+                        <div className="turn-dot" />
+                    </div>
+
+                    <span className="score blue">{score.blue} 🟦</span>
                 </div>
 
                 <div className="board">
@@ -362,8 +337,8 @@ export default function Game({ onExit }) {
                 </div>
 
                 <div className="hand bottom">
-                    {player.map((c) => (
-                        <div key={c.id} className="hand-slot">
+                    {player.map((c, i) => (
+                        <div key={c.id} className="hand-slot" style={{ zIndex: i }}>
                             <Card
                                 card={c}
                                 selected={selected?.id === c.id}
@@ -380,7 +355,6 @@ export default function Game({ onExit }) {
 function Card({ card, onClick, selected, disabled }) {
     const [placedAnim, setPlacedAnim] = useState(false);
     const [capturedAnim, setCapturedAnim] = useState(false);
-    const [specialAnim, setSpecialAnim] = useState(false);
 
     useEffect(() => {
         if (!card?.placeKey) return;
@@ -396,22 +370,6 @@ function Card({ card, onClick, selected, disabled }) {
         return () => clearTimeout(t);
     }, [card?.captureKey]);
 
-    useEffect(() => {
-        if (!card?.specialKey) return;
-        setSpecialAnim(true);
-        const t = setTimeout(() => setSpecialAnim(false), 520);
-        return () => clearTimeout(t);
-    }, [card?.specialKey]);
-
-    const specialClass =
-        card.specialType === "both"
-            ? "special-both"
-            : card.specialType === "same"
-                ? "special-same"
-                : card.specialType === "plus"
-                    ? "special-plus"
-                    : "";
-
     return (
         <div
             className={[
@@ -421,8 +379,6 @@ function Card({ card, onClick, selected, disabled }) {
                 disabled ? "disabled" : "",
                 placedAnim ? "is-placed" : "",
                 capturedAnim ? "is-captured" : "",
-                specialAnim ? "is-special" : "",
-                specialClass,
             ].join(" ")}
             onClick={disabled ? undefined : onClick}
         >
@@ -434,6 +390,41 @@ function Card({ card, onClick, selected, disabled }) {
                 <span className="tt-num right">{card.values.right}</span>
                 <span className="tt-num bottom">{card.values.bottom}</span>
             </div>
+        </div>
+    );
+}
+
+function DiceRain() {
+    const dice = useMemo(() => {
+        return Array.from({ length: 34 }, (_, i) => ({
+            id: i,
+            left: Math.random() * 100,
+            delay: Math.random() * 0.6,
+            dur: 1.2 + Math.random() * 1.2,
+            rot: (Math.random() * 720 - 360).toFixed(0),
+            size: 16 + Math.random() * 18,
+            opacity: 0.75 + Math.random() * 0.25,
+        }));
+    }, []);
+
+    return (
+        <div className="dice-rain" aria-hidden="true">
+            {dice.map((d) => (
+                <span
+                    key={d.id}
+                    className="die"
+                    style={{
+                        left: `${d.left}%`,
+                        animationDelay: `${d.delay}s`,
+                        animationDuration: `${d.dur}s`,
+                        fontSize: `${d.size}px`,
+                        opacity: d.opacity,
+                        ["--rot"]: `${d.rot}deg`,
+                    }}
+                >
+                    🎲
+                </span>
+            ))}
         </div>
     );
 }
