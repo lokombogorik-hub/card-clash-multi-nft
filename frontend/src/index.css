@@ -1,3 +1,5 @@
+/* frontend/src/index.css — clean version: hands scroll sideways, board does NOT jump */
+
 * {
     box-sizing: border-box;
     font-family: sans-serif;
@@ -39,6 +41,7 @@ button {
 :root {
     --ui-pad: clamp(10px, 2.2vw, 16px);
     --gap: clamp(6px, 2vw, 10px);
+
     --app-h: 100vh;
     /* задаётся из main.jsx через window.innerHeight */
     --lift: 22px;
@@ -46,14 +49,18 @@ button {
 
     --card-w-vw: calc((100vw - (var(--ui-pad) * 2) - (var(--gap) * 2)) / 3);
 
+    /* topHand + board(3h) + bottomHand ≈ 5 * cardH */
     --available-h: calc(var(--app-h) - (var(--ui-pad) * 2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - (var(--gap) * 6));
 
-    /* top hand + board(3h) + bottom hand ≈ 5 * cardH */
     --card-h-fit: calc(var(--available-h) / 5.05);
     --card-w-fit: calc(var(--card-h-fit) / 1.375);
 
     --card-w: clamp(62px, min(var(--card-w-vw), var(--card-w-fit)), 126px);
     --card-h: calc(var(--card-w) * 1.375);
+
+    /* фиксированные высоты строк (чтобы board не прыгал) */
+    --hand-top-h: calc(var(--card-h) + 10px);
+    --hand-bottom-h: calc(var(--card-h) + var(--lift) + 10px);
 }
 
 /* ROOT */
@@ -62,9 +69,11 @@ button {
     inset: 0;
     height: var(--app-h);
     width: 100%;
+
     padding: var(--ui-pad);
     padding-top: calc(var(--ui-pad) + env(safe-area-inset-top, 0px));
     padding-bottom: calc(var(--ui-pad) + env(safe-area-inset-bottom, 0px));
+
     overflow: hidden;
     isolation: isolate;
 
@@ -139,20 +148,19 @@ button {
     }
 }
 
-/* UI grid: left HUD column + game column */
+/* UI */
 .game-ui {
     position: relative;
     z-index: 3;
     height: 100%;
 
     display: grid;
-    grid-template-columns: 58px 1fr;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: var(--hand-top-h) 1fr var(--hand-bottom-h);
     gap: var(--gap);
-    column-gap: 8px;
+    min-height: 0;
 }
 
-/* exit -> top right */
+/* exit */
 .exit {
     position: absolute;
     right: 10px;
@@ -166,121 +174,60 @@ button {
     z-index: 50;
 }
 
-/* LEFT HUD */
+/* HUD overlay (если используешь hud-left) */
 .hud-left {
-    grid-column: 1;
-    grid-row: 1 / 4;
-    width: 58px;
-
+    position: absolute;
+    left: max(6px, env(safe-area-inset-left, 0px));
+    top: calc(env(safe-area-inset-top, 0px) + 8px);
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+    width: 54px;
+    z-index: 60;
+    pointer-events: none;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    pointer-events: none;
-    z-index: 30;
+    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.35));
 }
 
-.hud-score {
-    width: 58px;
-    padding: 8px 6px;
-    border-radius: 14px;
-    text-align: center;
-    font-weight: 900;
-    font-size: 14px;
-    background: rgba(0, 0, 0, 0.35);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.hud-score.red {
-    box-shadow: 0 0 18px rgba(255, 80, 80, 0.18);
-}
-
-.hud-score.blue {
-    box-shadow: 0 0 18px rgba(0, 180, 255, 0.18);
-}
-
-.hud-turn {
-    position: relative;
-    width: 24px;
-    height: 86px;
-    margin: 0 auto;
-    border-radius: 999px;
-    background: rgba(0, 0, 0, 0.28);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.hud-dot {
-    position: absolute;
-    left: 50%;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    transform: translate(-50%, 6px);
-    transition: transform 220ms ease, background 220ms ease;
-    box-shadow: 0 0 18px rgba(255, 255, 255, 0.20);
-}
-
-.hud-turn.enemy .hud-dot {
-    background: rgba(255, 80, 80, 0.95);
-    transform: translate(-50%, 6px);
-}
-
-.hud-turn.player .hud-dot {
-    background: rgba(0, 180, 255, 0.95);
-    transform: translate(-50%, calc(86px - 20px));
-}
-
-/* TOP HAND / BOARD / BOTTOM HAND placed in col 2 */
-.hand.top {
-    grid-column: 2;
-    grid-row: 1;
-}
-
-.board {
-    grid-column: 2;
-    grid-row: 2;
-}
-
-.hand.bottom {
-    grid-column: 2;
-    grid-row: 3;
-}
-
-/* HANDS (outer) */
+/* HANDS */
 .hand {
     position: relative;
     z-index: 10;
-    width: 100%;
+    min-height: 0;
+    /* важно для grid */
+    overflow: hidden;
+    /* внешний контейнер без скролла */
 }
 
-/* scroll strip */
+/* SCROLL STRIP — вот тут боковой скролл */
 .hand-scroll {
     display: flex;
     gap: 10px;
     align-items: flex-end;
 
-    overflow-x: auto;
+    height: 100%;
+    min-height: 100%;
+
+    overflow-x: scroll;
+    /* ВСЕГДА scroll → не прыгает при auto */
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
 
     padding: 2px 6px;
-    min-height: calc(var(--card-h) + var(--lift) + 10px);
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
 
 .hand-scroll::-webkit-scrollbar {
-    height: 0px;
+    display: none;
 }
 
-.hand-scroll {
-    scrollbar-width: none;
-}
-
-/* top: no pocket */
+/* top hand */
 .hand.top .hand-scroll {
     align-items: flex-start;
-    min-height: calc(var(--card-h) + 10px);
 }
 
-/* bottom: pocket so selected card doesn’t go “under table” */
+/* bottom hand: делаем “карман”, чтобы выбранная карта НЕ уходила под доску */
 .hand.bottom .hand-scroll {
     padding-top: var(--lift);
 }
@@ -319,8 +266,16 @@ button {
     pointer-events: none;
     z-index: 0;
     background:
-        repeating-linear-gradient(90deg, rgba(24, 231, 255, 0.00) 0, rgba(24, 231, 255, 0.00) calc(var(--card-w) - 2px), rgba(24, 231, 255, 0.40) calc(var(--card-w) - 2px), rgba(24, 231, 255, 0.00) var(--card-w)),
-        repeating-linear-gradient(0deg, rgba(255, 61, 242, 0.00) 0, rgba(255, 61, 242, 0.00) calc(var(--card-h) - 2px), rgba(255, 61, 242, 0.32) calc(var(--card-h) - 2px), rgba(255, 61, 242, 0.00) var(--card-h));
+        repeating-linear-gradient(90deg,
+            rgba(24, 231, 255, 0.00) 0,
+            rgba(24, 231, 255, 0.00) calc(var(--card-w) - 2px),
+            rgba(24, 231, 255, 0.40) calc(var(--card-w) - 2px),
+            rgba(24, 231, 255, 0.00) var(--card-w)),
+        repeating-linear-gradient(0deg,
+            rgba(255, 61, 242, 0.00) 0,
+            rgba(255, 61, 242, 0.00) calc(var(--card-h) - 2px),
+            rgba(255, 61, 242, 0.32) calc(var(--card-h) - 2px),
+            rgba(255, 61, 242, 0.00) var(--card-h));
     filter: drop-shadow(0 0 22px rgba(24, 231, 255, 0.22));
     opacity: 0.9;
     animation: gridBreath 2.8s ease-in-out infinite;
@@ -386,7 +341,7 @@ button {
     z-index: 1;
 }
 
-/* selected lift (exactly lift px, inside pocket) */
+/* selected lift (inside pocket, no “under table”) */
 .hand.bottom .card.selected {
     transform: translateY(calc(-1 * var(--lift))) scale(1.04);
     z-index: 9999;
@@ -412,45 +367,6 @@ button {
 
 .hand.top .card.disabled {
     opacity: 1 !important;
-}
-
-/* animations */
-.card.is-placed .card-anim {
-    animation: placeSmooth 380ms cubic-bezier(.2, .9, .2, 1);
-}
-
-@keyframes placeSmooth {
-    0% {
-        transform: translateY(18px) scale(.96);
-        opacity: 0;
-    }
-
-    100% {
-        transform: translateY(0) scale(1);
-        opacity: 1;
-    }
-}
-
-.card.is-captured .card-anim {
-    animation: captureBounce 360ms cubic-bezier(.2, .9, .2, 1);
-}
-
-@keyframes captureBounce {
-    0% {
-        transform: translateY(0) scale(1);
-    }
-
-    35% {
-        transform: translateY(-10px) scale(1.05);
-    }
-
-    70% {
-        transform: translateY(0) scale(.99);
-    }
-
-    100% {
-        transform: translateY(0) scale(1);
-    }
 }
 
 /* TT numbers */
@@ -495,209 +411,12 @@ button {
     left: 28px;
 }
 
-/* GAME OVER */
-.game-over {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.70);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 999;
-}
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
 
-.game-over-box {
-    background: #1e1e2f;
-    padding: 24px 32px;
-    border-radius: 16px;
-    text-align: center;
-    min-width: 260px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.game-over-buttons {
-    display: flex;
-    gap: 12px;
-    justify-content: center;
-    margin-top: 16px;
-}
-
-.game-over-buttons button {
-    padding: 8px 14px;
-    border-radius: 10px;
-    background: #3b82f6;
-    color: #fff;
-    font-weight: 700;
-}
-
-/* dice rain */
-.dice-rain {
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-    pointer-events: none;
-    overflow: hidden;
-}
-
-.die {
-    position: absolute;
-    top: -12vh;
-    filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
-    animation-name: diceFall;
-    animation-timing-function: linear;
-    animation-iteration-count: 1;
-}
-
-@keyframes diceFall {
-    0% {
-        transform: translate3d(0, -10vh, 0) rotate(0deg);
-        opacity: 0;
+    .game-root::before,
+    .game-root::after,
+    .board::before {
+        animation: none !important;
     }
-
-    12% {
-        opacity: 1;
-    }
-
-    100% {
-        transform: translate3d(0, 115vh, 0) rotate(var(--rot));
-        opacity: 0.95;
-    }
-}
-
-/* ===== FIX: HUD does NOT shift layout (overlay at left edge, above cards) ===== */
-
-/* 1) Возвращаем game-ui в одну колонку (убираем сдвиг вправо) */
-.game-ui {
-    grid-template-columns: 1fr !important;
-    grid-template-rows: auto 1fr auto !important;
-    column-gap: 0 !important;
-}
-
-/* 2) HUD делаем overlay слева (не влияет на layout) */
-.hud-left {
-    position: absolute !important;
-    left: max(6px, env(safe-area-inset-left, 0px)) !important;
-    top: calc(env(safe-area-inset-top, 0px) + 8px) !important;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px) !important;
-
-    width: 54px !important;
-    z-index: 60 !important;
-    pointer-events: none !important;
-
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: space-between !important;
-
-    /* чтобы выглядело “выше” и не рядом с картами */
-    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.35));
-}
-
-/* 3) Убираем любые привязки к колонкам (если они были) */
-.hand.top,
-.board,
-.hand.bottom {
-    grid-column: 1 !important;
-}
-
-/* 4) Чтобы лента руки/доска не "съезжали" из-за старого padding-left */
-.hand-scroll {
-    padding-left: 6px !important;
-}
-
-/* 5) (опционально) чуть уменьшим квадраты, чтобы аккуратно сидели у края */
-.hud-score {
-    width: 54px !important;
-    border-radius: 14px !important;
-    font-size: 13px !important;
-    padding: 7px 6px !important;
-}
-
-.hud-turn {
-    width: 22px !important;
-    height: 78px !important;
-}
-
-.hud-turn.player .hud-dot {
-    transform: translate(-50%, calc(78px - 20px)) !important;
-}
-
-/* ===== FIX: board must not jump when hand card count changes ===== */
-
-/* фиксируем высоты строк рук */
-:root {
-    --hand-top-h: calc(var(--card-h) + 10px);
-    --hand-bottom-h: calc(var(--card-h) + var(--lift) + 10px);
-}
-
-.hand.top {
-    height: var(--hand-top-h) !important;
-    min-height: var(--hand-top-h) !important;
-}
-
-.hand.bottom {
-    height: var(--hand-bottom-h) !important;
-    min-height: var(--hand-bottom-h) !important;
-}
-
-/* скролл-лента занимает всю высоту руки */
-.hand-scroll {
-    height: 100% !important;
-    min-height: 100% !important;
-}
-
-/* делаем скролл стабильным (чтобы не "прыгало" при появлении overflow) */
-.hand-scroll {
-    overflow-x: scroll !important;
-    /* всегда scroll, не auto */
-    scrollbar-gutter: stable both-edges;
-    /* где поддерживается */
-}
-
-/* у webkit-скролла оставляем нулевую высоту, чтобы не съедал место */
-.hand-scroll::-webkit-scrollbar {
-    height: 0px;
-}
-
-/* ===== FIX: board must not jump when hand becomes scrollable ===== */
-
-/* 1) фиксированные строки grid (не auto) */
-:root {
-    --hand-top-h: calc(var(--card-h) + 10px);
-    --hand-bottom-h: calc(var(--card-h) + var(--lift) + 10px);
-}
-
-.game-ui {
-    grid-template-rows: var(--hand-top-h) 1fr var(--hand-bottom-h) !important;
-}
-
-/* 2) руки строго фиксированной высоты */
-.hand.top {
-    height: var(--hand-top-h) !important;
-    min-height: var(--hand-top-h) !important;
-}
-
-.hand.bottom {
-    height: var(--hand-bottom-h) !important;
-    min-height: var(--hand-bottom-h) !important;
-}
-
-/* 3) очень важно для grid/flex: иначе элемент может расширять строку */
-.hand,
-.hand-scroll {
-    min-height: 0 !important;
-}
-
-/* 4) hand-scroll занимает всю высоту руки и НЕ добавляет высоту из‑за скроллбара */
-.hand-scroll {
-    height: 100% !important;
-    overflow-x: scroll !important;
-    /* всегда scroll → не “появляется/исчезает” */
-    overflow-y: hidden !important;
-    scrollbar-width: none !important;
-    -ms-overflow-style: none !important;
-}
-
-/* полностью убираем скроллбар у WebKit (чтобы не отъедал высоту) */
-.hand-scroll::-webkit-scrollbar {
-    display: none !important;
 }
