@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
-import tableVideo from "./assets/table.mp4"; // можно оставить, но мы скрываем видео CSS-ом
+import tableVideo from "./assets/table.mp4";
 
 const DIRS = [
     { dx: 0, dy: -1, a: "top", b: "bottom" },
@@ -10,6 +10,7 @@ const DIRS = [
 ];
 
 const RULES = { combo: true, same: true, plus: true };
+
 const rand = () => Math.ceil(Math.random() * 9);
 const randomFirstTurn = () => (Math.random() < 0.5 ? "player" : "enemy");
 
@@ -31,6 +32,7 @@ const genCard = (owner, id) => ({
     owner,
     values: { top: rand(), right: rand(), bottom: rand(), left: rand() },
     imageUrl: ART[Math.floor(Math.random() * ART.length)],
+
     placeKey: 0,
     captureKey: 0,
     specialKey: 0,
@@ -163,22 +165,33 @@ export default function Game({ onExit }) {
     const [gameOver, setGameOver] = useState(false);
     const [winner, setWinner] = useState(null);
 
-    // автозапуск видео (хотя мы его скрываем CSS-ом)
+    // запуск видео + запуск по первому клику (если autoplay блокнут)
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
+
         v.muted = true;
         v.playsInline = true;
         v.play().catch(() => { });
+
+        const start = () => v.play().catch(() => { });
+        window.addEventListener("pointerdown", start, { once: true });
+        return () => window.removeEventListener("pointerdown", start);
     }, []);
 
     // победа: конфетти
     useEffect(() => {
         if (!gameOver) return;
         if (winner !== "player") return;
+
         const end = Date.now() + 1400;
         const tick = () => {
-            confetti({ particleCount: 8, spread: 75, startVelocity: 28, origin: { x: 0.25, y: 0.2 } });
+            confetti({
+                particleCount: 8,
+                spread: 75,
+                startVelocity: 28,
+                origin: { x: 0.5, y: 0.2 },
+            });
             if (Date.now() < end) requestAnimationFrame(tick);
         };
         tick();
@@ -188,9 +201,11 @@ export default function Game({ onExit }) {
         setHands(makeHands());
         setBoard(Array(9).fill(null));
         setSelected(null);
+
         setTurn(randomFirstTurn());
         setGameOver(false);
         setWinner(null);
+
         aiGuard.current.handled = false;
     };
 
@@ -273,26 +288,26 @@ export default function Game({ onExit }) {
 
     return (
         <div className="game-root">
-            {/* скрыто CSS-ом, можно потом удалить совсем */}
+            {/* видео-стол */}
             <div className="table-bg" aria-hidden="true">
-                <video ref={videoRef} className="table-video" autoPlay loop muted playsInline preload="auto">
+                <video
+                    ref={videoRef}
+                    className="table-video"
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    preload="auto"
+                >
                     <source src={tableVideo} type="video/mp4" />
                 </video>
             </div>
 
+            {/* кости при проигрыше */}
             {gameOver && winner === "enemy" && <DiceRain />}
 
             <div className="game-ui">
                 <button className="exit" onClick={onExit}>← Меню</button>
-
-                {/* ЛЕВЫЙ HUD: красный сверху, ход, синий снизу */}
-                <div className="hud-left" aria-hidden="true">
-                    <div className="hud-score red">🟥 {score.red}</div>
-                    <div className={`hud-turn ${turn}`}>
-                        <div className="hud-dot" />
-                    </div>
-                    <div className="hud-score blue">{score.blue} 🟦</div>
-                </div>
 
                 {gameOver && (
                     <div className="game-over">
@@ -310,18 +325,22 @@ export default function Game({ onExit }) {
                     </div>
                 )}
 
-                {/* TOP HAND */}
                 <div className="hand top">
-                    <div className="hand-scroll">
-                        {enemy.map((c, i) => (
-                            <div key={c.id} className="hand-slot" style={{ zIndex: i }}>
-                                <Card card={c} disabled />
-                            </div>
-                        ))}
-                    </div>
+                    {enemy.map((c, i) => (
+                        <div key={c.id} className="hand-slot" style={{ zIndex: i }}>
+                            <Card card={c} disabled />
+                        </div>
+                    ))}
                 </div>
 
-                {/* BOARD */}
+                <div className="scorebar">
+                    <span className="score red">🟥 {score.red}</span>
+                    <div className={`turn-pill ${turn}`} aria-label="turn">
+                        <div className="turn-dot" />
+                    </div>
+                    <span className="score blue">{score.blue} 🟦</span>
+                </div>
+
                 <div className="board">
                     {board.map((cell, i) => (
                         <div
@@ -334,23 +353,16 @@ export default function Game({ onExit }) {
                     ))}
                 </div>
 
-                {/* BOTTOM HAND */}
                 <div className="hand bottom">
-                    <div className="hand-scroll">
-                        {player.map((c, i) => (
-                            <div
-                                key={c.id}
-                                className="hand-slot"
-                                style={{ zIndex: selected?.id === c.id ? 9999 : i }}
-                            >
-                                <Card
-                                    card={c}
-                                    selected={selected?.id === c.id}
-                                    onClick={() => setSelected(c)}
-                                />
-                            </div>
-                        ))}
-                    </div>
+                    {player.map((c, i) => (
+                        <div key={c.id} className="hand-slot" style={{ zIndex: i }}>
+                            <Card
+                                card={c}
+                                selected={selected?.id === c.id}
+                                onClick={() => setSelected(c)}
+                            />
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>

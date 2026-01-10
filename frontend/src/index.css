@@ -1,3 +1,5 @@
+/* frontend/src/index.css — bigger cards + horizontal scroll hands + correct layering */
+
 * {
     box-sizing: border-box;
     font-family: sans-serif;
@@ -14,10 +16,11 @@ body {
     background: #0b1220;
     color: white;
     overflow: hidden;
+    /* чтобы “не появлялось после свайпа” */
     overscroll-behavior: none;
 }
 
-/* MENU */
+/* ---------- MENU ---------- */
 .app {
     min-height: 100%;
     display: flex;
@@ -35,36 +38,45 @@ button {
     border: none;
 }
 
-/* SIZING */
+/* ---------- SIZING (Telegram friendly) ---------- */
 :root {
     --ui-pad: clamp(10px, 2.2vw, 16px);
     --gap: clamp(6px, 2vw, 10px);
+
+    --score-h: 26px;
+
+    /* выставляется из JS: document.documentElement.style.setProperty('--app-h', window.innerHeight+'px') */
     --app-h: 100vh;
-    --lift: 22px;
 
-    --score-h: 0px;
-    /* мы убрали центральный scorebar */
+    --space-0: #050611;
+    --space-1: #070a18;
+}
 
+/* Размер карты: делаем крупнее, но всё ещё чтобы влезало по высоте */
+:root {
     --card-w-vw: calc((100vw - (var(--ui-pad) * 2) - (var(--gap) * 2)) / 3);
 
-    --available-h: calc(var(--app-h) - (var(--ui-pad) * 2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - (var(--gap) * 6));
+    --available-h: calc(var(--app-h) - (var(--ui-pad) * 2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - var(--score-h) - (var(--gap) * 7));
 
-    /* top hand + board(3h) + bottom hand ≈ 5 * cardH */
-    --card-h-fit: calc(var(--available-h) / 5.1);
+    /* было 5.35 (очень мелко). Делаем больше: 5.05 */
+    --card-h-fit: calc(var(--available-h) / 5.05);
     --card-w-fit: calc(var(--card-h-fit) / 1.375);
 
     --card-w: clamp(62px, min(var(--card-w-vw), var(--card-w-fit)), 126px);
     --card-h: calc(var(--card-w) * 1.375);
 }
 
+/* ---------- GAME ROOT (NO VIDEO) ---------- */
 .game-root {
     position: fixed;
     inset: 0;
+
     height: var(--app-h);
     width: 100%;
     padding: var(--ui-pad);
     padding-top: calc(var(--ui-pad) + env(safe-area-inset-top, 0px));
     padding-bottom: calc(var(--ui-pad) + env(safe-area-inset-bottom, 0px));
+
     overflow: hidden;
     isolation: isolate;
 
@@ -72,10 +84,10 @@ button {
         radial-gradient(70vmax 55vmax at 18% 10%, rgba(124, 58, 237, 0.34), transparent 62%),
         radial-gradient(75vmax 60vmax at 88% 30%, rgba(24, 231, 255, 0.26), transparent 62%),
         radial-gradient(65vmax 50vmax at 50% 98%, rgba(255, 61, 242, 0.22), transparent 58%),
-        linear-gradient(180deg, #070a18, #050611);
+        linear-gradient(180deg, var(--space-1), var(--space-0));
 }
 
-/* скрываем видео */
+/* если видео ещё есть в JSX — скрываем */
 .table-bg,
 .table-video {
     display: none !important;
@@ -106,7 +118,7 @@ button {
     }
 }
 
-/* свечение */
+/* туманность/свечение (без mix-blend-mode — стабильнее в Telegram) */
 .game-root::after {
     content: "";
     position: absolute;
@@ -145,22 +157,21 @@ button {
     }
 }
 
-/* UI */
+/* ---------- UI LAYOUT ---------- */
 .game-ui {
     position: relative;
     z-index: 3;
+
     height: 100%;
     display: grid;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: auto var(--score-h) 1fr auto;
     gap: var(--gap);
 }
 
-/* exit перенёс вправо, чтобы не конфликтовал с левым HUD */
 .exit {
     position: absolute;
-    right: 10px;
+    left: 10px;
     top: 10px;
-    left: auto;
     padding: 8px 12px;
     border-radius: 10px;
     background: rgba(0, 0, 0, 0.35);
@@ -168,120 +179,47 @@ button {
     border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
-/* LEFT HUD */
-.hud-left {
-    position: absolute;
-    left: 10px;
-    top: 56px;
-    bottom: 14px;
-    width: 56px;
-    z-index: 20;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    pointer-events: none;
-}
-
-.hud-score {
-    width: 56px;
-    padding: 8px 6px;
-    border-radius: 14px;
-    text-align: center;
-    font-weight: 900;
-    font-size: 14px;
-    background: rgba(0, 0, 0, 0.35);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    backdrop-filter: blur(6px);
-}
-
-.hud-score.red {
-    box-shadow: 0 0 18px rgba(255, 80, 80, 0.18);
-}
-
-.hud-score.blue {
-    box-shadow: 0 0 18px rgba(0, 180, 255, 0.18);
-}
-
-.hud-turn {
-    position: relative;
-    width: 24px;
-    height: 86px;
-    margin: 0 auto;
-    border-radius: 999px;
-    background: rgba(0, 0, 0, 0.28);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.hud-dot {
-    position: absolute;
-    left: 50%;
-    width: 14px;
-    height: 14px;
-    border-radius: 50%;
-    transform: translate(-50%, 6px);
-    transition: transform 220ms ease, background 220ms ease;
-    box-shadow: 0 0 18px rgba(255, 255, 255, 0.20);
-}
-
-.hud-turn.enemy .hud-dot {
-    background: rgba(255, 80, 80, 0.95);
-    transform: translate(-50%, 6px);
-}
-
-.hud-turn.player .hud-dot {
-    background: rgba(0, 180, 255, 0.95);
-    transform: translate(-50%, calc(86px - 20px));
-}
-
-/* HANDS */
+/* ---------- HANDS: SCROLL HORIZONTAL (both players) ---------- */
 .hand {
     position: relative;
-    z-index: 10;
+    z-index: 6;
     /* руки над доской */
-    width: 100%;
-}
-
-/* скролл внутри (и главное — запас сверху для подъёма карты) */
-.hand-scroll {
     display: flex;
-    gap: 10px;
-    align-items: flex-end;
+    align-items: center;
+
+    width: 100%;
+    padding: 2px 4px;
 
     overflow-x: auto;
-    overflow-y: hidden;
+    /* возвращаем боковой скролл */
+    overflow-y: visible;
+    /* чтобы поднятая карта не обрезалась */
     -webkit-overflow-scrolling: touch;
 
-    padding: 2px 6px 2px 72px;
-    /* слева место под HUD */
-    min-height: calc(var(--card-h) + var(--lift) + 10px);
+    gap: 10px;
+    justify-content: flex-start;
+
+    min-height: calc(var(--card-h) + 14px);
 }
 
-/* верх — без подъёма, можно сделать компактнее */
-.hand.top .hand-scroll {
-    align-items: flex-start;
-    padding-top: 2px;
-    min-height: calc(var(--card-h) + 10px);
-}
-
-/* низ — добавляем “карман” сверху, чтобы поднятая карта не обрезалась */
-.hand.bottom .hand-scroll {
-    padding-top: var(--lift);
-    align-items: flex-end;
-}
-
-/* прячем полосу прокрутки */
-.hand-scroll::-webkit-scrollbar {
+/* прячем полосу прокрутки (не везде поддерживается, но ок) */
+.hand::-webkit-scrollbar {
     height: 0px;
 }
 
-.hand-scroll {
+.hand {
     scrollbar-width: none;
 }
 
+/* слоты */
 .hand-slot {
     position: relative;
     flex: 0 0 auto;
     width: var(--card-w);
+    overflow: visible;
+}
+
+.hand-slot {
     pointer-events: none;
 }
 
@@ -289,10 +227,62 @@ button {
     pointer-events: auto;
 }
 
-/* BOARD */
+/* ---------- SCORE ---------- */
+.scorebar {
+    height: var(--score-h);
+    width: 100%;
+    max-width: 520px;
+    margin: 0 auto;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+
+    font-size: 16px;
+    font-weight: 800;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+}
+
+.scorebar .score {
+    min-width: 64px;
+    text-align: center;
+}
+
+.turn-pill {
+    position: relative;
+    width: 110px;
+    height: 16px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.turn-dot {
+    position: absolute;
+    top: 50%;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    transform: translate(4px, -50%);
+    transition: transform 220ms ease, background 220ms ease;
+    box-shadow: 0 0 18px rgba(255, 255, 255, 0.25);
+}
+
+.turn-pill.player .turn-dot {
+    background: rgba(0, 180, 255, 0.95);
+    transform: translate(4px, -50%);
+}
+
+.turn-pill.enemy .turn-dot {
+    background: rgba(255, 80, 80, 0.95);
+    transform: translate(calc(110px - 18px), -50%);
+}
+
+/* ---------- BOARD + RUNIC GRID ---------- */
 .board {
     position: relative;
-    z-index: 3;
+    z-index: 2;
     /* ниже рук */
     justify-self: center;
     align-self: center;
@@ -303,9 +293,11 @@ button {
 
     border-radius: 16px;
     padding: var(--gap);
+
+    --step-x: calc(var(--card-w) + var(--gap));
+    --step-y: calc(var(--card-h) + var(--gap));
 }
 
-/* руническая сетка */
 .board::before {
     content: "";
     position: absolute;
@@ -313,9 +305,19 @@ button {
     border-radius: 16px;
     pointer-events: none;
     z-index: 0;
+
     background:
-        repeating-linear-gradient(90deg, rgba(24, 231, 255, 0.00) 0, rgba(24, 231, 255, 0.00) calc(var(--card-w) - 2px), rgba(24, 231, 255, 0.40) calc(var(--card-w) - 2px), rgba(24, 231, 255, 0.00) var(--card-w)),
-        repeating-linear-gradient(0deg, rgba(255, 61, 242, 0.00) 0, rgba(255, 61, 242, 0.00) calc(var(--card-h) - 2px), rgba(255, 61, 242, 0.32) calc(var(--card-h) - 2px), rgba(255, 61, 242, 0.00) var(--card-h));
+        repeating-linear-gradient(90deg,
+            rgba(24, 231, 255, 0.00) 0,
+            rgba(24, 231, 255, 0.00) calc(var(--step-x) - 2px),
+            rgba(24, 231, 255, 0.40) calc(var(--step-x) - 2px),
+            rgba(24, 231, 255, 0.00) var(--step-x)),
+        repeating-linear-gradient(0deg,
+            rgba(255, 61, 242, 0.00) 0,
+            rgba(255, 61, 242, 0.00) calc(var(--step-y) - 2px),
+            rgba(255, 61, 242, 0.32) calc(var(--step-y) - 2px),
+            rgba(255, 61, 242, 0.00) var(--step-y));
+
     filter: drop-shadow(0 0 22px rgba(24, 231, 255, 0.22));
     opacity: 0.9;
     animation: gridBreath 2.8s ease-in-out infinite;
@@ -352,7 +354,7 @@ button {
     cursor: pointer;
 }
 
-/* CARDS */
+/* ---------- CARDS ---------- */
 .card {
     width: var(--card-w);
     height: var(--card-h);
@@ -362,7 +364,6 @@ button {
     cursor: pointer;
     background: linear-gradient(145deg, #1a2232, #0f1625);
     transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
-    will-change: transform;
 }
 
 .card-anim {
@@ -381,14 +382,15 @@ button {
     z-index: 1;
 }
 
-/* выбранная карта: поднимается НА ВЫСОТУ lift (внутрь кармана) */
+/* выбранная карта: поднимается и точно поверх доски */
 .hand.bottom .card.selected {
-    transform: translateY(calc(-1 * var(--lift))) scale(1.04);
+    position: relative;
+    transform: translateY(calc(-1 * (var(--card-h) * 0.20))) scale(1.04);
     z-index: 9999;
     box-shadow: 0 0 22px rgba(255, 215, 0, 0.25), 0 18px 40px rgba(0, 0, 0, 0.55);
 }
 
-/* owner */
+/* контуры владельца */
 .card.player {
     border: 2px solid rgba(42, 107, 255, 0.98);
     box-shadow: 0 0 22px rgba(0, 180, 255, 0.40), 0 14px 30px rgba(0, 0, 0, 0.45);
@@ -399,16 +401,18 @@ button {
     box-shadow: 0 0 22px rgba(255, 80, 80, 0.34), 0 14px 30px rgba(0, 0, 0, 0.45);
 }
 
-/* enemy hand not transparent */
+/* disabled */
 .card.disabled {
+    opacity: 0.7;
     cursor: default;
 }
 
+/* враг в руке не прозрачный */
 .hand.top .card.disabled {
     opacity: 1 !important;
 }
 
-/* animations */
+/* анимации */
 .card.is-placed .card-anim {
     animation: placeSmooth 380ms cubic-bezier(.2, .9, .2, 1);
 }
@@ -447,7 +451,7 @@ button {
     }
 }
 
-/* TT numbers */
+/* ---------- TT NUMBERS ---------- */
 .tt-badge {
     position: absolute;
     top: 9px;
@@ -489,7 +493,7 @@ button {
     left: 28px;
 }
 
-/* GAME OVER */
+/* ---------- GAME OVER ---------- */
 .game-over {
     position: fixed;
     inset: 0;
@@ -524,7 +528,7 @@ button {
     font-weight: 700;
 }
 
-/* dice rain */
+/* ---------- DICE RAIN ---------- */
 .dice-rain {
     position: fixed;
     inset: 0;
@@ -558,6 +562,13 @@ button {
     }
 }
 
+/* ---------- TOUCH / MOTION ---------- */
+@media (hover:none) {
+    .card:hover:not(.disabled) {
+        transform: none;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
 
     .game-root::before,
@@ -565,97 +576,4 @@ button {
     .board::before {
         animation: none !important;
     }
-}
-
-/* ===== HUD column: icons + toggle near left edge, no content shift ===== */
-
-/* 1) Делаем в game-ui 2 колонки: слева HUD, справа игра */
-.game-ui {
-    display: grid !important;
-    grid-template-columns: 58px 1fr !important;
-    /* узкая колонка под квадраты/тумблер */
-    grid-template-rows: auto 1fr auto !important;
-    /* top hand / board / bottom hand */
-    column-gap: 8px !important;
-    gap: var(--gap) !important;
-}
-
-/* 2) HUD больше НЕ absolute — он живёт в левой колонке */
-.hud-left {
-    position: relative !important;
-    left: auto !important;
-    top: auto !important;
-    bottom: auto !important;
-
-    grid-column: 1 !important;
-    grid-row: 1 / 4 !important;
-
-    width: 58px !important;
-    z-index: 30 !important;
-    pointer-events: none;
-
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: space-between !important;
-
-    /* ближе к краю, но аккуратно */
-    margin-left: 0 !important;
-}
-
-/* 3) Руки и доска — в правой колонке */
-.hand.top {
-    grid-column: 2 !important;
-    grid-row: 1 !important;
-}
-
-.board {
-    grid-column: 2 !important;
-    grid-row: 2 !important;
-}
-
-.hand.bottom {
-    grid-column: 2 !important;
-    grid-row: 3 !important;
-}
-
-/* 4) Убираем левый padding, который “двигал картинку” */
-.hand-scroll {
-    padding-left: 6px !important;
-}
-
-/* 5) КЛЮЧ к багу “карта заезжает под стол”:
-      поднимаем карту ВНУТРИ нижней руки, делая сверху “карман” */
-:root {
-    --lift: 24px;
-}
-
-/* высота подъёма */
-
-.hand.bottom .hand-scroll {
-    padding-top: var(--lift) !important;
-    /* карман */
-    overflow-y: hidden !important;
-    /* и не режем странно */
-}
-
-.hand.bottom .card.selected {
-    transform: translateY(calc(-1 * var(--lift))) scale(1.04) !important;
-    position: relative !important;
-    z-index: 9999 !important;
-}
-
-/* 6) Руки всегда поверх доски по слоям */
-.hand {
-    position: relative !important;
-    z-index: 20 !important;
-}
-
-.board {
-    position: relative !important;
-    z-index: 5 !important;
-}
-
-/* 7) Противник: disabled не прозрачный */
-.hand.top .card.disabled {
-    opacity: 1 !important;
 }
