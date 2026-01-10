@@ -562,3 +562,64 @@ button {
         animation: none !important;
     }
 }
+
+/* ===== FIX: hands fit 5 cards + selected card above board ===== */
+
+/* 1) отдельный размер карты для рук (чтобы 5 всегда влезали) */
+:root {
+    /* 5 карт + небольшой внутренний отступ */
+    --hand-card-w: clamp(46px, calc((100vw - (var(--ui-pad) * 2) - 10px) / 5), var(--card-w));
+    --hand-card-h: calc(var(--hand-card-w) * 1.375);
+}
+
+/* 2) обе руки — к краям, без обрезки и без бокового скролла */
+.hand {
+    justify-content: space-between !important;
+    overflow-x: hidden !important;
+    /* важно: не режем по бокам из-за скролла */
+    overflow-y: visible !important;
+    /* важно: чтобы выбранная карта поднималась */
+    padding-left: 2px !important;
+    padding-right: 2px !important;
+    min-height: calc(var(--hand-card-h) + 14px) !important;
+}
+
+/* 3) слоты в руке под новый размер */
+.hand-slot {
+    width: var(--hand-card-w) !important;
+    flex: 0 0 var(--hand-card-w) !important;
+}
+
+/* 4) сами карты в руке под новый размер */
+.hand .card {
+    width: var(--hand-card-w) !important;
+    height: var(--hand-card-h) !important;
+}
+
+/* 5) убираем любые наложения (если где-то были margin-left отрицательные) */
+.hand .hand-slot+.hand-slot {
+    margin-left: 0 !important;
+}
+
+/* 6) чтобы поднятая карта не "уходила под стол": фикс слоёв */
+.board {
+    position: relative !important;
+    z-index: 1 !important;
+}
+
+.hand.top,
+.hand.bottom {
+    position: relative !important;
+    z-index: 3 !important;
+}
+
+/* выбранная карта всегда поверх всего */
+.hand.bottom .card.selected {
+    position: relative !important;
+    z-index: 9999 !important;
+}
+
+/* 7) карты противника не прозрачные */
+.hand.top .card.disabled {
+    opacity: 1 !important;
+}
