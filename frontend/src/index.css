@@ -564,3 +564,71 @@ button {
         animation: none !important;
     }
 }
+
+/* ===== HUD WITHOUT SHIFT & WITHOUT OVERLAP (symmetry columns) ===== */
+
+/* 1) задаём ширину колонки HUD и пересчитываем ширину карты по ширине экрана */
+:root {
+    --hud-w: 58px;
+    /* можешь менять */
+    --card-w-vw: calc((100vw - (var(--ui-pad) * 2) - (var(--gap) * 2) - (var(--hud-w) * 2)) / 3);
+}
+
+/* 2) game-ui: 3 колонки (HUD слева, игра по центру, пустой отступ справа) */
+.game-ui {
+    padding-left: 0 !important;
+    display: grid !important;
+    grid-template-columns: var(--hud-w) 1fr var(--hud-w) !important;
+    grid-template-rows: var(--hand-top-h) 1fr var(--hand-bottom-h) !important;
+    column-gap: 8px !important;
+    gap: var(--gap) !important;
+}
+
+/* (на всякий) создаём правый “пустой” элемент, чтобы колонка точно держалась */
+.game-ui::after {
+    content: "";
+    grid-column: 3;
+    grid-row: 1 / 4;
+}
+
+/* 3) HUD занимает левую колонку и НЕ перекрывает поле */
+.hud-left {
+    position: relative !important;
+    grid-column: 1 !important;
+    grid-row: 1 / 4 !important;
+
+    width: var(--hud-w) !important;
+    z-index: 30 !important;
+    pointer-events: none !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+}
+
+/* 4) Игра (руки+поле) в центральной колонке */
+.hand.top {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+}
+
+.board {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+}
+
+.hand.bottom {
+    grid-column: 2 !important;
+    grid-row: 3 !important;
+}
+
+/* 5) Чтобы ничего не прилипало к HUD — нормальные паддинги ленты */
+.hand-scroll {
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+}
+
+/* 6) Кнопка выхода — в правой “пустой” зоне (чтобы не мешала) */
+.exit {
+    right: calc(10px + var(--hud-w)) !important;
+}
