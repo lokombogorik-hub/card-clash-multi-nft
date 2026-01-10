@@ -1,4 +1,4 @@
-/* frontend/src/index.css */
+/* frontend/src/index.css (NEON COSMOS TABLE v3 — more alive, NO VIDEO) */
 
 * {
     box-sizing: border-box;
@@ -49,13 +49,15 @@ button {
 
     --space-0: #050611;
     --space-1: #070a18;
+
     --neon-cyan: #18e7ff;
     --neon-magenta: #ff3df2;
     --neon-violet: #7c3aed;
+    --neon-green: #39ff88;
 }
 
 /* =========================================================
-   GAME ROOT + NEON COSMOS TABLE (NO VIDEO)
+   GAME ROOT + NEON COSMOS TABLE v3 (NO VIDEO)
    ========================================================= */
 .game-root {
     min-height: 100vh;
@@ -69,80 +71,96 @@ button {
     isolation: isolate;
 
     background:
-        radial-gradient(80vmax 60vmax at 18% 10%, rgba(124, 58, 237, 0.28), transparent 62%),
-        radial-gradient(85vmax 70vmax at 88% 32%, rgba(24, 231, 255, 0.22), transparent 62%),
-        radial-gradient(70vmax 60vmax at 50% 98%, rgba(255, 61, 242, 0.18), transparent 58%),
+        radial-gradient(90vmax 70vmax at 16% 10%, rgba(124, 58, 237, 0.34), transparent 62%),
+        radial-gradient(85vmax 70vmax at 88% 30%, rgba(24, 231, 255, 0.26), transparent 62%),
+        radial-gradient(70vmax 55vmax at 50% 98%, rgba(255, 61, 242, 0.22), transparent 58%),
         linear-gradient(180deg, var(--space-1), var(--space-0));
 }
 
-/* Если в JSX остался <video> — прячем, чтобы он не мешал */
+/* Если в JSX остался <video> — прячем */
 .table-bg,
 .table-video {
     display: none !important;
 }
 
-/* слой звезд/пыли */
+/* 1) ЗВЁЗДЫ + ШУМ (движется) */
 .game-root::before {
     content: "";
     position: absolute;
-    inset: -25%;
+    inset: -30%;
     background:
-        radial-gradient(circle, rgba(255, 255, 255, 0.16) 1px, transparent 1.8px) 0 0 / 52px 52px,
-        radial-gradient(circle, rgba(255, 255, 255, 0.10) 1px, transparent 1.8px) 22px 18px / 74px 74px,
-        radial-gradient(circle, rgba(24, 231, 255, 0.12) 1px, transparent 1.8px) 10px 30px / 92px 92px;
-    opacity: 0.55;
-    animation: starDrift 16s linear infinite;
+        radial-gradient(circle, rgba(255, 255, 255, 0.22) 1px, transparent 1.8px) 0 0 / 58px 58px,
+        radial-gradient(circle, rgba(255, 255, 255, 0.14) 1px, transparent 1.8px) 18px 22px / 86px 86px,
+        radial-gradient(circle, rgba(24, 231, 255, 0.16) 1px, transparent 1.8px) 12px 36px / 110px 110px,
+        /* лёгкое зерно */
+        repeating-linear-gradient(0deg,
+            rgba(255, 255, 255, 0.018) 0px,
+            rgba(255, 255, 255, 0.018) 1px,
+            rgba(255, 255, 255, 0.00) 3px);
+    opacity: 0.65;
+    filter: blur(0.2px);
+    animation: starDriftV3 14s linear infinite;
     pointer-events: none;
     z-index: 0;
 }
 
-@keyframes starDrift {
+@keyframes starDriftV3 {
     from {
         transform: translate3d(0, 0, 0);
     }
 
     to {
-        transform: translate3d(-7%, 5%, 0);
+        transform: translate3d(-9%, 6%, 0);
     }
 }
 
-/* слой свечения/туманности (главная “живость” стола) */
+/* 2) АВРОРА/ТУМАННОСТЬ (ярче и заметнее) */
 .game-root::after {
     content: "";
     position: absolute;
-    inset: -30%;
+    inset: -35%;
     background:
-        radial-gradient(45vmax 35vmax at 30% 40%, rgba(24, 231, 255, 0.20), transparent 60%),
-        radial-gradient(50vmax 40vmax at 70% 55%, rgba(255, 61, 242, 0.16), transparent 62%),
-        radial-gradient(55vmax 45vmax at 55% 20%, rgba(124, 58, 237, 0.18), transparent 60%),
+        radial-gradient(55vmax 40vmax at 25% 45%, rgba(24, 231, 255, 0.26), transparent 62%),
+        radial-gradient(60vmax 45vmax at 70% 55%, rgba(255, 61, 242, 0.22), transparent 64%),
+        radial-gradient(70vmax 50vmax at 55% 18%, rgba(124, 58, 237, 0.24), transparent 62%),
+        /* “ленты” авроры */
+        linear-gradient(115deg,
+            rgba(24, 231, 255, 0.00) 0%,
+            rgba(24, 231, 255, 0.14) 18%,
+            rgba(255, 61, 242, 0.12) 48%,
+            rgba(124, 58, 237, 0.12) 72%,
+            rgba(24, 231, 255, 0.00) 100%),
         conic-gradient(from 210deg,
             rgba(24, 231, 255, 0.00),
-            rgba(24, 231, 255, 0.16),
-            rgba(255, 61, 242, 0.14),
-            rgba(124, 58, 237, 0.16),
+            rgba(24, 231, 255, 0.20),
+            rgba(255, 61, 242, 0.18),
+            rgba(124, 58, 237, 0.20),
             rgba(24, 231, 255, 0.00));
-    filter: blur(22px) saturate(1.18);
-    opacity: 0.85;
+    filter: blur(22px) saturate(1.25);
+    opacity: 0.95;
     mix-blend-mode: screen;
-    animation: nebulaPulse 7.5s ease-in-out infinite;
+    animation: nebulaPulseV3 6.2s ease-in-out infinite;
     pointer-events: none;
     z-index: 1;
 }
 
-@keyframes nebulaPulse {
+@keyframes nebulaPulseV3 {
     0% {
-        transform: translate3d(-1%, -1%, 0) rotate(0deg) scale(1.00);
-        opacity: .65;
+        transform: translate3d(-1.5%, -1%, 0) rotate(0deg) scale(1.00);
+        filter: blur(22px) saturate(1.15) hue-rotate(0deg);
+        opacity: .75;
     }
 
     50% {
-        transform: translate3d(1%, 1%, 0) rotate(10deg) scale(1.06);
-        opacity: .95;
+        transform: translate3d(1.5%, 1%, 0) rotate(12deg) scale(1.08);
+        filter: blur(18px) saturate(1.35) hue-rotate(16deg);
+        opacity: 1.00;
     }
 
     100% {
-        transform: translate3d(-1%, -1%, 0) rotate(0deg) scale(1.00);
-        opacity: .65;
+        transform: translate3d(-1.5%, -1%, 0) rotate(0deg) scale(1.00);
+        filter: blur(22px) saturate(1.15) hue-rotate(0deg);
+        opacity: .75;
     }
 }
 
@@ -156,6 +174,77 @@ button {
     justify-content: space-between;
 }
 
+/* 3) СКАН-ЛИНИИ + “движущийся луч” поверх UI (очень заметно) */
+.game-ui::before {
+    content: "";
+    position: absolute;
+    inset: -60px;
+    background:
+        repeating-linear-gradient(180deg,
+            rgba(255, 255, 255, 0.00) 0px,
+            rgba(255, 255, 255, 0.00) 9px,
+            rgba(24, 231, 255, 0.05) 10px);
+    opacity: 0.18;
+    pointer-events: none;
+    z-index: -1;
+    animation: scanMove 3.2s linear infinite;
+}
+
+@keyframes scanMove {
+    from {
+        transform: translateY(0);
+    }
+
+    to {
+        transform: translateY(22px);
+    }
+}
+
+.game-ui::after {
+    content: "";
+    position: absolute;
+    inset: -30%;
+    background: radial-gradient(circle at 50% 50%, rgba(24, 231, 255, 0.10), transparent 48%);
+    opacity: 0.0;
+    mix-blend-mode: screen;
+    pointer-events: none;
+    z-index: -1;
+    animation: sweepLight 4.4s ease-in-out infinite;
+}
+
+@keyframes sweepLight {
+    0% {
+        opacity: 0.00;
+        transform: translate3d(-18%, -12%, 0) scale(0.9);
+    }
+
+    35% {
+        opacity: 0.55;
+        transform: translate3d(0%, 0%, 0) scale(1.05);
+    }
+
+    70% {
+        opacity: 0.35;
+        transform: translate3d(14%, 10%, 0) scale(1.10);
+    }
+
+    100% {
+        opacity: 0.00;
+        transform: translate3d(22%, 16%, 0) scale(0.95);
+    }
+}
+
+/* Fallback если mix-blend-mode не поддерживается */
+@supports not (mix-blend-mode: screen) {
+
+    .game-root::after,
+    .game-ui::after {
+        mix-blend-mode: normal;
+        opacity: 0.55;
+    }
+}
+
+/* ---------- EXIT BUTTON ---------- */
 .exit {
     position: absolute;
     left: 10px;
@@ -203,12 +292,10 @@ button {
     width: 100%;
     max-width: 520px;
     margin: 8px auto;
-
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-
     font-size: 16px;
     font-weight: 800;
     text-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
@@ -236,7 +323,7 @@ button {
     border-radius: 50%;
     transform: translate(4px, -50%);
     transition: transform 220ms ease, background 220ms ease;
-    box-shadow: 0 0 14px rgba(255, 255, 255, 0.25);
+    box-shadow: 0 0 18px rgba(255, 255, 255, 0.25);
 }
 
 .turn-pill.player .turn-dot {
@@ -250,7 +337,7 @@ button {
 }
 
 /* =========================================================
-   BOARD + RUNIC GRID
+   BOARD + RUNIC GRID (more visible)
    ========================================================= */
 .board {
     display: grid;
@@ -267,6 +354,7 @@ button {
     --step-y: calc(var(--card-h) + var(--gap));
 }
 
+/* сетка */
 .board::before {
     content: "";
     position: absolute;
@@ -279,33 +367,34 @@ button {
         repeating-linear-gradient(90deg,
             rgba(24, 231, 255, 0.00) 0,
             rgba(24, 231, 255, 0.00) calc(var(--step-x) - 2px),
-            rgba(24, 231, 255, 0.26) calc(var(--step-x) - 2px),
+            rgba(24, 231, 255, 0.40) calc(var(--step-x) - 2px),
             rgba(24, 231, 255, 0.00) var(--step-x)),
         repeating-linear-gradient(0deg,
             rgba(255, 61, 242, 0.00) 0,
             rgba(255, 61, 242, 0.00) calc(var(--step-y) - 2px),
-            rgba(255, 61, 242, 0.22) calc(var(--step-y) - 2px),
+            rgba(255, 61, 242, 0.34) calc(var(--step-y) - 2px),
             rgba(255, 61, 242, 0.00) var(--step-y));
 
-    filter: drop-shadow(0 0 18px rgba(24, 231, 255, 0.18));
-    opacity: 0.9;
-    animation: gridBreath 3.4s ease-in-out infinite;
+    filter: drop-shadow(0 0 22px rgba(24, 231, 255, 0.22));
+    opacity: 0.95;
+    animation: gridBreathV3 2.6s ease-in-out infinite;
 }
 
-@keyframes gridBreath {
+@keyframes gridBreathV3 {
 
     0%,
     100% {
-        opacity: .65;
-        filter: drop-shadow(0 0 14px rgba(24, 231, 255, 0.16));
+        opacity: .70;
+        filter: drop-shadow(0 0 16px rgba(24, 231, 255, 0.18));
     }
 
     50% {
-        opacity: .95;
-        filter: drop-shadow(0 0 26px rgba(24, 231, 255, 0.22));
+        opacity: 1.00;
+        filter: drop-shadow(0 0 34px rgba(24, 231, 255, 0.26));
     }
 }
 
+/* углы */
 .board::after {
     content: "";
     position: absolute;
@@ -314,14 +403,15 @@ button {
     pointer-events: none;
     z-index: 0;
     background:
-        radial-gradient(circle at 8% 10%, rgba(24, 231, 255, 0.22), transparent 42%),
-        radial-gradient(circle at 92% 10%, rgba(255, 61, 242, 0.18), transparent 44%),
-        radial-gradient(circle at 8% 92%, rgba(124, 58, 237, 0.18), transparent 46%),
-        radial-gradient(circle at 92% 92%, rgba(24, 231, 255, 0.16), transparent 46%);
+        radial-gradient(circle at 8% 10%, rgba(24, 231, 255, 0.30), transparent 45%),
+        radial-gradient(circle at 92% 10%, rgba(255, 61, 242, 0.24), transparent 46%),
+        radial-gradient(circle at 8% 92%, rgba(124, 58, 237, 0.22), transparent 48%),
+        radial-gradient(circle at 92% 92%, rgba(24, 231, 255, 0.20), transparent 48%);
     mix-blend-mode: screen;
-    opacity: 0.75;
+    opacity: 0.85;
 }
 
+/* карты поверх */
 .board>* {
     position: relative;
     z-index: 1;
@@ -333,18 +423,20 @@ button {
     height: var(--card-h);
     border-radius: 12px;
 
-    background: rgba(255, 255, 255, 0.06);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
-    backdrop-filter: blur(6px);
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.10),
+        0 10px 22px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(7px);
     transition: background .2s, box-shadow .2s;
 }
 
 .cell.highlight {
-    background: rgba(24, 231, 255, 0.10);
+    background: rgba(24, 231, 255, 0.12);
     box-shadow:
-        inset 0 0 0 2px rgba(24, 231, 255, 0.34),
-        0 0 22px rgba(24, 231, 255, 0.18),
-        0 10px 22px rgba(0, 0, 0, 0.40);
+        inset 0 0 0 2px rgba(24, 231, 255, 0.42),
+        0 0 26px rgba(24, 231, 255, 0.22),
+        0 14px 26px rgba(0, 0, 0, 0.50);
     cursor: pointer;
 }
 
@@ -380,13 +472,13 @@ button {
 
 /* контуры владельца */
 .card.player {
-    border: 2px solid rgba(42, 107, 255, 0.95);
-    box-shadow: 0 0 18px rgba(0, 180, 255, 0.35), 0 14px 28px rgba(0, 0, 0, 0.35);
+    border: 2px solid rgba(42, 107, 255, 0.98);
+    box-shadow: 0 0 22px rgba(0, 180, 255, 0.40), 0 14px 30px rgba(0, 0, 0, 0.45);
 }
 
 .card.enemy {
-    border: 2px solid rgba(255, 42, 42, 0.95);
-    box-shadow: 0 0 18px rgba(255, 80, 80, 0.30), 0 14px 28px rgba(0, 0, 0, 0.35);
+    border: 2px solid rgba(255, 42, 42, 0.98);
+    box-shadow: 0 0 22px rgba(255, 80, 80, 0.34), 0 14px 30px rgba(0, 0, 0, 0.45);
 }
 
 .card:hover:not(.disabled) {
@@ -400,7 +492,7 @@ button {
 
 .card.selected {
     outline: 3px solid rgba(255, 215, 0, 0.95);
-    box-shadow: 0 0 28px rgba(255, 215, 0, 0.32);
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.32);
 }
 
 /* постановка */
@@ -560,42 +652,39 @@ button {
     }
 }
 
-/* ---------- MOBILE / SUPPORT / MOTION ---------- */
+/* ---------- MOBILE TUNING ---------- */
+@media (max-width: 480px) {
+
+    /* чуть легче, но всё ещё “живое” */
+    .game-root::before {
+        opacity: .45;
+    }
+
+    .game-root::after {
+        filter: blur(16px) saturate(1.18);
+        opacity: .85;
+    }
+
+    .game-ui::before {
+        opacity: .12;
+    }
+}
+
+/* ---------- TOUCH ---------- */
 @media (hover: none) {
     .card:hover:not(.disabled) {
         transform: none;
     }
 }
 
-@media (max-width: 480px) {
-    .game-root::before {
-        opacity: .40;
-    }
-
-    .game-root::after {
-        filter: blur(16px) saturate(1.12);
-        opacity: .75;
-    }
-
-    .board::after {
-        opacity: .55;
-    }
-}
-
-@supports not (mix-blend-mode: screen) {
-
-    .game-root::after,
-    .board::after {
-        mix-blend-mode: normal;
-        opacity: .55;
-    }
-}
-
+/* ---------- REDUCED MOTION ---------- */
 @media (prefers-reduced-motion: reduce) {
 
     .game-root::before,
     .game-root::after,
-    .board::before {
+    .board::before,
+    .game-ui::before,
+    .game-ui::after {
         animation: none !important;
     }
 
