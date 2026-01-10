@@ -187,31 +187,24 @@ export default function Game({ onExit }) {
     useEffect(() => {
         if (!gameOver || winner !== "player") return;
 
-        const origin = { x: 0.5, y: 0.35 }; // центр
-        const timers = [];
-        const confettiApi = useRef(null);
-
-        useEffect(() => {
-            confettiApi.current = confetti.create(undefined, { resize: true, useWorker: true });
-        }, []);
-        const fire = (delay, opts) => {
-            timers.push(
-                setTimeout(() => {
-                    confettiApi.current({
-                        ...opts,
-                        origin,
-                        ticks: 140,
-                        gravity: 1.05,
-                        scalar: 0.9,
-                    });
-                }, delay)
-            );
+        const safe = (opts) => {
+            try {
+                confetti({
+                    zIndex: 99999,
+                    ...opts,
+                });
+            } catch (e) {
+                // чтобы не крашилось вообще
+                console.warn("confetti failed:", e);
+            }
         };
 
-        fire(0, { particleCount: 45, spread: 70, startVelocity: 34 });
-        fire(180, { particleCount: 35, spread: 85, startVelocity: 30 });
-        fire(360, { particleCount: 30, spread: 95, startVelocity: 28 });
-        fire(520, { particleCount: 24, spread: 110, startVelocity: 26 });
+        const origin = { x: 0.5, y: 0.35 };
+        const timers = [];
+
+        timers.push(setTimeout(() => safe({ particleCount: 35, spread: 70, startVelocity: 30, origin }), 0));
+        timers.push(setTimeout(() => safe({ particleCount: 25, spread: 90, startVelocity: 26, origin }), 180));
+        timers.push(setTimeout(() => safe({ particleCount: 18, spread: 110, startVelocity: 24, origin }), 360));
 
         return () => timers.forEach(clearTimeout);
     }, [gameOver, winner]);
