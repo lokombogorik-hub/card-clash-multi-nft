@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 import tableVideo from "./assets/table.mp4"; // <-- ВАЖНО: видео тут
 useEffect(() => {
