@@ -657,3 +657,47 @@ button {
 .hand-scroll::-webkit-scrollbar {
     height: 0px;
 }
+
+/* ===== FIX: board must not jump when hand becomes scrollable ===== */
+
+/* 1) фиксированные строки grid (не auto) */
+:root {
+    --hand-top-h: calc(var(--card-h) + 10px);
+    --hand-bottom-h: calc(var(--card-h) + var(--lift) + 10px);
+}
+
+.game-ui {
+    grid-template-rows: var(--hand-top-h) 1fr var(--hand-bottom-h) !important;
+}
+
+/* 2) руки строго фиксированной высоты */
+.hand.top {
+    height: var(--hand-top-h) !important;
+    min-height: var(--hand-top-h) !important;
+}
+
+.hand.bottom {
+    height: var(--hand-bottom-h) !important;
+    min-height: var(--hand-bottom-h) !important;
+}
+
+/* 3) очень важно для grid/flex: иначе элемент может расширять строку */
+.hand,
+.hand-scroll {
+    min-height: 0 !important;
+}
+
+/* 4) hand-scroll занимает всю высоту руки и НЕ добавляет высоту из‑за скроллбара */
+.hand-scroll {
+    height: 100% !important;
+    overflow-x: scroll !important;
+    /* всегда scroll → не “появляется/исчезает” */
+    overflow-y: hidden !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+}
+
+/* полностью убираем скроллбар у WebKit (чтобы не отъедал высоту) */
+.hand-scroll::-webkit-scrollbar {
+    display: none !important;
+}
