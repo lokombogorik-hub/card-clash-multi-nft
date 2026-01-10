@@ -3,10 +3,34 @@
     font-family: sans-serif;
 }
 
+html,
+body,
+#root {
+    height: 100%;
+}
+
+/* фикс “съезда” меню */
 body {
     margin: 0;
     background: #0b1220;
     color: white;
+}
+
+.app {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    justify-content: center;
+    align-items: center;
+}
+
+button {
+    padding: 12px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 10px;
+    border: none;
 }
 
 :root {
@@ -18,36 +42,32 @@ body {
 }
 
 .game-root {
-    min-height: 100vh;
+    min-height: 100%;
     width: 100%;
     padding: var(--ui-pad);
     padding-top: calc(var(--ui-pad) + env(safe-area-inset-top, 0px));
     padding-bottom: calc(var(--ui-pad) + env(safe-area-inset-bottom, 0px));
     position: relative;
     overflow: hidden;
-
-    /* Никаких старых фоновых картинок */
     background: #050a12;
+    /* без старой картинки */
 }
 
-/* Фон-слой */
 .table-bg {
     position: absolute;
     inset: 0;
     z-index: 0;
 }
 
-/* Видео должно быть ВИДИМО и сверху фона элемента */
 .table-video {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
-
     filter: saturate(1.12) contrast(1.04);
+    opacity: 1;
 }
 
-/* Glow поверх видео */
 .game-root::before {
     content: "";
     position: absolute;
@@ -82,11 +102,10 @@ body {
     }
 }
 
-/* UI слой */
 .game-ui {
     position: relative;
     z-index: 2;
-    min-height: calc(100vh - (var(--ui-pad) * 2));
+    min-height: calc(100% - (var(--ui-pad) * 2));
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -125,9 +144,9 @@ body {
 
 .scorebar {
     width: 100%;
-    max-width: 360px;
+    max-width: 520px;
     margin: 8px auto;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 800;
     text-align: center;
     text-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
@@ -197,7 +216,6 @@ body {
     z-index: 1;
 }
 
-/* простая аура без color-mix (чтобы не зависеть от поддержки) */
 .card.player {
     border: 2px solid rgba(42, 107, 255, 0.95);
     box-shadow: 0 0 18px rgba(0, 180, 255, 0.35), 0 14px 28px rgba(0, 0, 0, 0.35);
@@ -248,7 +266,6 @@ body {
     box-shadow: 0 0 28px rgba(255, 215, 0, 0.32);
 }
 
-/* анимации */
 .card.is-placed .card-anim {
     animation: placeSmooth 380ms cubic-bezier(.2, .9, .2, 1);
 }
@@ -292,7 +309,7 @@ body {
     }
 }
 
-/* numbers */
+/* TT numbers */
 .tt-badge {
     position: absolute;
     top: 9px;
@@ -334,7 +351,7 @@ body {
     left: 28px;
 }
 
-/* game over */
+/* Game over */
 .game-over {
     position: fixed;
     inset: 0;
@@ -367,6 +384,67 @@ body {
     background: #3b82f6;
     color: #fff;
     font-weight: 700;
+}
+
+/* defeat effect */
+.game-root.defeat {
+    animation: screenShake 420ms ease-in-out 2;
+}
+
+@keyframes screenShake {
+    0% {
+        transform: translate(0, 0);
+    }
+
+    25% {
+        transform: translate(6px, -2px);
+    }
+
+    50% {
+        transform: translate(-6px, 3px);
+    }
+
+    75% {
+        transform: translate(4px, 2px);
+    }
+
+    100% {
+        transform: translate(0, 0);
+    }
+}
+
+.defeat-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+    background:
+        radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.0), rgba(0, 0, 0, 0.65)),
+        linear-gradient(180deg, rgba(120, 0, 0, 0.15), rgba(0, 0, 0, 0.55));
+    animation: defeatPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes defeatPulse {
+
+    0%,
+    100% {
+        opacity: .75;
+    }
+
+    50% {
+        opacity: .95;
+    }
+}
+
+.video-hint {
+    margin: 10px auto 0;
+    max-width: 520px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(6px);
+    font-size: 13px;
 }
 
 @media (hover:none) {

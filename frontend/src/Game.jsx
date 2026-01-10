@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import confetti from "canvas-confetti";
 
 /**
  * Triple Triad directions:
@@ -11,13 +12,15 @@ const DIRS = [
     { dx: -1, dy: 0, a: "left", b: "right" },
 ];
 
+const RULES = { combo: true, same: true, plus: true };
+
 const rand = () => Math.ceil(Math.random() * 9);
 
+// Vite base url for public assets (работает и при деплое в подпапку)
 const BASE = import.meta.env.BASE_URL || "/";
-const withBase = (p) => {
-    const base = BASE.endsWith("/") ? BASE : BASE + "/";
-    const path = p.startsWith("/") ? p.slice(1) : p;
-    return base + path;
+const pub = (path) => {
+    const b = BASE.endsWith("/") ? BASE : BASE + "/";
+    return b + String(path).replace(/^\//, "");
 };
 
 const ART = [
@@ -31,9 +34,7 @@ const ART = [
     "cards/card7.jpg",
     "cards/card8.jpg",
     "cards/card9.jpg",
-].map(withBase);
-
-const RULES = { combo: true, same: true, plus: true };
+].map(pub);
 
 const genCard = (owner, id) => ({
     id,
@@ -41,11 +42,14 @@ const genCard = (owner, id) => ({
     values: { top: rand(), right: rand(), bottom: rand(), left: rand() },
     imageUrl: ART[Math.floor(Math.random() * ART.length)],
     rarity: "common",
-    placeKey: 0,
-    captureKey: 0,
-    specialKey: 0,
-    specialType: "",
+
+    placeKey: 0,    // постановка
+    captureKey: 0,  // захват (bounce)
+    specialKey: 0,  // Same/Plus flash
+    specialType: "", // same/plus/both
 });
+
+const randomFirstTurn = () => (Math.random() < 0.5 ? "player" : "enemy");
 
 function neighborsOf(idx) {
     const x = idx % 3;
@@ -135,16 +139,18 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
 function captureByPowerFrom(idx, grid) {
     const src = grid[idx];
     if (!src) return [];
-
     const flipped = [];
+
     for (const { ni, a, b } of neighborsOf(idx)) {
         const t = grid[ni];
         if (!t) continue;
         if (t.owner === src.owner) continue;
+
         if (src.values[a] > t.values[b]) {
             if (flipToOwner(grid, ni, src.owner)) flipped.push(ni);
         }
     }
+
     return flipped;
 }
 
@@ -160,21 +166,7 @@ function resolveCombo(queue, grid, rules) {
 
 export default function Game({ onExit }) {
     const videoRef = useRef(null);
-
-    useEffect(() => {
-        const v = videoRef.current;
-        if (!v) return;
-
-        // принудительный play() (если autoplay иногда не стартует)
-        const tryPlay = async () => {
-            try {
-                await v.play();
-            } catch (e) {
-                console.warn("BG video autoplay blocked or failed:", e);
-            }
-        };
-        tryPlay();
-    }, []);
+    const aiGuard = useRef({ handled: false });
 
     const makeHands = () => ({
         player: Array.from({ length: 5 }, (_, i) => genCard("player", `p${i}`)),
@@ -184,19 +176,56 @@ export default function Game({ onExit }) {
     const [{ player, enemy }, setHands] = useState(makeHands);
     const [board, setBoard] = useState(Array(9).fill(null));
     const [selected, setSelected] = useState(null);
-    const [turn, setTurn] = useState("player");
+
+    const [turn, setTurn] = useState(() => randomFirstTurn());
     const [gameOver, setGameOver] = useState(false);
     const [winner, setWinner] = useState(null);
 
-    const aiGuard = useRef({ handled: false });
+    const [videoOk, setVideoOk] = useState(false);
+    const [videoErr, setVideoErr] = useState(false);
+
+    // пробуем автозапуск видео (иногда нужно)
+    useEffect(() => {
+        const v = videoRef.current;
+        if (!v) return;
+        v.muted = true;
+        v.playsInline = true;
+
+        v.play().catch(() => {
+            // если браузер заблокировал autoplay — не страшно, будет fallback
+        });
+    }, []);
+
+    // конфетти / поражение
+    useEffect(() => {
+        if (!gameOver) return;
+
+        if (winner === "player") {
+            const end = Date.now() + 1400;
+            const frame = () => {
+                confetti({
+                    particleCount: 6,
+                    startVelocity: 30,
+                    spread: 70,
+                    origin: { x: Math.random() * 0.2 + 0.4, y: 0.2 },
+                });
+                if (Date.now() < end) requestAnimationFrame(frame);
+            };
+            frame();
+        }
+    }, [gameOver, winner]);
 
     const reset = () => {
         setHands(makeHands());
         setBoard(Array(9).fill(null));
         setSelected(null);
-        setTurn("player");
+
+        const first = randomFirstTurn();
+        setTurn(first);
+
         setGameOver(false);
         setWinner(null);
+
         aiGuard.current.handled = false;
     };
 
@@ -205,13 +234,10 @@ export default function Game({ onExit }) {
         if (!selected || board[i]) return;
 
         const next = [...board];
-        next[i] = {
-            ...selected,
-            owner: "player",
-            placeKey: (selected.placeKey || 0) + 1,
-        };
+        next[i] = { ...selected, owner: "player", placeKey: (selected.placeKey || 0) + 1 };
 
         const { flipped, specialType } = resolvePlacementFlips(i, next, RULES);
+
         if (specialType) {
             next[i] = {
                 ...next[i],
@@ -230,6 +256,7 @@ export default function Game({ onExit }) {
         setTurn("enemy");
     };
 
+    // AI ход (рандом)
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
         if (aiGuard.current.handled) return;
@@ -248,13 +275,10 @@ export default function Game({ onExit }) {
         const card = enemy[Math.floor(Math.random() * enemy.length)];
 
         const next = [...board];
-        next[cell] = {
-            ...card,
-            owner: "enemy",
-            placeKey: (card.placeKey || 0) + 1,
-        };
+        next[cell] = { ...card, owner: "enemy", placeKey: (card.placeKey || 0) + 1 };
 
         const { flipped, specialType } = resolvePlacementFlips(cell, next, RULES);
+
         if (specialType) {
             next[cell] = {
                 ...next[cell],
@@ -274,10 +298,13 @@ export default function Game({ onExit }) {
         return () => clearTimeout(t);
     }, [turn, gameOver, board, enemy]);
 
+    // конец игры
     useEffect(() => {
         if (board.some((c) => c === null)) return;
+
         const p = board.filter((c) => c.owner === "player").length;
         const e = board.filter((c) => c.owner === "enemy").length;
+
         setWinner(p > e ? "player" : e > p ? "enemy" : "draw");
         setGameOver(true);
     }, [board]);
@@ -294,26 +321,27 @@ export default function Game({ onExit }) {
     }, [board]);
 
     return (
-        <div className="game-root">
-            {/* Видео-фон отдельным слоем */}
+        <div className={`game-root ${gameOver && winner === "enemy" ? "defeat" : ""}`}>
+            {/* Видео-стол */}
             <div className="table-bg" aria-hidden="true">
                 <video
                     ref={videoRef}
-                    className="table-video"
+                    className={`table-video ${videoOk ? "ok" : ""} ${videoErr ? "err" : ""}`}
                     autoPlay
                     loop
                     muted
                     playsInline
                     preload="auto"
-                    onError={(e) => {
-                        console.error("BG video error:", e?.currentTarget?.error);
-                    }}
+                    onCanPlay={() => setVideoOk(true)}
+                    onError={() => setVideoErr(true)}
                 >
-                    <source src={withBase("table.mp4")} type="video/mp4" />
+                    <source src={pub("table.mp4")} type="video/mp4" />
                 </video>
             </div>
 
-            {/* UI слой */}
+            {/* Дымка при поражении */}
+            {gameOver && winner === "enemy" && <div className="defeat-overlay" />}
+
             <div className="game-ui">
                 <button className="exit" onClick={onExit}>← Меню</button>
 
@@ -341,7 +369,9 @@ export default function Game({ onExit }) {
                     ))}
                 </div>
 
-                <div className="scorebar">🟥 {score.red} : {score.blue} 🟦</div>
+                <div className="scorebar">
+                    🟥 {score.red} : {score.blue} 🟦 • Ход: {turn === "player" ? "ты" : "враг"}
+                </div>
 
                 <div className="board">
                     {board.map((cell, i) => (
@@ -366,6 +396,13 @@ export default function Game({ onExit }) {
                         </div>
                     ))}
                 </div>
+
+                {/* Диагностика видео (если не работает) */}
+                {videoErr && (
+                    <div className="video-hint">
+                        Видео не проигралось. Проверь: файл <b>frontend/public/table.mp4</b> и кодек (нужен H.264).
+                    </div>
+                )}
             </div>
         </div>
     );
