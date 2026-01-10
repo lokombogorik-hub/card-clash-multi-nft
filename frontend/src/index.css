@@ -1,4 +1,4 @@
-/* frontend/src/index.css (NEON COSMOS TABLE v3 — more alive, NO VIDEO) */
+/* frontend/src/index.css — Telegram WebApp friendly (NO VIDEO), fits by height */
 
 * {
     box-sizing: border-box;
@@ -15,6 +15,7 @@ body {
     margin: 0;
     background: #0b1220;
     color: white;
+    overflow: hidden;
 }
 
 /* ---------- MENU ---------- */
@@ -35,32 +36,40 @@ button {
     border: none;
 }
 
-/* ---------- RESPONSIVE SIZING ---------- */
+/* ---------- VIEWPORT / SIZING ---------- */
 :root {
     --ui-pad: clamp(10px, 2.2vw, 16px);
     --gap: clamp(6px, 2vw, 10px);
-
-    --card-w: clamp(76px,
-            calc((100vw - (var(--ui-pad) * 2) - (var(--gap) * 2)) / 3),
-            122px);
-    --card-h: calc(var(--card-w) * 1.375);
-
     --hand-overlap: 0.34;
 
-    --space-0: #050611;
-    --space-1: #070a18;
-
-    --neon-cyan: #18e7ff;
-    --neon-magenta: #ff3df2;
-    --neon-violet: #7c3aed;
-    --neon-green: #39ff88;
+    /* fallback */
+    --vh: 100vh;
 }
 
-/* =========================================================
-   GAME ROOT + NEON COSMOS TABLE v3 (NO VIDEO)
-   ========================================================= */
+@supports (height: 100dvh) {
+    :root {
+        --vh: 100dvh;
+    }
+}
+
+/* Размер карты рассчитываем так, чтобы:
+   1) по ширине влезло 3 колонки
+   2) по высоте влезло: верхняя рука + board + нижняя рука + scorebar */
+:root {
+    --hud-h: 84px;
+    /* примерная высота scorebar + отступы */
+
+    --card-w-vw: calc((100vw - (var(--ui-pad) * 2) - (var(--gap) * 2)) / 3);
+    --card-h-vh: calc((var(--vh) - (var(--ui-pad) * 2) - var(--hud-h) - (var(--gap) * 4)) / 3);
+    --card-w-vh: calc(var(--card-h-vh) / 1.375);
+
+    --card-w: clamp(66px, min(var(--card-w-vw), var(--card-w-vh)), 118px);
+    --card-h: calc(var(--card-w) * 1.375);
+}
+
+/* ---------- GAME ROOT (NO VIDEO) ---------- */
 .game-root {
-    min-height: 100vh;
+    height: var(--vh);
     width: 100%;
     padding: var(--ui-pad);
     padding-top: calc(var(--ui-pad) + env(safe-area-inset-top, 0px));
@@ -71,180 +80,96 @@ button {
     isolation: isolate;
 
     background:
-        radial-gradient(90vmax 70vmax at 16% 10%, rgba(124, 58, 237, 0.34), transparent 62%),
-        radial-gradient(85vmax 70vmax at 88% 30%, rgba(24, 231, 255, 0.26), transparent 62%),
-        radial-gradient(70vmax 55vmax at 50% 98%, rgba(255, 61, 242, 0.22), transparent 58%),
-        linear-gradient(180deg, var(--space-1), var(--space-0));
+        radial-gradient(70vmax 55vmax at 18% 10%, rgba(124, 58, 237, 0.30), transparent 62%),
+        radial-gradient(75vmax 60vmax at 88% 30%, rgba(24, 231, 255, 0.24), transparent 62%),
+        radial-gradient(65vmax 50vmax at 50% 98%, rgba(255, 61, 242, 0.20), transparent 58%),
+        linear-gradient(180deg, #070a18, #050611);
 }
 
-/* Если в JSX остался <video> — прячем */
+/* на всякий случай скрываем видео-слой, если он остался в JSX */
 .table-bg,
 .table-video {
     display: none !important;
 }
 
-/* 1) ЗВЁЗДЫ + ШУМ (движется) */
+/* звёзды/шум */
 .game-root::before {
     content: "";
     position: absolute;
     inset: -30%;
     background:
-        radial-gradient(circle, rgba(255, 255, 255, 0.22) 1px, transparent 1.8px) 0 0 / 58px 58px,
-        radial-gradient(circle, rgba(255, 255, 255, 0.14) 1px, transparent 1.8px) 18px 22px / 86px 86px,
-        radial-gradient(circle, rgba(24, 231, 255, 0.16) 1px, transparent 1.8px) 12px 36px / 110px 110px,
-        /* лёгкое зерно */
-        repeating-linear-gradient(0deg,
-            rgba(255, 255, 255, 0.018) 0px,
-            rgba(255, 255, 255, 0.018) 1px,
-            rgba(255, 255, 255, 0.00) 3px);
-    opacity: 0.65;
-    filter: blur(0.2px);
-    animation: starDriftV3 14s linear infinite;
+        radial-gradient(circle, rgba(255, 255, 255, 0.20) 1px, transparent 1.8px) 0 0 / 62px 62px,
+        radial-gradient(circle, rgba(255, 255, 255, 0.12) 1px, transparent 1.8px) 18px 22px / 92px 92px,
+        radial-gradient(circle, rgba(24, 231, 255, 0.14) 1px, transparent 1.8px) 12px 36px / 120px 120px;
+    opacity: 0.55;
+    animation: starDrift 14s linear infinite;
     pointer-events: none;
     z-index: 0;
 }
 
-@keyframes starDriftV3 {
+@keyframes starDrift {
     from {
         transform: translate3d(0, 0, 0);
     }
 
     to {
-        transform: translate3d(-9%, 6%, 0);
+        transform: translate3d(-8%, 6%, 0);
     }
 }
 
-/* 2) АВРОРА/ТУМАННОСТЬ (ярче и заметнее) */
+/* яркое свечение (без mix-blend-mode — в Telegram видно стабильно) */
 .game-root::after {
     content: "";
     position: absolute;
     inset: -35%;
     background:
-        radial-gradient(55vmax 40vmax at 25% 45%, rgba(24, 231, 255, 0.26), transparent 62%),
-        radial-gradient(60vmax 45vmax at 70% 55%, rgba(255, 61, 242, 0.22), transparent 64%),
-        radial-gradient(70vmax 50vmax at 55% 18%, rgba(124, 58, 237, 0.24), transparent 62%),
-        /* “ленты” авроры */
+        radial-gradient(55vmax 40vmax at 25% 45%, rgba(24, 231, 255, 0.22), transparent 62%),
+        radial-gradient(60vmax 45vmax at 70% 55%, rgba(255, 61, 242, 0.18), transparent 64%),
+        radial-gradient(70vmax 50vmax at 55% 18%, rgba(124, 58, 237, 0.20), transparent 62%),
         linear-gradient(115deg,
             rgba(24, 231, 255, 0.00) 0%,
-            rgba(24, 231, 255, 0.14) 18%,
-            rgba(255, 61, 242, 0.12) 48%,
-            rgba(124, 58, 237, 0.12) 72%,
-            rgba(24, 231, 255, 0.00) 100%),
-        conic-gradient(from 210deg,
-            rgba(24, 231, 255, 0.00),
-            rgba(24, 231, 255, 0.20),
-            rgba(255, 61, 242, 0.18),
-            rgba(124, 58, 237, 0.20),
-            rgba(24, 231, 255, 0.00));
-    filter: blur(22px) saturate(1.25);
+            rgba(24, 231, 255, 0.12) 20%,
+            rgba(255, 61, 242, 0.10) 52%,
+            rgba(124, 58, 237, 0.10) 78%,
+            rgba(24, 231, 255, 0.00) 100%);
+    filter: blur(18px) saturate(1.2);
     opacity: 0.95;
-    mix-blend-mode: screen;
-    animation: nebulaPulseV3 6.2s ease-in-out infinite;
+    animation: nebulaPulse 6.4s ease-in-out infinite;
     pointer-events: none;
     z-index: 1;
 }
 
-@keyframes nebulaPulseV3 {
+@keyframes nebulaPulse {
     0% {
-        transform: translate3d(-1.5%, -1%, 0) rotate(0deg) scale(1.00);
-        filter: blur(22px) saturate(1.15) hue-rotate(0deg);
+        transform: translate3d(-1.2%, -0.8%, 0) rotate(0deg) scale(1.00);
         opacity: .75;
     }
 
     50% {
-        transform: translate3d(1.5%, 1%, 0) rotate(12deg) scale(1.08);
-        filter: blur(18px) saturate(1.35) hue-rotate(16deg);
+        transform: translate3d(1.2%, 0.8%, 0) rotate(10deg) scale(1.06);
         opacity: 1.00;
     }
 
     100% {
-        transform: translate3d(-1.5%, -1%, 0) rotate(0deg) scale(1.00);
-        filter: blur(22px) saturate(1.15) hue-rotate(0deg);
+        transform: translate3d(-1.2%, -0.8%, 0) rotate(0deg) scale(1.00);
         opacity: .75;
     }
 }
 
-/* UI поверх стола */
+/* ---------- LAYOUT ---------- */
 .game-ui {
     position: relative;
     z-index: 3;
-    min-height: calc(100vh - (var(--ui-pad) * 2));
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
+
+    height: 100%;
+    display: grid;
+    grid-template-rows: auto auto 1fr auto;
+    /* top-hand, score, board, bottom-hand */
+    gap: var(--gap);
+    align-content: space-between;
 }
 
-/* 3) СКАН-ЛИНИИ + “движущийся луч” поверх UI (очень заметно) */
-.game-ui::before {
-    content: "";
-    position: absolute;
-    inset: -60px;
-    background:
-        repeating-linear-gradient(180deg,
-            rgba(255, 255, 255, 0.00) 0px,
-            rgba(255, 255, 255, 0.00) 9px,
-            rgba(24, 231, 255, 0.05) 10px);
-    opacity: 0.18;
-    pointer-events: none;
-    z-index: -1;
-    animation: scanMove 3.2s linear infinite;
-}
-
-@keyframes scanMove {
-    from {
-        transform: translateY(0);
-    }
-
-    to {
-        transform: translateY(22px);
-    }
-}
-
-.game-ui::after {
-    content: "";
-    position: absolute;
-    inset: -30%;
-    background: radial-gradient(circle at 50% 50%, rgba(24, 231, 255, 0.10), transparent 48%);
-    opacity: 0.0;
-    mix-blend-mode: screen;
-    pointer-events: none;
-    z-index: -1;
-    animation: sweepLight 4.4s ease-in-out infinite;
-}
-
-@keyframes sweepLight {
-    0% {
-        opacity: 0.00;
-        transform: translate3d(-18%, -12%, 0) scale(0.9);
-    }
-
-    35% {
-        opacity: 0.55;
-        transform: translate3d(0%, 0%, 0) scale(1.05);
-    }
-
-    70% {
-        opacity: 0.35;
-        transform: translate3d(14%, 10%, 0) scale(1.10);
-    }
-
-    100% {
-        opacity: 0.00;
-        transform: translate3d(22%, 16%, 0) scale(0.95);
-    }
-}
-
-/* Fallback если mix-blend-mode не поддерживается */
-@supports not (mix-blend-mode: screen) {
-
-    .game-root::after,
-    .game-ui::after {
-        mix-blend-mode: normal;
-        opacity: 0.55;
-    }
-}
-
-/* ---------- EXIT BUTTON ---------- */
+/* кнопка меню */
 .exit {
     position: absolute;
     left: 10px;
@@ -254,19 +179,17 @@ button {
     background: rgba(0, 0, 0, 0.35);
     color: #fff;
     border: 1px solid rgba(255, 255, 255, 0.18);
-    backdrop-filter: blur(6px);
 }
 
-/* ---------- HANDS (OVERLAP) ---------- */
+/* ---------- HANDS ---------- */
 .hand {
-    position: relative;
     display: flex;
     justify-content: center;
     width: 100%;
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
-    padding: 6px 0;
+    padding: 4px 0;
 }
 
 .hand-slot {
@@ -287,15 +210,18 @@ button {
     pointer-events: auto;
 }
 
-/* ---------- SCOREBAR + TURN DOT ---------- */
+/* ---------- SCORE ---------- */
 .scorebar {
+    height: 28px;
     width: 100%;
     max-width: 520px;
-    margin: 8px auto;
+    margin: 0 auto;
+
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
+
     font-size: 16px;
     font-weight: 800;
     text-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
@@ -336,15 +262,14 @@ button {
     transform: translate(calc(110px - 18px), -50%);
 }
 
-/* =========================================================
-   BOARD + RUNIC GRID (more visible)
-   ========================================================= */
+/* ---------- BOARD + RUNIC GRID ---------- */
 .board {
+    justify-self: center;
+    align-self: center;
+
     display: grid;
     grid-template-columns: repeat(3, var(--card-w));
     gap: var(--gap);
-    justify-content: center;
-    margin: 0 auto;
 
     position: relative;
     border-radius: 16px;
@@ -354,7 +279,6 @@ button {
     --step-y: calc(var(--card-h) + var(--gap));
 }
 
-/* сетка */
 .board::before {
     content: "";
     position: absolute;
@@ -367,91 +291,59 @@ button {
         repeating-linear-gradient(90deg,
             rgba(24, 231, 255, 0.00) 0,
             rgba(24, 231, 255, 0.00) calc(var(--step-x) - 2px),
-            rgba(24, 231, 255, 0.40) calc(var(--step-x) - 2px),
+            rgba(24, 231, 255, 0.42) calc(var(--step-x) - 2px),
             rgba(24, 231, 255, 0.00) var(--step-x)),
         repeating-linear-gradient(0deg,
             rgba(255, 61, 242, 0.00) 0,
             rgba(255, 61, 242, 0.00) calc(var(--step-y) - 2px),
             rgba(255, 61, 242, 0.34) calc(var(--step-y) - 2px),
             rgba(255, 61, 242, 0.00) var(--step-y));
-
     filter: drop-shadow(0 0 22px rgba(24, 231, 255, 0.22));
-    opacity: 0.95;
-    animation: gridBreathV3 2.6s ease-in-out infinite;
+    opacity: 0.9;
+    animation: gridBreath 2.8s ease-in-out infinite;
 }
 
-@keyframes gridBreathV3 {
+@keyframes gridBreath {
 
     0%,
     100% {
-        opacity: .70;
-        filter: drop-shadow(0 0 16px rgba(24, 231, 255, 0.18));
+        opacity: .65;
     }
 
     50% {
         opacity: 1.00;
-        filter: drop-shadow(0 0 34px rgba(24, 231, 255, 0.26));
     }
 }
 
-/* углы */
-.board::after {
-    content: "";
-    position: absolute;
-    inset: -10px;
-    border-radius: 18px;
-    pointer-events: none;
-    z-index: 0;
-    background:
-        radial-gradient(circle at 8% 10%, rgba(24, 231, 255, 0.30), transparent 45%),
-        radial-gradient(circle at 92% 10%, rgba(255, 61, 242, 0.24), transparent 46%),
-        radial-gradient(circle at 8% 92%, rgba(124, 58, 237, 0.22), transparent 48%),
-        radial-gradient(circle at 92% 92%, rgba(24, 231, 255, 0.20), transparent 48%);
-    mix-blend-mode: screen;
-    opacity: 0.85;
-}
-
-/* карты поверх */
 .board>* {
     position: relative;
     z-index: 1;
 }
 
-/* клетки */
 .cell {
     width: var(--card-w);
     height: var(--card-h);
     border-radius: 12px;
-
     background: rgba(255, 255, 255, 0.05);
-    box-shadow:
-        inset 0 0 0 1px rgba(255, 255, 255, 0.10),
-        0 10px 22px rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(7px);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
     transition: background .2s, box-shadow .2s;
 }
 
 .cell.highlight {
     background: rgba(24, 231, 255, 0.12);
-    box-shadow:
-        inset 0 0 0 2px rgba(24, 231, 255, 0.42),
-        0 0 26px rgba(24, 231, 255, 0.22),
-        0 14px 26px rgba(0, 0, 0, 0.50);
+    box-shadow: inset 0 0 0 2px rgba(24, 231, 255, 0.40), 0 0 26px rgba(24, 231, 255, 0.20);
     cursor: pointer;
 }
 
-/* ---------- CARD ---------- */
+/* ---------- CARDS ---------- */
 .card {
     width: var(--card-w);
     height: var(--card-h);
     border-radius: 12px;
     position: relative;
     overflow: hidden;
-    isolation: isolate;
     cursor: pointer;
-
     background: linear-gradient(145deg, #1a2232, #0f1625);
-    transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
 }
 
 .card-anim {
@@ -470,7 +362,6 @@ button {
     z-index: 1;
 }
 
-/* контуры владельца */
 .card.player {
     border: 2px solid rgba(42, 107, 255, 0.98);
     box-shadow: 0 0 22px rgba(0, 180, 255, 0.40), 0 14px 30px rgba(0, 0, 0, 0.45);
@@ -479,10 +370,6 @@ button {
 .card.enemy {
     border: 2px solid rgba(255, 42, 42, 0.98);
     box-shadow: 0 0 22px rgba(255, 80, 80, 0.34), 0 14px 30px rgba(0, 0, 0, 0.45);
-}
-
-.card:hover:not(.disabled) {
-    transform: translateY(-8px) scale(1.03);
 }
 
 .card.disabled {
@@ -495,20 +382,14 @@ button {
     box-shadow: 0 0 30px rgba(255, 215, 0, 0.32);
 }
 
-/* постановка */
 .card.is-placed .card-anim {
     animation: placeSmooth 380ms cubic-bezier(.2, .9, .2, 1);
 }
 
 @keyframes placeSmooth {
     0% {
-        transform: translateY(22px) scale(.95);
+        transform: translateY(18px) scale(.96);
         opacity: 0;
-    }
-
-    70% {
-        transform: translateY(-4px) scale(1.03);
-        opacity: 1;
     }
 
     100% {
@@ -517,7 +398,6 @@ button {
     }
 }
 
-/* захват: подпрыгивание */
 .card.is-captured .card-anim {
     animation: captureBounce 360ms cubic-bezier(.2, .9, .2, 1);
 }
@@ -528,11 +408,11 @@ button {
     }
 
     35% {
-        transform: translateY(-12px) scale(1.06);
+        transform: translateY(-10px) scale(1.05);
     }
 
     70% {
-        transform: translateY(0) scale(.985);
+        transform: translateY(0) scale(.99);
     }
 
     100% {
@@ -540,7 +420,7 @@ button {
     }
 }
 
-/* ---------- TRIPLE TRIAD NUMBERS ---------- */
+/* ---------- TT NUMBERS ---------- */
 .tt-badge {
     position: absolute;
     top: 9px;
@@ -598,7 +478,6 @@ button {
     padding: 24px 32px;
     border-radius: 16px;
     text-align: center;
-    color: white;
     min-width: 260px;
     border: 1px solid rgba(255, 255, 255, 0.12);
 }
@@ -614,11 +493,11 @@ button {
     padding: 8px 14px;
     border-radius: 10px;
     background: #3b82f6;
-    color: white;
+    color: #fff;
     font-weight: 700;
 }
 
-/* ---------- DICE RAIN (LOSS) ---------- */
+/* ---------- DICE RAIN ---------- */
 .dice-rain {
     position: fixed;
     inset: 0;
@@ -652,74 +531,18 @@ button {
     }
 }
 
-/* ---------- MOBILE TUNING ---------- */
-@media (max-width: 480px) {
-
-    /* чуть легче, но всё ещё “живое” */
-    .game-root::before {
-        opacity: .45;
-    }
-
-    .game-root::after {
-        filter: blur(16px) saturate(1.18);
-        opacity: .85;
-    }
-
-    .game-ui::before {
-        opacity: .12;
-    }
-}
-
-/* ---------- TOUCH ---------- */
-@media (hover: none) {
+/* ---------- TOUCH / MOTION ---------- */
+@media (hover:none) {
     .card:hover:not(.disabled) {
         transform: none;
     }
 }
 
-/* ---------- REDUCED MOTION ---------- */
 @media (prefers-reduced-motion: reduce) {
 
     .game-root::before,
     .game-root::after,
-    .board::before,
-    .game-ui::before,
-    .game-ui::after {
+    .board::before {
         animation: none !important;
-    }
-
-    .card.is-placed .card-anim,
-    .card.is-captured .card-anim {
-        animation: none !important;
-    }
-}
-
-/* ===== Telegram WebView friendly glow patch ===== */
-
-/* стабильная высота в мобильных webview */
-.game-root {
-    min-height: 100dvh;
-    height: 100dvh;
-}
-
-/* убираем зависимость от mix-blend-mode — делаем заметный glow “обычным” способом */
-.game-root::after {
-    mix-blend-mode: normal !important;
-    opacity: 0.80 !important;
-    filter: blur(16px) saturate(1.15) !important;
-}
-
-/* если mix-blend-mode реально поддерживается — включаем “красивый” режим */
-@supports (mix-blend-mode: screen) {
-    .game-root::after {
-        mix-blend-mode: screen !important;
-        opacity: 0.90 !important;
-    }
-}
-
-/* backdrop-filter часто ломает картинку в Telegram Android: делаем fallback */
-@supports not (backdrop-filter: blur(1px)) {
-    .cell {
-        backdrop-filter: none !important;
     }
 }
