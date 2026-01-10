@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 
 const DIRS = [
@@ -53,7 +53,11 @@ function flipToOwner(grid, ni, newOwner) {
     if (!t) return false;
     if (t.owner === newOwner) return false;
 
-    grid[ni] = { ...t, owner: newOwner, captureKey: (t.captureKey || 0) + 1 };
+    grid[ni] = {
+        ...t,
+        owner: newOwner,
+        captureKey: (t.captureKey || 0) + 1,
+    };
     return true;
 }
 
@@ -73,8 +77,10 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
 
     const toFlip = new Set();
 
+    // Power
     for (const i of infos) if (i.placedSide > i.targetSide) toFlip.add(i.ni);
 
+    // Same
     let sameTriggered = false;
     if (rules.same) {
         const eq = infos.filter((i) => i.placedSide === i.targetSide);
@@ -84,6 +90,7 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
         }
     }
 
+    // Plus
     let plusTriggered = false;
     if (rules.plus) {
         const groups = new Map();
@@ -101,12 +108,19 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
     }
 
     const specialType =
-        sameTriggered && plusTriggered ? "both" : sameTriggered ? "same" : plusTriggered ? "plus" : "";
+        sameTriggered && plusTriggered
+            ? "both"
+            : sameTriggered
+                ? "same"
+                : plusTriggered
+                    ? "plus"
+                    : "";
 
     const flipped = [];
     for (const ni of toFlip) {
         if (flipToOwner(grid, ni, placed.owner)) flipped.push(ni);
     }
+
     return { flipped, specialType };
 }
 
@@ -129,6 +143,7 @@ function captureByPowerFrom(idx, grid) {
 
 function resolveCombo(queue, grid, rules) {
     if (!rules.combo) return;
+
     const q = [...queue];
     while (q.length) {
         const idx = q.shift();
@@ -139,22 +154,6 @@ function resolveCombo(queue, grid, rules) {
 
 export default function Game({ onExit }) {
     const aiGuard = useRef({ handled: false });
-
-    const confettiApi = useRef(null);
-
-    useEffect(() => {
-        // useWorker заметно разгружает main thread на мобилках
-        try {
-            confettiApi.current = confetti.create(undefined, { resize: true, useWorker: true });
-        } catch {
-            confettiApi.current = confetti;
-        }
-        return () => {
-            try {
-                confettiApi.current?.reset?.();
-            } catch { }
-        };
-    }, []);
 
     const makeHands = () => ({
         player: Array.from({ length: 5 }, (_, i) => genCard("player", `p${i}`)),
@@ -179,46 +178,26 @@ export default function Game({ onExit }) {
         aiGuard.current.handled = false;
     };
 
+    // если игра закончилась — сброс выбора
     useEffect(() => {
         if (gameOver) setSelected(null);
     }, [gameOver]);
 
-    // Победа: легкое конфетти (несколько залпов, без requestAnimationFrame)
+    // Победа: конфетти по центру
     useEffect(() => {
         if (!gameOver || winner !== "player") return;
 
-        const c = confettiApi.current || confetti;
-        const origin = { x: 0.5, y: 0.38 };
-
-        const timers = [];
-        const fire = (delay, opts) => {
-            timers.push(
-                setTimeout(() => {
-                    c({
-                        ...opts,
-                        origin,
-                        ticks: 140,
-                        gravity: 1.05,
-                        scalar: 0.9,
-                    });
-                }, delay)
-            );
+        const end = Date.now() + 1400;
+        const tick = () => {
+            confetti({
+                particleCount: 10,
+                spread: 80,
+                startVelocity: 30,
+                origin: { x: 0.5, y: 0.35 }, // центр
+            });
+            if (Date.now() < end) requestAnimationFrame(tick);
         };
-
-        fire(0, { particleCount: 45, spread: 70, startVelocity: 34 });
-        fire(180, { particleCount: 35, spread: 85, startVelocity: 30 });
-        fire(360, { particleCount: 30, spread: 95, startVelocity: 28 });
-        fire(520, { particleCount: 24, spread: 110, startVelocity: 26 });
-
-        timers.push(
-            setTimeout(() => {
-                try {
-                    c.reset?.();
-                } catch { }
-            }, 1600)
-        );
-
-        return () => timers.forEach(clearTimeout);
+        tick();
     }, [gameOver, winner]);
 
     const placeCard = (i) => {
@@ -227,7 +206,11 @@ export default function Game({ onExit }) {
         if (!selected || board[i]) return;
 
         const next = [...board];
-        next[i] = { ...selected, owner: "player", placeKey: (selected.placeKey || 0) + 1 };
+        next[i] = {
+            ...selected,
+            owner: "player",
+            placeKey: (selected.placeKey || 0) + 1,
+        };
 
         const { flipped } = resolvePlacementFlips(i, next, RULES);
         resolveCombo(flipped, next, RULES);
@@ -240,13 +223,16 @@ export default function Game({ onExit }) {
         setTurn("enemy");
     };
 
-    // AI
+    // AI (рандом)
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
         if (aiGuard.current.handled) return;
         aiGuard.current.handled = true;
 
-        const empty = board.map((c, idx) => (c === null ? idx : null)).filter((v) => v !== null);
+        const empty = board
+            .map((c, idx) => (c === null ? idx : null))
+            .filter((v) => v !== null);
+
         if (!empty.length || !enemy.length) {
             setTurn("player");
             return;
@@ -256,7 +242,11 @@ export default function Game({ onExit }) {
         const card = enemy[Math.floor(Math.random() * enemy.length)];
 
         const next = [...board];
-        next[cell] = { ...card, owner: "enemy", placeKey: (card.placeKey || 0) + 1 };
+        next[cell] = {
+            ...card,
+            owner: "enemy",
+            placeKey: (card.placeKey || 0) + 1,
+        };
 
         const { flipped } = resolvePlacementFlips(cell, next, RULES);
         resolveCombo(flipped, next, RULES);
@@ -265,12 +255,12 @@ export default function Game({ onExit }) {
             setBoard(next);
             setHands((h) => ({ ...h, enemy: h.enemy.filter((c) => c.id !== card.id) }));
             setTurn("player");
-        }, 420);
+        }, 450);
 
         return () => clearTimeout(t);
     }, [turn, gameOver, board, enemy]);
 
-    // Game over
+    // Конец игры (когда доска заполнена)
     useEffect(() => {
         if (board.some((c) => c === null)) return;
 
@@ -292,7 +282,8 @@ export default function Game({ onExit }) {
         );
     }, [board]);
 
-    const winnerText = winner === "player" ? "Победа" : winner === "enemy" ? "Поражение" : "Ничья";
+    const winnerText =
+        winner === "player" ? "Победа" : winner === "enemy" ? "Поражение" : "Ничья";
 
     return (
         <div className="game-root">
@@ -312,7 +303,7 @@ export default function Game({ onExit }) {
                     </div>
                 </div>
 
-                {/* HUD */}
+                {/* HUD under enemy hand */}
                 <div className="hud-top">
                     <div className="hud-score red">🟥 {score.red}</div>
                     <div className={`hud-turn ${turn}`}>
@@ -338,18 +329,25 @@ export default function Game({ onExit }) {
                 <div className="hand bottom">
                     <div className="hand-scroll">
                         {player.map((c, i) => (
-                            <div key={c.id} className="hand-slot" style={{ zIndex: selected?.id === c.id ? 9999 : i }}>
+                            <div
+                                key={c.id}
+                                className="hand-slot"
+                                style={{ zIndex: selected?.id === c.id ? 9999 : i }}
+                            >
                                 <Card
                                     card={c}
                                     selected={selected?.id === c.id}
                                     disabled={gameOver || turn !== "player"}
-                                    onClick={() => setSelected((prev) => (prev?.id === c.id ? null : c))}
+                                    onClick={() =>
+                                        setSelected((prev) => (prev?.id === c.id ? null : c))
+                                    }
                                 />
                             </div>
                         ))}
                     </div>
                 </div>
 
+                {/* GAME OVER OVERLAY */}
                 {gameOver && (
                     <div className="game-over">
                         <div className="game-over-box">
@@ -366,7 +364,7 @@ export default function Game({ onExit }) {
     );
 }
 
-const Card = memo(function Card({ card, onClick, selected, disabled }) {
+function Card({ card, onClick, selected, disabled }) {
     const [placedAnim, setPlacedAnim] = useState(false);
     const [capturedAnim, setCapturedAnim] = useState(false);
 
@@ -407,9 +405,9 @@ const Card = memo(function Card({ card, onClick, selected, disabled }) {
             </div>
         </div>
     );
-});
+}
 
-const DiceRain = memo(function DiceRain() {
+function DiceRain() {
     const dice = useMemo(() => {
         return Array.from({ length: 34 }, (_, i) => ({
             id: i,
@@ -442,4 +440,4 @@ const DiceRain = memo(function DiceRain() {
             ))}
         </div>
     );
-});
+}
