@@ -56,7 +56,7 @@ function flipToOwner(grid, ni, newOwner) {
     grid[ni] = {
         ...t,
         owner: newOwner,
-        captureKey: (t.captureKey || 0) + 1,
+        captureKey: (t.captureKey || 0) + 1, // ВАЖНО
     };
     return true;
 }

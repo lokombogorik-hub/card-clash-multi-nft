@@ -593,17 +593,20 @@ button {
         text-align: center;
         min-width: 260px;
         border: 1px solid rgba(255, 255, 255, 0.12);
+        position: relative;
+        z-index: 22000;
     }
 
     .game-over-box h2 {
         margin: 0 0 12px;
     }
 
-    /* DICE RAIN (below game over) */
+    /* Кости при проигрыше */
     .dice-rain {
         position: fixed;
         inset: 0;
-        z-index: 15000;
+        z-index: 21000;
+        /* выше game-over */
         pointer-events: none;
         overflow: hidden;
     }
