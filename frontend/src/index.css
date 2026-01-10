@@ -273,8 +273,11 @@ button {
 }
 
 .hand.bottom {
-    grid-row: 4;
-    z-index: 4;
+    overflow: visible;
+    /* НЕ режем поднятую карту */
+    z-index: 30;
+    /* слой выше стола */
+    position: relative;
 }
 
 .hand-scroll {
@@ -301,15 +304,16 @@ button {
 }
 
 .hand.bottom .hand-scroll {
-    padding-top: var(--lift);
-    /* pocket */
-    align-items: flex-end;
+    overflow-y: visible;
+    /* иначе translateY будет обрезан */
 }
+
 
 .hand-slot {
     width: var(--card-w);
     flex: 0 0 auto;
     pointer-events: none;
+    position: relative
 }
 
 .hand-slot>.card {
@@ -321,6 +325,7 @@ button {
     position: relative;
     justify-self: center;
     align-self: center;
+    z-index: 10;
 
     width: calc((var(--card-w) * 3) + (var(--gap) * 4));
     height: var(--board-h);
@@ -429,6 +434,7 @@ button {
 }
 
 .hand.bottom .card.selected {
+    position: relative;
     transform: translateY(calc(-1 * var(--lift))) scale(1.05);
     z-index: 9999;
     filter: saturate(1.08);
