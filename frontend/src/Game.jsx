@@ -187,17 +187,29 @@ export default function Game({ onExit }) {
     useEffect(() => {
         if (!gameOver || winner !== "player") return;
 
-        const end = Date.now() + 1400;
-        const tick = () => {
-            confetti({
-                particleCount: 10,
-                spread: 80,
-                startVelocity: 30,
-                origin: { x: 0.5, y: 0.35 }, // центр
-            });
-            if (Date.now() < end) requestAnimationFrame(tick);
+        const origin = { x: 0.5, y: 0.35 }; // центр
+        const timers = [];
+
+        const fire = (delay, opts) => {
+            timers.push(
+                setTimeout(() => {
+                    confetti({
+                        ...opts,
+                        origin,
+                        ticks: 140,
+                        gravity: 1.05,
+                        scalar: 0.9,
+                    });
+                }, delay)
+            );
         };
-        tick();
+
+        fire(0, { particleCount: 45, spread: 70, startVelocity: 34 });
+        fire(180, { particleCount: 35, spread: 85, startVelocity: 30 });
+        fire(360, { particleCount: 30, spread: 95, startVelocity: 28 });
+        fire(520, { particleCount: 24, spread: 110, startVelocity: 26 });
+
+        return () => timers.forEach(clearTimeout);
     }, [gameOver, winner]);
 
     const placeCard = (i) => {
