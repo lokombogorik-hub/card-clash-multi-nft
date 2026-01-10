@@ -1,7 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 import tableVideo from "./assets/table.mp4"; // <-- ВАЖНО: видео тут
+useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    <video ref={videoRef} className="table-video" autoPlay loop muted playsInline controls></video>
+    const start = async () => {
+        try { await v.play(); } catch (e) { }
+        window.removeEventListener("pointerdown", start);
+    };
 
+    // если autoplay не сработал — запустим по первому тапу
+    window.addEventListener("pointerdown", start, { once: true });
+    return () => window.removeEventListener("pointerdown", start);
+}, []);
 const DIRS = [
     { dx: 0, dy: -1, a: "top", b: "bottom" },
     { dx: 1, dy: 0, a: "right", b: "left" },
