@@ -6,4 +6,11 @@ export default defineConfig({
     resolve: {
         dedupe: ["react", "react-dom"],
     },
+    optimizeDeps: {
+        include: ["react", "react-dom"],
+    },
+    // Временно отключаем минификацию, чтобы проверить, что не она ломает рантайм на Vercel
+    build: {
+        minify: false,
+    },
 });
