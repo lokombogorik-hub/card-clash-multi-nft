@@ -566,3 +566,96 @@ button {
         animation: none !important;
     }
 }
+
+/* ===== HUD column: icons + toggle near left edge, no content shift ===== */
+
+/* 1) Делаем в game-ui 2 колонки: слева HUD, справа игра */
+.game-ui {
+    display: grid !important;
+    grid-template-columns: 58px 1fr !important;
+    /* узкая колонка под квадраты/тумблер */
+    grid-template-rows: auto 1fr auto !important;
+    /* top hand / board / bottom hand */
+    column-gap: 8px !important;
+    gap: var(--gap) !important;
+}
+
+/* 2) HUD больше НЕ absolute — он живёт в левой колонке */
+.hud-left {
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    bottom: auto !important;
+
+    grid-column: 1 !important;
+    grid-row: 1 / 4 !important;
+
+    width: 58px !important;
+    z-index: 30 !important;
+    pointer-events: none;
+
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+
+    /* ближе к краю, но аккуратно */
+    margin-left: 0 !important;
+}
+
+/* 3) Руки и доска — в правой колонке */
+.hand.top {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+}
+
+.board {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+}
+
+.hand.bottom {
+    grid-column: 2 !important;
+    grid-row: 3 !important;
+}
+
+/* 4) Убираем левый padding, который “двигал картинку” */
+.hand-scroll {
+    padding-left: 6px !important;
+}
+
+/* 5) КЛЮЧ к багу “карта заезжает под стол”:
+      поднимаем карту ВНУТРИ нижней руки, делая сверху “карман” */
+:root {
+    --lift: 24px;
+}
+
+/* высота подъёма */
+
+.hand.bottom .hand-scroll {
+    padding-top: var(--lift) !important;
+    /* карман */
+    overflow-y: hidden !important;
+    /* и не режем странно */
+}
+
+.hand.bottom .card.selected {
+    transform: translateY(calc(-1 * var(--lift))) scale(1.04) !important;
+    position: relative !important;
+    z-index: 9999 !important;
+}
+
+/* 6) Руки всегда поверх доски по слоям */
+.hand {
+    position: relative !important;
+    z-index: 20 !important;
+}
+
+.board {
+    position: relative !important;
+    z-index: 5 !important;
+}
+
+/* 7) Противник: disabled не прозрачный */
+.hand.top .card.disabled {
+    opacity: 1 !important;
+}
