@@ -1,4 +1,4 @@
-/* Telegram WebApp TT: big cards + stable layout + compact HUD */
+/* Telegram WebApp TT: big cards + stable layout + compact HUD (perf + no clipping) */
 
 * {
     box-sizing: border-box;
@@ -43,37 +43,24 @@ button {
     --gap: clamp(5px, 1.6vw, 8px);
 
     --app-h: 100vh;
-    /* задаётся из main.jsx */
     --lift: 22px;
     --hand-pad: 6px;
 
-    /* compact HUD row under enemy hand */
     --hud-h: 30px;
 
-    /* width constraint (board: 3 cards + 2 gaps + padding*2 => gaps total = 4*gap) */
     --card-w-vw: calc((100vw - (var(--ui-pad) * 2) - (var(--gap) * 4)) / 3);
 
-    /*
-    Layout height formula (NO overlap / NO clipping):
-    total = topHand + gap + HUD + gap + board + gap + bottomHand
-    topHand = cardH + handPad
-    bottomHand = cardH + lift + handPad
-    board = 3*cardH + 4*gap (2 inner gaps + padding*2)
-    => 5*cardH + lift + hud-h + 2*handPad + 7*gap
-  */
+    /* 5*cardH + lift + hud-h + 2*handPad + 7*gap */
     --available-h: calc(var(--app-h) - (var(--ui-pad) * 2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - var(--hud-h) - (var(--hand-pad) * 2) - var(--lift) - (var(--gap) * 7));
 
     --card-h-fit: calc(var(--available-h) / 5);
     --card-w-fit: calc(var(--card-h-fit) / 1.375);
 
-    /* bigger ceiling */
     --card-w: clamp(64px, min(var(--card-w-vw), var(--card-w-fit)), 170px);
     --card-h: calc(var(--card-w) * 1.375);
 
-    /* exact board height (matches .board actual size) */
     --board-h: calc((var(--card-h) * 3) + (var(--gap) * 4));
 
-    /* row heights */
     --hand-top-h: calc(var(--card-h) + var(--hand-pad));
     --hand-bottom-h: calc(var(--card-h) + var(--lift) + var(--hand-pad));
 }
@@ -99,7 +86,6 @@ button {
         linear-gradient(180deg, #070a18, #050611);
 }
 
-/* stars */
 .game-root::before {
     content: "";
     position: absolute;
@@ -124,41 +110,41 @@ button {
     }
 }
 
-/* glow */
 .game-root::after {
     content: "";
     position: absolute;
     inset: -35%;
     background:
-        radial-gradient(55vmax 40vmax at 25% 45%, rgba(24, 231, 255, 0.24), transparent 62%),
-        radial-gradient(60vmax 45vmax at 70% 55%, rgba(255, 61, 242, 0.20), transparent 64%),
-        radial-gradient(70vmax 50vmax at 55% 18%, rgba(124, 58, 237, 0.22), transparent 62%),
+        radial-gradient(55vmax 40vmax at 25% 45%, rgba(24, 231, 255, 0.22), transparent 62%),
+        radial-gradient(60vmax 45vmax at 70% 55%, rgba(255, 61, 242, 0.18), transparent 64%),
+        radial-gradient(70vmax 50vmax at 55% 18%, rgba(124, 58, 237, 0.20), transparent 62%),
         linear-gradient(115deg,
             rgba(24, 231, 255, 0.00) 0%,
             rgba(24, 231, 255, 0.14) 20%,
             rgba(255, 61, 242, 0.12) 52%,
             rgba(124, 58, 237, 0.12) 78%,
             rgba(24, 231, 255, 0.00) 100%);
-    filter: blur(18px) saturate(1.2);
-    opacity: 0.95;
-    animation: nebulaPulse 6.4s ease-in-out infinite;
+    filter: blur(14px) saturate(1.15);
+    /* чуть легче для телефона */
+    opacity: 0.9;
+    animation: nebulaPulse 7.5s ease-in-out infinite;
     pointer-events: none;
     z-index: 1;
 }
 
 @keyframes nebulaPulse {
     0% {
-        transform: translate3d(-1.2%, -0.8%, 0) rotate(0deg) scale(1.00);
+        transform: translate3d(-1%, -0.6%, 0) rotate(0deg) scale(1.00);
         opacity: .75;
     }
 
     50% {
-        transform: translate3d(1.2%, 0.8%, 0) rotate(10deg) scale(1.06);
+        transform: translate3d(1%, 0.6%, 0) rotate(8deg) scale(1.05);
         opacity: 1.00;
     }
 
     100% {
-        transform: translate3d(-1.2%, -0.8%, 0) rotate(0deg) scale(1.00);
+        transform: translate3d(-1%, -0.6%, 0) rotate(0deg) scale(1.00);
         opacity: .75;
     }
 }
@@ -173,7 +159,6 @@ button {
     grid-template-columns: 1fr;
     grid-template-rows: var(--hand-top-h) var(--hud-h) var(--board-h) var(--hand-bottom-h);
     gap: var(--gap);
-
     min-height: 0;
 }
 
@@ -190,7 +175,7 @@ button {
     z-index: 50;
 }
 
-/* ---------- HUD (compact, under enemy hand) ---------- */
+/* ---------- HUD ---------- */
 .hud-top {
     grid-row: 2;
     display: flex;
@@ -256,7 +241,6 @@ button {
     min-height: 0;
     overflow: hidden;
 
-    /* чтобы визуально ничего "не просвечивало" даже при артефактах */
     background: rgba(0, 0, 0, 0.10);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 14px;
@@ -274,8 +258,22 @@ button {
 
 .hand.bottom {
     grid-row: 4;
-    z-index: 4;
+    z-index: 20;
 }
+
+/* выше стола */
+
+/* ВАЖНО: чтобы выбранная карта НЕ обрезалась */
+.hand.bottom {
+    overflow: visible;
+}
+
+/* даём выход вверх */
+.hand.bottom .hand-scroll {
+    overflow-y: visible;
+}
+
+/* убираем вертикальный клип */
 
 .hand-scroll {
     height: 100%;
@@ -353,14 +351,14 @@ button {
             rgba(255, 61, 242, 0.00) var(--card-h));
     filter: drop-shadow(0 0 22px rgba(24, 231, 255, 0.22));
     opacity: 0.9;
-    animation: gridBreath 2.8s ease-in-out infinite;
+    animation: gridBreath 3.2s ease-in-out infinite;
 }
 
 @keyframes gridBreath {
 
     0%,
     100% {
-        opacity: .65;
+        opacity: .7;
     }
 
     50% {
@@ -420,12 +418,12 @@ button {
     z-index: 1;
 }
 
-/* smooth selection in bottom hand */
+/* smooth selection */
 .hand.bottom .card {
     transition:
-        transform 200ms cubic-bezier(.2, .9, .2, 1),
-        box-shadow 200ms ease,
-        filter 200ms ease;
+        transform 220ms cubic-bezier(.2, .9, .2, 1),
+        box-shadow 220ms ease,
+        filter 220ms ease;
 }
 
 .hand.bottom .card.selected {
@@ -437,43 +435,48 @@ button {
         0 18px 44px rgba(0, 0, 0, 0.60);
 }
 
-/* owner */
+/* owner base */
 .card.player {
     border: 2px solid rgba(42, 107, 255, 0.98);
     box-shadow:
-        0 0 18px rgba(0, 180, 255, 0.30),
+        0 0 16px rgba(0, 180, 255, 0.22),
         0 14px 30px rgba(0, 0, 0, 0.45);
-    animation: pulseBlue 2.6s ease-in-out infinite;
 }
 
 .card.enemy {
     border: 2px solid rgba(255, 42, 42, 0.98);
     box-shadow:
-        0 0 18px rgba(255, 80, 80, 0.22),
+        0 0 16px rgba(255, 80, 80, 0.16),
         0 14px 30px rgba(0, 0, 0, 0.45);
-    animation: pulseRed 2.6s ease-in-out infinite;
 }
 
-/* enemy hand cards: visible but not interactive */
+/* PERF: пульс только на картах на столе (не в руках) */
+.board .card.player {
+    animation: pulseBlue 2.8s ease-in-out infinite;
+}
+
+.board .card.enemy {
+    animation: pulseRed 2.8s ease-in-out infinite;
+}
+
 .card.disabled {
     cursor: default;
     opacity: 1;
-    animation: none;
+    animation: none !important;
 }
 
-/* pulsing glow */
 @keyframes pulseBlue {
 
     0%,
     100% {
         box-shadow:
-            0 0 16px rgba(0, 180, 255, 0.24),
+            0 0 14px rgba(0, 180, 255, 0.18),
             0 14px 30px rgba(0, 0, 0, 0.45);
     }
 
     50% {
         box-shadow:
-            0 0 26px rgba(0, 180, 255, 0.46),
+            0 0 24px rgba(0, 180, 255, 0.40),
             0 16px 34px rgba(0, 0, 0, 0.52);
     }
 }
@@ -483,18 +486,18 @@ button {
     0%,
     100% {
         box-shadow:
-            0 0 16px rgba(255, 80, 80, 0.18),
+            0 0 14px rgba(255, 80, 80, 0.14),
             0 14px 30px rgba(0, 0, 0, 0.45);
     }
 
     50% {
         box-shadow:
-            0 0 26px rgba(255, 80, 80, 0.40),
+            0 0 24px rgba(255, 80, 80, 0.34),
             0 16px 34px rgba(0, 0, 0, 0.52);
     }
 }
 
-/* place / capture animations */
+/* place / capture */
 .card.is-placed .card-anim {
     animation: placeSmooth 380ms cubic-bezier(.2, .9, .2, 1);
 }
@@ -575,7 +578,7 @@ button {
     left: 28px;
 }
 
-/* GAME OVER (must be above everything) */
+/* GAME OVER */
 .game-over {
     position: fixed;
     inset: 0;
@@ -599,7 +602,7 @@ button {
     margin: 0 0 12px;
 }
 
-/* DICE RAIN (below game over) */
+/* DICE RAIN */
 .dice-rain {
     position: fixed;
     inset: 0;
@@ -644,8 +647,8 @@ button {
         animation: none !important;
     }
 
-    .card.player,
-    .card.enemy {
+    .board .card.player,
+    .board .card.enemy {
         animation: none !important;
     }
 
