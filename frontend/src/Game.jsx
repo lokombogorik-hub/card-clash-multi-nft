@@ -1,19 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
-import tableVideo from "./assets/table.mp4"; // <-- ВАЖНО: видео тут
-useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    <video ref={videoRef} className="table-video" autoPlay loop muted playsInline controls></video>
-    const start = async () => {
-        try { await v.play(); } catch (e) { }
-        window.removeEventListener("pointerdown", start);
-    };
+import tableVideo from "./assets/table.mp4";
 
-    // если autoplay не сработал — запустим по первому тапу
-    window.addEventListener("pointerdown", start, { once: true });
-    return () => window.removeEventListener("pointerdown", start);
-}, []);
 const DIRS = [
     { dx: 0, dy: -1, a: "top", b: "bottom" },
     { dx: 1, dy: 0, a: "right", b: "left" },
@@ -22,7 +10,9 @@ const DIRS = [
 ];
 
 const RULES = { combo: true, same: true, plus: true };
+
 const rand = () => Math.ceil(Math.random() * 9);
+const randomFirstTurn = () => (Math.random() < 0.5 ? "player" : "enemy");
 
 const ART = [
     "/cards/card.jpg",
@@ -37,13 +27,12 @@ const ART = [
     "/cards/card9.jpg",
 ];
 
-const randomFirstTurn = () => (Math.random() < 0.5 ? "player" : "enemy");
-
 const genCard = (owner, id) => ({
     id,
     owner,
     values: { top: rand(), right: rand(), bottom: rand(), left: rand() },
     imageUrl: ART[Math.floor(Math.random() * ART.length)],
+
     placeKey: 0,
     captureKey: 0,
     specialKey: 0,
@@ -71,7 +60,7 @@ function flipToOwner(grid, ni, newOwner) {
     grid[ni] = {
         ...t,
         owner: newOwner,
-        captureKey: (t.captureKey || 0) + 1, // подпрыгивание
+        captureKey: (t.captureKey || 0) + 1,
     };
     return true;
 }
@@ -176,13 +165,18 @@ export default function Game({ onExit }) {
     const [gameOver, setGameOver] = useState(false);
     const [winner, setWinner] = useState(null);
 
-    // автозапуск (если браузер блокнет — ок, будет просто стоп-кадр)
+    // запуск видео + запуск по первому клику (если autoplay блокнут)
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
+
         v.muted = true;
         v.playsInline = true;
         v.play().catch(() => { });
+
+        const start = () => v.play().catch(() => { });
+        window.addEventListener("pointerdown", start, { once: true });
+        return () => window.removeEventListener("pointerdown", start);
     }, []);
 
     // победа: конфетти
@@ -192,7 +186,12 @@ export default function Game({ onExit }) {
 
         const end = Date.now() + 1400;
         const tick = () => {
-            confetti({ particleCount: 8, spread: 75, startVelocity: 28, origin: { x: 0.5, y: 0.2 } });
+            confetti({
+                particleCount: 8,
+                spread: 75,
+                startVelocity: 28,
+                origin: { x: 0.5, y: 0.2 },
+            });
             if (Date.now() < end) requestAnimationFrame(tick);
         };
         tick();
@@ -203,9 +202,10 @@ export default function Game({ onExit }) {
         setBoard(Array(9).fill(null));
         setSelected(null);
 
-        setTurn(randomFirstTurn()); // снова рандом
+        setTurn(randomFirstTurn());
         setGameOver(false);
         setWinner(null);
+
         aiGuard.current.handled = false;
     };
 
@@ -266,7 +266,7 @@ export default function Game({ onExit }) {
         return () => clearTimeout(t);
     }, [turn, gameOver, board, enemy]);
 
-    // end
+    // конец игры
     useEffect(() => {
         if (board.some((c) => c === null)) return;
         const p = board.filter((c) => c.owner === "player").length;
@@ -287,10 +287,18 @@ export default function Game({ onExit }) {
     }, [board]);
 
     return (
-        <div className={`game-root ${gameOver && winner === "enemy" ? "defeat" : ""}`}>
+        <div className="game-root">
             {/* видео-стол */}
             <div className="table-bg" aria-hidden="true">
-                <video ref={videoRef} className="table-video" autoPlay loop muted playsInline preload="auto">
+                <video
+                    ref={videoRef}
+                    className="table-video"
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    preload="auto"
+                >
                     <source src={tableVideo} type="video/mp4" />
                 </video>
             </div>
@@ -327,12 +335,9 @@ export default function Game({ onExit }) {
 
                 <div className="scorebar">
                     <span className="score red">🟥 {score.red}</span>
-
-                    {/* индикатор хода: точка ездит */}
                     <div className={`turn-pill ${turn}`} aria-label="turn">
                         <div className="turn-dot" />
                     </div>
-
                     <span className="score blue">{score.blue} 🟦</span>
                 </div>
 
