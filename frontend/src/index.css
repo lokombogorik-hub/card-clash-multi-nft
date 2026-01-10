@@ -703,10 +703,3 @@ button {
     padding: 20px;
     text-shadow: 0 6px 22px rgba(0, 0, 0, 0.55);
 }
-
-/* Если пользователь просит меньше анимаций — выключаем видео */
-@media (prefers-reduced-motion: reduce) {
-    .menu-video {
-        display: none;
-    }
-}
