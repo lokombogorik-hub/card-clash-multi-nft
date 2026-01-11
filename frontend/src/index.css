@@ -703,3 +703,28 @@ button {
     padding: 20px;
     text-shadow: 0 6px 22px rgba(0, 0, 0, 0.55);
 }
+
+/* Если пользователь просит меньше анимаций — выключаем видео */
+@media (prefers-reduced-motion: reduce) {
+    .menu-video {
+        display: none;
+    }
+}
+
+/* ===== TT numbers: force correct sizing on desktop ===== */
+:root {
+    --tt-font: clamp(10px, calc(var(--card-w) * 0.085), 14px);
+    --tt-badge: clamp(34px, calc(var(--card-w) * 0.30), 46px);
+}
+
+/* более специфичный селектор, чтобы перебить чужие span-стили */
+.card .tt-num {
+    font-size: var(--tt-font) !important;
+    line-height: 1 !important;
+    font-weight: 900;
+}
+
+.card .tt-badge {
+    width: var(--tt-badge);
+    height: var(--tt-badge);
+}
