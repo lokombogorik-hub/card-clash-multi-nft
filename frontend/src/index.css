@@ -710,3 +710,33 @@ button {
         display: none;
     }
 }
+
+/* ===== FORCE TT NUMBERS (fix desktop huge text) ===== */
+.game-root .card .tt-num {
+    position: absolute !important;
+    font-size: 12px !important;
+    /* перебиваем любые vw/rem и т.п. */
+    line-height: 1 !important;
+    font-weight: 900 !important;
+}
+
+/* на всякий случай фиксируем позиции, если их тоже кто-то переопределяет */
+.game-root .card .tt-num.top {
+    top: 6px !important;
+    left: 28px !important;
+}
+
+.game-root .card .tt-num.left {
+    top: 24px !important;
+    left: 14px !important;
+}
+
+.game-root .card .tt-num.right {
+    top: 24px !important;
+    left: 42px !important;
+}
+
+.game-root .card .tt-num.bottom {
+    top: 40px !important;
+    left: 28px !important;
+}
