@@ -30,7 +30,7 @@ export default function App() {
         return () => tg.enableVerticalSwipes?.();
     }, []);
 
-    // пытаемся запустить видео (если WebView не разрешит — оно все равно появится, просто не будет играть)
+    // пробуем автозапуск видео (на iOS может понадобиться жест, поэтому ещё есть onPointerDown)
     useEffect(() => {
         const v = logoRef.current;
         if (!v) return;
@@ -112,33 +112,30 @@ export default function App() {
                             onClick={onPlay}
                             aria-label="Play"
                         >
-                            {/* ЛОГО стоит на радиусе круга и НЕ крутится */}
-                            <div className="logo-orbit" aria-hidden="true">
-                                <div className="logo-wrap">
-                                    <div className="logo-upright">
-                                        {logoOk ? (
-                                            <video
-                                                ref={logoRef}
-                                                className="logo-video"
-                                                autoPlay
-                                                loop
-                                                muted
-                                                playsInline
-                                                preload="auto"
-                                                onError={() => setLogoOk(false)}
-                                            >
-                                                <source src="/ui/logo.mp4" type="video/mp4" />
-                                            </video>
-                                        ) : (
-                                            <div className="logo-fallback">
-                                                Видео логотипа не поддерживается
-                                                <div className="logo-fallback-sub">Проверь /ui/logo.mp4 или перекодируй в H.264</div>
-                                            </div>
-                                        )}
+                            {/* ЛОГО ПО ЦЕНТРУ И БОЛЬШОЕ */}
+                            <div className="logo-center" aria-hidden="true">
+                                {logoOk ? (
+                                    <video
+                                        ref={logoRef}
+                                        className="logo-video"
+                                        autoPlay
+                                        loop
+                                        muted
+                                        playsInline
+                                        preload="auto"
+                                        onError={() => setLogoOk(false)}
+                                    >
+                                        <source src="/ui/logo.mp4" type="video/mp4" />
+                                    </video>
+                                ) : (
+                                    <div className="logo-fallback">
+                                        Видео логотипа не поддерживается
+                                        <div className="logo-fallback-sub">Проверь /ui/logo.mp4 и кодек H.264</div>
                                     </div>
-                                </div>
+                                )}
                             </div>
 
+                            {/* Play поверх */}
                             <span className="play-icon">
                                 <PlayIcon />
                             </span>
@@ -245,15 +242,10 @@ function RefreshIcon() {
 function HomeIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path
-                d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z"
-                stroke="white"
-                strokeWidth="2"
-            />
+            <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" stroke="white" strokeWidth="2" />
         </svg>
     );
 }
-
 function SaleIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -262,7 +254,6 @@ function SaleIcon() {
         </svg>
     );
 }
-
 function BagIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -271,7 +262,6 @@ function BagIcon() {
         </svg>
     );
 }
-
 function UserIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -296,12 +286,6 @@ function MenuStyles() {
         color: #fff;
       }
 
-      .nebula-bg{
-        position: absolute;
-        inset: 0;
-        z-index: 0;
-      }
-
       .shell-content{
         position: relative;
         z-index: 1;
@@ -317,8 +301,8 @@ function MenuStyles() {
       }
 
       .play-logo{
-        width: min(240px, 56vmin);
-        height: min(240px, 56vmin);
+        width: min(320px, 78vmin);   /* больше зона */
+        height: min(320px, 78vmin);
         border-radius: 999px;
         padding: 0;
         border: 1px solid rgba(255,255,255,0.10);
@@ -330,46 +314,18 @@ function MenuStyles() {
         position: relative;
         overflow: hidden;
         cursor: pointer;
-
-        /* параметры орбиты */
-        --play-size: min(240px, 56vmin);
-        --logo-size: 92px;
-        --orbit-r: calc((var(--play-size) / 2) - (var(--logo-size) / 2) - 8px);
-
-        /* где стоит логотип на окружности: сверху */
-        --orbit-angle: -90deg;
-        --orbit-angle-neg: 90deg;
       }
 
-      .logo-orbit{
-        position: absolute;
-        inset: 0;
-        z-index: 1;
-        pointer-events: none;
-      }
-
-      .logo-wrap{
-        width: var(--logo-size);
-        height: var(--logo-size);
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        transform:
-          translate(-50%, -50%)
-          rotate(var(--orbit-angle))
-          translateX(var(--orbit-r));
-        border-radius: 999px;
+      /* ЛОГО ОЧЕНЬ БОЛЬШОЕ И ПО ЦЕНТРУ */
+      .logo-center{
+        width: 92%;
+        height: 92%;
+        border-radius: 22px;
         overflow: hidden;
         background: rgba(0,0,0,0.22);
-        border: 1px solid rgba(255,255,255,0.12);
-        backdrop-filter: blur(6px);
-        box-shadow: 0 10px 28px rgba(0,0,0,0.55);
-      }
-
-      .logo-upright{
-        width: 100%;
-        height: 100%;
-        transform: rotate(var(--orbit-angle-neg));
+        border: 1px solid rgba(255,255,255,0.10);
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+        pointer-events: none;
       }
 
       .logo-video{
@@ -377,7 +333,6 @@ function MenuStyles() {
         height: 100%;
         object-fit: contain;
         display: block;
-        pointer-events: none;
       }
 
       .logo-fallback{
@@ -387,15 +342,16 @@ function MenuStyles() {
         place-items:center;
         text-align:center;
         font-size:12px;
-        padding:10px;
-        color: rgba(255,255,255,0.85);
+        padding:12px;
+        color: rgba(255,255,255,0.88);
       }
       .logo-fallback-sub{
         margin-top:6px;
-        opacity:0.7;
+        opacity:0.75;
         font-size:11px;
       }
 
+      /* Play поверх логотипа */
       .play-icon{
         position: absolute;
         inset: 0;
@@ -403,9 +359,15 @@ function MenuStyles() {
         place-items: center;
         z-index: 2;
         pointer-events: none;
+        width: 86px;
+        height: 86px;
+        margin: auto;
+        border-radius: 999px;
+        background: rgba(0,0,0,0.35);
+        border: 1px solid rgba(255,255,255,0.16);
+        box-shadow: 0 18px 55px rgba(0,0,0,0.65), 0 0 30px rgba(24,231,255,0.10);
+        backdrop-filter: blur(10px);
       }
-
-      .play-logo:active{ transform: scale(0.985); }
 
       .page{ padding: 18px; }
 
