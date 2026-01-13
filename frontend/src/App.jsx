@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Game from "./Game";
-import NebulaBg from "./components/NebulaBg";
 
 const isLandscape = () =>
     window.matchMedia?.("(orientation: landscape)")?.matches ??
@@ -18,9 +17,9 @@ export default function App() {
         tg.ready();
         tg.expand();
 
-        tg.setHeaderColor?.("#02030a");
-        tg.setBackgroundColor?.("#02030a");
-        tg.setBottomBarColor?.("#02030a");
+        tg.setHeaderColor?.("#050611");
+        tg.setBackgroundColor?.("#050611");
+        tg.setBottomBarColor?.("#050611");
 
         tg.MainButton?.hide();
         tg.SecondaryButton?.hide();
@@ -30,6 +29,7 @@ export default function App() {
         return () => tg.enableVerticalSwipes?.();
     }, []);
 
+    // пробуем стартануть видео (если нельзя — отвалится и сработает fallback)
     useEffect(() => {
         const v = logoRef.current;
         if (!v) return;
@@ -111,7 +111,7 @@ export default function App() {
                             onClick={onPlay}
                             aria-label="Play"
                         >
-                            <div className="logo-center" aria-hidden="true">
+                            <div className="logo-wrap">
                                 {logoOk ? (
                                     <video
                                         ref={logoRef}
@@ -128,7 +128,9 @@ export default function App() {
                                 ) : (
                                     <div className="logo-fallback">
                                         Видео логотипа не поддерживается
-                                        <div className="logo-fallback-sub">Проверь /ui/logo.mp4 и кодек H.264</div>
+                                        <div className="logo-fallback-sub">
+                                            Проверь /ui/logo.mp4 или перекодируй в H.264
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -217,6 +219,126 @@ function BottomNav({ active, onChange }) {
     );
 }
 
+/* ================= BACKGROUND (animated) ================= */
+
+function NebulaBg() {
+    const ref = useRef(null);
+
+    useEffect(() => {
+        const canvas = ref.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext("2d");
+
+        let w = 0, h = 0, dpr = 1;
+        let raf = 0;
+        let t = 0;
+
+        const colors = [
+            [24, 231, 255],
+            [255, 61, 242],
+            [124, 58, 237],
+        ];
+
+        const blobs = [];
+        const stars = [];
+
+        const resize = () => {
+            dpr = Math.min(window.devicePixelRatio || 1, 2);
+            w = Math.max(1, window.innerWidth);
+            h = Math.max(1, window.innerHeight);
+
+            canvas.width = Math.floor(w * dpr);
+            canvas.height = Math.floor(h * dpr);
+            canvas.style.width = `${w}px`;
+            canvas.style.height = `${h}px`;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            blobs.length = 0;
+            stars.length = 0;
+
+            // делаем движение заметнее
+            const blobCount = Math.round(Math.min(16, Math.max(10, (w * h) / 80000)));
+            for (let i = 0; i < blobCount; i++) {
+                const c = colors[Math.floor(Math.random() * colors.length)];
+                blobs.push({
+                    x: Math.random() * w,
+                    y: Math.random() * h,
+                    r: 140 + Math.random() * 260,
+                    vx: (Math.random() - 0.5) * 0.35,
+                    vy: (Math.random() - 0.5) * 0.35,
+                    a: 0.10 + Math.random() * 0.14,
+                    c,
+                    phase: Math.random() * 1000,
+                });
+            }
+
+            const starCount = Math.round(Math.min(260, Math.max(160, (w * h) / 7000)));
+            for (let i = 0; i < starCount; i++) {
+                stars.push({
+                    x: Math.random() * w,
+                    y: Math.random() * h,
+                    r: 0.4 + Math.random() * 1.6,
+                    a: 0.10 + Math.random() * 0.35,
+                    tw: 0.006 + Math.random() * 0.02,
+                    phase: Math.random() * 1000,
+                });
+            }
+        };
+
+        const wrap = (b) => {
+            if (b.x < -b.r) b.x = w + b.r;
+            if (b.x > w + b.r) b.x = -b.r;
+            if (b.y < -b.r) b.y = h + b.r;
+            if (b.y > h + b.r) b.y = -b.r;
+        };
+
+        const draw = () => {
+            t += 1;
+            ctx.fillStyle = "#050611";
+            ctx.fillRect(0, 0, w, h);
+
+            for (const b of blobs) {
+                b.x += b.vx;
+                b.y += b.vy;
+                wrap(b);
+
+                const pulse = 0.75 + 0.25 * Math.sin((t + b.phase) * 0.01);
+                const alpha = b.a * pulse;
+
+                const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r);
+                g.addColorStop(0, `rgba(${b.c[0]},${b.c[1]},${b.c[2]},${alpha})`);
+                g.addColorStop(1, `rgba(${b.c[0]},${b.c[1]},${b.c[2]},0)`);
+                ctx.fillStyle = g;
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.fillStyle = "rgba(255,255,255,0.95)";
+            for (const s of stars) {
+                const tw = 0.6 + 0.4 * Math.sin((t + s.phase) * s.tw);
+                ctx.globalAlpha = s.a * tw;
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+
+            raf = requestAnimationFrame(draw);
+        };
+
+        resize();
+        draw();
+        window.addEventListener("resize", resize);
+        return () => {
+            cancelAnimationFrame(raf);
+            window.removeEventListener("resize", resize);
+        };
+    }, []);
+
+    return <canvas ref={ref} className="nebula-bg" aria-hidden="true" />;
+}
+
 /* ================= ICONS ================= */
 
 function PlayIcon() {
@@ -279,18 +401,10 @@ function MenuStyles() {
         width: 100%;
         height: var(--app-h, 100vh);
         overflow: hidden;
-        background: #02030a;
+        background: #050611;
         color: #fff;
       }
-
-      /* ВОТ ЭТО КЛЮЧЕВО: фон (canvas) должен быть абсолютом */
-      .nebula-bg{
-        position: absolute;
-        inset: 0;
-        z-index: 0;
-        pointer-events: none;
-      }
-
+      .nebula-bg{ position:absolute; inset:0; z-index:0; }
       .shell-content{
         position: relative;
         z-index: 1;
@@ -298,46 +412,50 @@ function MenuStyles() {
         padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
         padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 120px);
       }
-
-      .home-center{
-        height: 100%;
-        display: grid;
-        place-items: center;
-      }
-
+      .home-center{ height:100%; display:grid; place-items:center; }
       .play-logo{
-        width: min(320px, 78vmin);
-        height: min(320px, 78vmin);
+        width: min(220px, 52vmin);
+        height: min(220px, 52vmin);
         border-radius: 999px;
         padding: 0;
-        border: 1px solid rgba(255,255,255,0.10);
-        background: rgba(0,0,0,0.18);
+        border: 1px solid rgba(255,255,255,0.14);
+        background: rgba(0,0,0,0.25);
         backdrop-filter: blur(8px);
-        box-shadow: 0 24px 70px rgba(0,0,0,0.65);
+        box-shadow: 0 20px 60px rgba(0,0,0,0.55);
         display: grid;
         place-items: center;
         position: relative;
         overflow: hidden;
         cursor: pointer;
       }
-
-      .logo-center{
-        width: 92%;
-        height: 92%;
-        border-radius: 22px;
-        overflow: hidden;
-        background: rgba(0,0,0,0.22);
-        border: 1px solid rgba(255,255,255,0.10);
-        pointer-events: none;
+      .play-logo::before{
+        content:"";
+        position:absolute;
+        inset:-30%;
+        background:
+          radial-gradient(closest-side, rgba(24,231,255,0.18), transparent 70%),
+          radial-gradient(closest-side, rgba(255,61,242,0.14), transparent 72%);
+        filter: blur(10px);
+        opacity: 0.9;
       }
-
+      .logo-wrap{
+        width: 78%;
+        height: 78%;
+        position: relative;
+        z-index: 1;
+        animation: logoSpin 7.5s linear infinite;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.10);
+      }
       .logo-video{
         width: 100%;
         height: 100%;
         object-fit: contain;
         display: block;
+        pointer-events: none;
       }
-
       .logo-fallback{
         width:100%;
         height:100%;
@@ -345,32 +463,23 @@ function MenuStyles() {
         place-items:center;
         text-align:center;
         font-size:12px;
-        padding:12px;
-        color: rgba(255,255,255,0.88);
+        padding:10px;
+        color: rgba(255,255,255,0.85);
       }
       .logo-fallback-sub{
         margin-top:6px;
-        opacity:0.75;
+        opacity:0.7;
         font-size:11px;
       }
-
       .play-icon{
         position: absolute;
         inset: 0;
         display: grid;
         place-items: center;
         z-index: 2;
-        pointer-events: none;
-
-        width: 86px;
-        height: 86px;
-        margin: auto;
-        border-radius: 999px;
-        background: rgba(0,0,0,0.35);
-        border: 1px solid rgba(255,255,255,0.16);
-        box-shadow: 0 18px 55px rgba(0,0,0,0.65);
-        backdrop-filter: blur(10px);
       }
+      .play-logo:active{ transform: scale(0.985); }
+      @keyframes logoSpin{ from{transform:rotate(0)} to{transform:rotate(360deg)} }
 
       .page{ padding: 18px; }
 
@@ -392,7 +501,7 @@ function MenuStyles() {
         gap: 12px;
         padding: 10px 12px;
         border-radius: 14px;
-        background: rgba(0,0,0,0.58);
+        background: rgba(0,0,0,0.45);
         border: 1px solid rgba(255,255,255,0.12);
         backdrop-filter: blur(10px);
       }
@@ -413,14 +522,14 @@ function MenuStyles() {
       }
       .season-progress-fill{
         height: 100%;
-        background: linear-gradient(90deg, rgba(24,231,255,0.75), rgba(255,61,242,0.55));
+        background: linear-gradient(90deg, rgba(24,231,255,0.9), rgba(255,61,242,0.75));
       }
       .icon-btn{
         width: 36px;
         height: 32px;
         border-radius: 10px;
         border: 1px solid rgba(255,255,255,0.12);
-        background: rgba(0,0,0,0.45);
+        background: rgba(0,0,0,0.35);
         color: #fff;
         padding: 0;
       }
@@ -432,7 +541,7 @@ function MenuStyles() {
         gap: 8px;
         padding: 10px 10px;
         border-radius: 16px;
-        background: rgba(0,0,0,0.62);
+        background: rgba(0,0,0,0.55);
         border: 1px solid rgba(255,255,255,0.12);
         backdrop-filter: blur(10px);
       }
@@ -450,23 +559,23 @@ function MenuStyles() {
       .nav-txt{ font-size: 11px; font-weight: 800; }
       .nav-item.active{
         color: #fff;
-        border-color: rgba(24,231,255,0.25);
-        background: rgba(24,231,255,0.08);
+        border-color: rgba(24,231,255,0.28);
+        background: rgba(24,231,255,0.10);
       }
       .nav-item.disabled{ opacity: 0.35; }
 
-      .rotate-gate{
+      .rotate-gate {
         position: fixed;
         inset: 0;
         display: flex;
         align-items: center;
         justify-content: center;
         padding: 18px;
-        background: rgba(0, 0, 0, 0.78);
+        background: rgba(0, 0, 0, 0.75);
         z-index: 30000;
         color: #fff;
       }
-      .rotate-gate-box{
+      .rotate-gate-box {
         width: min(420px, 92vw);
         background: rgba(0, 0, 0, 0.45);
         border: 1px solid rgba(255, 255, 255, 0.14);
@@ -474,9 +583,9 @@ function MenuStyles() {
         padding: 18px 16px;
         text-align: center;
       }
-      .rotate-title{ font-weight: 900; font-size: 20px; margin-bottom: 6px; }
-      .rotate-subtitle{ opacity: 0.85; font-size: 13px; margin-bottom: 14px; }
-      .rotate-phone{
+      .rotate-title { font-weight: 900; font-size: 20px; margin-bottom: 6px; }
+      .rotate-subtitle { opacity: 0.85; font-size: 13px; margin-bottom: 14px; }
+      .rotate-phone {
         width: 88px;
         height: 140px;
         margin: 0 auto 14px;
@@ -485,7 +594,7 @@ function MenuStyles() {
         transform: rotate(-18deg);
         animation: phoneWiggle 1.4s ease-in-out infinite;
       }
-      @keyframes phoneWiggle{
+      @keyframes phoneWiggle {
         0%,100% { transform: rotate(-18deg); }
         50% { transform: rotate(-6deg); }
       }
