@@ -29,7 +29,7 @@ export default function App() {
         return () => tg.enableVerticalSwipes?.();
     }, []);
 
-    // пробуем стартануть видео (если нельзя — отвалится и сработает fallback)
+    // пробуем запустить видео (на iOS иногда нужен тап — мы дополнительно запускаем в onPointerDown)
     useEffect(() => {
         const v = logoRef.current;
         if (!v) return;
@@ -57,6 +57,7 @@ export default function App() {
         else setScreen("rotate");
     };
 
+    // rotate gate: ждём landscape и запускаем игру
     useEffect(() => {
         if (screen !== "rotate") return;
 
@@ -106,36 +107,40 @@ export default function App() {
                 {screen === "home" && (
                     <div className="home-center">
                         <button
-                            className="play-logo"
+                            className="play-stage"
                             onPointerDown={() => logoRef.current?.play?.().catch(() => { })}
                             onClick={onPlay}
                             aria-label="Play"
                         >
-                            <div className="logo-wrap">
-                                {logoOk ? (
-                                    <video
-                                        ref={logoRef}
-                                        className="logo-video"
-                                        autoPlay
-                                        loop
-                                        muted
-                                        playsInline
-                                        preload="auto"
-                                        onError={() => setLogoOk(false)}
-                                    >
-                                        <source src="/ui/logo.mp4" type="video/mp4" />
-                                    </video>
-                                ) : (
-                                    <div className="logo-fallback">
-                                        Видео логотипа не поддерживается
-                                        <div className="logo-fallback-sub">
-                                            Проверь /ui/logo.mp4 или перекодируй в H.264
-                                        </div>
+                            {/* ДВИЖЕНИЕ ПО ОКРУЖНОСТИ (логотип не вращается) */}
+                            <div className="orbit-rotor" aria-hidden="true">
+                                <div className="orbit-pos">
+                                    <div className="orbit-upright">
+                                        {logoOk ? (
+                                            <video
+                                                ref={logoRef}
+                                                className="logo-video"
+                                                autoPlay
+                                                loop
+                                                muted
+                                                playsInline
+                                                preload="auto"
+                                                onError={() => setLogoOk(false)}
+                                            >
+                                                <source src="/ui/logo.mp4" type="video/mp4" />
+                                            </video>
+                                        ) : (
+                                            <div className="logo-fallback">
+                                                Видео не поддерживается
+                                                <div className="logo-fallback-sub">Сделай H.264 и путь /ui/logo.mp4</div>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
+                                </div>
                             </div>
 
-                            <span className="play-icon">
+                            {/* Play по центру */}
+                            <span className="play-core">
                                 <PlayIcon />
                             </span>
                         </button>
@@ -219,7 +224,7 @@ function BottomNav({ active, onChange }) {
     );
 }
 
-/* ================= BACKGROUND (animated) ================= */
+/* ================= BACKGROUND ================= */
 
 function NebulaBg() {
     const ref = useRef(null);
@@ -256,7 +261,6 @@ function NebulaBg() {
             blobs.length = 0;
             stars.length = 0;
 
-            // делаем движение заметнее
             const blobCount = Math.round(Math.min(16, Math.max(10, (w * h) / 80000)));
             for (let i = 0; i < blobCount; i++) {
                 const c = colors[Math.floor(Math.random() * colors.length)];
@@ -413,49 +417,61 @@ function MenuStyles() {
         padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 120px);
       }
       .home-center{ height:100%; display:grid; place-items:center; }
-      .play-logo{
-        width: min(220px, 52vmin);
-        height: min(220px, 52vmin);
-        border-radius: 999px;
+
+      /* контейнер клика (круга нет!) */
+      .play-stage{
+        --play-size: min(220px, 52vmin);
+        --logo-size: 72px;
+        --orbit-r: calc((var(--play-size) / 2) - (var(--logo-size) / 2) - 6px);
+
+        width: var(--play-size);
+        height: var(--play-size);
         padding: 0;
-        border: 1px solid rgba(255,255,255,0.14);
-        background: rgba(0,0,0,0.25);
-        backdrop-filter: blur(8px);
-        box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+        border: none;
+        background: transparent;
+        position: relative;
         display: grid;
         place-items: center;
-        position: relative;
-        overflow: hidden;
         cursor: pointer;
       }
-      .play-logo::before{
-        content:"";
-        position:absolute;
-        inset:-30%;
-        background:
-          radial-gradient(closest-side, rgba(24,231,255,0.18), transparent 70%),
-          radial-gradient(closest-side, rgba(255,61,242,0.14), transparent 72%);
-        filter: blur(10px);
-        opacity: 0.9;
+
+      /* вращается ТОЛЬКО орбита (позиция), а не логотип */
+      .orbit-rotor{
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        animation: orbit 6.8s linear infinite;
+        pointer-events: none;
       }
-      .logo-wrap{
-        width: 78%;
-        height: 78%;
-        position: relative;
-        z-index: 1;
-        animation: logoSpin 7.5s linear infinite;
+
+      /* выносим логотип на радиус */
+      .orbit-pos{
+        width: var(--logo-size);
+        height: var(--logo-size);
+        transform: translateX(var(--orbit-r));
+      }
+
+      /* контр-вращение: логотип остаётся "ровным" */
+      .orbit-upright{
+        width: 100%;
+        height: 100%;
         border-radius: 999px;
         overflow: hidden;
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.10);
+        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(0,0,0,0.25);
+        backdrop-filter: blur(6px);
+        animation: orbit 6.8s linear infinite reverse;
+        box-shadow: 0 10px 28px rgba(0,0,0,0.55);
       }
+
       .logo-video{
         width: 100%;
         height: 100%;
         object-fit: contain;
         display: block;
-        pointer-events: none;
       }
+
       .logo-fallback{
         width:100%;
         height:100%;
@@ -471,15 +487,25 @@ function MenuStyles() {
         opacity:0.7;
         font-size:11px;
       }
-      .play-icon{
-        position: absolute;
-        inset: 0;
+
+      /* play в центре */
+      .play-core{
+        width: 74px;
+        height: 74px;
+        border-radius: 999px;
         display: grid;
         place-items: center;
-        z-index: 2;
+        background: rgba(0,0,0,0.30);
+        border: 1px solid rgba(255,255,255,0.14);
+        box-shadow: 0 18px 50px rgba(0,0,0,0.55), 0 0 28px rgba(24,231,255,0.12);
+        backdrop-filter: blur(8px);
+        pointer-events: none;
       }
-      .play-logo:active{ transform: scale(0.985); }
-      @keyframes logoSpin{ from{transform:rotate(0)} to{transform:rotate(360deg)} }
+
+      @keyframes orbit{
+        from{ transform: rotate(0deg); }
+        to{ transform: rotate(360deg); }
+      }
 
       .page{ padding: 18px; }
 
