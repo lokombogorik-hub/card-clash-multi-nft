@@ -1,37 +1,32 @@
-# backend/main.py
-
 from fastapi import FastAPI
-import uvicorn
+from fastapi.middleware.cors import CORSMiddleware
 
-from config import (
-    DEBUG,
-    SERVER_HOST,
-    SERVER_PORT,
-    PROJECT_NAME
+from utils.config import settings
+from api.auth import router as auth_router
+from api.users import router as users_router
+
+from database.session import engine
+from database.base import Base
+from database.models import user as _user_model  # noqa: F401
+
+app = FastAPI(title="CardClash API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_list() or ["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-from api.rest_api import router as api_router
+@app.get("/health")
+def health():
+    return {"ok": True}
 
-# Создаём сервер
-app = FastAPI(title=PROJECT_NAME)
+app.include_router(auth_router, prefix="/api")
+app.include_router(users_router, prefix="/api")
 
-# Подключаем API
-app.include_router(api_router, prefix="/api")
-
-
-@app.get("/")
-def root():
-    return {
-        "message": "Backend is running!",
-        "project": PROJECT_NAME,
-        "debug": DEBUG
-    }
-
-
-if __name__ == "__main__":
-    uvicorn.run(
-        "main:app",
-        host=SERVER_HOST,
-        port=SERVER_PORT,
-        reload=DEBUG
-    )
+@app.on_event("startup")
+async def startup():
+    # для старта без Alembic
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
