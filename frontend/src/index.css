@@ -817,3 +817,47 @@ button {
     top: 40px !important;
     left: 28px !important;
 }
+
+.topbar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: env(safe-area-inset-top, 0px);
+    height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    z-index: 80;
+    pointer-events: auto;
+}
+
+.topbar-title {
+    font-weight: 900;
+    opacity: .9;
+}
+
+.topbar-right {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+}
+
+.topbar-btn {
+    width: 40px;
+    height: 32px;
+    padding: 0;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.35);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.pill {
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    font-weight: 800;
+    font-size: 12px;
+}
