@@ -337,14 +337,7 @@ export default function Game({ onExit }) {
     }
     return (
         <div className="game-root">
-            <div className="topbar">
-                <button className="topbar-btn" onClick={onExit}>←</button>
-                <div className="topbar-title">Card Clash</div>
-                <div className="topbar-right">
-                    <div className="pill">💎 120</div>
-                    <div className="pill">🪙 3400</div>
-                </div>
-            </div>
+
             {gameOver && winner === "enemy" && <DiceRain />}
 
             <div className="game-ui">

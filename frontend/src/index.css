@@ -818,46 +818,169 @@ button {
     left: 28px !important;
 }
 
-.topbar {
+/* ===== NEW HOME SHELL (fullscreen, no telegram ui) ===== */
+.shell {
+    position: fixed;
+    inset: 0;
+    height: var(--app-h, 100vh);
+    width: 100%;
+    overflow: hidden;
+    background: #050611;
+    color: #fff;
+}
+
+.starfield {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+}
+
+/* контент поверх канваса */
+.shell-content {
+    position: relative;
+    z-index: 1;
+    height: 100%;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 120px);
+}
+
+/* центр главной кнопки */
+.home-center {
+    height: 100%;
+    display: grid;
+    place-items: center;
+}
+
+/* большой круг Play */
+.play-orb {
+    width: min(160px, 42vmin);
+    height: min(160px, 42vmin);
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: radial-gradient(circle at 35% 30%, rgba(24, 231, 255, 0.22), rgba(0, 0, 0, 0.35) 55%, rgba(0, 0, 0, 0.55));
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55), 0 0 40px rgba(24, 231, 255, 0.12);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.play-orb:active {
+    transform: scale(0.98);
+}
+
+/* страницы-заглушки */
+.page {
+    padding: 18px;
+}
+
+/* нижний стек: сезонная панель + nav */
+.bottom-stack {
     position: absolute;
     left: 0;
     right: 0;
-    top: env(safe-area-inset-top, 0px);
-    height: 48px;
+    bottom: 0;
+    z-index: 2;
+    padding: 10px 12px calc(env(safe-area-inset-bottom, 0px) + 10px);
+    display: grid;
+    gap: 10px;
+    pointer-events: none;
+    /* чтобы клики шли только на кнопки внутри */
+}
+
+/* сезонная панель */
+.season-bar {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(10px);
+}
+
+.season-title {
+    font-weight: 900;
+    font-size: 13px;
+}
+
+.season-sub {
+    opacity: 0.8;
+    font-size: 12px;
+    margin-top: 2px;
+}
+
+.season-right {
+    margin-left: auto;
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 8px 12px;
-    z-index: 80;
-    pointer-events: auto;
 }
 
-.topbar-title {
-    font-weight: 900;
-    opacity: .9;
+.season-progress {
+    width: 120px;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.10);
+    overflow: hidden;
 }
 
-.topbar-right {
-    margin-left: auto;
-    display: flex;
-    gap: 8px;
+.season-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, rgba(24, 231, 255, 0.9), rgba(255, 61, 242, 0.75));
 }
 
-.topbar-btn {
-    width: 40px;
+.icon-btn {
+    width: 36px;
     height: 32px;
-    padding: 0;
     border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
     background: rgba(0, 0, 0, 0.35);
     color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    padding: 0;
 }
 
-.pill {
-    padding: 6px 10px;
-    border-radius: 999px;
-    background: rgba(0, 0, 0, 0.35);
+/* нижнее меню */
+.bottom-nav {
+    pointer-events: auto;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    padding: 10px 10px;
+    border-radius: 16px;
+    background: rgba(0, 0, 0, 0.55);
     border: 1px solid rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(10px);
+}
+
+.nav-item {
+    padding: 8px 8px;
+    border-radius: 14px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: rgba(255, 255, 255, 0.78);
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+}
+
+.nav-ic {
+    line-height: 0;
+}
+
+.nav-txt {
+    font-size: 11px;
     font-weight: 800;
-    font-size: 12px;
+}
+
+.nav-item.active {
+    color: #fff;
+    border-color: rgba(24, 231, 255, 0.28);
+    background: rgba(24, 231, 255, 0.10);
+}
+
+.nav-item.disabled {
+    opacity: 0.35;
 }
