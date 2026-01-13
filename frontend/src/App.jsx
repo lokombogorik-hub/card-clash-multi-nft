@@ -17,12 +17,10 @@ export default function App() {
         tg.ready();
         tg.expand();
 
-        // визуально "прячем" верхнюю шапку Telegram под цвет фона
         tg.setHeaderColor?.("#050611");
         tg.setBackgroundColor?.("#050611");
         tg.setBottomBarColor?.("#050611");
 
-        // убираем стандартные телеграм-кнопки
         tg.MainButton?.hide();
         tg.SecondaryButton?.hide();
         tg.BackButton?.hide();
@@ -31,7 +29,7 @@ export default function App() {
         return () => tg.enableVerticalSwipes?.();
     }, []);
 
-    // пробуем запустить видео (на iOS иногда требуется жест — мы ещё "пинаем" в onPointerDown)
+    // пробуем стартануть видео (если нельзя — отвалится и сработает fallback)
     useEffect(() => {
         const v = logoRef.current;
         if (!v) return;
@@ -59,7 +57,6 @@ export default function App() {
         else setScreen("rotate");
     };
 
-    // rotate gate: ждём landscape
     useEffect(() => {
         if (screen !== "rotate") return;
 
@@ -103,20 +100,18 @@ export default function App() {
     return (
         <div className="shell">
             <MenuStyles />
-            <DarkWarpBg />
+            <NebulaBg />
 
             <div className="shell-content">
                 {screen === "home" && (
                     <div className="home-center">
-                        {/* Одна кнопка по центру: кликаешь по play и запускаешь */}
                         <button
-                            className="play-stage"
+                            className="play-logo"
                             onPointerDown={() => logoRef.current?.play?.().catch(() => { })}
                             onClick={onPlay}
                             aria-label="Play"
                         >
-                            {/* ЛОГО по центру, статично, увеличено */}
-                            <div className="logo-center" aria-hidden="true">
+                            <div className="logo-wrap">
                                 {logoOk ? (
                                     <video
                                         ref={logoRef}
@@ -134,14 +129,13 @@ export default function App() {
                                     <div className="logo-fallback">
                                         Видео логотипа не поддерживается
                                         <div className="logo-fallback-sub">
-                                            Проверь /ui/logo.mp4 и перекодируй в H.264
+                                            Проверь /ui/logo.mp4 или перекодируй в H.264
                                         </div>
                                     </div>
                                 )}
                             </div>
 
-                            {/* Play поверх логотипа */}
-                            <span className="play-core">
+                            <span className="play-icon">
                                 <PlayIcon />
                             </span>
                         </button>
@@ -225,9 +219,9 @@ function BottomNav({ active, onChange }) {
     );
 }
 
-/* ================= BACKGROUND (darker + more dynamic) ================= */
+/* ================= BACKGROUND (animated) ================= */
 
-function DarkWarpBg() {
+function NebulaBg() {
     const ref = useRef(null);
 
     useEffect(() => {
@@ -235,22 +229,18 @@ function DarkWarpBg() {
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
 
-        const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-
         let w = 0, h = 0, dpr = 1;
         let raf = 0;
+        let t = 0;
 
-        // звезды в 3D (warp)
-        const stars = [];
-        const STAR_COUNT = 320;
-
-        // туманности (очень темные)
-        const blobs = [];
-        const blobColors = [
+        const colors = [
             [24, 231, 255],
             [255, 61, 242],
             [124, 58, 237],
         ];
+
+        const blobs = [];
+        const stars = [];
 
         const resize = () => {
             dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -261,130 +251,84 @@ function DarkWarpBg() {
             canvas.height = Math.floor(h * dpr);
             canvas.style.width = `${w}px`;
             canvas.style.height = `${h}px`;
-
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-            stars.length = 0;
             blobs.length = 0;
+            stars.length = 0;
 
-            // туманности
-            const blobCount = 10;
+            // делаем движение заметнее
+            const blobCount = Math.round(Math.min(16, Math.max(10, (w * h) / 80000)));
             for (let i = 0; i < blobCount; i++) {
-                const c = blobColors[Math.floor(Math.random() * blobColors.length)];
+                const c = colors[Math.floor(Math.random() * colors.length)];
                 blobs.push({
                     x: Math.random() * w,
                     y: Math.random() * h,
-                    r: 180 + Math.random() * 320,
-                    vx: (Math.random() - 0.5) * 0.08,
-                    vy: (Math.random() - 0.5) * 0.08,
-                    a: 0.05 + Math.random() * 0.06, // темнее
+                    r: 140 + Math.random() * 260,
+                    vx: (Math.random() - 0.5) * 0.35,
+                    vy: (Math.random() - 0.5) * 0.35,
+                    a: 0.10 + Math.random() * 0.14,
                     c,
+                    phase: Math.random() * 1000,
                 });
             }
 
-            // звезды (z=depth)
-            for (let i = 0; i < STAR_COUNT; i++) {
-                stars.push(spawnStar(true));
+            const starCount = Math.round(Math.min(260, Math.max(160, (w * h) / 7000)));
+            for (let i = 0; i < starCount; i++) {
+                stars.push({
+                    x: Math.random() * w,
+                    y: Math.random() * h,
+                    r: 0.4 + Math.random() * 1.6,
+                    a: 0.10 + Math.random() * 0.35,
+                    tw: 0.006 + Math.random() * 0.02,
+                    phase: Math.random() * 1000,
+                });
             }
         };
 
-        const spawnStar = (randomZ = false) => {
-            // координаты в "нормализованном" пространстве вокруг центра
-            return {
-                x: (Math.random() * 2 - 1) * w,
-                y: (Math.random() * 2 - 1) * h,
-                z: randomZ ? Math.random() * w : w, // depth
-                p: Math.random(), // random for brightness
-            };
+        const wrap = (b) => {
+            if (b.x < -b.r) b.x = w + b.r;
+            if (b.x > w + b.r) b.x = -b.r;
+            if (b.y < -b.r) b.y = h + b.r;
+            if (b.y > h + b.r) b.y = -b.r;
         };
 
-        const drawBlob = (b) => {
-            const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r);
-            g.addColorStop(0, `rgba(${b.c[0]},${b.c[1]},${b.c[2]},${b.a})`);
-            g.addColorStop(1, `rgba(${b.c[0]},${b.c[1]},${b.c[2]},0)`);
-            ctx.fillStyle = g;
-            ctx.beginPath();
-            ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-            ctx.fill();
-        };
-
-        let tick = 0;
-        const frame = () => {
-            tick++;
-
-            // лёгкий "трейл" для динамики
-            ctx.fillStyle = "rgba(5, 6, 17, 0.35)";
+        const draw = () => {
+            t += 1;
+            ctx.fillStyle = "#050611";
             ctx.fillRect(0, 0, w, h);
 
-            // туманности (очень темные, медленные)
             for (const b of blobs) {
                 b.x += b.vx;
                 b.y += b.vy;
-                if (b.x < -b.r) b.x = w + b.r;
-                if (b.x > w + b.r) b.x = -b.r;
-                if (b.y < -b.r) b.y = h + b.r;
-                if (b.y > h + b.r) b.y = -b.r;
-                drawBlob(b);
-            }
+                wrap(b);
 
-            // warp центр немного выше
-            const cx = w * 0.5;
-            const cy = h * 0.42;
+                const pulse = 0.75 + 0.25 * Math.sin((t + b.phase) * 0.01);
+                const alpha = b.a * pulse;
 
-            // скорость
-            const speed = reduceMotion ? 6 : 18;
-
-            for (let i = 0; i < stars.length; i++) {
-                const s = stars[i];
-                s.z -= speed;
-
-                if (s.z <= 1) {
-                    stars[i] = spawnStar(false);
-                    continue;
-                }
-
-                // перспектива
-                const k = 128 / s.z;
-                const x = cx + s.x * k;
-                const y = cy + s.y * k;
-
-                if (x < -50 || x > w + 50 || y < -50 || y > h + 50) {
-                    stars[i] = spawnStar(false);
-                    continue;
-                }
-
-                // размер и яркость
-                const r = (1 - s.z / w) * 2.2 + 0.3;
-                const a = 0.10 + (1 - s.z / w) * 0.9;
-
-                // небольшие “стреки”
-                const x2 = cx + s.x * (128 / (s.z + speed * 2));
-                const y2 = cy + s.y * (128 / (s.z + speed * 2));
-
-                ctx.strokeStyle = `rgba(255,255,255,${a * 0.55})`;
-                ctx.lineWidth = 1;
+                const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r);
+                g.addColorStop(0, `rgba(${b.c[0]},${b.c[1]},${b.c[2]},${alpha})`);
+                g.addColorStop(1, `rgba(${b.c[0]},${b.c[1]},${b.c[2]},0)`);
+                ctx.fillStyle = g;
                 ctx.beginPath();
-                ctx.moveTo(x2, y2);
-                ctx.lineTo(x, y);
-                ctx.stroke();
-
-                ctx.fillStyle = `rgba(255,255,255,${a})`;
-                ctx.beginPath();
-                ctx.arc(x, y, r, 0, Math.PI * 2);
+                ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
                 ctx.fill();
             }
 
-            raf = requestAnimationFrame(frame);
+            ctx.fillStyle = "rgba(255,255,255,0.95)";
+            for (const s of stars) {
+                const tw = 0.6 + 0.4 * Math.sin((t + s.phase) * s.tw);
+                ctx.globalAlpha = s.a * tw;
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+
+            raf = requestAnimationFrame(draw);
         };
 
         resize();
-
-        // старт: заливаем фон полностью один раз (чтобы не было прозрачного)
-        ctx.fillStyle = "#050611";
-        ctx.fillRect(0, 0, w, h);
-
-        frame();
-
+        draw();
         window.addEventListener("resize", resize);
         return () => {
             cancelAnimationFrame(raf);
@@ -392,7 +336,7 @@ function DarkWarpBg() {
         };
     }, []);
 
-    return <canvas ref={ref} className="bg-canvas" aria-hidden="true" />;
+    return <canvas ref={ref} className="nebula-bg" aria-hidden="true" />;
 }
 
 /* ================= ICONS ================= */
@@ -460,13 +404,7 @@ function MenuStyles() {
         background: #050611;
         color: #fff;
       }
-
-      .bg-canvas{
-        position:absolute;
-        inset:0;
-        z-index:0;
-      }
-
+      .nebula-bg{ position:absolute; inset:0; z-index:0; }
       .shell-content{
         position: relative;
         z-index: 1;
@@ -474,45 +412,50 @@ function MenuStyles() {
         padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
         padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 120px);
       }
-
-      .home-center{
-        height:100%;
-        display:grid;
-        place-items:center;
-      }
-
-      /* Кликабельная зона по центру */
-      .play-stage{
-        width: min(360px, 80vmin);
-        height: min(360px, 80vmin);
+      .home-center{ height:100%; display:grid; place-items:center; }
+      .play-logo{
+        width: min(220px, 52vmin);
+        height: min(220px, 52vmin);
+        border-radius: 999px;
         padding: 0;
-        border: none;
-        background: transparent;
-        position: relative;
+        border: 1px solid rgba(255,255,255,0.14);
+        background: rgba(0,0,0,0.25);
+        backdrop-filter: blur(8px);
+        box-shadow: 0 20px 60px rgba(0,0,0,0.55);
         display: grid;
         place-items: center;
+        position: relative;
+        overflow: hidden;
         cursor: pointer;
       }
-
-      /* Логотип по центру (увеличенный) */
-      .logo-center{
-        width: min(260px, 64vmin);
-        height: min(260px, 64vmin);
-        border-radius: 18px;
-        overflow: hidden;
-        background: rgba(0,0,0,0.20);
-        border: 1px solid rgba(255,255,255,0.10);
-        backdrop-filter: blur(8px);
-        box-shadow: 0 22px 70px rgba(0,0,0,0.60);
+      .play-logo::before{
+        content:"";
+        position:absolute;
+        inset:-30%;
+        background:
+          radial-gradient(closest-side, rgba(24,231,255,0.18), transparent 70%),
+          radial-gradient(closest-side, rgba(255,61,242,0.14), transparent 72%);
+        filter: blur(10px);
+        opacity: 0.9;
       }
-
+      .logo-wrap{
+        width: 78%;
+        height: 78%;
+        position: relative;
+        z-index: 1;
+        animation: logoSpin 7.5s linear infinite;
+        border-radius: 999px;
+        overflow: hidden;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.10);
+      }
       .logo-video{
         width: 100%;
         height: 100%;
         object-fit: contain;
         display: block;
+        pointer-events: none;
       }
-
       .logo-fallback{
         width:100%;
         height:100%;
@@ -520,29 +463,23 @@ function MenuStyles() {
         place-items:center;
         text-align:center;
         font-size:12px;
-        padding:12px;
-        color: rgba(255,255,255,0.88);
+        padding:10px;
+        color: rgba(255,255,255,0.85);
       }
       .logo-fallback-sub{
         margin-top:6px;
-        opacity:0.75;
+        opacity:0.7;
         font-size:11px;
       }
-
-      /* Play поверх логотипа */
-      .play-core{
-        position:absolute;
-        width: 76px;
-        height: 76px;
-        border-radius: 999px;
+      .play-icon{
+        position: absolute;
+        inset: 0;
         display: grid;
         place-items: center;
-        background: rgba(0,0,0,0.35);
-        border: 1px solid rgba(255,255,255,0.16);
-        box-shadow: 0 18px 55px rgba(0,0,0,0.65), 0 0 30px rgba(24,231,255,0.12);
-        backdrop-filter: blur(10px);
-        pointer-events:none;
+        z-index: 2;
       }
+      .play-logo:active{ transform: scale(0.985); }
+      @keyframes logoSpin{ from{transform:rotate(0)} to{transform:rotate(360deg)} }
 
       .page{ padding: 18px; }
 
@@ -564,12 +501,12 @@ function MenuStyles() {
         gap: 12px;
         padding: 10px 12px;
         border-radius: 14px;
-        background: rgba(0,0,0,0.52);
+        background: rgba(0,0,0,0.45);
         border: 1px solid rgba(255,255,255,0.12);
         backdrop-filter: blur(10px);
       }
       .season-title{ font-weight: 900; font-size: 13px; }
-      .season-sub{ opacity: 0.82; font-size: 12px; margin-top: 2px; }
+      .season-sub{ opacity: 0.8; font-size: 12px; margin-top: 2px; }
       .season-right{
         margin-left: auto;
         display: flex;
@@ -585,14 +522,14 @@ function MenuStyles() {
       }
       .season-progress-fill{
         height: 100%;
-        background: linear-gradient(90deg, rgba(24,231,255,0.85), rgba(255,61,242,0.65));
+        background: linear-gradient(90deg, rgba(24,231,255,0.9), rgba(255,61,242,0.75));
       }
       .icon-btn{
         width: 36px;
         height: 32px;
         border-radius: 10px;
         border: 1px solid rgba(255,255,255,0.12);
-        background: rgba(0,0,0,0.40);
+        background: rgba(0,0,0,0.35);
         color: #fff;
         padding: 0;
       }
@@ -604,7 +541,7 @@ function MenuStyles() {
         gap: 8px;
         padding: 10px 10px;
         border-radius: 16px;
-        background: rgba(0,0,0,0.60);
+        background: rgba(0,0,0,0.55);
         border: 1px solid rgba(255,255,255,0.12);
         backdrop-filter: blur(10px);
       }
