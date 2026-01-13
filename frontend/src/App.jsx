@@ -29,7 +29,6 @@ export default function App() {
         return () => tg.enableVerticalSwipes?.();
     }, []);
 
-    // пробуем стартануть видео (если нельзя — отвалится и сработает fallback)
     useEffect(() => {
         const v = logoRef.current;
         if (!v) return;
@@ -219,7 +218,7 @@ function BottomNav({ active, onChange }) {
     );
 }
 
-/* ================= BACKGROUND (animated) ================= */
+/* ================= BACKGROUND (slightly more dynamic) ================= */
 
 function NebulaBg() {
     const ref = useRef(null);
@@ -229,7 +228,9 @@ function NebulaBg() {
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
 
-        let w = 0, h = 0, dpr = 1;
+        let w = 0,
+            h = 0,
+            dpr = 1;
         let raf = 0;
         let t = 0;
 
@@ -256,53 +257,63 @@ function NebulaBg() {
             blobs.length = 0;
             stars.length = 0;
 
-            // делаем движение заметнее
-            const blobCount = Math.round(Math.min(16, Math.max(10, (w * h) / 80000)));
+            const blobCount = Math.round(Math.min(18, Math.max(12, (w * h) / 75000)));
             for (let i = 0; i < blobCount; i++) {
                 const c = colors[Math.floor(Math.random() * colors.length)];
                 blobs.push({
                     x: Math.random() * w,
                     y: Math.random() * h,
                     r: 140 + Math.random() * 260,
-                    vx: (Math.random() - 0.5) * 0.35,
-                    vy: (Math.random() - 0.5) * 0.35,
+                    vx: (Math.random() - 0.5) * 0.45, // было 0.35
+                    vy: (Math.random() - 0.5) * 0.45,
                     a: 0.10 + Math.random() * 0.14,
                     c,
                     phase: Math.random() * 1000,
                 });
             }
 
-            const starCount = Math.round(Math.min(260, Math.max(160, (w * h) / 7000)));
+            const starCount = Math.round(Math.min(320, Math.max(200, (w * h) / 6200)));
             for (let i = 0; i < starCount; i++) {
                 stars.push({
                     x: Math.random() * w,
                     y: Math.random() * h,
                     r: 0.4 + Math.random() * 1.6,
                     a: 0.10 + Math.random() * 0.35,
-                    tw: 0.006 + Math.random() * 0.02,
+                    tw: 0.010 + Math.random() * 0.030, // было 0.006..0.02 -> чуть активнее мерцание
                     phase: Math.random() * 1000,
+                    vx: (Math.random() - 0.5) * 0.10, // добавили дрейф
+                    vy: (Math.random() - 0.5) * 0.10,
                 });
             }
         };
 
-        const wrap = (b) => {
+        const wrapBlob = (b) => {
             if (b.x < -b.r) b.x = w + b.r;
             if (b.x > w + b.r) b.x = -b.r;
             if (b.y < -b.r) b.y = h + b.r;
             if (b.y > h + b.r) b.y = -b.r;
         };
 
+        const wrapStar = (s) => {
+            if (s.x < -20) s.x = w + 20;
+            if (s.x > w + 20) s.x = -20;
+            if (s.y < -20) s.y = h + 20;
+            if (s.y > h + 20) s.y = -20;
+        };
+
         const draw = () => {
             t += 1;
+
+            // темнота остается, но движение заметнее за счет дрейфа и скорости
             ctx.fillStyle = "#050611";
             ctx.fillRect(0, 0, w, h);
 
             for (const b of blobs) {
                 b.x += b.vx;
                 b.y += b.vy;
-                wrap(b);
+                wrapBlob(b);
 
-                const pulse = 0.75 + 0.25 * Math.sin((t + b.phase) * 0.01);
+                const pulse = 0.70 + 0.30 * Math.sin((t + b.phase) * 0.012);
                 const alpha = b.a * pulse;
 
                 const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r);
@@ -316,6 +327,10 @@ function NebulaBg() {
 
             ctx.fillStyle = "rgba(255,255,255,0.95)";
             for (const s of stars) {
+                s.x += s.vx;
+                s.y += s.vy;
+                wrapStar(s);
+
                 const tw = 0.6 + 0.4 * Math.sin((t + s.phase) * s.tw);
                 ctx.globalAlpha = s.a * tw;
                 ctx.beginPath();
@@ -413,6 +428,7 @@ function MenuStyles() {
         padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 120px);
       }
       .home-center{ height:100%; display:grid; place-items:center; }
+
       .play-logo{
         width: min(220px, 52vmin);
         height: min(220px, 52vmin);
@@ -428,6 +444,7 @@ function MenuStyles() {
         overflow: hidden;
         cursor: pointer;
       }
+
       .play-logo::before{
         content:"";
         position:absolute;
@@ -438,17 +455,19 @@ function MenuStyles() {
         filter: blur(10px);
         opacity: 0.9;
       }
+
+      /* ЛОГО: без кручения, чуть больше */
       .logo-wrap{
-        width: 78%;
-        height: 78%;
+        width: 86%;
+        height: 86%;
         position: relative;
         z-index: 1;
-        animation: logoSpin 7.5s linear infinite;
         border-radius: 999px;
         overflow: hidden;
         background: rgba(255,255,255,0.04);
         border: 1px solid rgba(255,255,255,0.10);
       }
+
       .logo-video{
         width: 100%;
         height: 100%;
@@ -456,6 +475,7 @@ function MenuStyles() {
         display: block;
         pointer-events: none;
       }
+
       .logo-fallback{
         width:100%;
         height:100%;
@@ -471,15 +491,17 @@ function MenuStyles() {
         opacity:0.7;
         font-size:11px;
       }
+
       .play-icon{
         position: absolute;
         inset: 0;
         display: grid;
         place-items: center;
         z-index: 2;
+        pointer-events: none;
       }
+
       .play-logo:active{ transform: scale(0.985); }
-      @keyframes logoSpin{ from{transform:rotate(0)} to{transform:rotate(360deg)} }
 
       .page{ padding: 18px; }
 
