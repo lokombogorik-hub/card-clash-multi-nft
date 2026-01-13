@@ -168,6 +168,33 @@ export default function Game({ onExit }) {
     const [gameOver, setGameOver] = useState(false);
     const [winner, setWinner] = useState(null);
 
+    // ===== LANDSCAPE GUARD =====
+    const isLandscape = () =>
+        window.matchMedia?.("(orientation: landscape)")?.matches ??
+        window.innerWidth > window.innerHeight;
+
+    const [landscapeOk, setLandscapeOk] = useState(() => isLandscape());
+
+    useEffect(() => {
+        const onChange = () => setLandscapeOk(isLandscape());
+
+        // на разных устройствах работает по-разному, поэтому слушаем оба
+        const m = window.matchMedia?.("(orientation: landscape)");
+        m?.addEventListener?.("change", onChange);
+
+        window.addEventListener("resize", onChange);
+        window.addEventListener("orientationchange", onChange);
+
+        // сразу проверим
+        onChange();
+
+        return () => {
+            m?.removeEventListener?.("change", onChange);
+            window.removeEventListener("resize", onChange);
+            window.removeEventListener("orientationchange", onChange);
+        };
+    }, []);
+
     const reset = () => {
         setHands(makeHands());
         setBoard(Array(9).fill(null));
@@ -294,6 +321,20 @@ export default function Game({ onExit }) {
     const winnerText =
         winner === "player" ? "Победа" : winner === "enemy" ? "Поражение" : "Ничья";
 
+    if (!landscapeOk) {
+        return (
+            <div className="rotate-gate">
+                <div className="rotate-gate-box">
+                    <div className="rotate-title">Поверни телефон</div>
+                    <div className="rotate-subtitle">Игра доступна только в горизонтальном режиме</div>
+
+                    <div className="rotate-phone" />
+
+                    <button onClick={onExit}>← В меню</button>
+                </div>
+            </div>
+        );
+    }
     return (
         <div className="game-root">
             {gameOver && winner === "enemy" && <DiceRain />}

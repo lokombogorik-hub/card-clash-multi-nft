@@ -711,18 +711,14 @@ button {
     }
 }
 
-/* ===== ROTATE GATE (landscape required) ===== */
 .rotate-gate {
     position: fixed;
     inset: 0;
-    background: radial-gradient(80vmax 60vmax at 50% 20%, rgba(124, 58, 237, 0.25), transparent 60%),
-        radial-gradient(80vmax 60vmax at 50% 90%, rgba(24, 231, 255, 0.18), transparent 60%),
-        linear-gradient(180deg, #070a18, #050611);
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 18px;
-    color: #fff;
+    background: rgba(0, 0, 0, 0.75);
 }
 
 .rotate-gate-box {
@@ -732,7 +728,6 @@ button {
     border-radius: 16px;
     padding: 18px 16px;
     text-align: center;
-    backdrop-filter: blur(8px);
 }
 
 .rotate-title {
@@ -753,33 +748,18 @@ button {
     margin: 0 auto 14px;
     border-radius: 16px;
     border: 2px solid rgba(255, 255, 255, 0.35);
-    position: relative;
     transform: rotate(-18deg);
-    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
     animation: phoneWiggle 1.4s ease-in-out infinite;
-}
-
-.rotate-phone::before {
-    content: "";
-    position: absolute;
-    inset: 10px;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.06);
 }
 
 @keyframes phoneWiggle {
 
     0%,
     100% {
-        transform: rotate(-18deg) translateY(0);
+        transform: rotate(-18deg);
     }
 
     50% {
-        transform: rotate(-6deg) translateY(-2px);
+        transform: rotate(-6deg);
     }
-}
-
-.rotate-cancel {
-    padding: 10px 14px;
-    border-radius: 12px;
 }
