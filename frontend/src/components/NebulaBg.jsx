@@ -8,17 +8,20 @@ export default function NebulaBg() {
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
 
-        let w = 0, h = 0, dpr = 1;
-        let raf = 0;
-
-        const colors = [
-            [24, 231, 255],   // cyan
-            [255, 61, 242],   // magenta
-            [124, 58, 237],   // purple
-        ];
+        let w = 0,
+            h = 0,
+            dpr = 1;
 
         const blobs = [];
         const stars = [];
+        let raf = 0;
+        let t = 0;
+
+        const colors = [
+            [24, 231, 255],  // cyan
+            [255, 61, 242],  // magenta
+            [124, 58, 237],  // purple
+        ];
 
         const resize = () => {
             dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -29,60 +32,79 @@ export default function NebulaBg() {
             canvas.height = Math.floor(h * dpr);
             canvas.style.width = `${w}px`;
             canvas.style.height = `${h}px`;
-
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
             blobs.length = 0;
             stars.length = 0;
 
-            // мягкие "туманности"
-            const blobCount = Math.round(Math.min(14, Math.max(8, (w * h) / 90000)));
+            // очень тёмные "туманности", но с движением
+            const blobCount = Math.round(Math.min(14, Math.max(9, (w * h) / 90000)));
             for (let i = 0; i < blobCount; i++) {
                 const c = colors[Math.floor(Math.random() * colors.length)];
                 blobs.push({
                     x: Math.random() * w,
                     y: Math.random() * h,
-                    r: 120 + Math.random() * 220,
-                    vx: (Math.random() - 0.5) * 0.10,
-                    vy: (Math.random() - 0.5) * 0.10,
-                    a: 0.10 + Math.random() * 0.12,
+                    r: 180 + Math.random() * 320,
+                    vx: (Math.random() - 0.5) * 0.55, // чуть активнее
+                    vy: (Math.random() - 0.5) * 0.55,
+                    a: 0.05 + Math.random() * 0.06,   // темнее
                     c,
+                    phase: Math.random() * 1000,
                 });
             }
 
-            // небольшие звёзды (без "скорости")
-            const starCount = Math.round(Math.min(220, Math.max(120, (w * h) / 8000)));
+            // звезды + небольшой дрейф (чуть активнее)
+            const starCount = Math.round(Math.min(320, Math.max(180, (w * h) / 6500)));
             for (let i = 0; i < starCount; i++) {
                 stars.push({
                     x: Math.random() * w,
                     y: Math.random() * h,
-                    r: 0.4 + Math.random() * 1.4,
-                    a: 0.15 + Math.random() * 0.35,
-                    tw: 0.004 + Math.random() * 0.01, // twinkle speed
-                    t: Math.random() * 1000,
+                    r: 0.4 + Math.random() * 1.6,
+                    a: 0.06 + Math.random() * 0.28,  // темнее
+                    tw: 0.006 + Math.random() * 0.02,
+                    phase: Math.random() * 1000,
+                    vx: (Math.random() - 0.5) * 0.12,
+                    vy: (Math.random() - 0.5) * 0.12,
                 });
             }
+
+            // базовая заливка, чтобы не было "пустого" кадра
+            ctx.fillStyle = "#02030a";
+            ctx.fillRect(0, 0, w, h);
         };
 
-        const wrap = (b) => {
+        const wrapBlob = (b) => {
             if (b.x < -b.r) b.x = w + b.r;
             if (b.x > w + b.r) b.x = -b.r;
             if (b.y < -b.r) b.y = h + b.r;
             if (b.y > h + b.r) b.y = -b.r;
         };
 
+        const wrapStar = (s) => {
+            if (s.x < -20) s.x = w + 20;
+            if (s.x > w + 20) s.x = -20;
+            if (s.y < -20) s.y = h + 20;
+            if (s.y > h + 20) s.y = -20;
+        };
+
         const draw = () => {
-            ctx.fillStyle = "#050611";
+            t += 1;
+
+            // "трейл" чтобы было больше динамики, но всё тёмное
+            ctx.fillStyle = "rgba(2,3,10,0.30)";
             ctx.fillRect(0, 0, w, h);
 
-            // туманности (градиентные круги)
+            // туманности
             for (const b of blobs) {
                 b.x += b.vx;
                 b.y += b.vy;
-                wrap(b);
+                wrapBlob(b);
+
+                const pulse = 0.80 + 0.20 * Math.sin((t + b.phase) * 0.01);
+                const alpha = b.a * pulse;
 
                 const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r);
-                g.addColorStop(0, `rgba(${b.c[0]},${b.c[1]},${b.c[2]},${b.a})`);
+                g.addColorStop(0, `rgba(${b.c[0]},${b.c[1]},${b.c[2]},${alpha})`);
                 g.addColorStop(1, `rgba(${b.c[0]},${b.c[1]},${b.c[2]},0)`);
                 ctx.fillStyle = g;
                 ctx.beginPath();
@@ -90,12 +112,16 @@ export default function NebulaBg() {
                 ctx.fill();
             }
 
-            // звёзды с легким мерцанием
-            ctx.fillStyle = "rgba(255,255,255,0.9)";
+            // звезды
+            ctx.fillStyle = "rgba(255,255,255,0.95)";
             for (const s of stars) {
-                s.t += 1;
-                const tw = 0.6 + 0.4 * Math.sin(s.t * s.tw);
+                s.x += s.vx;
+                s.y += s.vy;
+                wrapStar(s);
+
+                const tw = 0.6 + 0.4 * Math.sin((t + s.phase) * s.tw);
                 ctx.globalAlpha = s.a * tw;
+
                 ctx.beginPath();
                 ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
                 ctx.fill();
@@ -107,8 +133,8 @@ export default function NebulaBg() {
 
         resize();
         draw();
-
         window.addEventListener("resize", resize);
+
         return () => {
             cancelAnimationFrame(raf);
             window.removeEventListener("resize", resize);
