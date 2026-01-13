@@ -8,8 +8,8 @@ const isLandscape = () =>
 export default function App() {
     const [screen, setScreen] = useState("home"); // home | market | profile | rotate | game
     const logoRef = useRef(null);
+    const [logoOk, setLogoOk] = useState(true);
 
-    // Telegram WebApp init / hide telegram UI
     useEffect(() => {
         const tg = window.Telegram?.WebApp;
         if (!tg) return;
@@ -17,12 +17,10 @@ export default function App() {
         tg.ready();
         tg.expand();
 
-        // визуально "прячем" шапку под фон
         tg.setHeaderColor?.("#050611");
         tg.setBackgroundColor?.("#050611");
         tg.setBottomBarColor?.("#050611");
 
-        // убираем стандартные кнопки
         tg.MainButton?.hide();
         tg.SecondaryButton?.hide();
         tg.BackButton?.hide();
@@ -31,7 +29,7 @@ export default function App() {
         return () => tg.enableVerticalSwipes?.();
     }, []);
 
-    // пробуем запустить видео-логотип (на iOS может требовать тапа)
+    // пробуем стартануть видео (если нельзя — отвалится и сработает fallback)
     useEffect(() => {
         const v = logoRef.current;
         if (!v) return;
@@ -59,7 +57,6 @@ export default function App() {
         else setScreen("rotate");
     };
 
-    // rotate gate: ждём landscape и запускаем игру
     useEffect(() => {
         if (screen !== "rotate") return;
 
@@ -84,9 +81,7 @@ export default function App() {
         setScreen("home");
     };
 
-    if (screen === "game") {
-        return <Game onExit={onExitGame} />;
-    }
+    if (screen === "game") return <Game onExit={onExitGame} />;
 
     if (screen === "rotate") {
         return (
@@ -117,18 +112,27 @@ export default function App() {
                             aria-label="Play"
                         >
                             <div className="logo-wrap">
-                                <video
-                                    ref={logoRef}
-                                    className="logo-video"
-                                    autoPlay
-                                    loop
-                                    muted
-                                    playsInline
-                                    preload="auto"
-                                    poster="/ui/logo-poster.png"
-                                >
-                                    <source src="/ui/logo.mp4" type="video/mp4" />
-                                </video>
+                                {logoOk ? (
+                                    <video
+                                        ref={logoRef}
+                                        className="logo-video"
+                                        autoPlay
+                                        loop
+                                        muted
+                                        playsInline
+                                        preload="auto"
+                                        onError={() => setLogoOk(false)}
+                                    >
+                                        <source src="/ui/logo.mp4" type="video/mp4" />
+                                    </video>
+                                ) : (
+                                    <div className="logo-fallback">
+                                        Видео логотипа не поддерживается
+                                        <div className="logo-fallback-sub">
+                                            Проверь /ui/logo.mp4 или перекодируй в H.264
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <span className="play-icon">
@@ -215,7 +219,7 @@ function BottomNav({ active, onChange }) {
     );
 }
 
-/* ================= BACKGROUND (Nebula + particles) ================= */
+/* ================= BACKGROUND (animated) ================= */
 
 function NebulaBg() {
     const ref = useRef(null);
@@ -225,10 +229,9 @@ function NebulaBg() {
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
 
-        let w = 0,
-            h = 0,
-            dpr = 1;
+        let w = 0, h = 0, dpr = 1;
         let raf = 0;
+        let t = 0;
 
         const colors = [
             [24, 231, 255],
@@ -248,35 +251,36 @@ function NebulaBg() {
             canvas.height = Math.floor(h * dpr);
             canvas.style.width = `${w}px`;
             canvas.style.height = `${h}px`;
-
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
             blobs.length = 0;
             stars.length = 0;
 
-            const blobCount = Math.round(Math.min(14, Math.max(8, (w * h) / 90000)));
+            // делаем движение заметнее
+            const blobCount = Math.round(Math.min(16, Math.max(10, (w * h) / 80000)));
             for (let i = 0; i < blobCount; i++) {
                 const c = colors[Math.floor(Math.random() * colors.length)];
                 blobs.push({
                     x: Math.random() * w,
                     y: Math.random() * h,
-                    r: 120 + Math.random() * 220,
-                    vx: (Math.random() - 0.5) * 0.10,
-                    vy: (Math.random() - 0.5) * 0.10,
-                    a: 0.10 + Math.random() * 0.12,
+                    r: 140 + Math.random() * 260,
+                    vx: (Math.random() - 0.5) * 0.35,
+                    vy: (Math.random() - 0.5) * 0.35,
+                    a: 0.10 + Math.random() * 0.14,
                     c,
+                    phase: Math.random() * 1000,
                 });
             }
 
-            const starCount = Math.round(Math.min(240, Math.max(140, (w * h) / 8000)));
+            const starCount = Math.round(Math.min(260, Math.max(160, (w * h) / 7000)));
             for (let i = 0; i < starCount; i++) {
                 stars.push({
                     x: Math.random() * w,
                     y: Math.random() * h,
-                    r: 0.4 + Math.random() * 1.4,
+                    r: 0.4 + Math.random() * 1.6,
                     a: 0.10 + Math.random() * 0.35,
-                    tw: 0.004 + Math.random() * 0.01,
-                    t: Math.random() * 1000,
+                    tw: 0.006 + Math.random() * 0.02,
+                    phase: Math.random() * 1000,
                 });
             }
         };
@@ -289,6 +293,7 @@ function NebulaBg() {
         };
 
         const draw = () => {
+            t += 1;
             ctx.fillStyle = "#050611";
             ctx.fillRect(0, 0, w, h);
 
@@ -297,8 +302,11 @@ function NebulaBg() {
                 b.y += b.vy;
                 wrap(b);
 
+                const pulse = 0.75 + 0.25 * Math.sin((t + b.phase) * 0.01);
+                const alpha = b.a * pulse;
+
                 const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.r);
-                g.addColorStop(0, `rgba(${b.c[0]},${b.c[1]},${b.c[2]},${b.a})`);
+                g.addColorStop(0, `rgba(${b.c[0]},${b.c[1]},${b.c[2]},${alpha})`);
                 g.addColorStop(1, `rgba(${b.c[0]},${b.c[1]},${b.c[2]},0)`);
                 ctx.fillStyle = g;
                 ctx.beginPath();
@@ -306,10 +314,9 @@ function NebulaBg() {
                 ctx.fill();
             }
 
-            ctx.fillStyle = "rgba(255,255,255,0.9)";
+            ctx.fillStyle = "rgba(255,255,255,0.95)";
             for (const s of stars) {
-                s.t += 1;
-                const tw = 0.6 + 0.4 * Math.sin(s.t * s.tw);
+                const tw = 0.6 + 0.4 * Math.sin((t + s.phase) * s.tw);
                 ctx.globalAlpha = s.a * tw;
                 ctx.beginPath();
                 ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
@@ -322,7 +329,6 @@ function NebulaBg() {
 
         resize();
         draw();
-
         window.addEventListener("resize", resize);
         return () => {
             cancelAnimationFrame(raf);
@@ -346,12 +352,7 @@ function PlayIcon() {
 function RefreshIcon() {
     return (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path
-                d="M20 12a8 8 0 1 1-2.34-5.66"
-                stroke="white"
-                strokeWidth="2"
-                strokeLinecap="round"
-            />
+            <path d="M20 12a8 8 0 1 1-2.34-5.66" stroke="white" strokeWidth="2" strokeLinecap="round" />
             <path d="M20 4v6h-6" stroke="white" strokeWidth="2" strokeLinecap="round" />
         </svg>
     );
@@ -360,11 +361,7 @@ function RefreshIcon() {
 function HomeIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path
-                d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z"
-                stroke="white"
-                strokeWidth="2"
-            />
+            <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" stroke="white" strokeWidth="2" />
         </svg>
     );
 }
@@ -393,7 +390,7 @@ function UserIcon() {
     );
 }
 
-/* ================= STYLES (inline, so you don't need to edit CSS) ================= */
+/* ================= STYLES ================= */
 
 function MenuStyles() {
     return (
@@ -407,11 +404,7 @@ function MenuStyles() {
         background: #050611;
         color: #fff;
       }
-      .nebula-bg{
-        position: absolute;
-        inset: 0;
-        z-index: 0;
-      }
+      .nebula-bg{ position:absolute; inset:0; z-index:0; }
       .shell-content{
         position: relative;
         z-index: 1;
@@ -419,12 +412,7 @@ function MenuStyles() {
         padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
         padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 120px);
       }
-      .home-center{
-        height: 100%;
-        display: grid;
-        place-items: center;
-      }
-
+      .home-center{ height:100%; display:grid; place-items:center; }
       .play-logo{
         width: min(220px, 52vmin);
         height: min(220px, 52vmin);
@@ -445,20 +433,21 @@ function MenuStyles() {
         position:absolute;
         inset:-30%;
         background:
-          radial-gradient(closest-side, rgba(24,231,255,0.16), transparent 70%),
-          radial-gradient(closest-side, rgba(255,61,242,0.12), transparent 72%);
+          radial-gradient(closest-side, rgba(24,231,255,0.18), transparent 70%),
+          radial-gradient(closest-side, rgba(255,61,242,0.14), transparent 72%);
         filter: blur(10px);
         opacity: 0.9;
       }
       .logo-wrap{
-        width: 74%;
-        height: 74%;
+        width: 78%;
+        height: 78%;
         position: relative;
         z-index: 1;
         animation: logoSpin 7.5s linear infinite;
-        filter: drop-shadow(0 10px 18px rgba(0,0,0,0.45));
         border-radius: 999px;
         overflow: hidden;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.10);
       }
       .logo-video{
         width: 100%;
@@ -466,6 +455,21 @@ function MenuStyles() {
         object-fit: contain;
         display: block;
         pointer-events: none;
+      }
+      .logo-fallback{
+        width:100%;
+        height:100%;
+        display:grid;
+        place-items:center;
+        text-align:center;
+        font-size:12px;
+        padding:10px;
+        color: rgba(255,255,255,0.85);
+      }
+      .logo-fallback-sub{
+        margin-top:6px;
+        opacity:0.7;
+        font-size:11px;
       }
       .play-icon{
         position: absolute;
@@ -593,10 +597,6 @@ function MenuStyles() {
       @keyframes phoneWiggle {
         0%,100% { transform: rotate(-18deg); }
         50% { transform: rotate(-6deg); }
-      }
-
-      @media (prefers-reduced-motion: reduce){
-        .logo-wrap{ animation: none !important; }
       }
     `}</style>
     );
