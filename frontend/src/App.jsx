@@ -30,7 +30,6 @@ export default function App() {
         return () => tg.enableVerticalSwipes?.();
     }, []);
 
-    // пробуем автозапуск видео (на iOS может понадобиться жест, поэтому ещё есть onPointerDown)
     useEffect(() => {
         const v = logoRef.current;
         if (!v) return;
@@ -112,7 +111,6 @@ export default function App() {
                             onClick={onPlay}
                             aria-label="Play"
                         >
-                            {/* ЛОГО ПО ЦЕНТРУ И БОЛЬШОЕ */}
                             <div className="logo-center" aria-hidden="true">
                                 {logoOk ? (
                                     <video
@@ -135,7 +133,6 @@ export default function App() {
                                 )}
                             </div>
 
-                            {/* Play поверх */}
                             <span className="play-icon">
                                 <PlayIcon />
                             </span>
@@ -286,6 +283,14 @@ function MenuStyles() {
         color: #fff;
       }
 
+      /* ВОТ ЭТО КЛЮЧЕВО: фон (canvas) должен быть абсолютом */
+      .nebula-bg{
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+      }
+
       .shell-content{
         position: relative;
         z-index: 1;
@@ -295,13 +300,13 @@ function MenuStyles() {
       }
 
       .home-center{
-        height:100%;
-        display:grid;
-        place-items:center;
+        height: 100%;
+        display: grid;
+        place-items: center;
       }
 
       .play-logo{
-        width: min(320px, 78vmin);   /* больше зона */
+        width: min(320px, 78vmin);
         height: min(320px, 78vmin);
         border-radius: 999px;
         padding: 0;
@@ -316,7 +321,6 @@ function MenuStyles() {
         cursor: pointer;
       }
 
-      /* ЛОГО ОЧЕНЬ БОЛЬШОЕ И ПО ЦЕНТРУ */
       .logo-center{
         width: 92%;
         height: 92%;
@@ -324,7 +328,6 @@ function MenuStyles() {
         overflow: hidden;
         background: rgba(0,0,0,0.22);
         border: 1px solid rgba(255,255,255,0.10);
-        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
         pointer-events: none;
       }
 
@@ -351,7 +354,6 @@ function MenuStyles() {
         font-size:11px;
       }
 
-      /* Play поверх логотипа */
       .play-icon{
         position: absolute;
         inset: 0;
@@ -359,13 +361,14 @@ function MenuStyles() {
         place-items: center;
         z-index: 2;
         pointer-events: none;
+
         width: 86px;
         height: 86px;
         margin: auto;
         border-radius: 999px;
         background: rgba(0,0,0,0.35);
         border: 1px solid rgba(255,255,255,0.16);
-        box-shadow: 0 18px 55px rgba(0,0,0,0.65), 0 0 30px rgba(24,231,255,0.10);
+        box-shadow: 0 18px 55px rgba(0,0,0,0.65);
         backdrop-filter: blur(10px);
       }
 
@@ -452,7 +455,7 @@ function MenuStyles() {
       }
       .nav-item.disabled{ opacity: 0.35; }
 
-      .rotate-gate {
+      .rotate-gate{
         position: fixed;
         inset: 0;
         display: flex;
@@ -463,7 +466,7 @@ function MenuStyles() {
         z-index: 30000;
         color: #fff;
       }
-      .rotate-gate-box {
+      .rotate-gate-box{
         width: min(420px, 92vw);
         background: rgba(0, 0, 0, 0.45);
         border: 1px solid rgba(255, 255, 255, 0.14);
@@ -471,9 +474,9 @@ function MenuStyles() {
         padding: 18px 16px;
         text-align: center;
       }
-      .rotate-title { font-weight: 900; font-size: 20px; margin-bottom: 6px; }
-      .rotate-subtitle { opacity: 0.85; font-size: 13px; margin-bottom: 14px; }
-      .rotate-phone {
+      .rotate-title{ font-weight: 900; font-size: 20px; margin-bottom: 6px; }
+      .rotate-subtitle{ opacity: 0.85; font-size: 13px; margin-bottom: 14px; }
+      .rotate-phone{
         width: 88px;
         height: 140px;
         margin: 0 auto 14px;
@@ -482,7 +485,7 @@ function MenuStyles() {
         transform: rotate(-18deg);
         animation: phoneWiggle 1.4s ease-in-out infinite;
       }
-      @keyframes phoneWiggle {
+      @keyframes phoneWiggle{
         0%,100% { transform: rotate(-18deg); }
         50% { transform: rotate(-6deg); }
       }
