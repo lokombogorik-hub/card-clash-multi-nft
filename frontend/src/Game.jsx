@@ -10,7 +10,7 @@ const DIRS = [
 
 const RULES = { combo: true, same: true, plus: true };
 
-const rand = () => Math.ceil(Math.random() * 9);
+const rand9 = () => Math.ceil(Math.random() * 9);
 const randomFirstTurn = () => (Math.random() < 0.5 ? "player" : "enemy");
 
 const ART = [
@@ -29,7 +29,7 @@ const ART = [
 const genCard = (owner, id) => ({
     id,
     owner,
-    values: { top: rand(), right: rand(), bottom: rand(), left: rand() },
+    values: { top: rand9(), right: rand9(), bottom: rand9(), left: rand9() },
     imageUrl: ART[Math.floor(Math.random() * ART.length)],
     placeKey: 0,
     captureKey: 0,
@@ -58,7 +58,7 @@ function flipToOwner(grid, ni, newOwner) {
 
 function resolvePlacementFlips(placedIdx, grid, rules) {
     const placed = grid[placedIdx];
-    if (!placed) return { flipped: [], specialType: "" };
+    if (!placed) return { flipped: [] };
 
     const infos = neighborsOf(placedIdx)
         .map(({ ni, a, b }) => {
@@ -72,13 +72,16 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
 
     const toFlip = new Set();
 
+    // basic (power)
     for (const i of infos) if (i.placedSide > i.targetSide) toFlip.add(i.ni);
 
+    // same
     if (rules.same) {
         const eq = infos.filter((i) => i.placedSide === i.targetSide);
         if (eq.length >= 2) eq.forEach((i) => toFlip.add(i.ni));
     }
 
+    // plus
     if (rules.plus) {
         const groups = new Map();
         for (const i of infos) {
@@ -93,13 +96,15 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
     for (const ni of toFlip) {
         if (flipToOwner(grid, ni, placed.owner)) flipped.push(ni);
     }
-    return { flipped, specialType: "" };
+
+    return { flipped };
 }
 
 function captureByPowerFrom(idx, grid) {
     const src = grid[idx];
     if (!src) return [];
     const flipped = [];
+
     for (const { ni, a, b } of neighborsOf(idx)) {
         const t = grid[ni];
         if (!t) continue;
@@ -108,6 +113,7 @@ function captureByPowerFrom(idx, grid) {
             if (flipToOwner(grid, ni, src.owner)) flipped.push(ni);
         }
     }
+
     return flipped;
 }
 
@@ -122,33 +128,13 @@ function resolveCombo(queue, grid, rules) {
 }
 
 const posForHandIndex = (i) => {
-    // 0..2 -> col1 rows 1..3, 3..4 -> col2 rows 1..2  (3 + 2)
+    // 0..2 -> col1 rows 1..3, 3..4 -> col2 rows 1..2 (3 + 2)
     if (i < 3) return { col: 1, row: i + 1 };
     return { col: 2, row: i - 2 };
 };
 
-const isLandscape = () =>
-    window.matchMedia?.("(orientation: landscape)")?.matches ??
-    window.innerWidth > window.innerHeight;
-
 export default function Game({ onExit }) {
     const aiGuard = useRef({ handled: false });
-
-    // ===== LANDSCAPE GUARD (чтобы при повороте в портрет не “ломалось”) =====
-    const [landscapeOk, setLandscapeOk] = useState(() => isLandscape());
-    useEffect(() => {
-        const onChange = () => setLandscapeOk(isLandscape());
-        const m = window.matchMedia?.("(orientation: landscape)");
-        m?.addEventListener?.("change", onChange);
-        window.addEventListener("resize", onChange);
-        window.addEventListener("orientationchange", onChange);
-        onChange();
-        return () => {
-            m?.removeEventListener?.("change", onChange);
-            window.removeEventListener("resize", onChange);
-            window.removeEventListener("orientationchange", onChange);
-        };
-    }, []);
 
     const makeHands = () => ({
         player: Array.from({ length: 5 }, (_, i) => genCard("player", `p${i}`)),
@@ -161,7 +147,7 @@ export default function Game({ onExit }) {
 
     const [turn, setTurn] = useState(() => randomFirstTurn());
     const [gameOver, setGameOver] = useState(false);
-    const [winner, setWinner] = useState(null);
+    const [winner, setWinner] = useState(null); // player | enemy | draw
 
     const reset = () => {
         setHands(makeHands());
@@ -173,27 +159,24 @@ export default function Game({ onExit }) {
         aiGuard.current.handled = false;
     };
 
-    useEffect(() => {
-        if (!gameOver || winner !== "player") return;
+    const score = useMemo(() => {
+        return board.reduce(
+            (a, c) => {
+                if (!c) return a;
+                c.owner === "player" ? a.blue++ : a.red++;
+                return a;
+            },
+            { red: 0, blue: 0 }
+        );
+    }, [board]);
 
-        const safe = (opts) => {
-            try {
-                confetti({ zIndex: 99999, ...opts });
-            } catch { }
-        };
-
-        const origin = { x: 0.5, y: 0.35 };
-        const timers = [];
-        timers.push(setTimeout(() => safe({ particleCount: 40, spread: 75, startVelocity: 30, origin }), 0));
-        timers.push(setTimeout(() => safe({ particleCount: 28, spread: 95, startVelocity: 26, origin }), 180));
-        timers.push(setTimeout(() => safe({ particleCount: 18, spread: 110, startVelocity: 24, origin }), 360));
-        return () => timers.forEach(clearTimeout);
-    }, [gameOver, winner]);
+    const winnerText = winner === "player" ? "Победа" : winner === "enemy" ? "Поражение" : "Ничья";
 
     const placeCard = (i) => {
         if (gameOver) return;
         if (turn !== "player") return;
-        if (!selected || board[i]) return;
+        if (!selected) return;
+        if (board[i]) return;
 
         const next = [...board];
         next[i] = { ...selected, owner: "player", placeKey: (selected.placeKey || 0) + 1 };
@@ -209,7 +192,7 @@ export default function Game({ onExit }) {
         setTurn("enemy");
     };
 
-    // AI
+    // AI ход
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
         if (aiGuard.current.handled) return;
@@ -248,35 +231,30 @@ export default function Game({ onExit }) {
         setGameOver(true);
     }, [board]);
 
-    const score = useMemo(() => {
-        return board.reduce(
-            (a, c) => {
-                if (!c) return a;
-                c.owner === "player" ? a.blue++ : a.red++;
-                return a;
-            },
-            { red: 0, blue: 0 }
-        );
-    }, [board]);
+    // confetti win
+    useEffect(() => {
+        if (!gameOver || winner !== "player") return;
 
-    const winnerText = winner === "player" ? "Победа" : winner === "enemy" ? "Поражение" : "Ничья";
+        const safe = (opts) => {
+            try {
+                confetti({ zIndex: 99999, ...opts });
+            } catch { }
+        };
 
-    if (!landscapeOk) {
-        return (
-            <div className="rotate-gate">
-                <div className="rotate-gate-box">
-                    <div className="rotate-title">Поверни телефон</div>
-                    <div className="rotate-subtitle">Игра доступна только в горизонтальном режиме</div>
-                    <button onClick={onExit}>← Меню</button>
-                </div>
-            </div>
-        );
-    }
+        const origin = { x: 0.5, y: 0.35 };
+        const timers = [];
+        timers.push(setTimeout(() => safe({ particleCount: 40, spread: 75, startVelocity: 30, origin }), 0));
+        timers.push(setTimeout(() => safe({ particleCount: 28, spread: 95, startVelocity: 26, origin }), 180));
+        timers.push(setTimeout(() => safe({ particleCount: 18, spread: 110, startVelocity: 24, origin }), 360));
+        return () => timers.forEach(clearTimeout);
+    }, [gameOver, winner]);
 
     return (
         <div className="game-root">
             <div className="game-ui tt-layout">
-                <button className="exit" onClick={onExit}>← Меню</button>
+                <button className="exit" onClick={onExit}>
+                    ← Меню
+                </button>
 
                 {/* LEFT enemy */}
                 <div className="hand left">
@@ -334,6 +312,8 @@ export default function Game({ onExit }) {
                     </div>
                 </div>
 
+                {gameOver && winner === "enemy" && <DiceRain />}
+
                 {gameOver && (
                     <div className="game-over">
                         <div className="game-over-box">
@@ -346,6 +326,41 @@ export default function Game({ onExit }) {
                     </div>
                 )}
             </div>
+        </div>
+    );
+}
+
+function DiceRain() {
+    const dice = useMemo(() => {
+        const chars = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
+        const n = 44;
+        return Array.from({ length: n }, (_, i) => {
+            const left = Math.random() * 100;
+            const delay = Math.random() * 0.9;
+            const dur = 1.8 + Math.random() * 1.6;
+            const size = 18 + Math.random() * 22;
+            const rot = `${Math.floor(Math.random() * 900) - 450}deg`;
+            return { id: i, ch: chars[(Math.random() * chars.length) | 0], left, delay, dur, size, rot };
+        });
+    }, []);
+
+    return (
+        <div className="dice-rain" aria-hidden="true">
+            {dice.map((d) => (
+                <div
+                    key={d.id}
+                    className="die"
+                    style={{
+                        left: `${d.left}%`,
+                        fontSize: `${d.size}px`,
+                        animationDuration: `${d.dur}s`,
+                        animationDelay: `${d.delay}s`,
+                        ["--rot"]: d.rot,
+                    }}
+                >
+                    {d.ch}
+                </div>
+            ))}
         </div>
     );
 }
@@ -372,7 +387,16 @@ function Card({ card, onClick, selected, disabled, hidden }) {
         return (
             <div className="card back" aria-hidden="true">
                 <div className="card-back-inner">
-                    <img className="card-back-logo-img" src="/ui/cardclash-logo.png" alt="CardClash" draggable="false" />
+                    <img
+                        className="card-back-logo-img"
+                        src="/ui/cardclash-logo.png?v=1"
+                        alt="CardClash"
+                        draggable="false"
+                        onError={(e) => {
+                            // если имя файла/регистр не совпал или кэш дал 404
+                            e.currentTarget.style.display = "none";
+                        }}
+                    />
                 </div>
             </div>
         );
