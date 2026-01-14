@@ -357,7 +357,7 @@ function Styles() {
         pointer-events: auto;
         /* ширина/высота/шрифт */
         width: min(200px, 64vw);
-        height: 38px;
+        height: 40px;
         font-size: 12px;
 
         border-radius: 999px;
