@@ -984,3 +984,142 @@ button {
 .nav-item.disabled {
     opacity: 0.35;
 }
+
+/* ===== TRIPLE TRIAD LAYOUT (hands left/right, board center) ===== */
+
+/* Пересчёт ширины карты под 5 колонок: лев.рука + поле(3) + прав.рука */
+:root {
+    --hud-h: 32px;
+    --side-w: calc(var(--card-w) + 12px);
+
+    /* total width ≈ ui*2 + (5*card-w) + (6*gap) */
+    --card-w-vw: calc((100vw - (var(--ui-pad) * 2) - (var(--gap) * 6)) / 5);
+
+    /* подгоняем по высоте именно под поле 3 карты (руки скроллятся) */
+    --available-h-tt: calc(var(--app-h) - (var(--ui-pad) * 2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - var(--hud-h) - (var(--gap) * 2));
+
+    --card-h-fit-board: calc((var(--available-h-tt) - (var(--gap) * 4)) / 3);
+    --card-w-fit-board: calc(var(--card-h-fit-board) / 1.375);
+
+    --card-w: clamp(56px, min(var(--card-w-vw), var(--card-w-fit-board)), 150px);
+    --card-h: calc(var(--card-w) * 1.375);
+
+    --board-h: calc((var(--card-h) * 3) + (var(--gap) * 4));
+    --board-w: calc((var(--card-w) * 3) + (var(--gap) * 4));
+
+    --stage-w: min(100%, calc((var(--card-w) * 5) + (var(--gap) * 6)));
+}
+
+/* основной грид игры */
+.game-ui.tt-layout {
+    display: grid;
+    grid-template-columns: var(--side-w) 1fr var(--side-w);
+    grid-template-rows: 1fr;
+    gap: var(--gap);
+    width: var(--stage-w);
+    margin: 0 auto;
+    height: 100%;
+    align-items: stretch;
+}
+
+/* колонки */
+.hand.left {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.center-col {
+    grid-column: 2;
+    grid-row: 1;
+    display: grid;
+    grid-template-rows: var(--hud-h) 1fr;
+    gap: var(--gap);
+}
+
+.hand.right {
+    grid-column: 3;
+    grid-row: 1;
+}
+
+/* HUD по центру над полем */
+.center-col .hud-top {
+    width: min(var(--board-w), 100%);
+    justify-self: center;
+}
+
+/* поле строго по центру */
+.center-col .board {
+    justify-self: center;
+    align-self: center;
+}
+
+/* руки вертикально со скроллом */
+.hand.left .hand-scroll,
+.hand.right .hand-scroll {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 10px 6px;
+    align-items: center;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* скрыть скроллбар */
+.hand.left .hand-scroll::-webkit-scrollbar,
+.hand.right .hand-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+.hand.left .hand-scroll,
+.hand.right .hand-scroll {
+    scrollbar-width: none;
+}
+
+/* слот */
+.hand-slot {
+    width: var(--card-w);
+    height: var(--card-h);
+}
+
+/* Выбор карты справа: лёгкий “выезд” к полю */
+.hand.right .card.selected {
+    transform: translateX(-14px) scale(1.05);
+    z-index: 9999;
+}
+
+/* ===== Enemy card back ===== */
+.card.back {
+    background:
+        radial-gradient(120% 90% at 20% 20%, rgba(120, 200, 255, 0.18), transparent 60%),
+        radial-gradient(120% 90% at 80% 80%, rgba(255, 61, 242, 0.14), transparent 60%),
+        linear-gradient(145deg, #0f1625, #070a18);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.55);
+}
+
+.card-back-inner {
+    position: absolute;
+    inset: 10px;
+    border-radius: 10px;
+    background:
+        radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.06), transparent 55%),
+        radial-gradient(circle at 70% 70%, rgba(255, 255, 255, 0.05), transparent 55%),
+        repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.04) 0 6px, rgba(255, 255, 255, 0.00) 6px 12px);
+    display: grid;
+    place-items: center;
+}
+
+.card-back-glyph {
+    font-size: 20px;
+    opacity: 0.9;
+    text-shadow: 0 10px 22px rgba(0, 0, 0, 0.65);
+}
+
+/* Важно: чтобы старые top/bottom стили не мешали */
+.hand.top,
+.hand.bottom {
+    display: none !important;
+}

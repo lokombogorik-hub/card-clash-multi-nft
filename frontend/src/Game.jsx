@@ -53,11 +53,7 @@ function flipToOwner(grid, ni, newOwner) {
     if (!t) return false;
     if (t.owner === newOwner) return false;
 
-    grid[ni] = {
-        ...t,
-        owner: newOwner,
-        captureKey: (t.captureKey || 0) + 1, // ВАЖНО
-    };
+    grid[ni] = { ...t, owner: newOwner, captureKey: (t.captureKey || 0) + 1 };
     return true;
 }
 
@@ -108,19 +104,12 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
     }
 
     const specialType =
-        sameTriggered && plusTriggered
-            ? "both"
-            : sameTriggered
-                ? "same"
-                : plusTriggered
-                    ? "plus"
-                    : "";
+        sameTriggered && plusTriggered ? "both" : sameTriggered ? "same" : plusTriggered ? "plus" : "";
 
     const flipped = [];
     for (const ni of toFlip) {
         if (flipToOwner(grid, ni, placed.owner)) flipped.push(ni);
     }
-
     return { flipped, specialType };
 }
 
@@ -143,7 +132,6 @@ function captureByPowerFrom(idx, grid) {
 
 function resolveCombo(queue, grid, rules) {
     if (!rules.combo) return;
-
     const q = [...queue];
     while (q.length) {
         const idx = q.shift();
@@ -168,33 +156,6 @@ export default function Game({ onExit }) {
     const [gameOver, setGameOver] = useState(false);
     const [winner, setWinner] = useState(null);
 
-    // ===== LANDSCAPE GUARD =====
-    const isLandscape = () =>
-        window.matchMedia?.("(orientation: landscape)")?.matches ??
-        window.innerWidth > window.innerHeight;
-
-    const [landscapeOk, setLandscapeOk] = useState(() => isLandscape());
-
-    useEffect(() => {
-        const onChange = () => setLandscapeOk(isLandscape());
-
-        // на разных устройствах работает по-разному, поэтому слушаем оба
-        const m = window.matchMedia?.("(orientation: landscape)");
-        m?.addEventListener?.("change", onChange);
-
-        window.addEventListener("resize", onChange);
-        window.addEventListener("orientationchange", onChange);
-
-        // сразу проверим
-        onChange();
-
-        return () => {
-            m?.removeEventListener?.("change", onChange);
-            window.removeEventListener("resize", onChange);
-            window.removeEventListener("orientationchange", onChange);
-        };
-    }, []);
-
     const reset = () => {
         setHands(makeHands());
         setBoard(Array(9).fill(null));
@@ -205,32 +166,20 @@ export default function Game({ onExit }) {
         aiGuard.current.handled = false;
     };
 
-    // если игра закончилась — сброс выбора
-    useEffect(() => {
-        if (gameOver) setSelected(null);
-    }, [gameOver]);
-
-    // Победа: конфетти по центру
+    // конфетти без rAF-loop
     useEffect(() => {
         if (!gameOver || winner !== "player") return;
 
         const safe = (opts) => {
             try {
-                confetti({
-                    zIndex: 99999,
-                    ...opts,
-                });
-            } catch (e) {
-                // чтобы не крашилось вообще
-                console.warn("confetti failed:", e);
-            }
+                confetti({ zIndex: 99999, ...opts });
+            } catch { }
         };
 
         const origin = { x: 0.5, y: 0.35 };
         const timers = [];
-
-        timers.push(setTimeout(() => safe({ particleCount: 35, spread: 70, startVelocity: 30, origin }), 0));
-        timers.push(setTimeout(() => safe({ particleCount: 25, spread: 90, startVelocity: 26, origin }), 180));
+        timers.push(setTimeout(() => safe({ particleCount: 40, spread: 75, startVelocity: 30, origin }), 0));
+        timers.push(setTimeout(() => safe({ particleCount: 28, spread: 95, startVelocity: 26, origin }), 180));
         timers.push(setTimeout(() => safe({ particleCount: 18, spread: 110, startVelocity: 24, origin }), 360));
 
         return () => timers.forEach(clearTimeout);
@@ -242,11 +191,7 @@ export default function Game({ onExit }) {
         if (!selected || board[i]) return;
 
         const next = [...board];
-        next[i] = {
-            ...selected,
-            owner: "player",
-            placeKey: (selected.placeKey || 0) + 1,
-        };
+        next[i] = { ...selected, owner: "player", placeKey: (selected.placeKey || 0) + 1 };
 
         const { flipped } = resolvePlacementFlips(i, next, RULES);
         resolveCombo(flipped, next, RULES);
@@ -259,16 +204,13 @@ export default function Game({ onExit }) {
         setTurn("enemy");
     };
 
-    // AI (рандом)
+    // AI
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
         if (aiGuard.current.handled) return;
         aiGuard.current.handled = true;
 
-        const empty = board
-            .map((c, idx) => (c === null ? idx : null))
-            .filter((v) => v !== null);
-
+        const empty = board.map((c, idx) => (c === null ? idx : null)).filter((v) => v !== null);
         if (!empty.length || !enemy.length) {
             setTurn("player");
             return;
@@ -278,11 +220,7 @@ export default function Game({ onExit }) {
         const card = enemy[Math.floor(Math.random() * enemy.length)];
 
         const next = [...board];
-        next[cell] = {
-            ...card,
-            owner: "enemy",
-            placeKey: (card.placeKey || 0) + 1,
-        };
+        next[cell] = { ...card, owner: "enemy", placeKey: (card.placeKey || 0) + 1 };
 
         const { flipped } = resolvePlacementFlips(cell, next, RULES);
         resolveCombo(flipped, next, RULES);
@@ -291,12 +229,12 @@ export default function Game({ onExit }) {
             setBoard(next);
             setHands((h) => ({ ...h, enemy: h.enemy.filter((c) => c.id !== card.id) }));
             setTurn("player");
-        }, 450);
+        }, 420);
 
         return () => clearTimeout(t);
     }, [turn, gameOver, board, enemy]);
 
-    // Конец игры (когда доска заполнена)
+    // game over
     useEffect(() => {
         if (board.some((c) => c === null)) return;
 
@@ -318,87 +256,63 @@ export default function Game({ onExit }) {
         );
     }, [board]);
 
-    const winnerText =
-        winner === "player" ? "Победа" : winner === "enemy" ? "Поражение" : "Ничья";
+    const winnerText = winner === "player" ? "Победа" : winner === "enemy" ? "Поражение" : "Ничья";
 
-    if (!landscapeOk) {
-        return (
-            <div className="rotate-gate">
-                <div className="rotate-gate-box">
-                    <div className="rotate-title">Поверни телефон</div>
-                    <div className="rotate-subtitle">Игра доступна только в горизонтальном режиме</div>
-
-                    <div className="rotate-phone" />
-
-                    <button onClick={onExit}>← В меню</button>
-                </div>
-            </div>
-        );
-    }
     return (
         <div className="game-root">
-
-            {gameOver && winner === "enemy" && <DiceRain />}
-
-            <div className="game-ui">
+            <div className="game-ui tt-layout">
                 <button className="exit" onClick={onExit}>← Меню</button>
 
-                {/* TOP HAND */}
-                <div className="hand top">
+                {/* LEFT: enemy hand (backs) */}
+                <div className="hand left">
                     <div className="hand-scroll">
-                        {enemy.map((c, i) => (
-                            <div key={c.id} className="hand-slot" style={{ zIndex: i }}>
-                                <Card card={c} disabled />
+                        {enemy.map((c) => (
+                            <div key={c.id} className="hand-slot">
+                                <Card card={c} hidden disabled />
                             </div>
                         ))}
                     </div>
                 </div>
 
-                {/* HUD under enemy hand */}
-                <div className="hud-top">
-                    <div className="hud-score red">🟥 {score.red}</div>
-                    <div className={`hud-turn ${turn}`}>
-                        <div className="hud-dot" />
-                    </div>
-                    <div className="hud-score blue">{score.blue} 🟦</div>
-                </div>
-
-                {/* BOARD */}
-                <div className="board">
-                    {board.map((cell, i) => (
-                        <div
-                            key={i}
-                            className={`cell ${!gameOver && selected && !cell ? "highlight" : ""}`}
-                            onClick={() => placeCard(i)}
-                        >
-                            {cell && <Card card={cell} />}
+                {/* CENTER: HUD + board */}
+                <div className="center-col">
+                    <div className="hud-top">
+                        <div className="hud-score red">🟥 {score.red}</div>
+                        <div className={`hud-turn ${turn}`}>
+                            <div className="hud-dot" />
                         </div>
-                    ))}
+                        <div className="hud-score blue">{score.blue} 🟦</div>
+                    </div>
+
+                    <div className="board">
+                        {board.map((cell, i) => (
+                            <div
+                                key={i}
+                                className={`cell ${!gameOver && selected && !cell ? "highlight" : ""}`}
+                                onClick={() => placeCard(i)}
+                            >
+                                {cell && <Card card={cell} />}
+                            </div>
+                        ))}
+                    </div>
                 </div>
 
-                {/* BOTTOM HAND */}
-                <div className="hand bottom">
+                {/* RIGHT: player hand */}
+                <div className="hand right">
                     <div className="hand-scroll">
-                        {player.map((c, i) => (
-                            <div
-                                key={c.id}
-                                className="hand-slot"
-                                style={{ zIndex: selected?.id === c.id ? 9999 : i }}
-                            >
+                        {player.map((c) => (
+                            <div key={c.id} className="hand-slot">
                                 <Card
                                     card={c}
                                     selected={selected?.id === c.id}
                                     disabled={gameOver || turn !== "player"}
-                                    onClick={() =>
-                                        setSelected((prev) => (prev?.id === c.id ? null : c))
-                                    }
+                                    onClick={() => setSelected((prev) => (prev?.id === c.id ? null : c))}
                                 />
                             </div>
                         ))}
                     </div>
                 </div>
 
-                {/* GAME OVER OVERLAY */}
                 {gameOver && (
                     <div className="game-over">
                         <div className="game-over-box">
@@ -415,7 +329,7 @@ export default function Game({ onExit }) {
     );
 }
 
-function Card({ card, onClick, selected, disabled }) {
+function Card({ card, onClick, selected, disabled, hidden }) {
     const [placedAnim, setPlacedAnim] = useState(false);
     const [capturedAnim, setCapturedAnim] = useState(false);
 
@@ -433,6 +347,24 @@ function Card({ card, onClick, selected, disabled }) {
         return () => clearTimeout(t);
     }, [card?.captureKey]);
 
+    // Enemy card back
+    if (hidden) {
+        return (
+            <div
+                className={[
+                    "card",
+                    "back",
+                    disabled ? "disabled" : "",
+                ].join(" ")}
+                aria-hidden="true"
+            >
+                <div className="card-back-inner">
+                    <div className="card-back-glyph">✦</div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div
             className={[
@@ -444,7 +376,6 @@ function Card({ card, onClick, selected, disabled }) {
                 capturedAnim ? "is-captured" : "",
             ].join(" ")}
             onClick={disabled ? undefined : onClick}
-            role={disabled ? undefined : "button"}
         >
             <div className="card-anim">
                 <img className="card-art-img" src={card.imageUrl} alt="" draggable="false" />
@@ -454,41 +385,6 @@ function Card({ card, onClick, selected, disabled }) {
                 <span className="tt-num right">{card.values.right}</span>
                 <span className="tt-num bottom">{card.values.bottom}</span>
             </div>
-        </div>
-    );
-}
-
-function DiceRain() {
-    const dice = useMemo(() => {
-        return Array.from({ length: 34 }, (_, i) => ({
-            id: i,
-            left: Math.random() * 100,
-            delay: Math.random() * 0.6,
-            dur: 1.2 + Math.random() * 1.2,
-            rot: (Math.random() * 720 - 360).toFixed(0),
-            size: 16 + Math.random() * 18,
-            opacity: 0.75 + Math.random() * 0.25,
-        }));
-    }, []);
-
-    return (
-        <div className="dice-rain" aria-hidden="true">
-            {dice.map((d) => (
-                <span
-                    key={d.id}
-                    className="die"
-                    style={{
-                        left: `${d.left}%`,
-                        animationDelay: `${d.delay}s`,
-                        animationDuration: `${d.dur}s`,
-                        fontSize: `${d.size}px`,
-                        opacity: d.opacity,
-                        ["--rot"]: `${d.rot}deg`,
-                    }}
-                >
-                    🎲
-                </span>
-            ))}
         </div>
     );
 }
