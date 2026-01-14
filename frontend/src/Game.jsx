@@ -52,7 +52,6 @@ function flipToOwner(grid, ni, newOwner) {
     const t = grid[ni];
     if (!t) return false;
     if (t.owner === newOwner) return false;
-
     grid[ni] = { ...t, owner: newOwner, captureKey: (t.captureKey || 0) + 1 };
     return true;
 }
@@ -75,16 +74,11 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
 
     for (const i of infos) if (i.placedSide > i.targetSide) toFlip.add(i.ni);
 
-    let sameTriggered = false;
     if (rules.same) {
         const eq = infos.filter((i) => i.placedSide === i.targetSide);
-        if (eq.length >= 2) {
-            sameTriggered = true;
-            eq.forEach((i) => toFlip.add(i.ni));
-        }
+        if (eq.length >= 2) eq.forEach((i) => toFlip.add(i.ni));
     }
 
-    let plusTriggered = false;
     if (rules.plus) {
         const groups = new Map();
         for (const i of infos) {
@@ -92,22 +86,14 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
             arr.push(i);
             groups.set(i.sum, arr);
         }
-        for (const [, arr] of groups) {
-            if (arr.length >= 2) {
-                plusTriggered = true;
-                arr.forEach((i) => toFlip.add(i.ni));
-            }
-        }
+        for (const [, arr] of groups) if (arr.length >= 2) arr.forEach((i) => toFlip.add(i.ni));
     }
-
-    const specialType =
-        sameTriggered && plusTriggered ? "both" : sameTriggered ? "same" : plusTriggered ? "plus" : "";
 
     const flipped = [];
     for (const ni of toFlip) {
         if (flipToOwner(grid, ni, placed.owner)) flipped.push(ni);
     }
-    return { flipped, specialType };
+    return { flipped, specialType: "" };
 }
 
 function captureByPowerFrom(idx, grid) {
@@ -136,13 +122,33 @@ function resolveCombo(queue, grid, rules) {
 }
 
 const posForHandIndex = (i) => {
-    // 0..2 -> col1 rows 1..3, 3..4 -> col2 rows 1..2
+    // 0..2 -> col1 rows 1..3, 3..4 -> col2 rows 1..2  (3 + 2)
     if (i < 3) return { col: 1, row: i + 1 };
     return { col: 2, row: i - 2 };
 };
 
+const isLandscape = () =>
+    window.matchMedia?.("(orientation: landscape)")?.matches ??
+    window.innerWidth > window.innerHeight;
+
 export default function Game({ onExit }) {
     const aiGuard = useRef({ handled: false });
+
+    // ===== LANDSCAPE GUARD (чтобы при повороте в портрет не “ломалось”) =====
+    const [landscapeOk, setLandscapeOk] = useState(() => isLandscape());
+    useEffect(() => {
+        const onChange = () => setLandscapeOk(isLandscape());
+        const m = window.matchMedia?.("(orientation: landscape)");
+        m?.addEventListener?.("change", onChange);
+        window.addEventListener("resize", onChange);
+        window.addEventListener("orientationchange", onChange);
+        onChange();
+        return () => {
+            m?.removeEventListener?.("change", onChange);
+            window.removeEventListener("resize", onChange);
+            window.removeEventListener("orientationchange", onChange);
+        };
+    }, []);
 
     const makeHands = () => ({
         player: Array.from({ length: 5 }, (_, i) => genCard("player", `p${i}`)),
@@ -181,7 +187,6 @@ export default function Game({ onExit }) {
         timers.push(setTimeout(() => safe({ particleCount: 40, spread: 75, startVelocity: 30, origin }), 0));
         timers.push(setTimeout(() => safe({ particleCount: 28, spread: 95, startVelocity: 26, origin }), 180));
         timers.push(setTimeout(() => safe({ particleCount: 18, spread: 110, startVelocity: 24, origin }), 360));
-
         return () => timers.forEach(clearTimeout);
     }, [gameOver, winner]);
 
@@ -204,6 +209,7 @@ export default function Game({ onExit }) {
         setTurn("enemy");
     };
 
+    // AI
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
         if (aiGuard.current.handled) return;
@@ -233,6 +239,7 @@ export default function Game({ onExit }) {
         return () => clearTimeout(t);
     }, [turn, gameOver, board, enemy]);
 
+    // game over
     useEffect(() => {
         if (board.some((c) => c === null)) return;
         const p = board.filter((c) => c.owner === "player").length;
@@ -254,22 +261,30 @@ export default function Game({ onExit }) {
 
     const winnerText = winner === "player" ? "Победа" : winner === "enemy" ? "Поражение" : "Ничья";
 
+    if (!landscapeOk) {
+        return (
+            <div className="rotate-gate">
+                <div className="rotate-gate-box">
+                    <div className="rotate-title">Поверни телефон</div>
+                    <div className="rotate-subtitle">Игра доступна только в горизонтальном режиме</div>
+                    <button onClick={onExit}>← Меню</button>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="game-root">
             <div className="game-ui tt-layout">
                 <button className="exit" onClick={onExit}>← Меню</button>
 
-                {/* LEFT: enemy hand (backs) */}
+                {/* LEFT enemy */}
                 <div className="hand left">
                     <div className="hand-grid">
                         {enemy.map((c, i) => {
                             const { col, row } = posForHandIndex(i);
                             return (
-                                <div
-                                    key={c.id}
-                                    className={`hand-slot col${col}`}
-                                    style={{ gridColumn: col, gridRow: row }}
-                                >
+                                <div key={c.id} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
                                     <Card hidden />
                                 </div>
                             );
@@ -277,7 +292,7 @@ export default function Game({ onExit }) {
                     </div>
                 </div>
 
-                {/* CENTER: HUD + board */}
+                {/* CENTER */}
                 <div className="center-col">
                     <div className="hud-top">
                         <div className="hud-score red">🟥 {score.red}</div>
@@ -300,17 +315,13 @@ export default function Game({ onExit }) {
                     </div>
                 </div>
 
-                {/* RIGHT: player hand */}
+                {/* RIGHT player */}
                 <div className="hand right">
                     <div className="hand-grid">
                         {player.map((c, i) => {
                             const { col, row } = posForHandIndex(i);
                             return (
-                                <div
-                                    key={c.id}
-                                    className={`hand-slot col${col}`}
-                                    style={{ gridColumn: col, gridRow: row }}
-                                >
+                                <div key={c.id} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
                                     <Card
                                         card={c}
                                         selected={selected?.id === c.id}
@@ -361,16 +372,12 @@ function Card({ card, onClick, selected, disabled, hidden }) {
         return (
             <div className="card back" aria-hidden="true">
                 <div className="card-back-inner">
-                    <img
-                        className="card-back-logo-img"
-                        src="/ui/cardclash-logo.png"
-                        alt="CardClash"
-                        draggable="false"
-                    />
+                    <img className="card-back-logo-img" src="/ui/cardclash-logo.png" alt="CardClash" draggable="false" />
                 </div>
             </div>
         );
     }
+
     return (
         <div
             className={[
