@@ -73,10 +73,8 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
 
     const toFlip = new Set();
 
-    // Power
     for (const i of infos) if (i.placedSide > i.targetSide) toFlip.add(i.ni);
 
-    // Same
     let sameTriggered = false;
     if (rules.same) {
         const eq = infos.filter((i) => i.placedSide === i.targetSide);
@@ -86,7 +84,6 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
         }
     }
 
-    // Plus
     let plusTriggered = false;
     if (rules.plus) {
         const groups = new Map();
@@ -116,13 +113,11 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
 function captureByPowerFrom(idx, grid) {
     const src = grid[idx];
     if (!src) return [];
-
     const flipped = [];
     for (const { ni, a, b } of neighborsOf(idx)) {
         const t = grid[ni];
         if (!t) continue;
         if (t.owner === src.owner) continue;
-
         if (src.values[a] > t.values[b]) {
             if (flipToOwner(grid, ni, src.owner)) flipped.push(ni);
         }
@@ -139,6 +134,12 @@ function resolveCombo(queue, grid, rules) {
         if (more.length) q.push(...more);
     }
 }
+
+const posForHandIndex = (i) => {
+    // 0..2 -> col1 rows 1..3, 3..4 -> col2 rows 1..2
+    if (i < 3) return { col: 1, row: i + 1 };
+    return { col: 2, row: i - 2 };
+};
 
 export default function Game({ onExit }) {
     const aiGuard = useRef({ handled: false });
@@ -166,7 +167,6 @@ export default function Game({ onExit }) {
         aiGuard.current.handled = false;
     };
 
-    // конфетти без rAF-loop
     useEffect(() => {
         if (!gameOver || winner !== "player") return;
 
@@ -204,7 +204,6 @@ export default function Game({ onExit }) {
         setTurn("enemy");
     };
 
-    // AI
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
         if (aiGuard.current.handled) return;
@@ -234,13 +233,10 @@ export default function Game({ onExit }) {
         return () => clearTimeout(t);
     }, [turn, gameOver, board, enemy]);
 
-    // game over
     useEffect(() => {
         if (board.some((c) => c === null)) return;
-
         const p = board.filter((c) => c.owner === "player").length;
         const e = board.filter((c) => c.owner === "enemy").length;
-
         setWinner(p > e ? "player" : e > p ? "enemy" : "draw");
         setGameOver(true);
     }, [board]);
@@ -265,12 +261,19 @@ export default function Game({ onExit }) {
 
                 {/* LEFT: enemy hand (backs) */}
                 <div className="hand left">
-                    <div className="hand-scroll">
-                        {enemy.map((c) => (
-                            <div key={c.id} className="hand-slot">
-                                <Card card={c} hidden disabled />
-                            </div>
-                        ))}
+                    <div className="hand-grid">
+                        {enemy.map((c, i) => {
+                            const { col, row } = posForHandIndex(i);
+                            return (
+                                <div
+                                    key={c.id}
+                                    className={`hand-slot col${col}`}
+                                    style={{ gridColumn: col, gridRow: row }}
+                                >
+                                    <Card hidden />
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -299,17 +302,24 @@ export default function Game({ onExit }) {
 
                 {/* RIGHT: player hand */}
                 <div className="hand right">
-                    <div className="hand-scroll">
-                        {player.map((c) => (
-                            <div key={c.id} className="hand-slot">
-                                <Card
-                                    card={c}
-                                    selected={selected?.id === c.id}
-                                    disabled={gameOver || turn !== "player"}
-                                    onClick={() => setSelected((prev) => (prev?.id === c.id ? null : c))}
-                                />
-                            </div>
-                        ))}
+                    <div className="hand-grid">
+                        {player.map((c, i) => {
+                            const { col, row } = posForHandIndex(i);
+                            return (
+                                <div
+                                    key={c.id}
+                                    className={`hand-slot col${col}`}
+                                    style={{ gridColumn: col, gridRow: row }}
+                                >
+                                    <Card
+                                        card={c}
+                                        selected={selected?.id === c.id}
+                                        disabled={gameOver || turn !== "player"}
+                                        onClick={() => setSelected((prev) => (prev?.id === c.id ? null : c))}
+                                    />
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -347,24 +357,20 @@ function Card({ card, onClick, selected, disabled, hidden }) {
         return () => clearTimeout(t);
     }, [card?.captureKey]);
 
-    // Enemy card back
     if (hidden) {
         return (
-            <div
-                className={[
-                    "card",
-                    "back",
-                    disabled ? "disabled" : "",
-                ].join(" ")}
-                aria-hidden="true"
-            >
+            <div className="card back" aria-hidden="true">
                 <div className="card-back-inner">
-                    <div className="card-back-glyph">✦</div>
+                    <img
+                        className="card-back-logo-img"
+                        src="/ui/cardclash-logo.png"
+                        alt="CardClash"
+                        draggable="false"
+                    />
                 </div>
             </div>
         );
     }
-
     return (
         <div
             className={[
