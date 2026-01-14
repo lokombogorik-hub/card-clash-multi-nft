@@ -56,7 +56,7 @@ export default function App() {
     }, [screen]);
 
     const seasonInfo = useMemo(
-        () => ({ title: "Season 1", subtitle: "Ends in 3d 12h", progress: 0.62 }),
+        () => ({ title: "Digitall Bunny Турнир", subtitle: "Ends in 3d 12h", progress: 0.62 }),
         []
     );
 
