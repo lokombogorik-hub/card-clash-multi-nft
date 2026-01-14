@@ -137,7 +137,7 @@ export default function App() {
 
                 {screen === "market" && (
                     <div className="page">
-                        <h2>NFT</h2>
+                        <h2>Маркет</h2>
                         <p>Кейсы / дропы / коллекции.</p>
                     </div>
                 )}
@@ -150,7 +150,7 @@ export default function App() {
                 )}
             </div>
 
-            {/* КНОПКА КОШЕЛЬКА ВЫШЕ НИЖНЕГО СТЕКА */}
+            {/* КОШЕЛЁК: выше SeasonBar и меню, по центру, маленькая кнопка */}
             <div className="wallet-float">
                 <button className="wallet-btn" onClick={onConnectWallet}>
                     Подключить кошелёк
@@ -164,17 +164,9 @@ export default function App() {
                     progress={seasonInfo.progress}
                     onRefresh={() => console.log("refresh")}
                 />
+
                 <BottomNav active={screen} onChange={setScreen} />
             </div>
-
-            <SeasonBar
-                title={seasonInfo.title}
-                subtitle={seasonInfo.subtitle}
-                progress={seasonInfo.progress}
-                onRefresh={() => console.log("refresh")}
-            />
-
-            <BottomNav active={screen} onChange={setScreen} />
         </div>
     );
 }
@@ -202,7 +194,7 @@ function SeasonBar({ title, subtitle, progress, onRefresh }) {
 function BottomNav({ active, onChange }) {
     const items = [
         { key: "home", label: "Главная", icon: <HomeIcon /> },
-        { key: "market", label: "Маркет", icon: <GemIcon /> },
+        { key: "market", label: "Маркет", icon: <GemIcon /> }, // <-- было NFT
         { key: "inventory", label: "Инвентарь", icon: <BagIcon />, disabled: true },
         { key: "profile", label: "Профиль", icon: <UserIcon /> },
     ];
@@ -348,24 +340,26 @@ function Styles() {
         pointer-events: none;
       }
 
-      .bottom-stack{
+      /* ====== КНОПКА КОШЕЛЬКА (выше низа) ====== */
+      .wallet-float{
         position: absolute;
-        left: 0; right: 0;
-        bottom: 0;
-        z-index: 2;
-        padding: 10px 12px calc(env(safe-area-inset-bottom, 0px) + 10px);
-        display: grid;
-        gap: 10px;
-      }
-
-      .wallet-row{
+        left: 0;
+        right: 0;
+        /* МЕНЯЙ ВОТ ЭТО ЧИСЛО: больше -> выше, меньше -> ниже */
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 190px);
+        z-index: 3;
         display: flex;
         justify-content: center;
+        pointer-events: none;
       }
 
       .wallet-btn{
-        width: min(260px, 74vw);
-        height: 40px;
+        pointer-events: auto;
+        /* МЕНЯЙ: ширина/высота/шрифт */
+        width: min(220px, 64vw);
+        height: 34px;
+        font-size: 12px;
+
         border-radius: 999px;
         border: 1px solid rgba(255,255,255,0.16);
         background:
@@ -374,8 +368,17 @@ function Styles() {
           rgba(0,0,0,0.62);
         color: #fff;
         font-weight: 900;
-        font-size: 13px;
         letter-spacing: .2px;
+      }
+
+      .bottom-stack{
+        position: absolute;
+        left: 0; right: 0;
+        bottom: 0;
+        z-index: 2;
+        padding: 10px 12px calc(env(safe-area-inset-bottom, 0px) + 10px);
+        display: grid;
+        gap: 10px;
       }
 
       .season-bar{
@@ -395,7 +398,6 @@ function Styles() {
       .season-progress-fill{ height:100%; background: linear-gradient(90deg, rgba(120,200,255,0.85), rgba(255,61,242,0.45)); }
       .icon-btn{ width:36px; height:32px; border-radius:10px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.45); color:#fff; padding:0; }
 
-      /* NEW NFT-style bottom nav */
       .bottom-nav{
         display: grid;
         grid-template-columns: repeat(4, 1fr);

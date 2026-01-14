@@ -888,35 +888,6 @@ button {
     /* чтобы клики шли только на кнопки внутри */
 }
 
-/* floating wallet button ABOVE bottom stack */
-.wallet-float {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 150px);
-    /* выше сезона+меню */
-    z-index: 3;
-    display: flex;
-    justify-content: center;
-    pointer-events: none;
-}
-
-.wallet-btn {
-    pointer-events: auto;
-    width: min(220px, 64vw);
-    height: 34px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    background:
-        radial-gradient(80% 140% at 20% 20%, rgba(120, 200, 255, 0.16), transparent 62%),
-        radial-gradient(80% 140% at 80% 80%, rgba(255, 61, 242, 0.10), transparent 62%),
-        rgba(0, 0, 0, 0.62);
-    color: #fff;
-    font-weight: 900;
-    font-size: 12px;
-    letter-spacing: .2px;
-}
-
 /* сезонная панель */
 .season-bar {
     pointer-events: auto;
