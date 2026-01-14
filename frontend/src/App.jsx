@@ -346,7 +346,7 @@ function Styles() {
         left: 0;
         right: 0;
         /* больше -> выше, меньше -> ниже */
-        bottom: calc(env(safe-area-inset-bottom, 0px) + 210px);
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 230px);
         z-index: 3;
         display: flex;
         justify-content: center;
