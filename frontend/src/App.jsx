@@ -346,7 +346,7 @@ function Styles() {
         left: 0;
         right: 0;
         /* МЕНЯЙ ВОТ ЭТО ЧИСЛО: больше -> выше, меньше -> ниже */
-        bottom: calc(env(safe-area-inset-bottom, 0px) + 230px);
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 210px);
         z-index: 3;
         display: flex;
         justify-content: center;
@@ -356,7 +356,7 @@ function Styles() {
       .wallet-btn{
         pointer-events: auto;
         /* МЕНЯЙ: ширина/высота/шрифт */
-        width: min(200px, 64vw);
+        width: min(180px, 64vw);
         height: 38px;
         font-size: 12px;
 
