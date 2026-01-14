@@ -72,7 +72,7 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
 
     const toFlip = new Set();
 
-    // basic (power)
+    // power
     for (const i of infos) if (i.placedSide > i.targetSide) toFlip.add(i.ni);
 
     // same
@@ -104,7 +104,6 @@ function captureByPowerFrom(idx, grid) {
     const src = grid[idx];
     if (!src) return [];
     const flipped = [];
-
     for (const { ni, a, b } of neighborsOf(idx)) {
         const t = grid[ni];
         if (!t) continue;
@@ -113,7 +112,6 @@ function captureByPowerFrom(idx, grid) {
             if (flipToOwner(grid, ni, src.owner)) flipped.push(ni);
         }
     }
-
     return flipped;
 }
 
@@ -127,10 +125,10 @@ function resolveCombo(queue, grid, rules) {
     }
 }
 
+// 3+2 раскладка
 const posForHandIndex = (i) => {
-    // 0..2 -> col1 rows 1..3, 3..4 -> col2 rows 1..2 (3 + 2)
     if (i < 3) return { col: 1, row: i + 1 };
-    return { col: 2, row: i - 2 };
+    return { col: 2, row: i - 2 }; // rows 1..2
 };
 
 export default function Game({ onExit }) {
@@ -147,7 +145,7 @@ export default function Game({ onExit }) {
 
     const [turn, setTurn] = useState(() => randomFirstTurn());
     const [gameOver, setGameOver] = useState(false);
-    const [winner, setWinner] = useState(null); // player | enemy | draw
+    const [winner, setWinner] = useState(null);
 
     const reset = () => {
         setHands(makeHands());
@@ -175,8 +173,7 @@ export default function Game({ onExit }) {
     const placeCard = (i) => {
         if (gameOver) return;
         if (turn !== "player") return;
-        if (!selected) return;
-        if (board[i]) return;
+        if (!selected || board[i]) return;
 
         const next = [...board];
         next[i] = { ...selected, owner: "player", placeKey: (selected.placeKey || 0) + 1 };
@@ -192,7 +189,7 @@ export default function Game({ onExit }) {
         setTurn("enemy");
     };
 
-    // AI ход
+    // AI
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
         if (aiGuard.current.handled) return;
@@ -256,6 +253,15 @@ export default function Game({ onExit }) {
                     ← Меню
                 </button>
 
+                {/* HUD overlay: углы + центр */}
+                <div className="hud-overlay" aria-hidden="true">
+                    <div className="hud-score red">🟥 {score.red}</div>
+                    <div className={`hud-turn ${turn}`}>
+                        <div className="hud-dot" />
+                    </div>
+                    <div className="hud-score blue">{score.blue} 🟦</div>
+                </div>
+
                 {/* LEFT enemy */}
                 <div className="hand left">
                     <div className="hand-grid">
@@ -270,16 +276,8 @@ export default function Game({ onExit }) {
                     </div>
                 </div>
 
-                {/* CENTER */}
+                {/* CENTER board */}
                 <div className="center-col">
-                    <div className="hud-top">
-                        <div className="hud-score red">🟥 {score.red}</div>
-                        <div className={`hud-turn ${turn}`}>
-                            <div className="hud-dot" />
-                        </div>
-                        <div className="hud-score blue">{score.blue} 🟦</div>
-                    </div>
-
                     <div className="board">
                         {board.map((cell, i) => (
                             <div
@@ -389,11 +387,10 @@ function Card({ card, onClick, selected, disabled, hidden }) {
                 <div className="card-back-inner">
                     <img
                         className="card-back-logo-img"
-                        src="/ui/cardclash-logo.png?v=1"
+                        src="/ui/cardclash-logo.png?v=2"
                         alt="CardClash"
                         draggable="false"
                         onError={(e) => {
-                            // если имя файла/регистр не совпал или кэш дал 404
                             e.currentTarget.style.display = "none";
                         }}
                     />
