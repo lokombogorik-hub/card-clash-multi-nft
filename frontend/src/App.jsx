@@ -356,7 +356,7 @@ function Styles() {
       .wallet-btn{
         pointer-events: auto;
         /* МЕНЯЙ: ширина/высота/шрифт */
-        width: min(180px, 64vw);
+        width: min(190px, 64vw);
         height: 38px;
         font-size: 12px;
 
