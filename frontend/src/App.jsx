@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Game from "./Game";
-import LightningFogBg from "./components/LightningFogBg";
+import StormBg from "./components/StormBg";
 
 const isLandscape = () =>
     window.matchMedia?.("(orientation: landscape)")?.matches ??
@@ -18,9 +18,9 @@ export default function App() {
         tg.ready();
         tg.expand();
 
-        tg.setHeaderColor?.("#02030a");
-        tg.setBackgroundColor?.("#02030a");
-        tg.setBottomBarColor?.("#02030a");
+        tg.setHeaderColor?.("#000000");
+        tg.setBackgroundColor?.("#000000");
+        tg.setBottomBarColor?.("#000000");
 
         tg.MainButton?.hide();
         tg.SecondaryButton?.hide();
@@ -70,14 +70,9 @@ export default function App() {
         };
     }, [screen]);
 
-    const onExitGame = () => {
-        try { window.Telegram?.WebApp?.exitFullscreen?.(); } catch { }
-        setScreen("home");
-    };
+    const onExitGame = () => setScreen("home");
 
     const onConnectWallet = () => {
-        // TODO: integrate TonConnect / WalletConnect
-        console.log("connect wallet");
         alert("Wallet connect (soon)");
     };
 
@@ -86,12 +81,12 @@ export default function App() {
     if (screen === "rotate") {
         return (
             <div className="rotate-gate">
-                <MenuStyles />
+                <Styles />
                 <div className="rotate-gate-box">
-                    <div className="rotate-title">Rotate your phone</div>
-                    <div className="rotate-subtitle">Game starts only in landscape mode</div>
+                    <div className="rotate-title">Поверни телефон</div>
+                    <div className="rotate-subtitle">Игра запускается только в горизонтальном режиме</div>
                     <div className="rotate-phone" />
-                    <button onClick={() => setScreen("home")}>← Back</button>
+                    <button onClick={() => setScreen("home")}>← Назад</button>
                 </div>
             </div>
         );
@@ -99,8 +94,8 @@ export default function App() {
 
     return (
         <div className="shell">
-            <MenuStyles />
-            <LightningFogBg />
+            <Styles />
+            <StormBg />
 
             <div className="shell-content">
                 {screen === "home" && (
@@ -127,8 +122,8 @@ export default function App() {
                                     </video>
                                 ) : (
                                     <div className="logo-fallback">
-                                        Logo video not supported
-                                        <div className="logo-fallback-sub">Check /ui/logo.mp4 (H.264)</div>
+                                        Видео логотипа не поддерживается
+                                        <div className="logo-fallback-sub">Проверь /ui/logo.mp4 (H.264)</div>
                                     </div>
                                 )}
                             </div>
@@ -137,6 +132,20 @@ export default function App() {
                                 <PlayIcon />
                             </span>
                         </button>
+                    </div>
+                )}
+
+                {screen === "market" && (
+                    <div className="page">
+                        <h2>Маркет</h2>
+                        <p>NFT кейсы / дропы / предложения.</p>
+                    </div>
+                )}
+
+                {screen === "profile" && (
+                    <div className="page">
+                        <h2>Профиль</h2>
+                        <p>Прогресс, рейтинг, кошельки.</p>
                     </div>
                 )}
             </div>
@@ -149,17 +158,19 @@ export default function App() {
                     onRefresh={() => console.log("refresh")}
                 />
 
-                <button className="wallet-btn" onClick={onConnectWallet}>
-                    Connect Wallet
-                </button>
+                {/* кошелек выше меню, меньше, по центру */}
+                <div className="wallet-row">
+                    <button className="wallet-btn" onClick={onConnectWallet}>
+                        Подключить кошелёк
+                    </button>
+                </div>
 
-                {/* you can keep your BottomNav here if you want */}
+                <BottomNav active={screen} onChange={setScreen} />
             </div>
         </div>
     );
 }
 
-/* ======= Season bar ======= */
 function SeasonBar({ title, subtitle, progress, onRefresh }) {
     return (
         <div className="season-bar">
@@ -173,14 +184,40 @@ function SeasonBar({ title, subtitle, progress, onRefresh }) {
                     <div className="season-progress-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
                 </div>
                 <button className="icon-btn" onClick={onRefresh} aria-label="Refresh">
-                    <RefreshIcon />
+                    ⟳
                 </button>
             </div>
         </div>
     );
 }
 
-/* ======= Icons ======= */
+function BottomNav({ active, onChange }) {
+    const items = [
+        { key: "home", label: "Главная", icon: <HomeIcon /> },
+        { key: "market", label: "NFT", icon: <GemIcon /> },
+        { key: "inventory", label: "Инвентарь", icon: <BagIcon />, disabled: true },
+        { key: "profile", label: "Профиль", icon: <UserIcon /> },
+    ];
+
+    return (
+        <div className="bottom-nav">
+            {items.map((it) => {
+                const isActive = active === it.key;
+                return (
+                    <button
+                        key={it.key}
+                        className={`nav-item ${isActive ? "active" : ""} ${it.disabled ? "disabled" : ""}`}
+                        onClick={it.disabled ? undefined : () => onChange(it.key)}
+                    >
+                        <span className="nav-ic">{it.icon}</span>
+                        <span className="nav-txt">{it.label}</span>
+                    </button>
+                );
+            })}
+        </div>
+    );
+}
+
 function PlayIcon() {
     return (
         <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
@@ -189,17 +226,47 @@ function PlayIcon() {
     );
 }
 
-function RefreshIcon() {
+function HomeIcon() {
     return (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path d="M20 12a8 8 0 1 1-2.34-5.66" stroke="white" strokeWidth="2" strokeLinecap="round" />
-            <path d="M20 4v6h-6" stroke="white" strokeWidth="2" strokeLinecap="round" />
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path
+                d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z"
+                stroke="white"
+                strokeWidth="2"
+                opacity="0.9"
+            />
         </svg>
     );
 }
 
-/* ======= Styles (no need to edit index.css) ======= */
-function MenuStyles() {
+function GemIcon() {
+    return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M12 2 3 9l9 13 9-13-9-7Z" stroke="white" strokeWidth="2" opacity="0.9" />
+            <path d="M3 9h18" stroke="white" strokeWidth="2" opacity="0.6" />
+        </svg>
+    );
+}
+
+function BagIcon() {
+    return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M6 8h12l-1 13H7L6 8Z" stroke="white" strokeWidth="2" opacity="0.9" />
+            <path d="M9 8a3 3 0 0 1 6 0" stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.9" />
+        </svg>
+    );
+}
+
+function UserIcon() {
+    return (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" stroke="white" strokeWidth="2" opacity="0.9" />
+            <path d="M4 20a8 8 0 0 1 16 0" stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.9" />
+        </svg>
+    );
+}
+
+function Styles() {
     return (
         <style>{`
       .shell{
@@ -208,11 +275,11 @@ function MenuStyles() {
         width: 100%;
         height: var(--app-h, 100vh);
         overflow: hidden;
-        background: #02030a;
+        background: #000;
         color: #fff;
       }
 
-      .lightning-bg{
+      .storm-bg{
         position: absolute;
         inset: 0;
         z-index: 0;
@@ -224,10 +291,14 @@ function MenuStyles() {
         z-index: 1;
         height: 100%;
         padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
-        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 150px);
+        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 180px);
       }
 
-      .home-center{ height:100%; display:grid; place-items:center; }
+      .home-center{
+        height: 100%;
+        display: grid;
+        place-items: center;
+      }
 
       .play-logo{
         width: min(240px, 56vmin);
@@ -235,9 +306,9 @@ function MenuStyles() {
         border-radius: 999px;
         padding: 0;
         border: 1px solid rgba(255,255,255,0.10);
-        background: rgba(0,0,0,0.22);
+        background: rgba(0,0,0,0.18);
         backdrop-filter: blur(8px);
-        box-shadow: 0 24px 70px rgba(0,0,0,0.70);
+        box-shadow: 0 24px 80px rgba(0,0,0,0.78);
         display: grid;
         place-items: center;
         position: relative;
@@ -245,12 +316,9 @@ function MenuStyles() {
         cursor: pointer;
       }
 
-      /* slightly larger logo */
       .logo-wrap{
         width: 88%;
         height: 88%;
-        position: relative;
-        z-index: 1;
         border-radius: 999px;
         overflow: hidden;
         background: rgba(255,255,255,0.03);
@@ -269,7 +337,6 @@ function MenuStyles() {
         inset: 0;
         display: grid;
         place-items: center;
-        z-index: 2;
         pointer-events: none;
       }
 
@@ -284,8 +351,8 @@ function MenuStyles() {
       }
 
       .season-bar{
-        display:flex;
-        align-items:center;
+        display: flex;
+        align-items: center;
         gap: 12px;
         padding: 10px 12px;
         border-radius: 14px;
@@ -293,24 +360,74 @@ function MenuStyles() {
         border: 1px solid rgba(255,255,255,0.12);
         backdrop-filter: blur(10px);
       }
-
       .season-title{ font-weight: 900; font-size: 13px; }
       .season-sub{ opacity: .8; font-size: 12px; margin-top: 2px; }
       .season-right{ margin-left:auto; display:flex; align-items:center; gap:10px; }
       .season-progress{ width:120px; height:8px; border-radius:999px; background: rgba(255,255,255,0.10); overflow:hidden; }
-      .season-progress-fill{ height:100%; background: linear-gradient(90deg, rgba(180,230,255,0.85), rgba(255,61,242,0.55)); }
+      .season-progress-fill{ height:100%; background: linear-gradient(90deg, rgba(120,200,255,0.85), rgba(255,61,242,0.45)); }
       .icon-btn{ width:36px; height:32px; border-radius:10px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.45); color:#fff; padding:0; }
 
+      /* wallet centered, smaller */
+      .wallet-row{
+        display: flex;
+        justify-content: center;
+      }
       .wallet-btn{
-        height: 44px;
-        border-radius: 14px;
-        border: 1px solid rgba(255,255,255,0.14);
-        background: linear-gradient(90deg, rgba(180,230,255,0.20), rgba(0,0,0,0.60));
+        width: min(260px, 74vw);
+        height: 40px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.16);
+        background:
+          radial-gradient(80% 120% at 20% 30%, rgba(120,200,255,0.18), transparent 60%),
+          radial-gradient(80% 120% at 80% 70%, rgba(255,61,242,0.12), transparent 60%),
+          rgba(0,0,0,0.62);
         color: #fff;
         font-weight: 900;
         font-size: 13px;
+        letter-spacing: .2px;
       }
 
+      /* NEW NFT-style bottom nav */
+      .bottom-nav{
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        padding: 10px 10px;
+        border-radius: 18px;
+        background: rgba(0,0,0,0.65);
+        border: 1px solid rgba(255,255,255,0.12);
+        backdrop-filter: blur(12px);
+      }
+
+      .nav-item{
+        padding: 10px 6px;
+        border-radius: 14px;
+        border: 1px solid rgba(255,255,255,0.08);
+        background: rgba(255,255,255,0.03);
+        color: rgba(255,255,255,0.82);
+        display: grid;
+        justify-items: center;
+        gap: 6px;
+      }
+
+      .nav-txt{ font-size: 11px; font-weight: 900; letter-spacing: .2px; }
+      .nav-ic{ line-height: 0; }
+
+      .nav-item.active{
+        color: #fff;
+        border-color: rgba(120,200,255,0.28);
+        background:
+          radial-gradient(80% 140% at 20% 20%, rgba(120,200,255,0.16), transparent 60%),
+          radial-gradient(80% 140% at 80% 80%, rgba(255,61,242,0.12), transparent 60%),
+          rgba(255,255,255,0.03);
+        box-shadow: 0 0 24px rgba(120,200,255,0.10);
+      }
+
+      .nav-item.disabled{
+        opacity: 0.35;
+      }
+
+      /* rotate gate */
       .rotate-gate{
         position: fixed;
         inset: 0;
