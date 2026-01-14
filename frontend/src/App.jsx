@@ -137,33 +137,33 @@ export default function App() {
 
                 {screen === "market" && (
                     <div className="page">
-                        <h2>Маркет</h2>
-                        <p>NFT кейсы / дропы / предложения.</p>
+                        <h2>NFT</h2>
+                        <p>Кейсы / дропы / коллекции.</p>
                     </div>
                 )}
 
                 {screen === "profile" && (
                     <div className="page">
                         <h2>Профиль</h2>
-                        <p>Прогресс, рейтинг, кошельки.</p>
+                        <p>Прогресс, рейтинг, кошелёк.</p>
                     </div>
                 )}
             </div>
 
             <div className="bottom-stack">
+                {/* Кошелек ПОДНЯТ выше сезона */}
+                <div className="wallet-row">
+                    <button className="wallet-btn" onClick={onConnectWallet}>
+                        Подключить кошелёк
+                    </button>
+                </div>
+
                 <SeasonBar
                     title={seasonInfo.title}
                     subtitle={seasonInfo.subtitle}
                     progress={seasonInfo.progress}
                     onRefresh={() => console.log("refresh")}
                 />
-
-                {/* кошелек выше меню, меньше, по центру */}
-                <div className="wallet-row">
-                    <button className="wallet-btn" onClick={onConnectWallet}>
-                        Подключить кошелёк
-                    </button>
-                </div>
 
                 <BottomNav active={screen} onChange={setScreen} />
             </div>
@@ -291,7 +291,7 @@ function Styles() {
         z-index: 1;
         height: 100%;
         padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
-        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 180px);
+        padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 200px);
       }
 
       .home-center{
@@ -350,6 +350,26 @@ function Styles() {
         gap: 10px;
       }
 
+      .wallet-row{
+        display: flex;
+        justify-content: center;
+      }
+
+      .wallet-btn{
+        width: min(260px, 74vw);
+        height: 40px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.16);
+        background:
+          radial-gradient(80% 140% at 20% 20%, rgba(120,200,255,0.18), transparent 62%),
+          radial-gradient(80% 140% at 80% 80%, rgba(255,61,242,0.10), transparent 62%),
+          rgba(0,0,0,0.62);
+        color: #fff;
+        font-weight: 900;
+        font-size: 13px;
+        letter-spacing: .2px;
+      }
+
       .season-bar{
         display: flex;
         align-items: center;
@@ -366,26 +386,6 @@ function Styles() {
       .season-progress{ width:120px; height:8px; border-radius:999px; background: rgba(255,255,255,0.10); overflow:hidden; }
       .season-progress-fill{ height:100%; background: linear-gradient(90deg, rgba(120,200,255,0.85), rgba(255,61,242,0.45)); }
       .icon-btn{ width:36px; height:32px; border-radius:10px; border:1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.45); color:#fff; padding:0; }
-
-      /* wallet centered, smaller */
-      .wallet-row{
-        display: flex;
-        justify-content: center;
-      }
-      .wallet-btn{
-        width: min(260px, 74vw);
-        height: 40px;
-        border-radius: 999px;
-        border: 1px solid rgba(255,255,255,0.16);
-        background:
-          radial-gradient(80% 120% at 20% 30%, rgba(120,200,255,0.18), transparent 60%),
-          radial-gradient(80% 120% at 80% 70%, rgba(255,61,242,0.12), transparent 60%),
-          rgba(0,0,0,0.62);
-        color: #fff;
-        font-weight: 900;
-        font-size: 13px;
-        letter-spacing: .2px;
-      }
 
       /* NEW NFT-style bottom nav */
       .bottom-nav{
@@ -423,9 +423,7 @@ function Styles() {
         box-shadow: 0 0 24px rgba(120,200,255,0.10);
       }
 
-      .nav-item.disabled{
-        opacity: 0.35;
-      }
+      .nav-item.disabled{ opacity: 0.35; }
 
       /* rotate gate */
       .rotate-gate{
