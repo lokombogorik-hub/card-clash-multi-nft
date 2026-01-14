@@ -150,23 +150,31 @@ export default function App() {
                 )}
             </div>
 
-            <div className="bottom-stack">
-                {/* Кошелек ПОДНЯТ выше сезона */}
-                <div className="wallet-row">
-                    <button className="wallet-btn" onClick={onConnectWallet}>
-                        Подключить кошелёк
-                    </button>
-                </div>
+            {/* КНОПКА КОШЕЛЬКА ВЫШЕ НИЖНЕГО СТЕКА */}
+            <div className="wallet-float">
+                <button className="wallet-btn" onClick={onConnectWallet}>
+                    Подключить кошелёк
+                </button>
+            </div>
 
+            <div className="bottom-stack">
                 <SeasonBar
                     title={seasonInfo.title}
                     subtitle={seasonInfo.subtitle}
                     progress={seasonInfo.progress}
                     onRefresh={() => console.log("refresh")}
                 />
-
                 <BottomNav active={screen} onChange={setScreen} />
             </div>
+
+            <SeasonBar
+                title={seasonInfo.title}
+                subtitle={seasonInfo.subtitle}
+                progress={seasonInfo.progress}
+                onRefresh={() => console.log("refresh")}
+            />
+
+            <BottomNav active={screen} onChange={setScreen} />
         </div>
     );
 }
@@ -194,7 +202,7 @@ function SeasonBar({ title, subtitle, progress, onRefresh }) {
 function BottomNav({ active, onChange }) {
     const items = [
         { key: "home", label: "Главная", icon: <HomeIcon /> },
-        { key: "market", label: "NFT", icon: <GemIcon /> },
+        { key: "market", label: "Маркет", icon: <GemIcon /> },
         { key: "inventory", label: "Инвентарь", icon: <BagIcon />, disabled: true },
         { key: "profile", label: "Профиль", icon: <UserIcon /> },
     ];
