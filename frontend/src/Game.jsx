@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 
+/**
+ * Направления для сравнения сторон (Triple Triad 3x3)
+ */
 const DIRS = [
     { dx: 0, dy: -1, a: "top", b: "bottom" },
     { dx: 1, dy: 0, a: "right", b: "left" },
@@ -8,6 +11,9 @@ const DIRS = [
     { dx: -1, dy: 0, a: "left", b: "right" },
 ];
 
+/**
+ * Правила (сейчас включены все три)
+ */
 const RULES = { combo: true, same: true, plus: true };
 
 const rand9 = () => Math.ceil(Math.random() * 9);
@@ -26,28 +32,39 @@ const ART = [
     "/cards/card9.jpg",
 ];
 
+/**
+ * Генерация карты (рандом статы + рандом картинка)
+ */
 const genCard = (owner, id) => ({
     id,
     owner,
     values: { top: rand9(), right: rand9(), bottom: rand9(), left: rand9() },
     imageUrl: ART[Math.floor(Math.random() * ART.length)],
-    placeKey: 0,
-    captureKey: 0,
+    placeKey: 0, // для анимации "поставил"
+    captureKey: 0, // для анимации "захватил"
 });
 
+/**
+ * Соседи клетки по индексу 0..8 на поле 3x3
+ */
 function neighborsOf(idx) {
     const x = idx % 3;
     const y = Math.floor(idx / 3);
     const res = [];
+
     for (const { dx, dy, a, b } of DIRS) {
         const nx = x + dx;
         const ny = y + dy;
         if (nx < 0 || nx > 2 || ny < 0 || ny > 2) continue;
         res.push({ ni: ny * 3 + nx, a, b });
     }
+
     return res;
 }
 
+/**
+ * Флип карты на нового владельца (если карта есть и владелец другой)
+ */
 function flipToOwner(grid, ni, newOwner) {
     const t = grid[ni];
     if (!t) return false;
@@ -56,6 +73,12 @@ function flipToOwner(grid, ni, newOwner) {
     return true;
 }
 
+/**
+ * Правила захвата для одной поставленной карты:
+ * - basic (power)
+ * - same
+ * - plus
+ */
 function resolvePlacementFlips(placedIdx, grid, rules) {
     const placed = grid[placedIdx];
     if (!placed) return { flipped: [] };
@@ -72,13 +95,16 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
 
     const toFlip = new Set();
 
+    // basic
     for (const i of infos) if (i.placedSide > i.targetSide) toFlip.add(i.ni);
 
+    // same
     if (rules.same) {
         const eq = infos.filter((i) => i.placedSide === i.targetSide);
         if (eq.length >= 2) eq.forEach((i) => toFlip.add(i.ni));
     }
 
+    // plus
     if (rules.plus) {
         const groups = new Map();
         for (const i of infos) {
@@ -91,9 +117,13 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
 
     const flipped = [];
     for (const ni of toFlip) if (flipToOwner(grid, ni, placed.owner)) flipped.push(ni);
+
     return { flipped };
 }
 
+/**
+ * Доп.захват по силе для COMBO цепочек
+ */
 function captureByPowerFrom(idx, grid) {
     const src = grid[idx];
     if (!src) return [];
@@ -103,6 +133,7 @@ function captureByPowerFrom(idx, grid) {
         const t = grid[ni];
         if (!t) continue;
         if (t.owner === src.owner) continue;
+
         if (src.values[a] > t.values[b]) {
             if (flipToOwner(grid, ni, src.owner)) flipped.push(ni);
         }
@@ -110,8 +141,12 @@ function captureByPowerFrom(idx, grid) {
     return flipped;
 }
 
+/**
+ * COMBO: если были флипы — запускаем очередь и докручиваем цепочки
+ */
 function resolveCombo(queue, grid, rules) {
     if (!rules.combo) return;
+
     const q = [...queue];
     while (q.length) {
         const idx = q.shift();
@@ -120,9 +155,15 @@ function resolveCombo(queue, grid, rules) {
     }
 }
 
+/**
+ * Раскладка 5 карт в руку 2 колонки:
+ * - первые 3 -> col1 rows 1..3
+ * - последние 2 -> col2 rows 1..2
+ *
+ * ВАЖНО: мы НЕ меняем эту логику.
+ * Правильное “2 к столу / 3 к краю” делаем CSS-ом (swap колонок справа).
+ */
 const posForHandIndex = (i) => {
-    // 0..2 -> col1 rows 1..3
-    // 3..4 -> col2 rows 1..2
     if (i < 3) return { col: 1, row: i + 1 };
     return { col: 2, row: i - 2 };
 };
@@ -141,7 +182,7 @@ export default function Game({ onExit }) {
 
     const [turn, setTurn] = useState(() => randomFirstTurn());
     const [gameOver, setGameOver] = useState(false);
-    const [winner, setWinner] = useState(null);
+    const [winner, setWinner] = useState(null); // player | enemy | draw
 
     const reset = () => {
         setHands(makeHands());
@@ -153,6 +194,7 @@ export default function Game({ onExit }) {
         aiGuard.current.handled = false;
     };
 
+    // Счет по занятым клеткам
     const score = useMemo(() => {
         return board.reduce(
             (a, c) => {
@@ -166,6 +208,9 @@ export default function Game({ onExit }) {
 
     const winnerText = winner === "player" ? "Победа" : winner === "enemy" ? "Поражение" : "Ничья";
 
+    /**
+     * Ход игрока: ставим выбранную карту в клетку.
+     */
     const placeCard = (i) => {
         if (gameOver) return;
         if (turn !== "player") return;
@@ -186,6 +231,9 @@ export default function Game({ onExit }) {
         setTurn("enemy");
     };
 
+    /**
+     * AI ход: выбираем случайную пустую клетку + случайную карту
+     */
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
         if (aiGuard.current.handled) return;
@@ -215,14 +263,22 @@ export default function Game({ onExit }) {
         return () => clearTimeout(t);
     }, [turn, gameOver, board, enemy]);
 
+    /**
+     * Game over: когда поле заполнено
+     */
     useEffect(() => {
         if (board.some((c) => c === null)) return;
+
         const p = board.filter((c) => c.owner === "player").length;
         const e = board.filter((c) => c.owner === "enemy").length;
+
         setWinner(p > e ? "player" : e > p ? "enemy" : "draw");
         setGameOver(true);
     }, [board]);
 
+    /**
+     * Confetti при победе (try/catch для WebView)
+     */
     useEffect(() => {
         if (!gameOver || winner !== "player") return;
 
@@ -247,20 +303,24 @@ export default function Game({ onExit }) {
                     ← Меню
                 </button>
 
-                {/* Счёт снизу у ближних углов поля */}
+                {/* Счет — классы под твой CSS (снаружи поля, снизу) */}
                 <div className="hud-corner hud-score red hud-near-left">🟥 {score.red}</div>
                 <div className="hud-corner hud-score blue hud-near-right">{score.blue} 🟦</div>
 
-                {/* Ход = аватар-кружок, подсвечивается */}
-                <div className={`hud-corner hud-turn-avatar ${turn}`} />
+                {/* Ход — аватар-кружок (CSS делает glow по классу player/enemy) */}
+                <div className={`hud-turn-avatar ${turn}`} />
 
-                {/* LEFT enemy */}
+                {/* LEFT: enemy hand (рубашки) */}
                 <div className="hand left">
                     <div className="hand-grid">
                         {enemy.map((c, i) => {
                             const { col, row } = posForHandIndex(i);
                             return (
-                                <div key={c.id} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
+                                <div
+                                    key={c.id}
+                                    className={`hand-slot col${col}`}
+                                    style={{ gridColumn: col, gridRow: row }}
+                                >
                                     <Card hidden />
                                 </div>
                             );
@@ -268,7 +328,7 @@ export default function Game({ onExit }) {
                     </div>
                 </div>
 
-                {/* CENTER board */}
+                {/* CENTER: board */}
                 <div className="center-col">
                     <div className="board">
                         {board.map((cell, i) => (
@@ -283,13 +343,17 @@ export default function Game({ onExit }) {
                     </div>
                 </div>
 
-                {/* RIGHT player */}
+                {/* RIGHT: player hand */}
                 <div className="hand right">
                     <div className="hand-grid">
                         {player.map((c, i) => {
                             const { col, row } = posForHandIndex(i);
                             return (
-                                <div key={c.id} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
+                                <div
+                                    key={c.id}
+                                    className={`hand-slot col${col}`}
+                                    style={{ gridColumn: col, gridRow: row }}
+                                >
                                     <Card
                                         card={c}
                                         selected={selected?.id === c.id}
@@ -302,8 +366,10 @@ export default function Game({ onExit }) {
                     </div>
                 </div>
 
+                {/* эффекты поражения */}
                 {gameOver && winner === "enemy" && <DiceRain />}
 
+                {/* окно результата */}
                 {gameOver && (
                     <div className="game-over">
                         <div className="game-over-box">
@@ -319,6 +385,10 @@ export default function Game({ onExit }) {
         </div>
     );
 }
+
+/* =========================
+   Dice rain (проигрыш)
+   ========================= */
 
 function DiceRain() {
     const dice = useMemo(() => {
@@ -355,6 +425,10 @@ function DiceRain() {
     );
 }
 
+/* =========================
+   Card component
+   ========================= */
+
 function Card({ card, onClick, selected, disabled, hidden }) {
     const [placedAnim, setPlacedAnim] = useState(false);
     const [capturedAnim, setCapturedAnim] = useState(false);
@@ -373,6 +447,7 @@ function Card({ card, onClick, selected, disabled, hidden }) {
         return () => clearTimeout(t);
     }, [card?.captureKey]);
 
+    // Enemy back
     if (hidden) {
         return (
             <div className="card back" aria-hidden="true">
@@ -403,6 +478,7 @@ function Card({ card, onClick, selected, disabled, hidden }) {
         >
             <div className="card-anim">
                 <img className="card-art-img" src={card.imageUrl} alt="" draggable="false" />
+
                 <div className="tt-badge" />
                 <span className="tt-num top">{card.values.top}</span>
                 <span className="tt-num left">{card.values.left}</span>

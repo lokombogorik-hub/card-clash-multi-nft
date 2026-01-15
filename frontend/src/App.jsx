@@ -2,7 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Game from "./Game";
 import StormBg from "./components/StormBg";
 
-const useIsLandscape = () => {
+/**
+ * Проверка ландшафта.
+ * На iOS/Telegram matchMedia бывает капризным — поэтому fallback на сравнение width/height.
+ */
+function useIsLandscape() {
     const get = () =>
         window.matchMedia?.("(orientation: landscape)")?.matches ??
         window.innerWidth > window.innerHeight;
@@ -15,6 +19,7 @@ const useIsLandscape = () => {
         m?.addEventListener?.("change", onChange);
         window.addEventListener("resize", onChange);
         window.addEventListener("orientationchange", onChange);
+
         return () => {
             m?.removeEventListener?.("change", onChange);
             window.removeEventListener("resize", onChange);
@@ -23,14 +28,23 @@ const useIsLandscape = () => {
     }, []);
 
     return ok;
-};
+}
 
 export default function App() {
-    const [screen, setScreen] = useState("home"); // home | market | profile | game
+    /**
+     * Экраны:
+     * - home: главный экран
+     * - market/profile: заглушки
+     * - game: игра
+     */
+    const [screen, setScreen] = useState("home");
     const isLandscape = useIsLandscape();
+
+    // Видео-логотип на главном экране
     const logoRef = useRef(null);
     const [logoOk, setLogoOk] = useState(true);
 
+    // Telegram WebApp init
     useEffect(() => {
         const tg = window.Telegram?.WebApp;
         if (!tg) return;
@@ -38,46 +52,49 @@ export default function App() {
         tg.ready();
         tg.expand();
 
+        // Маскируем “шапку” цветом (полностью убрать на iOS/PC часто нельзя)
         tg.setHeaderColor?.("#000000");
         tg.setBackgroundColor?.("#000000");
         tg.setBottomBarColor?.("#000000");
 
+        // Скрываем стандартные кнопки
         tg.MainButton?.hide();
         tg.SecondaryButton?.hide();
         tg.BackButton?.hide();
 
+        // Чтобы WebView не пытался скроллить вертикально
         tg.disableVerticalSwipes?.();
         return () => tg.enableVerticalSwipes?.();
     }, []);
 
+    // Автоплей видео на home (в некоторых WebView нужно “подтолкнуть” play при касании)
     useEffect(() => {
         if (screen !== "home") return;
         logoRef.current?.play?.().catch(() => { });
     }, [screen]);
 
-    const seasonInfo = useMemo(
-        () => ({ title: "Digitall Bunny Турнир", subtitle: "Ends in 3d 12h", progress: 0.62 }),
-        []
-    );
-
+    // “Максимум возможного” для fullscreen/landscape (не гарантируется на iOS/Telegram Desktop)
     const requestFullscreenAndLandscape = async () => {
         const tg = window.Telegram?.WebApp;
         try {
             tg?.HapticFeedback?.impactOccurred?.("light");
         } catch { }
+
         try {
             await tg?.requestFullscreen?.();
         } catch { }
+
         try {
             await window.screen?.orientation?.lock?.("landscape");
         } catch { }
+
         try {
             tg?.expand?.();
         } catch { }
     };
 
     const onPlay = async () => {
-        // Сразу переходим в game, но если портрет — поверх встанет RotateGate
+        // ВАЖНО: Сначала показываем game. Если портрет — поверх будет rotate-gate.
         setScreen("game");
         await requestFullscreenAndLandscape();
     };
@@ -91,17 +108,23 @@ export default function App() {
         alert("Wallet connect (soon)");
     };
 
-    // RotateGate показываем в двух случаях:
-    // 1) screen === game и портрет => игра скрыта, показываем табло
+    // Если экран "game" и устройство в портрете — показываем табло
     const showRotate = screen === "game" && !isLandscape;
+
+    // Данные сезона (заглушка)
+    const seasonInfo = useMemo(
+        () => ({ title: "Digitall Bunny Турнир", subtitle: "Ends in 3d 12h", progress: 0.62 }),
+        []
+    );
 
     return (
         <div className="shell">
+            {/* фон-канвас (дождь/молнии) */}
             <StormBg />
 
             {screen === "game" ? (
                 <>
-                    {/* Игра всегда смонтирована, но скрывается в портрете (чтобы не было “поломанной картинки”) */}
+                    {/* Игра всегда смонтирована: при повороте не ломаем состояние, а просто прячем */}
                     <div className={`game-host ${showRotate ? "is-hidden" : ""}`}>
                         <Game onExit={onExitGame} />
                     </div>
@@ -115,9 +138,9 @@ export default function App() {
                             <div className="home-center">
                                 <button
                                     className="play-logo"
+                                    aria-label="Play"
                                     onPointerDown={() => logoRef.current?.play?.().catch(() => { })}
                                     onClick={onPlay}
-                                    aria-label="Play"
                                 >
                                     <div className="logo-wrap">
                                         {logoOk ? (
@@ -134,9 +157,11 @@ export default function App() {
                                                 <source src="/ui/logo.mp4" type="video/mp4" />
                                             </video>
                                         ) : (
-                                            <div className="logo-fallback">
+                                            <div className="page">
                                                 Видео логотипа не поддерживается
-                                                <div className="logo-fallback-sub">Проверь /ui/logo.mp4 (H.264)</div>
+                                                <div style={{ opacity: 0.8, marginTop: 6, fontSize: 12 }}>
+                                                    Проверь /ui/logo.mp4 (H.264)
+                                                </div>
                                             </div>
                                         )}
                                     </div>
@@ -163,12 +188,14 @@ export default function App() {
                         )}
                     </div>
 
+                    {/* Кнопка кошелька */}
                     <div className="wallet-float">
                         <button className="wallet-btn" onClick={onConnectWallet}>
                             Подключить кошелёк
                         </button>
                     </div>
 
+                    {/* нижний стек (season + nav) */}
                     <div className="bottom-stack">
                         <SeasonBar
                             title={seasonInfo.title}
@@ -183,6 +210,10 @@ export default function App() {
         </div>
     );
 }
+
+/* =========================
+   UI Components
+   ========================= */
 
 function RotateGate({ onBack }) {
     return (
@@ -244,6 +275,7 @@ function BottomNav({ active, onChange }) {
     );
 }
 
+/* icons */
 function PlayIcon() {
     return (
         <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
@@ -264,6 +296,7 @@ function HomeIcon() {
         </svg>
     );
 }
+
 function GemIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -272,6 +305,7 @@ function GemIcon() {
         </svg>
     );
 }
+
 function BagIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -280,6 +314,7 @@ function BagIcon() {
         </svg>
     );
 }
+
 function UserIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">

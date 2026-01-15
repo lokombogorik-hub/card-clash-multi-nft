@@ -1,3 +1,10 @@
+/* =========================================================
+   Card Clash — index.css
+   ВАЖНО:
+   - В ЭТОМ ФАЙЛЕ ТОЛЬКО CSS.
+   - НИКАКИХ import / JS / React кода тут быть не должно.
+   ========================================================= */
+
 /* =========================
    GLOBAL BASE
    ========================= */
@@ -29,13 +36,14 @@ button {
     -webkit-tap-highlight-color: transparent;
 }
 
+/* app height set from main.jsx */
 :root {
     --app-h: 100vh;
 }
 
-/* =========================
-   HOME / SHELL
-   ========================= */
+/* =========================================================
+   HOME / SHELL (главное меню)
+   ========================================================= */
 .shell {
     position: fixed;
     inset: 0;
@@ -111,6 +119,7 @@ button {
     padding: 18px;
 }
 
+/* Нижние панели меню */
 .wallet-float {
     position: absolute;
     left: 0;
@@ -250,9 +259,9 @@ button {
     pointer-events: none;
 }
 
-/* =========================
+/* =========================================================
    ROTATE GATE
-   ========================= */
+   ========================================================= */
 .rotate-gate {
     position: fixed;
     inset: 0;
@@ -308,44 +317,64 @@ button {
     }
 }
 
-/* =========================
-   TT GAME (NO HAND FRAMES + SCORE TIGHT TO BOARD)
-   ========================= */
+/* =========================================================
+   TT GAME — ПАРАМЕТРЫ (тут ты будешь менять значения)
+   ========================================================= */
 :root {
+    /* Общие отступы игры */
     --ui-pad: clamp(8px, 2vw, 14px);
     --gap: clamp(6px, 1.6vw, 10px);
 
-    /* cards sizing */
+    /* 1) Вот этим ты двигаешь КАРТЫ ОТ КРАЕВ ЭКРАНА */
+    --edge-inset: 14px;
+    /* ↑ больше = дальше от краев; ↓ меньше = ближе к краям */
+
+    /* 2) Вот этим ты увеличиваешь карты (потолок размера) */
     --card-w-max: 170px;
+
+    /* Руки: зазоры, чтобы не было наложения */
+    --hand-col-gap: 18px;
+    --row-gap: 12px;
+
+    /* Насколько “2 карты” подъезжают к столу */
+    --towards-board: 12px;
+
+    /* Плашки счета */
+    --score-w: 56px;
+    --score-gap: 4px;
+}
+
+/* =========================================================
+   TT GAME — ВЫЧИСЛЕНИЯ (лучше не трогать)
+   ========================================================= */
+:root {
+    /* ширина карты по ширине экрана */
     --card-w-vw: calc((100vw - (var(--ui-pad) * 2) - (var(--gap) * 8)) / 7);
 
+    /* подгоняем по высоте: поле = 3 ряда карт + 4 gap */
     --available-h: calc(var(--app-h, 100vh) - (var(--ui-pad) * 2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - (var(--gap) * 2));
 
     --card-h-fit: calc((var(--available-h) - (var(--gap) * 4)) / 3);
     --card-w-fit: calc(var(--card-h-fit) / 1.375);
 
+    /* финальные размеры карты */
     --card-w: clamp(62px, min(var(--card-w-vw), var(--card-w-fit)), var(--card-w-max));
     --card-h: calc(var(--card-w) * 1.375);
 
+    /* размеры поля */
     --board-w: calc((var(--card-w) * 3) + (var(--gap) * 4));
     --board-h: calc((var(--card-h) * 3) + (var(--gap) * 4));
 
-    /* hands layout */
-    --hand-col-gap: 18px;
-    --row-gap: 12px;
-    --towards-board: 12px;
-    --half-step: calc((var(--card-h) + var(--row-gap)) / 2);
-
-    /* keep some space from screen edges */
-    --edge-inset: 14px;
-
-    /* score sizing/placement */
-    --score-w: 56px;
-    --score-gap: 4px;
-
+    /* ширина боковой зоны руки (2 карты + зазор + воздух) */
     --side-w: calc((var(--card-w) * 2) + var(--hand-col-gap) + 26px);
+
+    /* 2 карты “между 3” по вертикали */
+    --half-step: calc((var(--card-h) + var(--row-gap)) / 2);
 }
 
+/* =========================================================
+   TT GAME — КОНТЕЙНЕРЫ
+   ========================================================= */
 .game-root {
     position: fixed;
     inset: 0;
@@ -355,16 +384,26 @@ button {
     padding-top: calc(var(--ui-pad) + env(safe-area-inset-top, 0px));
     padding-bottom: calc(var(--ui-pad) + env(safe-area-inset-bottom, 0px));
     overflow: hidden;
+    /* чтобы не появлялись скроллы */
     isolation: isolate;
 }
 
+/* Сцена игры: делаем компактную ширину под поле и руки,
+   чтобы на ПК не было “растянуто на весь экран” */
 .game-ui.tt-layout {
     height: 100%;
-    width: 100%;
     display: grid;
-    grid-template-columns: var(--side-w) 1fr var(--side-w);
+    grid-template-columns: var(--side-w) var(--board-w) var(--side-w);
     gap: var(--gap);
-    align-items: stretch;
+
+    /* ВОТ это отвечает за отступ от краев */
+    padding-left: var(--edge-inset);
+    padding-right: var(--edge-inset);
+    box-sizing: border-box;
+
+    width: min(100%, calc(var(--side-w) + var(--board-w) + var(--side-w) + (var(--gap) * 2) + (var(--edge-inset) * 2)));
+    margin: 0 auto;
+
     position: relative;
 }
 
@@ -380,7 +419,9 @@ button {
     border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
-/* ==== SCORE: tight to board, OUTSIDE board (never overlaps) ==== */
+/* =========================================================
+   HUD — счет (всегда СНАРУЖИ поля, чтобы не залезал)
+   ========================================================= */
 .hud-corner {
     position: absolute;
     z-index: 90;
@@ -388,14 +429,15 @@ button {
     filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.35));
 }
 
+/* Красный слева от поля */
 .hud-near-left {
     left: calc(50% - (var(--board-w) / 2) - var(--score-w) - var(--score-gap));
     bottom: 10px;
 }
 
+/* Синий справа (в сторону твоей руки) */
 .hud-near-right {
     left: calc(50% + (var(--board-w) / 2) + var(--score-gap));
-    /* синяя в сторону твоей руки (справа) */
     bottom: 10px;
 }
 
@@ -419,25 +461,58 @@ button {
     box-shadow: 0 0 14px rgba(0, 180, 255, 0.16);
 }
 
-/* ==== HANDS: remove frames around cards (no “field”) ==== */
+/* Ход (аватар) — оставляем как у тебя, но базово */
+.hud-turn-avatar {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    z-index: 95;
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.42);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    overflow: hidden;
+}
+
+.hud-turn-avatar::before {
+    content: "";
+    position: absolute;
+    inset: 4px;
+    border-radius: 999px;
+    background:
+        radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02)),
+        url("/ui/avatar-player.png?v=1");
+    background-size: cover;
+    background-position: center;
+    opacity: .95;
+}
+
+.hud-turn-avatar.enemy::before {
+    background:
+        radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02)),
+        url("/ui/avatar-enemy.png?v=1");
+    background-size: cover;
+    background-position: center;
+}
+
+.hud-turn-avatar.player {
+    box-shadow: 0 0 22px rgba(0, 180, 255, 0.28), 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.hud-turn-avatar.enemy {
+    box-shadow: 0 0 22px rgba(255, 80, 80, 0.22), 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+/* =========================================================
+   HANDS — без рамок, без клиппинга
+   ========================================================= */
 .hand.left,
 .hand.right {
     background: transparent;
-    /* убрали поле */
     border: none;
-    /* убрали рамку */
     border-radius: 0;
     overflow: visible;
-    /* ничего не обрезаем */
-}
-
-/* edge inset without transforms (stable) */
-.hand.left {
-    margin-left: var(--edge-inset);
-}
-
-.hand.right {
-    margin-right: var(--edge-inset);
 }
 
 .hand-grid {
@@ -447,8 +522,10 @@ button {
     grid-template-rows: repeat(3, var(--card-h));
     column-gap: var(--hand-col-gap);
     row-gap: var(--row-gap);
+
+    /* воздух, чтобы тени/пульсации не резались */
     padding: 10px;
-    /* небольшой воздух */
+
     justify-content: center;
     align-content: center;
     overflow: visible;
@@ -460,26 +537,27 @@ button {
     overflow: visible;
 }
 
-/* enemy left: 2 cards (col2) closer to board + “between” */
+/* Enemy слева: 2 карты (col2) ближе к столу + “между 3” */
 .hand.left .hand-slot.col2 {
     transform: translateX(var(--towards-board)) translateY(var(--half-step));
 }
 
-/* player right: 2 cards closer to board, 3 to screen edge
-   (swap columns for right hand) */
+/* Player справа: 2 карты (col2) ближе к столу, 3 (col1) к краю.
+   Ключ: на правой руке "колонка у стола" это grid-column:1,
+   поэтому мы ПЕРЕКЛАДЫВАЕМ col2 в колонку 1, а col1 в колонку 2. */
 .hand.right .hand-slot.col2 {
     grid-column: 1 !important;
-    /* 2 карты -> к столу */
     transform: translateX(calc(-1 * var(--towards-board))) translateY(var(--half-step));
 }
 
 .hand.right .hand-slot.col1 {
     grid-column: 2 !important;
-    /* 3 карты -> к краю */
     transform: none;
 }
 
-/* ==== CENTER / BOARD ==== */
+/* =========================================================
+   BOARD
+   ========================================================= */
 .center-col {
     display: flex;
     align-items: center;
@@ -542,7 +620,9 @@ button {
     cursor: pointer;
 }
 
-/* ==== CARD ==== */
+/* =========================================================
+   CARD
+   ========================================================= */
 .card {
     width: var(--card-w);
     height: var(--card-h);
@@ -573,7 +653,7 @@ button {
     z-index: 1;
 }
 
-/* selection (right hand) — мягче, чтобы не “вылетало” */
+/* Выбор карты справа — делаем мягче (чтобы не наезжала и не ломала сетку) */
 .hand.right .card {
     transition: transform 200ms cubic-bezier(.2, .9, .2, 1), box-shadow 200ms ease, filter 200ms ease;
 }
@@ -585,7 +665,7 @@ button {
     box-shadow: 0 0 20px rgba(255, 215, 0, 0.20), 0 14px 34px rgba(0, 0, 0, 0.55);
 }
 
-/* owner glow */
+/* Свечение владельца */
 .card.player {
     border: 2px solid rgba(42, 107, 255, 0.98);
     box-shadow: 0 0 18px rgba(0, 180, 255, 0.30), 0 14px 30px rgba(0, 0, 0, 0.45);
@@ -687,6 +767,7 @@ button {
     font-weight: 900;
     color: #fff;
     text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85);
+
     display: inline-block !important;
     width: auto !important;
     max-width: none !important;
@@ -746,7 +827,9 @@ button {
     filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.65)) drop-shadow(0 0 18px rgba(120, 200, 255, 0.18));
 }
 
-/* GAME OVER + dice */
+/* =========================================================
+   GAME OVER + DICE RAIN
+   ========================================================= */
 .game-over {
     position: fixed;
     inset: 0;
@@ -808,16 +891,33 @@ button {
     }
 }
 
-/* Mobile landscape: bigger cards + a bit more inset */
-@media (max-width: 520px) and (orientation: landscape) {
+/* =========================================================
+   MOBILE LANDSCAPE (важное!)
+   ТУТ ты увеличиваешь карты и отступы именно на телефоне.
+   max-height — чтобы реально работало на iPhone landscape.
+   ========================================================= */
+@media (max-height: 520px) and (orientation: landscape) {
     :root {
         --ui-pad: 6px;
         --gap: 6px;
-        --card-w-max: 236px;
+
+        /* Двигать от краёв на телефоне */
         --edge-inset: 22px;
+
+        /* Увеличить карты на телефоне */
+        --card-w-max: 196px;
+
+        /* Уменьшить наложение */
         --hand-col-gap: 20px;
         --row-gap: 12px;
-        --score-gap: 3px;
+    }
+}
+
+/* Альтернатива для “любых тач устройств” (Android/Telegram) */
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+    :root {
+        --edge-inset: 22px;
+        --card-w-max: 196px;
     }
 }
 
