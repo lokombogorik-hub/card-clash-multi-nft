@@ -307,8 +307,21 @@ export default function Game({ onExit }) {
                 <div className="hud-corner hud-score red hud-near-left">🟥 {score.red}</div>
                 <div className="hud-corner hud-score blue hud-near-right">{score.blue} 🟦</div>
 
-                {/* Ход — аватар-кружок (CSS делает glow по классу player/enemy) */}
-                <div className={`hud-turn-avatar ${turn}`} />
+                {/* Иконка игрока, ход */}
+                <PlayerBadge
+                    side="enemy"
+                    name="Enemy"
+                    avatar="/ui/avatar-enemy.png?v=1"
+                    active={turn === "enemy"}
+                />
+
+                <PlayerBadge
+                    side="player"
+                    name="You"
+                    avatar="/ui/avatar-player.png?v=1"
+                    active={turn === "player"}
+                />
+
 
                 {/* LEFT: enemy hand (рубашки) */}
                 <div className="hand left">
@@ -447,6 +460,14 @@ function Card({ card, onClick, selected, disabled, hidden }) {
         return () => clearTimeout(t);
     }, [card?.captureKey]);
 
+    function PlayerBadge({ side, name, avatar, active }) {
+        return (
+            <div className={`player-badge ${side} ${active ? "active" : ""}`} aria-label={`${name} badge`}>
+                <img className="player-badge-avatar" src={avatar} alt="" draggable="false" />
+                <div className="player-badge-name">{name}</div>
+            </div>
+        );
+    }
     // Enemy back
     if (hidden) {
         return (

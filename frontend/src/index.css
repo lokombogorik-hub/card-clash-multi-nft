@@ -388,6 +388,82 @@ button {
     isolation: isolate;
 }
 
+/* =========================
+   Player badges (bottom)
+   - score stays near board
+   - badge goes further outward (opposite side of score)
+   ========================= */
+
+.player-badge {
+    position: absolute;
+    bottom: 10px;
+    height: var(--badge-h);
+    width: var(--badge-w);
+    z-index: 95;
+
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    padding: 6px 10px;
+    border-radius: 14px;
+
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+
+    pointer-events: none;
+    /* чтобы не мешало кликам */
+}
+
+.player-badge-avatar {
+    width: var(--badge-avatar);
+    height: var(--badge-avatar);
+    border-radius: 999px;
+    object-fit: cover;
+    flex: 0 0 auto;
+
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.player-badge-name {
+    font-weight: 900;
+    font-size: 12px;
+    letter-spacing: .2px;
+    opacity: .95;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Подсветка “чей ход” */
+.player-badge.active.enemy {
+    box-shadow: 0 0 22px rgba(255, 80, 80, 0.24);
+    border-color: rgba(255, 80, 80, 0.35);
+}
+
+.player-badge.active.player {
+    box-shadow: 0 0 22px rgba(0, 180, 255, 0.26);
+    border-color: rgba(0, 180, 255, 0.35);
+}
+
+/* Позиция: "противоположно" счету снизу:
+   - красный счет слева от поля => бейдж enemy еще левее (наружу)
+   - синий счет справа от поля => бейдж player еще правее (наружу)
+*/
+
+/* enemy badge (слева, наружу от красного счета) */
+.player-badge.enemy {
+    left: calc(50% - (var(--board-w) / 2) - var(--score-w) - var(--score-gap) - var(--badge-w) - var(--badge-gap));
+}
+
+/* player badge (справа, наружу от синего счета) */
+.player-badge.player {
+    left: calc(50% + (var(--board-w) / 2) + var(--score-gap) + var(--score-w) + var(--badge-gap));
+}
+
 /* Сцена игры: делаем компактную ширину под поле и руки,
    чтобы на ПК не было “растянуто на весь экран” */
 .game-ui.tt-layout {
@@ -459,49 +535,6 @@ button {
 
 .hud-score.blue {
     box-shadow: 0 0 14px rgba(0, 180, 255, 0.16);
-}
-
-/* Ход (аватар) — оставляем как у тебя, но базово */
-.hud-turn-avatar {
-    position: absolute;
-    right: 10px;
-    top: 10px;
-    z-index: 95;
-    width: 44px;
-    height: 44px;
-    border-radius: 999px;
-    background: rgba(0, 0, 0, 0.42);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    overflow: hidden;
-}
-
-.hud-turn-avatar::before {
-    content: "";
-    position: absolute;
-    inset: 4px;
-    border-radius: 999px;
-    background:
-        radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02)),
-        url("/ui/avatar-player.png?v=1");
-    background-size: cover;
-    background-position: center;
-    opacity: .95;
-}
-
-.hud-turn-avatar.enemy::before {
-    background:
-        radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02)),
-        url("/ui/avatar-enemy.png?v=1");
-    background-size: cover;
-    background-position: center;
-}
-
-.hud-turn-avatar.player {
-    box-shadow: 0 0 22px rgba(0, 180, 255, 0.28), 0 10px 30px rgba(0, 0, 0, 0.45);
-}
-
-.hud-turn-avatar.enemy {
-    box-shadow: 0 0 22px rgba(255, 80, 80, 0.22), 0 10px 30px rgba(0, 0, 0, 0.45);
 }
 
 /* =========================================================
@@ -910,6 +943,19 @@ button {
         /* Уменьшить наложение */
         --hand-col-gap: 10px;
         --row-gap: 12px;
+        /* бейдж игрока (аватар + ник) */
+        --badge-w: 160px;
+        --badge-h: 44px;
+        --badge-gap: 8px;
+        --badge-avatar: 32px;
+    }
+}
+
+@media (max-height: 520px) and (orientation: landscape) {
+    :root {
+        --badge-w: 132px;
+        --badge-h: 40px;
+        --badge-avatar: 28px;
     }
 }
 
