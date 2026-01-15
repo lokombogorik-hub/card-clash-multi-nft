@@ -9,7 +9,6 @@ const DIRS = [
 ];
 
 const RULES = { combo: true, same: true, plus: true };
-
 const rand9 = () => Math.ceil(Math.random() * 9);
 const randomFirstTurn = () => (Math.random() < 0.5 ? "player" : "enemy");
 
@@ -119,16 +118,19 @@ function resolveCombo(queue, grid, rules) {
     }
 }
 
-const posForHandIndex = (i) => {
-    if (i < 3) return { col: 1, row: i + 1 };
-    return { col: 2, row: i - 2 };
-};
+const posForHandIndex = (i) => (i < 3 ? { col: 1, row: i + 1 } : { col: 2, row: i - 2 });
 
-function getDisplayName(me) {
+function displayName(me) {
     if (!me) return "You";
     const u = me.username ? `@${me.username}` : "";
     const full = [me.first_name, me.last_name].filter(Boolean).join(" ").trim();
     return u || full || "You";
+}
+
+function initialsFrom(name) {
+    if (!name) return "?";
+    const n = name.replace(/^@/, "").trim();
+    return (n[0] || "?").toUpperCase();
 }
 
 export default function Game({ onExit, me }) {
@@ -168,8 +170,6 @@ export default function Game({ onExit, me }) {
         );
     }, [board]);
 
-    const winnerText = winner === "player" ? "Победа" : winner === "enemy" ? "Поражение" : "Ничья";
-
     const placeCard = (i) => {
         if (gameOver) return;
         if (turn !== "player") return;
@@ -190,7 +190,6 @@ export default function Game({ onExit, me }) {
         setTurn("enemy");
     };
 
-    // AI
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
         if (aiGuard.current.handled) return;
@@ -220,7 +219,6 @@ export default function Game({ onExit, me }) {
         return () => clearTimeout(t);
     }, [turn, gameOver, board, enemy]);
 
-    // game over
     useEffect(() => {
         if (board.some((c) => c === null)) return;
         const p = board.filter((c) => c.owner === "player").length;
@@ -229,14 +227,11 @@ export default function Game({ onExit, me }) {
         setGameOver(true);
     }, [board]);
 
-    // confetti win
     useEffect(() => {
         if (!gameOver || winner !== "player") return;
 
         const safe = (opts) => {
-            try {
-                confetti({ zIndex: 99999, ...opts });
-            } catch { }
+            try { confetti({ zIndex: 99999, ...opts }); } catch { }
         };
 
         const origin = { x: 0.5, y: 0.35 };
@@ -247,30 +242,20 @@ export default function Game({ onExit, me }) {
         return () => timers.forEach(clearTimeout);
     }, [gameOver, winner]);
 
+    const myName = displayName(me);
+
     return (
         <div className="game-root">
             <div className="game-ui tt-layout">
                 <button className="exit" onClick={onExit}>← Меню</button>
 
-                {/* score */}
                 <div className="hud-corner hud-score red hud-near-left">🟥 {score.red}</div>
                 <div className="hud-corner hud-score blue hud-near-right">{score.blue} 🟦</div>
 
-                {/* badges (opposite side from score, highlight by turn) */}
-                <PlayerBadge
-                    side="enemy"
-                    name="Enemy"
-                    avatar="/ui/avatar-enemy.png?v=1"
-                    active={turn === "enemy"}
-                />
-                <PlayerBadge
-                    side="player"
-                    name={getDisplayName(me)}
-                    avatar={me?.photo_url || "/ui/avatar-player.png?v=1"}
-                    active={turn === "player"}
-                />
+                {/* badges TOP near board (CSS positions them) */}
+                <PlayerBadge side="enemy" name="Enemy" avatarUrl="/ui/avatar-enemy.png?v=1" active={turn === "enemy"} />
+                <PlayerBadge side="player" name={myName} avatarUrl={me?.photo_url} active={turn === "player"} />
 
-                {/* enemy hand */}
                 <div className="hand left">
                     <div className="hand-grid">
                         {enemy.map((c, i) => {
@@ -284,7 +269,6 @@ export default function Game({ onExit, me }) {
                     </div>
                 </div>
 
-                {/* board */}
                 <div className="center-col">
                     <div className="board">
                         {board.map((cell, i) => (
@@ -299,7 +283,6 @@ export default function Game({ onExit, me }) {
                     </div>
                 </div>
 
-                {/* player hand */}
                 <div className="hand right">
                     <div className="hand-grid">
                         {player.map((c, i) => {
@@ -323,7 +306,7 @@ export default function Game({ onExit, me }) {
                 {gameOver && (
                     <div className="game-over">
                         <div className="game-over-box">
-                            <h2>{winnerText}</h2>
+                            <h2>{winner === "player" ? "Победа" : winner === "enemy" ? "Поражение" : "Ничья"}</h2>
                             <div className="game-over-buttons">
                                 <button onClick={reset}>Заново</button>
                                 <button onClick={onExit}>Меню</button>
@@ -336,19 +319,24 @@ export default function Game({ onExit, me }) {
     );
 }
 
-function PlayerBadge({ side, name, avatar, active }) {
+function PlayerBadge({ side, name, avatarUrl, active }) {
+    const [imgOk, setImgOk] = useState(Boolean(avatarUrl));
+    const initials = initialsFrom(name);
+
     return (
         <div className={`player-badge ${side} ${active ? "active" : ""}`}>
-            <img
-                className="player-badge-avatar"
-                src={avatar}
-                alt=""
-                draggable="false"
-                onError={(e) => {
-                    e.currentTarget.src =
-                        side === "player" ? "/ui/avatar-player.png?v=1" : "/ui/avatar-enemy.png?v=1";
-                }}
-            />
+            {avatarUrl && imgOk ? (
+                <img
+                    className="player-badge-avatar"
+                    src={avatarUrl}
+                    alt=""
+                    draggable="false"
+                    referrerPolicy="no-referrer"
+                    onError={() => setImgOk(false)}
+                />
+            ) : (
+                <div className={`player-badge-avatar-fallback ${side}`}>{initials}</div>
+            )}
             <div className="player-badge-name">{name}</div>
         </div>
     );
@@ -411,13 +399,7 @@ function Card({ card, onClick, selected, disabled, hidden }) {
         return (
             <div className="card back" aria-hidden="true">
                 <div className="card-back-inner">
-                    <img
-                        className="card-back-logo-img"
-                        src="/ui/cardclash-logo.png?v=3"
-                        alt="CardClash"
-                        draggable="false"
-                        onError={(e) => (e.currentTarget.style.display = "none")}
-                    />
+                    <img className="card-back-logo-img" src="/ui/cardclash-logo.png?v=3" alt="CardClash" draggable="false" />
                 </div>
             </div>
         );

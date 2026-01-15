@@ -1018,3 +1018,65 @@ button {
     max-width: 100% !important;
     overflow: hidden !important;
 }
+
+/* =========================
+   DESKTOP/MOBILE FINAL FIX PACK — paste at VERY END
+   ========================= */
+
+/* EXIT: ПК — в угол, мобилка — вниз (без мискликов с Telegram close) */
+.exit {
+    position: fixed !important;
+    left: 12px !important;
+    top: 12px !important;
+    bottom: auto !important;
+    z-index: 999 !important;
+    min-width: 92px !important;
+}
+
+@media (hover: none) and (pointer: coarse) {
+    .exit {
+        top: auto !important;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
+    }
+}
+
+/* Player badge: авто-ширина + не режем ник */
+.player-badge {
+    width: auto !important;
+    max-width: min(260px, 34vw) !important;
+}
+
+.player-badge-name {
+    min-width: 0 !important;
+}
+
+/* Fallback avatar (если Telegram photo_url не пришёл/не загрузился) */
+.player-badge-avatar-fallback {
+    width: var(--badge-avatar) !important;
+    height: var(--badge-avatar) !important;
+    border-radius: 999px !important;
+    display: grid !important;
+    place-items: center !important;
+    font-weight: 900 !important;
+    font-size: 12px !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Бейджи СВЕРХУ, впритык к полю */
+.player-badge {
+    bottom: auto !important;
+    top: max(calc(env(safe-area-inset-top, 0px) + 6px),
+            calc(50% - (var(--board-h) / 2) - var(--badge-h) - 6px)) !important;
+}
+
+/* позиционирование без расчета ширины: "впритык к полю" */
+.player-badge.enemy {
+    left: calc(50% - (var(--board-w) / 2) - 8px) !important;
+    transform: translateX(-100%) !important;
+}
+
+.player-badge.player {
+    left: calc(50% + (var(--board-w) / 2) + 8px) !important;
+    transform: none !important;
+}

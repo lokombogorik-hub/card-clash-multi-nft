@@ -26,13 +26,13 @@ function useIsLandscape() {
 }
 
 export default function App() {
-    const [screen, setScreen] = useState("home"); // home | market | profile | game
+    const [screen, setScreen] = useState("home");
     const isLandscape = useIsLandscape();
 
     const logoRef = useRef(null);
     const [logoOk, setLogoOk] = useState(true);
 
-    // Telegram user (для ника/аватара)
+    // Telegram user for nickname/avatar
     const [me, setMe] = useState(null);
 
     useEffect(() => {
@@ -50,7 +50,6 @@ export default function App() {
         tg.SecondaryButton?.hide();
         tg.BackButton?.hide();
 
-        // забираем telegram user
         try {
             setMe(tg.initDataUnsafe?.user || null);
         } catch {
@@ -66,17 +65,12 @@ export default function App() {
         logoRef.current?.play?.().catch(() => { });
     }, [screen]);
 
-    const requestFullscreenAndLandscape = async () => {
+    const requestFullscreen = async () => {
         const tg = window.Telegram?.WebApp;
-
-        try { tg?.HapticFeedback?.impactOccurred?.("light"); } catch { }
-
-        // Telegram fullscreen (если поддерживается)
-        try { await tg?.requestFullscreen?.(); } catch { }
-        try { await window.screen?.orientation?.lock?.("landscape"); } catch { }
+        try { tg?.requestFullscreen?.(); } catch { }
         try { tg?.expand?.(); } catch { }
 
-        // Browser fullscreen fallback (ПК браузер) — работает только по клику (у нас клик Play)
+        // browser fallback (если открылось не в Telegram)
         try {
             if (!document.fullscreenElement) {
                 await document.documentElement.requestFullscreen?.();
@@ -84,17 +78,15 @@ export default function App() {
         } catch { }
     };
 
-    const onPlay = async () => {
+    const onPlay = () => {
+        // важно: fullscreen вызывать синхронно по клику
+        requestFullscreen();
         setScreen("game");
-        await requestFullscreenAndLandscape();
     };
 
     const onExitGame = () => setScreen("home");
 
-    const onConnectWallet = () => {
-        try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light"); } catch { }
-        alert("Wallet connect (soon)");
-    };
+    const onConnectWallet = () => alert("Wallet connect (soon)");
 
     const showRotate = screen === "game" && !isLandscape;
 
@@ -112,7 +104,6 @@ export default function App() {
                     <div className={`game-host ${showRotate ? "is-hidden" : ""}`}>
                         <Game onExit={onExitGame} me={me} />
                     </div>
-
                     {showRotate && <RotateGate onBack={onExitGame} />}
                 </>
             ) : (
@@ -141,12 +132,7 @@ export default function App() {
                                                 <source src="/ui/logo.mp4" type="video/mp4" />
                                             </video>
                                         ) : (
-                                            <div className="page">
-                                                Видео логотипа не поддерживается
-                                                <div style={{ opacity: 0.8, marginTop: 6, fontSize: 12 }}>
-                                                    Проверь /ui/logo.mp4 (H.264)
-                                                </div>
-                                            </div>
+                                            <div className="page">Видео логотипа не поддерживается</div>
                                         )}
                                     </div>
 
@@ -228,10 +214,10 @@ function SeasonBar({ title, subtitle, progress, onRefresh }) {
 
 function BottomNav({ active, onChange }) {
     const items = [
-        { key: "home", label: "Главная", icon: <HomeIcon /> },
-        { key: "market", label: "Маркет", icon: <GemIcon /> },
-        { key: "inventory", label: "Инвентарь", icon: <BagIcon />, disabled: true },
-        { key: "profile", label: "Профиль", icon: <UserIcon /> },
+        { key: "home", label: "Главная" },
+        { key: "market", label: "Маркет" },
+        { key: "inventory", label: "Инвентарь", disabled: true },
+        { key: "profile", label: "Профиль" },
     ];
 
     return (
@@ -244,7 +230,6 @@ function BottomNav({ active, onChange }) {
                         className={`nav-item ${isActive ? "active" : ""} ${it.disabled ? "disabled" : ""}`}
                         onClick={it.disabled ? undefined : () => onChange(it.key)}
                     >
-                        <span className="nav-ic">{it.icon}</span>
                         <span className="nav-txt">{it.label}</span>
                     </button>
                 );
@@ -257,43 +242,6 @@ function PlayIcon() {
     return (
         <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
             <path d="M9 7.5v9l8-4.5-8-4.5Z" fill="white" opacity="0.95" />
-        </svg>
-    );
-}
-
-function HomeIcon() {
-    return (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path
-                d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z"
-                stroke="white"
-                strokeWidth="2"
-                opacity="0.9"
-            />
-        </svg>
-    );
-}
-function GemIcon() {
-    return (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2 3 9l9 13 9-13-9-7Z" stroke="white" strokeWidth="2" opacity="0.9" />
-            <path d="M3 9h18" stroke="white" strokeWidth="2" opacity="0.6" />
-        </svg>
-    );
-}
-function BagIcon() {
-    return (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M6 8h12l-1 13H7L6 8Z" stroke="white" strokeWidth="2" opacity="0.9" />
-            <path d="M9 8a3 3 0 0 1 6 0" stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.9" />
-        </svg>
-    );
-}
-function UserIcon() {
-    return (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" stroke="white" strokeWidth="2" opacity="0.9" />
-            <path d="M4 20a8 8 0 0 1 16 0" stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.9" />
         </svg>
     );
 }
