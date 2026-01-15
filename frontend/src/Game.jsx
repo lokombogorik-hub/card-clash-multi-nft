@@ -72,16 +72,13 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
 
     const toFlip = new Set();
 
-    // basic
     for (const i of infos) if (i.placedSide > i.targetSide) toFlip.add(i.ni);
 
-    // same
     if (rules.same) {
         const eq = infos.filter((i) => i.placedSide === i.targetSide);
         if (eq.length >= 2) eq.forEach((i) => toFlip.add(i.ni));
     }
 
-    // plus
     if (rules.plus) {
         const groups = new Map();
         for (const i of infos) {
@@ -94,7 +91,6 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
 
     const flipped = [];
     for (const ni of toFlip) if (flipToOwner(grid, ni, placed.owner)) flipped.push(ni);
-
     return { flipped };
 }
 
@@ -111,7 +107,6 @@ function captureByPowerFrom(idx, grid) {
             if (flipToOwner(grid, ni, src.owner)) flipped.push(ni);
         }
     }
-
     return flipped;
 }
 
@@ -127,7 +122,7 @@ function resolveCombo(queue, grid, rules) {
 
 const posForHandIndex = (i) => {
     // 0..2 -> col1 rows 1..3
-    // 3..4 -> col2 rows 1..2 (а CSS сдвинет их вниз на полшага => будут “между 3”)
+    // 3..4 -> col2 rows 1..2
     if (i < 3) return { col: 1, row: i + 1 };
     return { col: 2, row: i - 2 };
 };
@@ -146,7 +141,7 @@ export default function Game({ onExit }) {
 
     const [turn, setTurn] = useState(() => randomFirstTurn());
     const [gameOver, setGameOver] = useState(false);
-    const [winner, setWinner] = useState(null); // player | enemy | draw
+    const [winner, setWinner] = useState(null);
 
     const reset = () => {
         setHands(makeHands());
@@ -191,7 +186,6 @@ export default function Game({ onExit }) {
         setTurn("enemy");
     };
 
-    // AI ход
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
         if (aiGuard.current.handled) return;
@@ -221,7 +215,6 @@ export default function Game({ onExit }) {
         return () => clearTimeout(t);
     }, [turn, gameOver, board, enemy]);
 
-    // game over
     useEffect(() => {
         if (board.some((c) => c === null)) return;
         const p = board.filter((c) => c.owner === "player").length;
@@ -230,7 +223,6 @@ export default function Game({ onExit }) {
         setGameOver(true);
     }, [board]);
 
-    // confetti win
     useEffect(() => {
         if (!gameOver || winner !== "player") return;
 
@@ -255,12 +247,12 @@ export default function Game({ onExit }) {
                     ← Меню
                 </button>
 
-                {/* HUD по углам (поверх, не занимает место у поля) */}
-                <div className="hud-corner hud-tl hud-score red">🟥 {score.red}</div>
-                <div className={`hud-corner hud-tr hud-turn ${turn}`}>
-                    <div className="hud-dot" />
-                </div>
-                <div className="hud-corner hud-br hud-score blue">{score.blue} 🟦</div>
+                {/* Счёт снизу у ближних углов поля */}
+                <div className="hud-corner hud-score red hud-near-left">🟥 {score.red}</div>
+                <div className="hud-corner hud-score blue hud-near-right">{score.blue} 🟦</div>
+
+                {/* Ход = аватар-кружок, подсвечивается */}
+                <div className={`hud-corner hud-turn-avatar ${turn}`} />
 
                 {/* LEFT enemy */}
                 <div className="hand left">
@@ -268,11 +260,7 @@ export default function Game({ onExit }) {
                         {enemy.map((c, i) => {
                             const { col, row } = posForHandIndex(i);
                             return (
-                                <div
-                                    key={c.id}
-                                    className={`hand-slot col${col}`}
-                                    style={{ gridColumn: col, gridRow: row }}
-                                >
+                                <div key={c.id} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
                                     <Card hidden />
                                 </div>
                             );
@@ -280,7 +268,7 @@ export default function Game({ onExit }) {
                     </div>
                 </div>
 
-                {/* CENTER (только поле, чтобы было шире) */}
+                {/* CENTER board */}
                 <div className="center-col">
                     <div className="board">
                         {board.map((cell, i) => (
@@ -301,11 +289,7 @@ export default function Game({ onExit }) {
                         {player.map((c, i) => {
                             const { col, row } = posForHandIndex(i);
                             return (
-                                <div
-                                    key={c.id}
-                                    className={`hand-slot col${col}`}
-                                    style={{ gridColumn: col, gridRow: row }}
-                                >
+                                <div key={c.id} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
                                     <Card
                                         card={c}
                                         selected={selected?.id === c.id}
@@ -395,12 +379,10 @@ function Card({ card, onClick, selected, disabled, hidden }) {
                 <div className="card-back-inner">
                     <img
                         className="card-back-logo-img"
-                        src="/ui/cardclash-logo.png?v=2"
+                        src="/ui/cardclash-logo.png?v=3"
                         alt="CardClash"
                         draggable="false"
-                        onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                        }}
+                        onError={(e) => (e.currentTarget.style.display = "none")}
                     />
                 </div>
             </div>

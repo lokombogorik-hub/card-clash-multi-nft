@@ -29,7 +29,6 @@ button {
     -webkit-tap-highlight-color: transparent;
 }
 
-/* app height set from main.jsx */
 :root {
     --app-h: 100vh;
 }
@@ -251,12 +250,6 @@ button {
     pointer-events: none;
 }
 
-/* if App hides game behind rotate gate */
-.game-host.is-hidden {
-    opacity: 0;
-    pointer-events: none;
-}
-
 /* =========================
    ROTATE GATE
    ========================= */
@@ -316,27 +309,29 @@ button {
 }
 
 /* =========================
-   TT GAME (FULL WIDTH GRID)
+   TT GAME
    ========================= */
 :root {
     --ui-pad: clamp(8px, 2vw, 14px);
     --gap: clamp(6px, 1.6vw, 10px);
 
+    /* mobile: cards bigger */
     --card-w-max: 170px;
 
+    /* hand layout */
     --hand-col-gap: 10px;
     --row-gap: 10px;
+    --towards-board: 12px;
 
-    /* inset hands from screen edges (mobile uses bigger) */
+    /* on mobile we inset hands a bit from edges */
     --side-inset: 0px;
 
-    /* 2 cards between 3 => half-step down */
+    /* 2 cards between 3 */
     --half-step: calc((var(--card-h) + var(--row-gap)) / 2);
 
-    /* 7 columns width calc */
+    /* 7 columns sizing */
     --card-w-vw: calc((100vw - (var(--ui-pad) * 2) - (var(--gap) * 8)) / 7);
 
-    /* fit by height (board = 3 rows) */
     --available-h: calc(var(--app-h, 100vh) - (var(--ui-pad) * 2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - (var(--gap) * 2));
 
     --card-h-fit: calc((var(--available-h) - (var(--gap) * 4)) / 3);
@@ -361,12 +356,6 @@ button {
     padding-bottom: calc(var(--ui-pad) + env(safe-area-inset-bottom, 0px));
     overflow: hidden;
     isolation: isolate;
-
-    background:
-        radial-gradient(70vmax 55vmax at 18% 10%, rgba(124, 58, 237, 0.34), transparent 62%),
-        radial-gradient(75vmax 60vmax at 88% 30%, rgba(24, 231, 255, 0.26), transparent 62%),
-        radial-gradient(65vmax 50vmax at 50% 98%, rgba(255, 61, 242, 0.22), transparent 58%),
-        linear-gradient(180deg, #070a18, #050611);
 }
 
 .game-ui.tt-layout {
@@ -377,24 +366,21 @@ button {
     gap: var(--gap);
     align-items: stretch;
     position: relative;
-    z-index: 2;
 }
 
-/* MENU button left */
 .exit {
     position: absolute;
     left: 10px;
     top: 10px;
-    right: auto;
+    z-index: 80;
     padding: 8px 12px;
     border-radius: 10px;
     background: rgba(0, 0, 0, 0.35);
     color: #fff;
     border: 1px solid rgba(255, 255, 255, 0.18);
-    z-index: 80;
 }
 
-/* HUD: score near board bottom corners */
+/* HUD placement: near board bottom corners */
 .hud-corner {
     position: absolute;
     z-index: 70;
@@ -402,21 +388,14 @@ button {
     filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.35));
 }
 
-/* score near board corners (close to board) */
-.hud-tl {
-    left: calc(var(--side-w) + var(--gap) + 8px);
+.hud-near-left {
+    left: calc((100% - var(--board-w)) / 2 + 8px);
     bottom: 10px;
 }
 
-.hud-br {
-    right: calc(var(--side-w) + var(--gap) + 8px);
+.hud-near-right {
+    right: calc((100% - var(--board-w)) / 2 + 8px);
     bottom: 10px;
-}
-
-/* turn avatar top-right */
-.hud-tr {
-    right: 10px;
-    top: 10px;
 }
 
 .hud-score {
@@ -439,64 +418,59 @@ button {
     box-shadow: 0 0 14px rgba(0, 180, 255, 0.16);
 }
 
-/* turn: avatar circle (replaces toggle) */
-.hud-turn {
+/* Turn avatar (top-right) */
+.hud-turn-avatar {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    z-index: 75;
     width: 44px;
     height: 44px;
     border-radius: 999px;
     background: rgba(0, 0, 0, 0.42);
     border: 1px solid rgba(255, 255, 255, 0.14);
-    position: relative;
     overflow: hidden;
 }
 
-.hud-dot {
-    display: none;
-}
-
-/* OPTIONAL avatars (put in public/ui/):
-   /ui/avatar-player.png
-   /ui/avatar-enemy.png */
-.hud-turn::before {
+.hud-turn-avatar::before {
     content: "";
     position: absolute;
     inset: 4px;
     border-radius: 999px;
     background:
-        radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.02)),
+        radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02)),
         url("/ui/avatar-player.png?v=1");
     background-size: cover;
     background-position: center;
-    opacity: 0.95;
+    opacity: .95;
 }
 
-.hud-turn.enemy::before {
+.hud-turn-avatar.player {
+    box-shadow: 0 0 22px rgba(0, 180, 255, 0.28), 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.hud-turn-avatar.enemy {
+    box-shadow: 0 0 22px rgba(255, 80, 80, 0.22), 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.hud-turn-avatar.enemy::before {
     background:
-        radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.02)),
+        radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02)),
         url("/ui/avatar-enemy.png?v=1");
     background-size: cover;
     background-position: center;
 }
 
-.hud-turn.player {
-    box-shadow: 0 0 22px rgba(0, 180, 255, 0.28), 0 10px 30px rgba(0, 0, 0, 0.45);
-}
-
-.hud-turn.enemy {
-    box-shadow: 0 0 22px rgba(255, 80, 80, 0.22), 0 10px 30px rgba(0, 0, 0, 0.45);
-}
-
-/* side hands (NO CLIP) */
+/* Side hands: НЕ режем свечение/карты */
 .hand.left,
 .hand.right {
     background: rgba(0, 0, 0, 0.10);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 14px;
     overflow: visible;
-    /* critical */
 }
 
-/* inset away from screen edges */
+/* Slight inset from edges (mobile uses bigger) */
 .hand.left {
     transform: translateX(var(--side-inset));
 }
@@ -512,8 +486,8 @@ button {
     grid-template-rows: repeat(3, var(--card-h));
     column-gap: var(--hand-col-gap);
     row-gap: var(--row-gap);
-    padding: 14px 14px;
-    /* more room so glow doesn't hit border */
+    padding: 14px;
+    /* важно: чтобы ничего не “срезалось” рамкой */
     justify-content: center;
     align-content: center;
     overflow: visible;
@@ -525,25 +499,16 @@ button {
     overflow: visible;
 }
 
-/* IMPORTANT: 2 cards (col2) closer to board + half-step down.
-   3 cards (col1) stay further. */
+/* 2 карты (col2) ближе к столу + между 3 по вертикали */
 .hand.left .hand-slot.col2 {
-    transform: translateX(12px) translateY(var(--half-step));
-}
-
-.hand.left .hand-slot.col1 {
-    transform: translateX(0px);
+    transform: translateX(var(--towards-board)) translateY(var(--half-step));
 }
 
 .hand.right .hand-slot.col2 {
-    transform: translateX(-12px) translateY(var(--half-step));
+    transform: translateX(calc(-1 * var(--towards-board))) translateY(var(--half-step));
 }
 
-.hand.right .hand-slot.col1 {
-    transform: translateX(0px);
-}
-
-/* center board only */
+/* Center */
 .center-col {
     display: flex;
     align-items: center;
@@ -606,7 +571,7 @@ button {
     cursor: pointer;
 }
 
-/* cards */
+/* Card */
 .card {
     width: var(--card-w);
     height: var(--card-h);
@@ -637,13 +602,13 @@ button {
     z-index: 1;
 }
 
-/* selection only for RIGHT side */
+/* Selection */
 .hand.right .card {
     transition: transform 200ms cubic-bezier(.2, .9, .2, 1), box-shadow 200ms ease, filter 200ms ease;
 }
 
 .hand.right .card.selected {
-    transform: translateX(-12px) scale(1.06);
+    transform: translateX(calc(-1 * var(--towards-board))) scale(1.06);
     z-index: 9999;
     filter: saturate(1.08);
     box-shadow:
@@ -651,7 +616,7 @@ button {
         0 18px 44px rgba(0, 0, 0, 0.60);
 }
 
-/* owner glow */
+/* Owner glow: enemy pulse ON */
 .card.player {
     border: 2px solid rgba(42, 107, 255, 0.98);
     box-shadow: 0 0 18px rgba(0, 180, 255, 0.30), 0 14px 30px rgba(0, 0, 0, 0.45);
@@ -733,7 +698,7 @@ button {
     }
 }
 
-/* TT numbers: FORCE inside diamond */
+/* TT numbers: жёстко фиксируем (не “на полкарты”) */
 .tt-badge {
     position: absolute;
     top: 9px;
@@ -749,17 +714,15 @@ button {
 .card .tt-num {
     position: absolute;
     z-index: 5;
+    font-size: 12px !important;
     font-weight: 900;
     color: #fff;
     text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85);
-
-    display: inline-block;
+    display: inline-block !important;
     width: auto !important;
     max-width: none !important;
     white-space: nowrap !important;
     line-height: 1 !important;
-
-    font-size: 12px;
 }
 
 .card .tt-num.top {
@@ -782,7 +745,7 @@ button {
     left: 28px;
 }
 
-/* card back */
+/* Card back */
 .card.back {
     cursor: default;
     background:
@@ -811,11 +774,10 @@ button {
     object-fit: contain;
     display: block;
     opacity: 0.95;
-    filter:
-        drop-shadow(0 10px 18px rgba(0, 0, 0, 0.65)) drop-shadow(0 0 18px rgba(120, 200, 255, 0.18));
+    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.65)) drop-shadow(0 0 18px rgba(120, 200, 255, 0.18));
 }
 
-/* game over */
+/* GAME OVER + dice */
 .game-over {
     position: fixed;
     inset: 0;
@@ -841,7 +803,6 @@ button {
     margin: 0 0 12px;
 }
 
-/* dice rain */
 .dice-rain {
     position: fixed;
     inset: 0;
@@ -878,16 +839,15 @@ button {
     }
 }
 
-/* MOBILE LANDSCAPE: bigger cards + hands slightly inset from edges */
+/* Mobile landscape: cards bigger + hands not glued to edges (between edge and board) */
 @media (max-width: 520px) and (orientation: landscape) {
     :root {
         --ui-pad: 6px;
         --gap: 6px;
         --hand-col-gap: 8px;
         --card-w-max: 186px;
-
-        /* important: not flush to edges */
-        --side-inset: 10px;
+        --side-inset: 12px;
+        /* от края чуть к центру */
     }
 }
 
