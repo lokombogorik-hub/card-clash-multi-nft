@@ -1,6 +1,6 @@
 /* =========================================================
    Card Clash — index.css
-   ВАЖНО: ТУТ ТОЛЬКО CSS. НИКАКОГО JS/IMPORT.
+   IMPORTANT: ONLY CSS HERE. NO JS/IMPORTS.
    ========================================================= */
 
 /* =========================
@@ -39,9 +39,9 @@ button {
     --app-h: 100vh;
 }
 
-/* =========================
+/* =========================================================
    HOME / SHELL
-   ========================= */
+   ========================================================= */
 .shell {
     position: fixed;
     inset: 0;
@@ -238,10 +238,6 @@ button {
     letter-spacing: .2px;
 }
 
-.nav-ic {
-    line-height: 0;
-}
-
 .nav-item.active {
     color: #fff;
     border-color: rgba(120, 200, 255, 0.28);
@@ -322,53 +318,41 @@ button {
 }
 
 /* =========================================================
-   TT GAME — НАСТРОЙКИ (тут ты меняешь отступы/размеры)
+   TT GAME — SETTINGS (edit here)
    ========================================================= */
 :root {
-    /* Общие */
     --ui-pad: clamp(8px, 2vw, 14px);
     --gap: clamp(6px, 1.6vw, 10px);
 
-    /* Отступ сцены от краёв экрана */
     --edge-inset: 14px;
 
-    /* Максимальная ширина карты (потолок) */
     --card-w-max: 170px;
 
-    /* Расстояния в руках */
     --hand-col-gap: 18px;
     --row-gap: 12px;
-
-    /* Подъезд “2 карт” к столу */
     --towards-board: 12px;
 
-    /* Паддинги внутри рук (важно для формул) */
     --hand-pad-x: 10px;
     --hand-pad-y: 10px;
 
-    /* Счёт */
     --score-w: 56px;
     --score-gap: 4px;
 
-    /* Player badge */
-    --badge-w: 160px;
     --badge-h: 44px;
-    --badge-gap: 8px;
     --badge-avatar: 32px;
+
+    /* зона системных кнопок Telegram (крестик / три точки) */
+    --tg-top-controls: 58px;
 }
 
 /* =========================================================
-   TT GAME — ВЫЧИСЛЕНИЯ (лучше не трогать)
+   TT GAME — CALC
    ========================================================= */
 :root {
-    /* доступная ширина с учётом padding body/ safe area */
     --vw-safe: calc(100vw - (var(--ui-pad) * 2) - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
 
-    /* card width from width (чтобы никогда не резалось):
-     total = 7*card + 2*handColGap + 4*handPadX + 6*gap + 2*edgeInset */
     --card-w-vw: calc((var(--vw-safe) - (var(--edge-inset) * 2) - (var(--hand-col-gap) * 2) - (var(--hand-pad-x) * 4) - (var(--gap) * 6)) / 7);
 
-    /* fit by height: board = 3*card-h + 4*gap */
     --available-h: calc(var(--app-h, 100vh) - (var(--ui-pad) * 2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - (var(--gap) * 2));
 
     --card-h-fit: calc((var(--available-h) - (var(--gap) * 4)) / 3);
@@ -381,15 +365,13 @@ button {
     --board-h: calc((var(--card-h) * 3) + (var(--gap) * 4));
 
     --side-w: calc((var(--card-w) * 2) + var(--hand-col-gap) + (var(--hand-pad-x) * 2));
+    --half-step: calc((var(--card-h) + (var(--row-gap))) / 2);
 
-    --half-step: calc((var(--card-h) + var(--row-gap)) / 2);
-
-    /* ширина всей сцены (контейнер с padding = edge-inset) */
     --stage-w: calc((var(--edge-inset) * 2) + (var(--side-w) * 2) + var(--board-w) + (var(--gap) * 2));
 }
 
 /* =========================
-   TT GAME — ROOT
+   TT GAME — ROOT / STAGE
    ========================= */
 .game-root {
     position: fixed;
@@ -403,7 +385,6 @@ button {
     isolation: isolate;
 }
 
-/* Сцена компактная и центрированная (на ПК выглядит “правильно”) */
 .game-ui.tt-layout {
     height: 100%;
     width: min(100%, var(--stage-w));
@@ -420,20 +401,34 @@ button {
     position: relative;
 }
 
+/* =========================
+   EXIT BUTTON
+   - Desktop: top-left corner
+   - Mobile: bottom-left (avoid Telegram close/…)
+   ========================= */
 .exit {
-    position: absolute;
-    left: 10px;
-    top: 10px;
-    z-index: 120;
-    padding: 8px 12px;
-    border-radius: 10px;
-    background: rgba(0, 0, 0, 0.35);
-    color: #fff;
+    position: fixed;
+    left: 12px;
+    top: 12px;
+    z-index: 999;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.60);
     border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #fff;
+    min-width: 92px;
+}
+
+/* mobile: put exit down to avoid misclick with Telegram close */
+@media (hover: none) and (pointer: coarse) {
+    .exit {
+        top: auto;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+    }
 }
 
 /* =========================
-   HUD — SCORE (снаружи поля)
+   HUD — SCORE (bottom, outside board)
    ========================= */
 .hud-corner {
     position: absolute;
@@ -474,17 +469,20 @@ button {
 
 /* =========================
    Player badges (TOP, tight to board)
+   - no clipping on desktop
+   - width auto + max width + ellipsis
    ========================= */
 .player-badge {
     position: absolute;
+    z-index: 105;
 
-    /* БЕЙДЖИ СВЕРХУ, ВПРИТЫК к полю:
-     центр - половина высоты поля - высота бейджа - небольшой зазор */
-    top: calc(50% - (var(--board-h) / 2) - var(--badge-h) - 8px);
+    /* never goes into Telegram top-controls zone */
+    top: max(calc(env(safe-area-inset-top, 0px) + var(--tg-top-controls) + 6px),
+            calc(50% - (var(--board-h) / 2) - var(--badge-h) - 6px));
 
     height: var(--badge-h);
-    width: var(--badge-w);
-    z-index: 105;
+    width: auto;
+    max-width: min(260px, 34vw);
 
     display: flex;
     align-items: center;
@@ -510,7 +508,20 @@ button {
     border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
+.player-badge-avatar-fallback {
+    width: var(--badge-avatar);
+    height: var(--badge-avatar);
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    font-weight: 900;
+    font-size: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.08);
+}
+
 .player-badge-name {
+    min-width: 0;
     font-weight: 900;
     font-size: 12px;
     letter-spacing: .2px;
@@ -530,12 +541,14 @@ button {
     border-color: rgba(0, 180, 255, 0.35);
 }
 
-/* enemy badge — слева от поля (снаружи), впритык */
+/* Position WITHOUT fixed badge width:
+   enemy: stick to left side of board, outside (using translateX(-100%))
+   player: stick to right side of board, outside */
 .player-badge.enemy {
-    left: calc(50% - (var(--board-w) / 2) - var(--badge-w) - 8px);
+    left: calc(50% - (var(--board-w) / 2) - 8px);
+    transform: translateX(-100%);
 }
 
-/* player badge — справа от поля (снаружи), впритык */
 .player-badge.player {
     left: calc(50% + (var(--board-w) / 2) + 8px);
 }
@@ -558,9 +571,7 @@ button {
     grid-template-rows: repeat(3, var(--card-h));
     column-gap: var(--hand-col-gap);
     row-gap: var(--row-gap);
-
     padding: var(--hand-pad-y) var(--hand-pad-x);
-
     justify-content: center;
     align-content: center;
     overflow: visible;
@@ -572,13 +583,10 @@ button {
     overflow: visible;
 }
 
-/* enemy: 2 cards closer to board */
 .hand.left .hand-slot.col2 {
     transform: translateX(var(--towards-board)) translateY(var(--half-step));
 }
 
-/* player: 2 cards closer to board, 3 to edge
-   (swap columns for right hand) */
 .hand.right .hand-slot.col2 {
     grid-column: 1 !important;
     transform: translateX(calc(-1 * var(--towards-board))) translateY(var(--half-step));
@@ -687,7 +695,6 @@ button {
     z-index: 1;
 }
 
-/* selection (right hand) — мягче */
 .hand.right .card {
     transition: transform 200ms cubic-bezier(.2, .9, .2, 1), box-shadow 200ms ease, filter 200ms ease;
 }
@@ -699,7 +706,6 @@ button {
     box-shadow: 0 0 20px rgba(255, 215, 0, 0.20), 0 14px 34px rgba(0, 0, 0, 0.55);
 }
 
-/* owner glow */
 .card.player {
     border: 2px solid rgba(42, 107, 255, 0.98);
     box-shadow: 0 0 18px rgba(0, 180, 255, 0.30), 0 14px 30px rgba(0, 0, 0, 0.45);
@@ -781,7 +787,7 @@ button {
     }
 }
 
-/* TT badge + numbers (жёстко фиксируем) */
+/* TT numbers fixed */
 .tt-badge {
     position: absolute;
     top: 9px;
@@ -925,7 +931,7 @@ button {
 }
 
 /* =========================
-   MOBILE LANDSCAPE (iPhone + Android)
+   MOBILE LANDSCAPE SAFE
    ========================= */
 @media (max-height: 520px) and (orientation: landscape),
 (hover: none) and (pointer: coarse) and (orientation: landscape) {
@@ -933,15 +939,17 @@ button {
         --ui-pad: 6px;
         --gap: 6px;
 
-        --edge-inset: 22px;
-        --card-w-max: 180px;
+        --edge-inset: 10px;
+        --card-w-max: 176px;
 
-        --hand-col-gap: 20px;
-        --row-gap: 12px;
+        --hand-col-gap: 14px;
+        --row-gap: 10px;
 
-        --badge-w: 132px;
-        --badge-h: 40px;
-        --badge-avatar: 28px;
+        --hand-pad-x: 8px;
+        --hand-pad-y: 8px;
+
+        --badge-h: 38px;
+        --badge-avatar: 26px;
     }
 }
 
@@ -960,123 +968,4 @@ button {
     .card.is-captured .card-anim {
         animation: none !important;
     }
-}
-
-/* =========================
-   FIX PACK B (Mobile safe + Exit safe-top)
-   Paste at VERY END of index.css
-   ========================= */
-
-:root {
-    /* высота зоны системных кнопок Telegram (крестик/три точки) */
-    --tg-top-controls: 58px;
-}
-
-/* 1) Кнопка "Меню" — сверху слева, но ниже Telegram controls */
-.exit {
-    position: absolute !important;
-    left: 12px !important;
-    right: auto !important;
-
-    top: calc(env(safe-area-inset-top, 0px) + var(--tg-top-controls) + 10px) !important;
-    bottom: auto !important;
-
-    z-index: 200 !important;
-    padding: 10px 12px !important;
-    border-radius: 12px !important;
-
-    background: rgba(0, 0, 0, 0.60) !important;
-    border: 1px solid rgba(255, 255, 255, 0.18) !important;
-    color: #fff !important;
-
-    min-width: 92px !important;
-}
-
-/* 2) ЖЁСТКИЙ mobile-safe, чтобы ничего не вылезало */
-@media (max-height: 520px) and (orientation: landscape),
-(hover: none) and (pointer: coarse) and (orientation: landscape) {
-    :root {
-        --ui-pad: 6px;
-        --gap: 6px;
-
-        --edge-inset: 10px;
-        --card-w-max: 176px;
-
-        --hand-col-gap: 14px;
-        --row-gap: 10px;
-
-        --hand-pad-x: 8px;
-        --hand-pad-y: 8px;
-
-        --badge-w: 124px;
-        --badge-h: 38px;
-        --badge-avatar: 26px;
-    }
-}
-
-.game-ui.tt-layout {
-    max-width: 100% !important;
-    overflow: hidden !important;
-}
-
-/* =========================
-   DESKTOP/MOBILE FINAL FIX PACK — paste at VERY END
-   ========================= */
-
-/* EXIT: ПК — в угол, мобилка — вниз (без мискликов с Telegram close) */
-.exit {
-    position: fixed !important;
-    left: 12px !important;
-    top: 12px !important;
-    bottom: auto !important;
-    z-index: 999 !important;
-    min-width: 92px !important;
-}
-
-@media (hover: none) and (pointer: coarse) {
-    .exit {
-        top: auto !important;
-        bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
-    }
-}
-
-/* Player badge: авто-ширина + не режем ник */
-.player-badge {
-    width: auto !important;
-    max-width: min(260px, 34vw) !important;
-}
-
-.player-badge-name {
-    min-width: 0 !important;
-}
-
-/* Fallback avatar (если Telegram photo_url не пришёл/не загрузился) */
-.player-badge-avatar-fallback {
-    width: var(--badge-avatar) !important;
-    height: var(--badge-avatar) !important;
-    border-radius: 999px !important;
-    display: grid !important;
-    place-items: center !important;
-    font-weight: 900 !important;
-    font-size: 12px !important;
-    border: 1px solid rgba(255, 255, 255, 0.18) !important;
-    background: rgba(255, 255, 255, 0.08) !important;
-}
-
-/* Бейджи СВЕРХУ, впритык к полю */
-.player-badge {
-    bottom: auto !important;
-    top: max(calc(env(safe-area-inset-top, 0px) + 6px),
-            calc(50% - (var(--board-h) / 2) - var(--badge-h) - 6px)) !important;
-}
-
-/* позиционирование без расчета ширины: "впритык к полю" */
-.player-badge.enemy {
-    left: calc(50% - (var(--board-w) / 2) - 8px) !important;
-    transform: translateX(-100%) !important;
-}
-
-.player-badge.player {
-    left: calc(50% + (var(--board-w) / 2) + 8px) !important;
-    transform: none !important;
 }
