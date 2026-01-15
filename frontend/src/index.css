@@ -908,16 +908,8 @@ button {
         --card-w-max: 230px;
 
         /* Уменьшить наложение */
-        --hand-col-gap: 20px;
+        --hand-col-gap: 10px;
         --row-gap: 12px;
-    }
-}
-
-/* Альтернатива для “любых тач устройств” (Android/Telegram) */
-@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
-    :root {
-        --edge-inset: 22px;
-        --card-w-max: 196px;
     }
 }
 
