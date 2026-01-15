@@ -473,11 +473,15 @@ button {
 }
 
 /* =========================
-   Player badges (bottom, outside of score)
+   Player badges (TOP, tight to board)
    ========================= */
 .player-badge {
     position: absolute;
-    bottom: 10px;
+
+    /* БЕЙДЖИ СВЕРХУ, ВПРИТЫК к полю:
+     центр - половина высоты поля - высота бейджа - небольшой зазор */
+    top: calc(50% - (var(--board-h) / 2) - var(--badge-h) - 8px);
+
     height: var(--badge-h);
     width: var(--badge-w);
     z-index: 105;
@@ -526,14 +530,14 @@ button {
     border-color: rgba(0, 180, 255, 0.35);
 }
 
-/* enemy badge — левее красного счёта */
+/* enemy badge — слева от поля (снаружи), впритык */
 .player-badge.enemy {
-    left: calc(50% - (var(--board-w) / 2) - var(--score-w) - var(--score-gap) - var(--badge-w) - var(--badge-gap));
+    left: calc(50% - (var(--board-w) / 2) - var(--badge-w) - 8px);
 }
 
-/* player badge — правее синего счёта */
+/* player badge — справа от поля (снаружи), впритык */
 .player-badge.player {
-    left: calc(50% + (var(--board-w) / 2) + var(--score-gap) + var(--score-w) + var(--badge-gap));
+    left: calc(50% + (var(--board-w) / 2) + 8px);
 }
 
 /* =========================
