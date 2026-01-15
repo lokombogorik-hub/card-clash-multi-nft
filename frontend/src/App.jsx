@@ -25,6 +25,14 @@ function useIsLandscape() {
     return ok;
 }
 
+function readTelegramUser() {
+    try {
+        return window.Telegram?.WebApp?.initDataUnsafe?.user || null;
+    } catch {
+        return null;
+    }
+}
+
 export default function App() {
     const [screen, setScreen] = useState("home");
     const isLandscape = useIsLandscape();
@@ -32,7 +40,6 @@ export default function App() {
     const logoRef = useRef(null);
     const [logoOk, setLogoOk] = useState(true);
 
-    // Telegram user for nickname/avatar
     const [me, setMe] = useState(null);
 
     useEffect(() => {
@@ -50,15 +57,25 @@ export default function App() {
         tg.SecondaryButton?.hide();
         tg.BackButton?.hide();
 
-        try {
-            setMe(tg.initDataUnsafe?.user || null);
-        } catch {
-            setMe(null);
-        }
+        // 1) читаем user сразу
+        setMe(readTelegramUser());
+
+        // 2) и ещё раз на viewportChanged (иногда user/viewport догружаются)
+        const sync = () => setMe(readTelegramUser());
+        try { tg.onEvent?.("viewportChanged", sync); } catch { }
 
         tg.disableVerticalSwipes?.();
-        return () => tg.enableVerticalSwipes?.();
+        return () => {
+            try { tg.offEvent?.("viewportChanged", sync); } catch { }
+            tg.enableVerticalSwipes?.();
+        };
     }, []);
+
+    // Перечитать user при входе в игру (на некоторых клиентах так надежнее)
+    useEffect(() => {
+        if (screen !== "game") return;
+        setMe(readTelegramUser());
+    }, [screen]);
 
     useEffect(() => {
         if (screen !== "home") return;
@@ -67,10 +84,12 @@ export default function App() {
 
     const requestFullscreen = async () => {
         const tg = window.Telegram?.WebApp;
+
+        // Telegram fullscreen (если доступен)
         try { tg?.requestFullscreen?.(); } catch { }
         try { tg?.expand?.(); } catch { }
 
-        // browser fallback (если открылось не в Telegram)
+        // Browser fullscreen fallback
         try {
             if (!document.fullscreenElement) {
                 await document.documentElement.requestFullscreen?.();
@@ -79,13 +98,12 @@ export default function App() {
     };
 
     const onPlay = () => {
-        // важно: fullscreen вызывать синхронно по клику
+        // Важно: вызвать fullscreen по клику
         requestFullscreen();
         setScreen("game");
     };
 
     const onExitGame = () => setScreen("home");
-
     const onConnectWallet = () => alert("Wallet connect (soon)");
 
     const showRotate = screen === "game" && !isLandscape;
@@ -142,20 +160,6 @@ export default function App() {
                                 </button>
                             </div>
                         )}
-
-                        {screen === "market" && (
-                            <div className="page">
-                                <h2>Маркет</h2>
-                                <p>Кейсы / дропы / коллекции.</p>
-                            </div>
-                        )}
-
-                        {screen === "profile" && (
-                            <div className="page">
-                                <h2>Профиль</h2>
-                                <p>Прогресс, рейтинг, кошелёк.</p>
-                            </div>
-                        )}
                     </div>
 
                     <div className="wallet-float">
@@ -195,7 +199,7 @@ function RotateGate({ onBack }) {
 function SeasonBar({ title, subtitle, progress, onRefresh }) {
     return (
         <div className="season-bar">
-            <div className="season-text">
+            <div>
                 <div className="season-title">{title}</div>
                 <div className="season-sub">{subtitle}</div>
             </div>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 
+/* ===== Rules / helpers ===== */
 const DIRS = [
     { dx: 0, dy: -1, a: "top", b: "bottom" },
     { dx: 1, dy: 0, a: "right", b: "left" },
@@ -9,6 +10,7 @@ const DIRS = [
 ];
 
 const RULES = { combo: true, same: true, plus: true };
+
 const rand9 = () => Math.ceil(Math.random() * 9);
 const randomFirstTurn = () => (Math.random() < 0.5 ? "player" : "enemy");
 
@@ -71,13 +73,16 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
 
     const toFlip = new Set();
 
+    // basic
     for (const i of infos) if (i.placedSide > i.targetSide) toFlip.add(i.ni);
 
+    // same
     if (rules.same) {
         const eq = infos.filter((i) => i.placedSide === i.targetSide);
         if (eq.length >= 2) eq.forEach((i) => toFlip.add(i.ni));
     }
 
+    // plus
     if (rules.plus) {
         const groups = new Map();
         for (const i of infos) {
@@ -118,6 +123,7 @@ function resolveCombo(queue, grid, rules) {
     }
 }
 
+/* 5 cards => 3 in col1 (rows 1..3) + 2 in col2 (rows 1..2) */
 const posForHandIndex = (i) => (i < 3 ? { col: 1, row: i + 1 } : { col: 2, row: i - 2 });
 
 function displayName(me) {
@@ -126,13 +132,12 @@ function displayName(me) {
     const full = [me.first_name, me.last_name].filter(Boolean).join(" ").trim();
     return u || full || "You";
 }
-
 function initialsFrom(name) {
-    if (!name) return "?";
-    const n = name.replace(/^@/, "").trim();
+    const n = (name || "").replace(/^@/, "").trim();
     return (n[0] || "?").toUpperCase();
 }
 
+/* ===== Game ===== */
 export default function Game({ onExit, me }) {
     const aiGuard = useRef({ handled: false });
 
@@ -190,6 +195,7 @@ export default function Game({ onExit, me }) {
         setTurn("enemy");
     };
 
+    // AI move
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
         if (aiGuard.current.handled) return;
@@ -219,6 +225,7 @@ export default function Game({ onExit, me }) {
         return () => clearTimeout(t);
     }, [turn, gameOver, board, enemy]);
 
+    // Game over
     useEffect(() => {
         if (board.some((c) => c === null)) return;
         const p = board.filter((c) => c.owner === "player").length;
@@ -227,6 +234,7 @@ export default function Game({ onExit, me }) {
         setGameOver(true);
     }, [board]);
 
+    // Confetti on win
     useEffect(() => {
         if (!gameOver || winner !== "player") return;
 
@@ -252,10 +260,11 @@ export default function Game({ onExit, me }) {
                 <div className="hud-corner hud-score red hud-near-left">🟥 {score.red}</div>
                 <div className="hud-corner hud-score blue hud-near-right">{score.blue} 🟦</div>
 
-                {/* badges TOP near board (CSS positions them) */}
-                <PlayerBadge side="enemy" name="Enemy" avatarUrl="/ui/avatar-enemy.png?v=1" active={turn === "enemy"} />
-                <PlayerBadge side="player" name={myName} avatarUrl={me?.photo_url} active={turn === "player"} />
+                {/* TOP badges (CSS positions them). On mobile we reposition so they DON'T overlap hands. */}
+                <PlayerBadge side="enemy" name="Enemy" avatarUrl={null} active={turn === "enemy"} />
+                <PlayerBadge side="player" name={myName} avatarUrl={me?.photo_url || null} active={turn === "player"} />
 
+                {/* enemy hand */}
                 <div className="hand left">
                     <div className="hand-grid">
                         {enemy.map((c, i) => {
@@ -269,6 +278,7 @@ export default function Game({ onExit, me }) {
                     </div>
                 </div>
 
+                {/* board */}
                 <div className="center-col">
                     <div className="board">
                         {board.map((cell, i) => (
@@ -283,6 +293,7 @@ export default function Game({ onExit, me }) {
                     </div>
                 </div>
 
+                {/* player hand */}
                 <div className="hand right">
                     <div className="hand-grid">
                         {player.map((c, i) => {
@@ -335,7 +346,7 @@ function PlayerBadge({ side, name, avatarUrl, active }) {
                     onError={() => setImgOk(false)}
                 />
             ) : (
-                <div className={`player-badge-avatar-fallback ${side}`}>{initials}</div>
+                <div className="player-badge-avatar-fallback">{initials}</div>
             )}
             <div className="player-badge-name">{name}</div>
         </div>
