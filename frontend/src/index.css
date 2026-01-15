@@ -961,3 +961,60 @@ button {
         animation: none !important;
     }
 }
+
+/* =========================
+   FIX PACK B (Mobile safe + Exit safe-top)
+   Paste at VERY END of index.css
+   ========================= */
+
+:root {
+    /* высота зоны системных кнопок Telegram (крестик/три точки) */
+    --tg-top-controls: 58px;
+}
+
+/* 1) Кнопка "Меню" — сверху слева, но ниже Telegram controls */
+.exit {
+    position: absolute !important;
+    left: 12px !important;
+    right: auto !important;
+
+    top: calc(env(safe-area-inset-top, 0px) + var(--tg-top-controls) + 10px) !important;
+    bottom: auto !important;
+
+    z-index: 200 !important;
+    padding: 10px 12px !important;
+    border-radius: 12px !important;
+
+    background: rgba(0, 0, 0, 0.60) !important;
+    border: 1px solid rgba(255, 255, 255, 0.18) !important;
+    color: #fff !important;
+
+    min-width: 92px !important;
+}
+
+/* 2) ЖЁСТКИЙ mobile-safe, чтобы ничего не вылезало */
+@media (max-height: 520px) and (orientation: landscape),
+(hover: none) and (pointer: coarse) and (orientation: landscape) {
+    :root {
+        --ui-pad: 6px;
+        --gap: 6px;
+
+        --edge-inset: 10px;
+        --card-w-max: 176px;
+
+        --hand-col-gap: 14px;
+        --row-gap: 10px;
+
+        --hand-pad-x: 8px;
+        --hand-pad-y: 8px;
+
+        --badge-w: 124px;
+        --badge-h: 38px;
+        --badge-avatar: 26px;
+    }
+}
+
+.game-ui.tt-layout {
+    max-width: 100% !important;
+    overflow: hidden !important;
+}
