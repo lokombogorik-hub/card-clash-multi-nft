@@ -2,10 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Game from "./Game";
 import StormBg from "./components/StormBg";
 
-/**
- * Проверка ландшафта.
- * На iOS/Telegram matchMedia бывает капризным — поэтому fallback на сравнение width/height.
- */
 function useIsLandscape() {
     const get = () =>
         window.matchMedia?.("(orientation: landscape)")?.matches ??
@@ -19,7 +15,6 @@ function useIsLandscape() {
         m?.addEventListener?.("change", onChange);
         window.addEventListener("resize", onChange);
         window.addEventListener("orientationchange", onChange);
-
         return () => {
             m?.removeEventListener?.("change", onChange);
             window.removeEventListener("resize", onChange);
@@ -31,20 +26,15 @@ function useIsLandscape() {
 }
 
 export default function App() {
-    /**
-     * Экраны:
-     * - home: главный экран
-     * - market/profile: заглушки
-     * - game: игра
-     */
-    const [screen, setScreen] = useState("home");
+    const [screen, setScreen] = useState("home"); // home | market | profile | game
     const isLandscape = useIsLandscape();
 
-    // Видео-логотип на главном экране
     const logoRef = useRef(null);
     const [logoOk, setLogoOk] = useState(true);
 
-    // Telegram WebApp init
+    // Telegram user (для ника/аватара)
+    const [me, setMe] = useState(null);
+
     useEffect(() => {
         const tg = window.Telegram?.WebApp;
         if (!tg) return;
@@ -52,49 +42,49 @@ export default function App() {
         tg.ready();
         tg.expand();
 
-        // Маскируем “шапку” цветом (полностью убрать на iOS/PC часто нельзя)
         tg.setHeaderColor?.("#000000");
         tg.setBackgroundColor?.("#000000");
         tg.setBottomBarColor?.("#000000");
 
-        // Скрываем стандартные кнопки
         tg.MainButton?.hide();
         tg.SecondaryButton?.hide();
         tg.BackButton?.hide();
 
-        // Чтобы WebView не пытался скроллить вертикально
+        // забираем telegram user
+        try {
+            setMe(tg.initDataUnsafe?.user || null);
+        } catch {
+            setMe(null);
+        }
+
         tg.disableVerticalSwipes?.();
         return () => tg.enableVerticalSwipes?.();
     }, []);
 
-    // Автоплей видео на home (в некоторых WebView нужно “подтолкнуть” play при касании)
     useEffect(() => {
         if (screen !== "home") return;
         logoRef.current?.play?.().catch(() => { });
     }, [screen]);
 
-    // “Максимум возможного” для fullscreen/landscape (не гарантируется на iOS/Telegram Desktop)
     const requestFullscreenAndLandscape = async () => {
         const tg = window.Telegram?.WebApp;
-        try {
-            tg?.HapticFeedback?.impactOccurred?.("light");
-        } catch { }
 
-        try {
-            await tg?.requestFullscreen?.();
-        } catch { }
+        try { tg?.HapticFeedback?.impactOccurred?.("light"); } catch { }
 
-        try {
-            await window.screen?.orientation?.lock?.("landscape");
-        } catch { }
+        // Telegram fullscreen (если поддерживается)
+        try { await tg?.requestFullscreen?.(); } catch { }
+        try { await window.screen?.orientation?.lock?.("landscape"); } catch { }
+        try { tg?.expand?.(); } catch { }
 
+        // Browser fullscreen fallback (ПК браузер) — работает только по клику (у нас клик Play)
         try {
-            tg?.expand?.();
+            if (!document.fullscreenElement) {
+                await document.documentElement.requestFullscreen?.();
+            }
         } catch { }
     };
 
     const onPlay = async () => {
-        // ВАЖНО: Сначала показываем game. Если портрет — поверх будет rotate-gate.
         setScreen("game");
         await requestFullscreenAndLandscape();
     };
@@ -102,16 +92,12 @@ export default function App() {
     const onExitGame = () => setScreen("home");
 
     const onConnectWallet = () => {
-        try {
-            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
-        } catch { }
+        try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light"); } catch { }
         alert("Wallet connect (soon)");
     };
 
-    // Если экран "game" и устройство в портрете — показываем табло
     const showRotate = screen === "game" && !isLandscape;
 
-    // Данные сезона (заглушка)
     const seasonInfo = useMemo(
         () => ({ title: "Digitall Bunny Турнир", subtitle: "Ends in 3d 12h", progress: 0.62 }),
         []
@@ -119,14 +105,12 @@ export default function App() {
 
     return (
         <div className="shell">
-            {/* фон-канвас (дождь/молнии) */}
             <StormBg />
 
             {screen === "game" ? (
                 <>
-                    {/* Игра всегда смонтирована: при повороте не ломаем состояние, а просто прячем */}
                     <div className={`game-host ${showRotate ? "is-hidden" : ""}`}>
-                        <Game onExit={onExitGame} />
+                        <Game onExit={onExitGame} me={me} />
                     </div>
 
                     {showRotate && <RotateGate onBack={onExitGame} />}
@@ -188,14 +172,12 @@ export default function App() {
                         )}
                     </div>
 
-                    {/* Кнопка кошелька */}
                     <div className="wallet-float">
                         <button className="wallet-btn" onClick={onConnectWallet}>
                             Подключить кошелёк
                         </button>
                     </div>
 
-                    {/* нижний стек (season + nav) */}
                     <div className="bottom-stack">
                         <SeasonBar
                             title={seasonInfo.title}
@@ -210,10 +192,6 @@ export default function App() {
         </div>
     );
 }
-
-/* =========================
-   UI Components
-   ========================= */
 
 function RotateGate({ onBack }) {
     return (
@@ -275,7 +253,6 @@ function BottomNav({ active, onChange }) {
     );
 }
 
-/* icons */
 function PlayIcon() {
     return (
         <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
@@ -296,7 +273,6 @@ function HomeIcon() {
         </svg>
     );
 }
-
 function GemIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -305,7 +281,6 @@ function GemIcon() {
         </svg>
     );
 }
-
 function BagIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -314,7 +289,6 @@ function BagIcon() {
         </svg>
     );
 }
-
 function UserIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
