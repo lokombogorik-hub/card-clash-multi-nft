@@ -969,3 +969,34 @@ button {
         animation: none !important;
     }
 }
+
+/* ===== Mobile: badges should NOT overlap hands/cards ===== */
+@media (max-height: 520px) and (orientation: landscape),
+(hover: none) and (pointer: coarse) and (orientation: landscape) {
+
+    /* уменьшаем бейджи */
+    :root {
+        --badge-h: 36px;
+        --badge-avatar: 24px;
+    }
+
+    /* делаем бейджи уже и ставим их НАД ПОЛЕМ, но ВНУТРИ ширины поля,
+     а не "снаружи", чтобы они не пересекали боковые руки */
+    .player-badge {
+        max-width: 44vw;
+        padding: 5px 8px;
+        gap: 8px;
+    }
+
+    /* enemy badge: в левом верхнем углу поля */
+    .player-badge.enemy {
+        left: calc(50% - (var(--board-w) / 2) + 6px);
+        transform: none;
+    }
+
+    /* player badge: в правом верхнем углу поля */
+    .player-badge.player {
+        left: calc(50% + (var(--board-w) / 2) - 6px);
+        transform: translateX(-100%);
+    }
+}
