@@ -969,25 +969,3 @@ button {
         animation: none !important;
     }
 }
-
-/* ===== Mobile: move badges INSIDE board width to avoid overlap with hands ===== */
-@media (max-height: 520px) and (orientation: landscape),
-(hover: none) and (pointer: coarse) and (orientation: landscape) {
-
-    .player-badge {
-        max-width: 44vw;
-        padding: 5px 8px;
-        gap: 8px;
-    }
-
-    /* вместо "снаружи поля" — ставим внутри ширины поля */
-    .player-badge.enemy {
-        left: calc(50% - (var(--board-w) / 2) + 6px);
-        transform: none;
-    }
-
-    .player-badge.player {
-        left: calc(50% + (var(--board-w) / 2) - 6px);
-        transform: translateX(-100%);
-    }
-}

@@ -57,10 +57,10 @@ export default function App() {
         tg.SecondaryButton?.hide();
         tg.BackButton?.hide();
 
-        // читаем Telegram user
+        // 1) читаем user сразу
         setMe(readTelegramUser());
 
-        // иногда initDataUnsafe догружается — перечитаем при viewportChanged
+        // 2) и ещё раз на viewportChanged (иногда user/viewport догружаются)
         const sync = () => setMe(readTelegramUser());
         try { tg.onEvent?.("viewportChanged", sync); } catch { }
 
@@ -71,6 +71,12 @@ export default function App() {
         };
     }, []);
 
+    // Перечитать user при входе в игру (на некоторых клиентах так надежнее)
+    useEffect(() => {
+        if (screen !== "game") return;
+        setMe(readTelegramUser());
+    }, [screen]);
+
     useEffect(() => {
         if (screen !== "home") return;
         logoRef.current?.play?.().catch(() => { });
@@ -78,10 +84,12 @@ export default function App() {
 
     const requestFullscreen = async () => {
         const tg = window.Telegram?.WebApp;
+
+        // Telegram fullscreen (если доступен)
         try { tg?.requestFullscreen?.(); } catch { }
         try { tg?.expand?.(); } catch { }
 
-        // Browser fallback (если откроется не в Telegram)
+        // Browser fullscreen fallback
         try {
             if (!document.fullscreenElement) {
                 await document.documentElement.requestFullscreen?.();
@@ -90,12 +98,13 @@ export default function App() {
     };
 
     const onPlay = () => {
-        // важно: fullscreen по клику
+        // Важно: вызвать fullscreen по клику
         requestFullscreen();
         setScreen("game");
     };
 
     const onExitGame = () => setScreen("home");
+    const onConnectWallet = () => alert("Wallet connect (soon)");
 
     const showRotate = screen === "game" && !isLandscape;
 
@@ -111,10 +120,8 @@ export default function App() {
             {screen === "game" ? (
                 <>
                     <div className={`game-host ${showRotate ? "is-hidden" : ""}`}>
-                        {/* ВАЖНО: me передаётся сюда */}
                         <Game onExit={onExitGame} me={me} />
                     </div>
-
                     {showRotate && <RotateGate onBack={onExitGame} />}
                 </>
             ) : (
@@ -155,6 +162,12 @@ export default function App() {
                         )}
                     </div>
 
+                    <div className="wallet-float">
+                        <button className="wallet-btn" onClick={onConnectWallet}>
+                            Подключить кошелёк
+                        </button>
+                    </div>
+
                     <div className="bottom-stack">
                         <SeasonBar
                             title={seasonInfo.title}
@@ -162,6 +175,7 @@ export default function App() {
                             progress={seasonInfo.progress}
                             onRefresh={() => console.log("refresh")}
                         />
+                        <BottomNav active={screen} onChange={setScreen} />
                     </div>
                 </>
             )}
@@ -189,6 +203,7 @@ function SeasonBar({ title, subtitle, progress, onRefresh }) {
                 <div className="season-title">{title}</div>
                 <div className="season-sub">{subtitle}</div>
             </div>
+
             <div className="season-right">
                 <div className="season-progress">
                     <div className="season-progress-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
@@ -197,6 +212,32 @@ function SeasonBar({ title, subtitle, progress, onRefresh }) {
                     ⟳
                 </button>
             </div>
+        </div>
+    );
+}
+
+function BottomNav({ active, onChange }) {
+    const items = [
+        { key: "home", label: "Главная" },
+        { key: "market", label: "Маркет" },
+        { key: "inventory", label: "Инвентарь", disabled: true },
+        { key: "profile", label: "Профиль" },
+    ];
+
+    return (
+        <div className="bottom-nav">
+            {items.map((it) => {
+                const isActive = active === it.key;
+                return (
+                    <button
+                        key={it.key}
+                        className={`nav-item ${isActive ? "active" : ""} ${it.disabled ? "disabled" : ""}`}
+                        onClick={it.disabled ? undefined : () => onChange(it.key)}
+                    >
+                        <span className="nav-txt">{it.label}</span>
+                    </button>
+                );
+            })}
         </div>
     );
 }
