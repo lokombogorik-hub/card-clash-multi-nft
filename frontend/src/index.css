@@ -899,13 +899,13 @@ button {
 @media (max-height: 520px) and (orientation: landscape) {
     :root {
         --ui-pad: 6px;
-        --gap: 6px;
+        --gap: 4px;
 
         /* Двигать от краёв на телефоне */
-        --edge-inset: 22px;
+        --edge-inset: 15px;
 
         /* Увеличить карты на телефоне */
-        --card-w-max: 196px;
+        --card-w-max: 250px;
 
         /* Уменьшить наложение */
         --hand-col-gap: 20px;
