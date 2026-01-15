@@ -92,7 +92,24 @@ export default function App() {
             tg?.expand?.();
         } catch { }
     };
+    const requestFullscreenAndLandscape = async () => {
+        const tg = window.Telegram?.WebApp;
 
+        try { tg?.HapticFeedback?.impactOccurred?.("light"); } catch { }
+
+        // Telegram Desktop / Mobile (если поддерживает)
+        try { await tg?.requestFullscreen?.(); } catch { }
+        try { await window.screen?.orientation?.lock?.("landscape"); } catch { }
+        try { tg?.expand?.(); } catch { }
+
+        // ===== Browser fallback (ПК браузер) =====
+        // Важно: работает ТОЛЬКО по клику (у тебя это onPlay => ок)
+        try {
+            if (!document.fullscreenElement) {
+                await document.documentElement.requestFullscreen?.();
+            }
+        } catch { }
+    };
     const onPlay = async () => {
         // ВАЖНО: Сначала показываем game. Если портрет — поверх будет rotate-gate.
         setScreen("game");
