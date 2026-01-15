@@ -814,7 +814,7 @@ button {
         --ui-pad: 6px;
         --gap: 4px;
         --card-w-max: 400px;
-        --edge-inset: 28px;
+        --edge-inset: 50px;
         --hand-col-gap: 20px;
         --row-gap: 12px;
         --score-gap: 3px;
