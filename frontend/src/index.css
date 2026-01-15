@@ -867,3 +867,194 @@ button {
         animation: none !important;
     }
 }
+
+/* =========================
+   FIX OVERRIDE (PASTE AT VERY END)
+   ========================= */
+
+/* 1) Отодвинуть руки от краёв (между краем и столом) */
+:root {
+    --side-inset: 12px;
+    /* было 0 */
+    --hand-col-gap: 14px;
+    /* больше зазор -> меньше наложения */
+    --row-gap: 12px;
+    --towards-board: 12px;
+    --half-step: calc((var(--card-h) + var(--row-gap)) / 2);
+}
+
+/* чтобы свечение/границы не резались */
+.game-ui.tt-layout,
+.hand,
+.hand-grid,
+.hand-slot {
+    overflow: visible !important;
+}
+
+/* чуть больше внутреннего воздуха у рук, чтобы glow не “резался рамкой” */
+.hand-grid {
+    padding: 16px !important;
+}
+
+/* инсет рук внутрь от экрана */
+.hand.left {
+    transform: translateX(var(--side-inset)) !important;
+}
+
+.hand.right {
+    transform: translateX(calc(-1 * var(--side-inset))) !important;
+}
+
+/* 2) ВАЖНО: 3 карты ближе к столу, 2 дальше (у тебя было наоборот)
+   col1 = 3 карты (rows 1..3) -> двигаем к столу
+   col2 = 2 карты (rows 1..2) -> НЕ двигаем к столу, только вниз на полшага */
+.hand.left .hand-slot.col1 {
+    transform: translateX(var(--towards-board)) !important;
+    /* к столу (вправо) */
+}
+
+.hand.left .hand-slot.col2 {
+    transform: translateY(var(--half-step)) !important;
+    /* “между 3” */
+}
+
+.hand.right .hand-slot.col1 {
+    transform: translateX(calc(-1 * var(--towards-board))) !important;
+    /* к столу (влево) */
+}
+
+.hand.right .hand-slot.col2 {
+    transform: translateY(var(--half-step)) !important;
+    /* “между 3” */
+}
+
+/* 3) Убрать наложение карт в моей руке:
+      - уменьшаем scale
+      - убираем сильный translateX у selected (он и даёт наезд на соседнюю колонку) */
+.hand.right .card.selected {
+    transform: scale(1.03) !important;
+    z-index: 20 !important;
+    box-shadow:
+        0 0 20px rgba(255, 215, 0, 0.20),
+        0 14px 34px rgba(0, 0, 0, 0.55) !important;
+}
+
+/* 4) Цифры TT: жёстко фиксируем, чтобы не были “на пол карты” */
+.card .tt-num {
+    position: absolute !important;
+    display: inline-block !important;
+    width: auto !important;
+    max-width: none !important;
+    white-space: nowrap !important;
+    line-height: 1 !important;
+
+    /* часто растягивает глобальный CSS — прибиваем */
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: none !important;
+
+    font-size: 12px !important;
+}
+
+/* позиции вокруг ромбика (верхний левый угол карты) */
+.card .tt-num.top {
+    top: 6px !important;
+    left: 28px !important;
+}
+
+.card .tt-num.left {
+    top: 24px !important;
+    left: 14px !important;
+}
+
+.card .tt-num.right {
+    top: 24px !important;
+    left: 42px !important;
+}
+
+.card .tt-num.bottom {
+    top: 40px !important;
+    left: 28px !important;
+}
+
+/* 5) HUD: аватар в рамке и в углу ближнему к столу, НЕ на поле.
+   Здесь считаем положение относительно центра экрана и размеров board. */
+
+/* если у тебя уже есть .hud-turn-avatar в Game.jsx */
+.hud-turn-avatar {
+    position: absolute !important;
+    z-index: 80 !important;
+    width: 44px !important;
+    height: 44px !important;
+    border-radius: 999px !important;
+
+    /* рамка как у HUD */
+    background: rgba(0, 0, 0, 0.42) !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    overflow: hidden !important;
+
+    /* угол “ближний к столу”: верхний правый угол около поля (снаружи) */
+    left: calc(50% + (var(--board-w) / 2) + 8px) !important;
+    top: calc(50% - (var(--board-h) / 2) + 0px) !important;
+}
+
+/* аватар-картинка (опционально, если есть ассеты) */
+.hud-turn-avatar::before {
+    content: "" !important;
+    position: absolute !important;
+    inset: 4px !important;
+    border-radius: 999px !important;
+    background:
+        radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02)),
+        url("/ui/avatar-player.png?v=1") !important;
+    background-size: cover !important;
+    background-position: center !important;
+    opacity: .95 !important;
+}
+
+.hud-turn-avatar.enemy::before {
+    background:
+        radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02)),
+        url("/ui/avatar-enemy.png?v=1") !important;
+    background-size: cover !important;
+    background-position: center !important;
+}
+
+.hud-turn-avatar.player {
+    box-shadow: 0 0 22px rgba(0, 180, 255, 0.28), 0 10px 30px rgba(0, 0, 0, 0.45) !important;
+}
+
+.hud-turn-avatar.enemy {
+    box-shadow: 0 0 22px rgba(255, 80, 80, 0.22), 0 10px 30px rgba(0, 0, 0, 0.45) !important;
+}
+
+/* 6) Счёт: рядом с полем, но СНАРУЖИ, чтобы не залезал на board */
+.hud-near-left {
+    position: absolute !important;
+    z-index: 80 !important;
+    left: calc(50% - (var(--board-w) / 2) - 66px) !important;
+    /* 56px pill + 10px gap */
+    top: calc(50% + (var(--board-h) / 2) - 28px) !important;
+    /* около нижнего угла поля */
+}
+
+.hud-near-right {
+    position: absolute !important;
+    z-index: 80 !important;
+    left: calc(50% + (var(--board-w) / 2) + 10px) !important;
+    top: calc(50% + (var(--board-h) / 2) - 28px) !important;
+}
+
+/* 7) На всякий случай: чтобы рамки/тени не “резались” границами контейнеров */
+.hand {
+    background-clip: padding-box !important;
+}
+
+/* 8) Мобилка: ещё чуть больше inset, чтобы не липло к краю */
+@media (max-width: 520px) and (orientation: landscape) {
+    :root {
+        --side-inset: 16px;
+        --hand-col-gap: 16px;
+    }
+}
