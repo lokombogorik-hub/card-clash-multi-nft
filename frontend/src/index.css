@@ -813,8 +813,8 @@ button {
     :root {
         --ui-pad: 6px;
         --gap: 6px;
-        --card-w-max: 186px;
-        --edge-inset: 16px;
+        --card-w-max: 236px;
+        --edge-inset: 22px;
         --hand-col-gap: 20px;
         --row-gap: 12px;
         --score-gap: 3px;
