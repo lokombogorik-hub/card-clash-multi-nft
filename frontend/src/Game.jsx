@@ -72,7 +72,7 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
 
     const toFlip = new Set();
 
-    // basic (power)
+    // basic
     for (const i of infos) if (i.placedSide > i.targetSide) toFlip.add(i.ni);
 
     // same
@@ -93,9 +93,7 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
     }
 
     const flipped = [];
-    for (const ni of toFlip) {
-        if (flipToOwner(grid, ni, placed.owner)) flipped.push(ni);
-    }
+    for (const ni of toFlip) if (flipToOwner(grid, ni, placed.owner)) flipped.push(ni);
 
     return { flipped };
 }
@@ -128,7 +126,8 @@ function resolveCombo(queue, grid, rules) {
 }
 
 const posForHandIndex = (i) => {
-    // 0..2 -> col1 rows 1..3, 3..4 -> col2 rows 1..2 (3 + 2)
+    // 0..2 -> col1 rows 1..3
+    // 3..4 -> col2 rows 1..2 (а CSS сдвинет их вниз на полшага => будут “между 3”)
     if (i < 3) return { col: 1, row: i + 1 };
     return { col: 2, row: i - 2 };
 };
@@ -256,13 +255,24 @@ export default function Game({ onExit }) {
                     ← Меню
                 </button>
 
+                {/* HUD по углам (поверх, не занимает место у поля) */}
+                <div className="hud-corner hud-tl hud-score red">🟥 {score.red}</div>
+                <div className={`hud-corner hud-tr hud-turn ${turn}`}>
+                    <div className="hud-dot" />
+                </div>
+                <div className="hud-corner hud-br hud-score blue">{score.blue} 🟦</div>
+
                 {/* LEFT enemy */}
                 <div className="hand left">
                     <div className="hand-grid">
                         {enemy.map((c, i) => {
                             const { col, row } = posForHandIndex(i);
                             return (
-                                <div key={c.id} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
+                                <div
+                                    key={c.id}
+                                    className={`hand-slot col${col}`}
+                                    style={{ gridColumn: col, gridRow: row }}
+                                >
                                     <Card hidden />
                                 </div>
                             );
@@ -270,16 +280,8 @@ export default function Game({ onExit }) {
                     </div>
                 </div>
 
-                {/* CENTER */}
+                {/* CENTER (только поле, чтобы было шире) */}
                 <div className="center-col">
-                    <div className="hud-top">
-                        <div className="hud-score red">🟥 {score.red}</div>
-                        <div className={`hud-turn ${turn}`}>
-                            <div className="hud-dot" />
-                        </div>
-                        <div className="hud-score blue">{score.blue} 🟦</div>
-                    </div>
-
                     <div className="board">
                         {board.map((cell, i) => (
                             <div
@@ -299,7 +301,11 @@ export default function Game({ onExit }) {
                         {player.map((c, i) => {
                             const { col, row } = posForHandIndex(i);
                             return (
-                                <div key={c.id} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
+                                <div
+                                    key={c.id}
+                                    className={`hand-slot col${col}`}
+                                    style={{ gridColumn: col, gridRow: row }}
+                                >
                                     <Card
                                         card={c}
                                         selected={selected?.id === c.id}
@@ -389,11 +395,10 @@ function Card({ card, onClick, selected, disabled, hidden }) {
                 <div className="card-back-inner">
                     <img
                         className="card-back-logo-img"
-                        src="/ui/cardclash-logo.png?v=1"
+                        src="/ui/cardclash-logo.png?v=2"
                         alt="CardClash"
                         draggable="false"
                         onError={(e) => {
-                            // если имя файла/регистр не совпал или кэш дал 404
                             e.currentTarget.style.display = "none";
                         }}
                     />
