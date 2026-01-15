@@ -867,3 +867,54 @@ button {
         animation: none !important;
     }
 }
+
+/* ===== PLAYER HAND (RIGHT) PATCH v1 — paste at very end ===== */
+
+/* регулируй тут */
+:root {
+    --player-edge-inset: 14px;
+    /* отступ руки от правого края */
+    --player-col-gap: 16px;
+    /* чтобы не накладывались колонки */
+    --player-row-gap: 12px;
+    --player-towards-board: 10px;
+    /* насколько 2 карты “подъезжают” к столу */
+    --player-half-step: calc((var(--card-h) + var(--player-row-gap)) / 2);
+}
+
+/* 3) отступ от края экрана к столу (сдвигаем правую руку влево) */
+.hand.right {
+    transform: translateX(calc(-1 * var(--player-edge-inset))) !important;
+    overflow: visible !important;
+    /* чтобы ничего не обрезалось */
+}
+
+/* убрать обрезания внутри и увеличить расстояния */
+.hand.right .hand-grid {
+    column-gap: var(--player-col-gap) !important;
+    row-gap: var(--player-row-gap) !important;
+    padding: 16px !important;
+    /* чтобы тени/свечения не упирались в рамку */
+    overflow: visible !important;
+}
+
+.hand.right .hand-slot {
+    overflow: visible !important;
+}
+
+/* 1) Позиция карт:
+   - col1 = 3 карты (к краю) => без сдвига
+   - col2 = 2 карты (к столу) => сдвиг к столу + вниз “между 3” */
+.hand.right .hand-slot.col1 {
+    transform: none !important;
+}
+
+.hand.right .hand-slot.col2 {
+    transform: translateX(calc(-1 * var(--player-towards-board))) translateY(var(--player-half-step)) !important;
+}
+
+/* 2) Убрать наложение выбранной карты (уменьшаем эффект) */
+.hand.right .card.selected {
+    transform: translateX(-6px) scale(1.03) !important;
+    z-index: 50 !important;
+}
