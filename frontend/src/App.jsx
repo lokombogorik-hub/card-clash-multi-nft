@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Game from "./Game";
 import StormBg from "./components/StormBg";
 
+const API = import.meta.env.VITE_API_URL || ""; // например https://your-backend.com
+
 function useIsLandscape() {
     const get = () =>
         window.matchMedia?.("(orientation: landscape)")?.matches ??
@@ -25,12 +27,21 @@ function useIsLandscape() {
     return ok;
 }
 
-function readTelegramUser() {
-    try {
-        return window.Telegram?.WebApp?.initDataUnsafe?.user || null;
-    } catch {
-        return null;
+async function apiJson(path, { token, method = "GET", body } = {}) {
+    const res = await fetch(`${API}${path}`, {
+        method,
+        headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: body ? JSON.stringify(body) : undefined,
+    });
+
+    if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`API ${method} ${path} failed: ${res.status} ${txt}`);
     }
+    return res.json();
 }
 
 export default function App() {
@@ -40,12 +51,28 @@ export default function App() {
     const logoRef = useRef(null);
     const [logoOk, setLogoOk] = useState(true);
 
-    // Telegram user (для бейджа/рейтинга)
-    const [me, setMe] = useState(null);
+    const [accessToken, setAccessToken] = useState(() => localStorage.getItem("cc_token") || "");
+    const [profile, setProfile] = useState(null); // backend user profile
 
-    // Для “плавающей” кнопки кошелька (позиция зависит от высоты нижнего стека)
+    // wallet button: depends on bottom stack height
     const bottomStackRef = useRef(null);
 
+    useLayoutEffect(() => {
+        const el = bottomStackRef.current;
+        if (!el) return;
+
+        const apply = () => {
+            const h = Math.ceil(el.getBoundingClientRect().height);
+            document.documentElement.style.setProperty("--bottom-stack-h", `${h}px`);
+        };
+
+        apply();
+        const ro = new ResizeObserver(apply);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, [screen]);
+
+    // Telegram init (colors + hide buttons)
     useEffect(() => {
         const tg = window.Telegram?.WebApp;
         if (!tg) return;
@@ -61,36 +88,58 @@ export default function App() {
         tg.SecondaryButton?.hide();
         tg.BackButton?.hide();
 
-        // читаем user
-        setMe(readTelegramUser());
-
-        // иногда WebApp докидывает viewport/user позже
-        const sync = () => setMe(readTelegramUser());
-        try { tg.onEvent?.("viewportChanged", sync); } catch { }
-
         tg.disableVerticalSwipes?.();
+        return () => tg.enableVerticalSwipes?.();
+    }, []);
+
+    // Telegram login -> JWT -> /users/me
+    useEffect(() => {
+        const tg = window.Telegram?.WebApp;
+        if (!tg) return;
+
+        const doLogin = async () => {
+            const initData = tg.initData || "";
+            if (!initData) return; // если пусто — Telegram не дал initData => не WebApp запуск
+
+            try {
+                const r = await apiJson("/api/auth/telegram", {
+                    method: "POST",
+                    body: { initData },
+                });
+
+                const token = r.accessToken;
+                if (!token) return;
+
+                localStorage.setItem("cc_token", token);
+                setAccessToken(token);
+
+                const me = await apiJson("/api/users/me", { token });
+                setProfile(me);
+            } catch (e) {
+                console.error(e);
+            }
+        };
+
+        // 1 раз сразу + ретраи (иногда initData появляется чуть позже)
+        doLogin();
+        const t1 = setTimeout(doLogin, 350);
+        const t2 = setTimeout(doLogin, 1200);
+
         return () => {
-            try { tg.offEvent?.("viewportChanged", sync); } catch { }
-            tg.enableVerticalSwipes?.();
+            clearTimeout(t1);
+            clearTimeout(t2);
         };
     }, []);
 
-    // измеряем нижний стек и кладём в CSS-переменную
-    useLayoutEffect(() => {
-        const el = bottomStackRef.current;
-        if (!el) return;
+    // Если токен уже есть (после перезагрузки) — подгружаем профиль
+    useEffect(() => {
+        if (!accessToken) return;
+        if (profile) return;
 
-        const apply = () => {
-            const h = Math.ceil(el.getBoundingClientRect().height);
-            document.documentElement.style.setProperty("--bottom-stack-h", `${h}px`);
-        };
-
-        apply();
-        const ro = new ResizeObserver(apply);
-        ro.observe(el);
-
-        return () => ro.disconnect();
-    }, [screen]);
+        apiJson("/api/users/me", { token: accessToken })
+            .then(setProfile)
+            .catch((e) => console.error(e));
+    }, [accessToken, profile]);
 
     useEffect(() => {
         if (screen !== "home") return;
@@ -99,12 +148,9 @@ export default function App() {
 
     const requestFullscreen = async () => {
         const tg = window.Telegram?.WebApp;
-
-        try { tg?.HapticFeedback?.impactOccurred?.("light"); } catch { }
         try { tg?.requestFullscreen?.(); } catch { }
         try { tg?.expand?.(); } catch { }
 
-        // браузерный фоллбек
         try {
             if (!document.fullscreenElement) {
                 await document.documentElement.requestFullscreen?.();
@@ -113,17 +159,13 @@ export default function App() {
     };
 
     const onPlay = () => {
-        // fullscreen должен быть вызван по клику
         requestFullscreen();
         setScreen("game");
     };
 
     const onExitGame = () => setScreen("home");
 
-    const onConnectWallet = () => {
-        try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light"); } catch { }
-        alert("Wallet connect (soon)");
-    };
+    const onConnectWallet = () => alert("Wallet connect (soon)");
 
     const showRotate = screen === "game" && !isLandscape;
 
@@ -138,10 +180,19 @@ export default function App() {
                 <StormBg />
 
                 <div className={`game-host ${showRotate ? "is-hidden" : ""}`}>
-                    <Game onExit={onExitGame} me={me} />
+                    <Game onExit={onExitGame} profile={profile} />
                 </div>
 
-                {showRotate && <RotateGate onBack={onExitGame} />}
+                {showRotate && (
+                    <div className="rotate-gate">
+                        <div className="rotate-gate-box">
+                            <div className="rotate-title">Поверни телефон</div>
+                            <div className="rotate-subtitle">Игра работает только в горизонтальном режиме</div>
+                            <div className="rotate-phone" />
+                            <button onClick={onExitGame}>← Меню</button>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     }
@@ -179,18 +230,16 @@ export default function App() {
                             </div>
 
                             <span className="play-icon">
-                                <PlayIcon />
+                                <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
+                                    <path d="M9 7.5v9l8-4.5-8-4.5Z" fill="white" opacity="0.95" />
+                                </svg>
                             </span>
                         </button>
                     </div>
                 )}
-
-                {screen === "market" && <div className="page"><h2>Маркет</h2></div>}
-                {screen === "inventory" && <div className="page"><h2>Инвентарь</h2></div>}
-                {screen === "profile" && <div className="page"><h2>Профиль</h2></div>}
             </div>
 
-            {/* Плавающая кнопка кошелька (чтобы не налезала при поворотах) */}
+            {/* Плавающая кнопка кошелька (не налезает при повороте) */}
             <div className="wallet-float">
                 <button className="wallet-btn" onClick={onConnectWallet}>
                     Подключить кошелёк
@@ -198,112 +247,21 @@ export default function App() {
             </div>
 
             <div className="bottom-stack" ref={bottomStackRef}>
-                <SeasonBar
-                    title={seasonInfo.title}
-                    subtitle={seasonInfo.subtitle}
-                    progress={seasonInfo.progress}
-                    onRefresh={() => console.log("refresh")}
-                />
-                <BottomNav active={screen} onChange={setScreen} />
-            </div>
-        </div>
-    );
-}
-
-function RotateGate({ onBack }) {
-    return (
-        <div className="rotate-gate">
-            <div className="rotate-gate-box">
-                <div className="rotate-title">Поверни телефон</div>
-                <div className="rotate-subtitle">Игра работает только в горизонтальном режиме</div>
-                <div className="rotate-phone" />
-                <button onClick={onBack}>← Меню</button>
-            </div>
-        </div>
-    );
-}
-
-function SeasonBar({ title, subtitle, progress, onRefresh }) {
-    return (
-        <div className="season-bar">
-            <div>
-                <div className="season-title">{title}</div>
-                <div className="season-sub">{subtitle}</div>
-            </div>
-
-            <div className="season-right">
-                <div className="season-progress">
-                    <div className="season-progress-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
+                <div className="season-bar">
+                    <div>
+                        <div className="season-title">{seasonInfo.title}</div>
+                        <div className="season-sub">{seasonInfo.subtitle}</div>
+                    </div>
+                    <div className="season-right">
+                        <div className="season-progress">
+                            <div className="season-progress-fill" style={{ width: `${Math.round(seasonInfo.progress * 100)}%` }} />
+                        </div>
+                        <button className="icon-btn" aria-label="Refresh">⟳</button>
+                    </div>
                 </div>
-                <button className="icon-btn" onClick={onRefresh} aria-label="Refresh">⟳</button>
+
+                {/* Тут у тебя уже bottom-nav с иконками из App.jsx (если нужно — вернём отдельно) */}
             </div>
         </div>
-    );
-}
-
-function BottomNav({ active, onChange }) {
-    const items = [
-        { key: "home", label: "Главная", icon: <HomeIcon /> },
-        { key: "market", label: "Маркет", icon: <GemIcon /> },
-        { key: "inventory", label: "Инвентарь", icon: <BagIcon /> },
-        { key: "profile", label: "Профиль", icon: <UserIcon /> },
-    ];
-
-    return (
-        <div className="bottom-nav">
-            {items.map((it) => {
-                const isActive = active === it.key;
-                return (
-                    <button
-                        key={it.key}
-                        className={`nav-item ${isActive ? "active" : ""}`}
-                        onClick={() => onChange(it.key)}
-                    >
-                        <span className="nav-ic">{it.icon}</span>
-                        <span className="nav-txt">{it.label}</span>
-                    </button>
-                );
-            })}
-        </div>
-    );
-}
-
-/* Icons */
-function PlayIcon() {
-    return (
-        <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
-            <path d="M9 7.5v9l8-4.5-8-4.5Z" fill="white" opacity="0.95" />
-        </svg>
-    );
-}
-function HomeIcon() {
-    return (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" stroke="white" strokeWidth="2" opacity="0.9" />
-        </svg>
-    );
-}
-function GemIcon() {
-    return (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2 3 9l9 13 9-13-9-7Z" stroke="white" strokeWidth="2" opacity="0.9" />
-            <path d="M3 9h18" stroke="white" strokeWidth="2" opacity="0.6" />
-        </svg>
-    );
-}
-function BagIcon() {
-    return (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M6 8h12l-1 13H7L6 8Z" stroke="white" strokeWidth="2" opacity="0.9" />
-            <path d="M9 8a3 3 0 0 1 6 0" stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.9" />
-        </svg>
-    );
-}
-function UserIcon() {
-    return (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" stroke="white" strokeWidth="2" opacity="0.9" />
-            <path d="M4 20a8 8 0 0 1 16 0" stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.9" />
-        </svg>
     );
 }

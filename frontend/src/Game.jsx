@@ -1,16 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 
-/* =========================
-   Triple Triad rules / helpers
-   ========================= */
+/* ===== rules ===== */
 const DIRS = [
     { dx: 0, dy: -1, a: "top", b: "bottom" },
     { dx: 1, dy: 0, a: "right", b: "left" },
     { dx: 0, dy: 1, a: "bottom", b: "top" },
     { dx: -1, dy: 0, a: "left", b: "right" },
 ];
-
 const RULES = { combo: true, same: true, plus: true };
 
 const rand9 = () => Math.ceil(Math.random() * 9);
@@ -74,17 +71,13 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
         .filter(Boolean);
 
     const toFlip = new Set();
-
-    // basic
     for (const i of infos) if (i.placedSide > i.targetSide) toFlip.add(i.ni);
 
-    // same
     if (rules.same) {
         const eq = infos.filter((i) => i.placedSide === i.targetSide);
         if (eq.length >= 2) eq.forEach((i) => toFlip.add(i.ni));
     }
 
-    // plus
     if (rules.plus) {
         const groups = new Map();
         for (const i of infos) {
@@ -97,7 +90,6 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
 
     const flipped = [];
     for (const ni of toFlip) if (flipToOwner(grid, ni, placed.owner)) flipped.push(ni);
-
     return { flipped };
 }
 
@@ -105,7 +97,6 @@ function captureByPowerFrom(idx, grid) {
     const src = grid[idx];
     if (!src) return [];
     const flipped = [];
-
     for (const { ni, a, b } of neighborsOf(idx)) {
         const t = grid[ni];
         if (!t) continue;
@@ -127,25 +118,19 @@ function resolveCombo(queue, grid, rules) {
     }
 }
 
-/* 5 cards layout (3 + 2). CSS swaps columns for player side. */
+/* 5 cards => 3 + 2 */
 const posForHandIndex = (i) => (i < 3 ? { col: 1, row: i + 1 } : { col: 2, row: i - 2 });
 
-/* =========================
-   Telegram user -> name/avatar
-   ========================= */
-function getPlayerName(me) {
-    // НЕ "You": если Telegram не дал user, показываем "Guest"
-    if (!me) return "Guest";
-    const u = me.username ? `@${me.username}` : "";
-    const full = [me.first_name, me.last_name].filter(Boolean).join(" ").trim();
-    return u || full || "Guest";
+function displayNameFromProfile(profile) {
+    if (!profile) return "Guest";
+    return profile.username ? `@${profile.username}` : (profile.first_name || profile.last_name)
+        ? [profile.first_name, profile.last_name].filter(Boolean).join(" ")
+        : "Guest";
 }
 
-function getPlayerAvatarUrl(me) {
-    if (!me) return null;
-    if (me.photo_url) return me.photo_url;
-    if (me.username) return `https://t.me/i/userpic/320/${me.username}.jpg`;
-    return null;
+function avatarFromProfile(profile) {
+    // ожидаем avatar_url от backend (либо null)
+    return profile?.avatar_url || null;
 }
 
 function initialsFrom(name) {
@@ -153,10 +138,7 @@ function initialsFrom(name) {
     return (n[0] || "?").toUpperCase();
 }
 
-/* =========================
-   Game
-   ========================= */
-export default function Game({ onExit, me }) {
+export default function Game({ onExit, profile }) {
     const aiGuard = useRef({ handled: false });
 
     const makeHands = () => ({
@@ -215,7 +197,7 @@ export default function Game({ onExit, me }) {
         setTurn("enemy");
     };
 
-    // AI turn
+    // AI
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
         if (aiGuard.current.handled) return;
@@ -254,14 +236,12 @@ export default function Game({ onExit, me }) {
         setGameOver(true);
     }, [board]);
 
-    // confetti on win
+    // confetti
     useEffect(() => {
         if (!gameOver || winner !== "player") return;
 
         const safe = (opts) => {
-            try {
-                confetti({ zIndex: 99999, ...opts });
-            } catch { }
+            try { confetti({ zIndex: 99999, ...opts }); } catch { }
         };
 
         const origin = { x: 0.5, y: 0.35 };
@@ -272,29 +252,22 @@ export default function Game({ onExit, me }) {
         return () => timers.forEach(clearTimeout);
     }, [gameOver, winner]);
 
-    const myName = getPlayerName(me);
-    const myAvatar = getPlayerAvatarUrl(me);
+    const playerName = displayNameFromProfile(profile);
+    const playerAvatar = avatarFromProfile(profile);
 
-    // Противник (пока AI) — фиксированный ник + локальный аватар
-    const enemyName = "BunnyBot";
+    const enemyName = "CPU";
     const enemyAvatar = "/ui/avatar-enemy.png?v=1";
 
     return (
         <div className="game-root">
             <div className="game-ui tt-layout">
-                <button className="exit" onClick={onExit}>
-                    ← Меню
-                </button>
+                <button className="exit" onClick={onExit}>← Меню</button>
 
-                {/* score */}
+                {/* score (bottom near board) */}
                 <div className="hud-corner hud-score red hud-near-left">🟥 {score.red}</div>
                 <div className="hud-corner hud-score blue hud-near-right">{score.blue} 🟦</div>
 
-                {/* top badges (CSS positions them; on mobile your CSS should push them up / inboard) */}
-                <PlayerBadge side="enemy" name={enemyName} avatarUrl={enemyAvatar} active={turn === "enemy"} />
-                <PlayerBadge side="player" name={myName} avatarUrl={myAvatar} active={turn === "player"} />
-
-                {/* LEFT enemy hand */}
+                {/* LEFT enemy */}
                 <div className="hand left">
                     <div className="hand-grid">
                         {enemy.map((c, i) => {
@@ -305,6 +278,11 @@ export default function Game({ onExit, me }) {
                                 </div>
                             );
                         })}
+
+                        {/* Badge slot: inner column (col2) row3 => "2 cards above it" */}
+                        <div className="hand-slot badge-slot enemy" style={{ gridColumn: 2, gridRow: 3 }}>
+                            <PlayerBadge side="enemy" name={enemyName} avatarUrl={enemyAvatar} active={turn === "enemy"} />
+                        </div>
                     </div>
                 </div>
 
@@ -323,7 +301,7 @@ export default function Game({ onExit, me }) {
                     </div>
                 </div>
 
-                {/* RIGHT player hand */}
+                {/* RIGHT player */}
                 <div className="hand right">
                     <div className="hand-grid">
                         {player.map((c, i) => {
@@ -339,6 +317,11 @@ export default function Game({ onExit, me }) {
                                 </div>
                             );
                         })}
+
+                        {/* Badge slot: inner column for player is gridColumn 1, row3 */}
+                        <div className="hand-slot badge-slot player" style={{ gridColumn: 1, gridRow: 3 }}>
+                            <PlayerBadge side="player" name={playerName} avatarUrl={playerAvatar} active={turn === "player"} />
+                        </div>
                     </div>
                 </div>
 
@@ -360,9 +343,6 @@ export default function Game({ onExit, me }) {
     );
 }
 
-/* =========================
-   Player badge
-   ========================= */
 function PlayerBadge({ side, name, avatarUrl, active }) {
     const [imgOk, setImgOk] = useState(Boolean(avatarUrl));
     const initials = initialsFrom(name);
@@ -386,9 +366,6 @@ function PlayerBadge({ side, name, avatarUrl, active }) {
     );
 }
 
-/* =========================
-   Dice Rain (loss)
-   ========================= */
 function DiceRain() {
     const dice = useMemo(() => {
         const chars = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
@@ -424,9 +401,6 @@ function DiceRain() {
     );
 }
 
-/* =========================
-   Card
-   ========================= */
 function Card({ card, onClick, selected, disabled, hidden }) {
     const [placedAnim, setPlacedAnim] = useState(false);
     const [capturedAnim, setCapturedAnim] = useState(false);
