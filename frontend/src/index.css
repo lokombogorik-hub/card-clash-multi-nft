@@ -1031,3 +1031,72 @@ button {
         animation: none !important;
     }
 }
+
+/* =========================
+   FIXES (paste at end)
+   ========================= */
+
+/* Иконки в bottom-nav всегда видны (SVG не "схлопывается") */
+.nav-ic {
+    line-height: 0;
+    display: grid;
+    place-items: center;
+}
+
+.nav-ic svg {
+    display: block;
+}
+
+/* Плавающая кнопка кошелька:
+   --bottom-stack-h выставляется JS-ом через ResizeObserver в App.jsx */
+:root {
+    --bottom-stack-h: 160px;
+}
+
+.wallet-float {
+    position: fixed;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    z-index: 50;
+    pointer-events: none;
+
+    bottom: calc(env(safe-area-inset-bottom, 0px) + var(--bottom-stack-h) + 12px);
+}
+
+.wallet-btn {
+    pointer-events: auto;
+}
+
+/* Кнопка "Меню" (твоя) — на всех мобилках внизу слева (и iOS, и Android одинаково) */
+@media (hover: none) and (pointer: coarse),
+(max-height: 520px) and (orientation: landscape) {
+    .exit {
+        top: auto !important;
+        bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
+        left: 12px !important;
+        right: auto !important;
+    }
+}
+
+/* Бейджи игрока/врага на мобилке: внутрь верхних углов поля,
+   чтобы НЕ пересекались с руками/картами по бокам */
+@media (hover: none) and (pointer: coarse),
+(max-height: 520px) and (orientation: landscape) {
+    .player-badge {
+        max-width: 44vw;
+        padding: 5px 8px;
+        gap: 8px;
+    }
+
+    .player-badge.enemy {
+        left: calc(50% - (var(--board-w) / 2) + 6px);
+        transform: none;
+    }
+
+    .player-badge.player {
+        left: calc(50% + (var(--board-w) / 2) - 6px);
+        transform: translateX(-100%);
+    }
+}

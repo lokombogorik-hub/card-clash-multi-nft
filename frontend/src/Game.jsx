@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 
-/* ===== Rules / helpers ===== */
+/* =========================
+   Triple Triad rules / helpers
+   ========================= */
 const DIRS = [
     { dx: 0, dy: -1, a: "top", b: "bottom" },
     { dx: 1, dy: 0, a: "right", b: "left" },
@@ -95,6 +97,7 @@ function resolvePlacementFlips(placedIdx, grid, rules) {
 
     const flipped = [];
     for (const ni of toFlip) if (flipToOwner(grid, ni, placed.owner)) flipped.push(ni);
+
     return { flipped };
 }
 
@@ -102,6 +105,7 @@ function captureByPowerFrom(idx, grid) {
     const src = grid[idx];
     if (!src) return [];
     const flipped = [];
+
     for (const { ni, a, b } of neighborsOf(idx)) {
         const t = grid[ni];
         if (!t) continue;
@@ -123,21 +127,35 @@ function resolveCombo(queue, grid, rules) {
     }
 }
 
-/* 5 cards => 3 in col1 (rows 1..3) + 2 in col2 (rows 1..2) */
+/* 5 cards layout (3 + 2). CSS swaps columns for player side. */
 const posForHandIndex = (i) => (i < 3 ? { col: 1, row: i + 1 } : { col: 2, row: i - 2 });
 
-function displayName(me) {
-    if (!me) return "You";
+/* =========================
+   Telegram user -> name/avatar
+   ========================= */
+function getPlayerName(me) {
+    // НЕ "You": если Telegram не дал user, показываем "Guest"
+    if (!me) return "Guest";
     const u = me.username ? `@${me.username}` : "";
     const full = [me.first_name, me.last_name].filter(Boolean).join(" ").trim();
-    return u || full || "You";
+    return u || full || "Guest";
 }
+
+function getPlayerAvatarUrl(me) {
+    if (!me) return null;
+    if (me.photo_url) return me.photo_url;
+    if (me.username) return `https://t.me/i/userpic/320/${me.username}.jpg`;
+    return null;
+}
+
 function initialsFrom(name) {
     const n = (name || "").replace(/^@/, "").trim();
     return (n[0] || "?").toUpperCase();
 }
 
-/* ===== Game ===== */
+/* =========================
+   Game
+   ========================= */
 export default function Game({ onExit, me }) {
     const aiGuard = useRef({ handled: false });
 
@@ -175,6 +193,8 @@ export default function Game({ onExit, me }) {
         );
     }, [board]);
 
+    const winnerText = winner === "player" ? "Победа" : winner === "enemy" ? "Поражение" : "Ничья";
+
     const placeCard = (i) => {
         if (gameOver) return;
         if (turn !== "player") return;
@@ -195,7 +215,7 @@ export default function Game({ onExit, me }) {
         setTurn("enemy");
     };
 
-    // AI move
+    // AI turn
     useEffect(() => {
         if (turn !== "enemy" || gameOver) return;
         if (aiGuard.current.handled) return;
@@ -225,7 +245,7 @@ export default function Game({ onExit, me }) {
         return () => clearTimeout(t);
     }, [turn, gameOver, board, enemy]);
 
-    // Game over
+    // game over
     useEffect(() => {
         if (board.some((c) => c === null)) return;
         const p = board.filter((c) => c.owner === "player").length;
@@ -234,12 +254,14 @@ export default function Game({ onExit, me }) {
         setGameOver(true);
     }, [board]);
 
-    // Confetti on win
+    // confetti on win
     useEffect(() => {
         if (!gameOver || winner !== "player") return;
 
         const safe = (opts) => {
-            try { confetti({ zIndex: 99999, ...opts }); } catch { }
+            try {
+                confetti({ zIndex: 99999, ...opts });
+            } catch { }
         };
 
         const origin = { x: 0.5, y: 0.35 };
@@ -250,21 +272,29 @@ export default function Game({ onExit, me }) {
         return () => timers.forEach(clearTimeout);
     }, [gameOver, winner]);
 
-    const myName = displayName(me);
+    const myName = getPlayerName(me);
+    const myAvatar = getPlayerAvatarUrl(me);
+
+    // Противник (пока AI) — фиксированный ник + локальный аватар
+    const enemyName = "BunnyBot";
+    const enemyAvatar = "/ui/avatar-enemy.png?v=1";
 
     return (
         <div className="game-root">
             <div className="game-ui tt-layout">
-                <button className="exit" onClick={onExit}>← Меню</button>
+                <button className="exit" onClick={onExit}>
+                    ← Меню
+                </button>
 
+                {/* score */}
                 <div className="hud-corner hud-score red hud-near-left">🟥 {score.red}</div>
                 <div className="hud-corner hud-score blue hud-near-right">{score.blue} 🟦</div>
 
-                {/* TOP badges (CSS positions them). On mobile we reposition so they DON'T overlap hands. */}
-                <PlayerBadge side="enemy" name="Enemy" avatarUrl={null} active={turn === "enemy"} />
-                <PlayerBadge side="player" name={myName} avatarUrl={me?.photo_url || null} active={turn === "player"} />
+                {/* top badges (CSS positions them; on mobile your CSS should push them up / inboard) */}
+                <PlayerBadge side="enemy" name={enemyName} avatarUrl={enemyAvatar} active={turn === "enemy"} />
+                <PlayerBadge side="player" name={myName} avatarUrl={myAvatar} active={turn === "player"} />
 
-                {/* enemy hand */}
+                {/* LEFT enemy hand */}
                 <div className="hand left">
                     <div className="hand-grid">
                         {enemy.map((c, i) => {
@@ -278,7 +308,7 @@ export default function Game({ onExit, me }) {
                     </div>
                 </div>
 
-                {/* board */}
+                {/* CENTER board */}
                 <div className="center-col">
                     <div className="board">
                         {board.map((cell, i) => (
@@ -293,7 +323,7 @@ export default function Game({ onExit, me }) {
                     </div>
                 </div>
 
-                {/* player hand */}
+                {/* RIGHT player hand */}
                 <div className="hand right">
                     <div className="hand-grid">
                         {player.map((c, i) => {
@@ -317,7 +347,7 @@ export default function Game({ onExit, me }) {
                 {gameOver && (
                     <div className="game-over">
                         <div className="game-over-box">
-                            <h2>{winner === "player" ? "Победа" : winner === "enemy" ? "Поражение" : "Ничья"}</h2>
+                            <h2>{winnerText}</h2>
                             <div className="game-over-buttons">
                                 <button onClick={reset}>Заново</button>
                                 <button onClick={onExit}>Меню</button>
@@ -330,6 +360,9 @@ export default function Game({ onExit, me }) {
     );
 }
 
+/* =========================
+   Player badge
+   ========================= */
 function PlayerBadge({ side, name, avatarUrl, active }) {
     const [imgOk, setImgOk] = useState(Boolean(avatarUrl));
     const initials = initialsFrom(name);
@@ -353,6 +386,9 @@ function PlayerBadge({ side, name, avatarUrl, active }) {
     );
 }
 
+/* =========================
+   Dice Rain (loss)
+   ========================= */
 function DiceRain() {
     const dice = useMemo(() => {
         const chars = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
@@ -388,6 +424,9 @@ function DiceRain() {
     );
 }
 
+/* =========================
+   Card
+   ========================= */
 function Card({ card, onClick, selected, disabled, hidden }) {
     const [placedAnim, setPlacedAnim] = useState(false);
     const [capturedAnim, setCapturedAnim] = useState(false);
