@@ -1,6 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Game from "./Game";
 import StormBg from "./components/StormBg";
+import { apiFetch } from "./api";
+import Inventory from "./pages/Inventory";
+import Profile from "./pages/Profile";
+import Market from "./pages/Market";
 
 function useIsLandscape() {
     const get = () =>
@@ -36,7 +40,7 @@ function readTelegramUser() {
 export default function App() {
     const [screen, setScreen] = useState("home"); // home | market | inventory | profile | game
     const isLandscape = useIsLandscape();
-
+    const [token, setToken] = useState(null);
     const logoRef = useRef(null);
     const [logoOk, setLogoOk] = useState(true);
 
@@ -60,7 +64,31 @@ export default function App() {
         tg.MainButton?.hide();
         tg.SecondaryButton?.hide();
         tg.BackButton?.hide();
+        useEffect(() => {
+            const tg = window.Telegram?.WebApp;
+            if (!tg) return;
 
+            tg.ready();
+            tg.expand();
+
+            // ... твои setHeaderColor/hide кнопок ...
+
+            const initAuth = async () => {
+                try {
+                    const initData = tg.initData || "";
+                    if (!initData) return; // в dev браузере может быть пусто
+                    const r = await apiFetch("/api/auth/telegram", {
+                        method: "POST",
+                        body: JSON.stringify({ initData }),
+                    });
+                    setToken(r.accessToken);
+                } catch (e) {
+                    console.error("Auth failed:", e);
+                }
+            };
+
+            initAuth();
+        }, []);
         // читаем user
         setMe(readTelegramUser());
 
@@ -117,7 +145,26 @@ export default function App() {
         requestFullscreen();
         setScreen("game");
     };
+    const ensureDeck = async () => {
+        if (!token) return false;
+        try {
+            const r = await apiFetch("/api/decks/active", { token });
+            return Array.isArray(r.cards) && r.cards.length === 5;
+        } catch {
+            return false;
+        }
+    };
+    const onPlay = async () => {
+        requestFullscreen();
 
+        const ok = await ensureDeck();
+        if (!ok) {
+            setScreen("inventory");
+            return;
+        }
+
+        setScreen("game");
+    };
     const onExitGame = () => setScreen("home");
 
     const onConnectWallet = () => {
@@ -185,9 +232,14 @@ export default function App() {
                     </div>
                 )}
 
-                {screen === "market" && <div className="page"><h2>Маркет</h2></div>}
-                {screen === "inventory" && <div className="page"><h2>Инвентарь</h2></div>}
-                {screen === "profile" && <div className="page"><h2>Профиль</h2></div>}
+                {screen === "market" && <Market />}
+                {screen === "inventory" && (
+                    <Inventory
+                        token={token}
+                        onDeckReady={() => setScreen("home")}
+                    />
+                )}
+                {screen === "profile" && <Profile token={token} />}
             </div>
 
             {/* Плавающая кнопка кошелька (чтобы не налезала при поворотах) */}
