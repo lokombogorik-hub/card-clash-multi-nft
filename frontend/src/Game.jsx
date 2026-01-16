@@ -155,13 +155,15 @@ function initialsFrom(name) {
 /* =========================
    Magic (spells)
    ========================= */
-const FREEZE_DURATION_MOVES = 2; // на сколько "ходов с постановкой карты" держится заморозка
+const FREEZE_DURATION_MOVES = 2; // сколько "ходов с постановкой карты" держится заморозка
+const REVEAL_MS = 3000;          // показать карту врага на 3 секунды
 
 /* =========================
    Game
    ========================= */
 export default function Game({ onExit, me }) {
     const aiGuard = useRef({ handled: false });
+    const revealTimerRef = useRef(null);
 
     const makeHands = () => ({
         player: Array.from({ length: 5 }, (_, i) => genCard("player", `p${i}`)),
@@ -189,6 +191,21 @@ export default function Game({ onExit, me }) {
         } catch { }
     };
 
+    const clearReveal = () => {
+        if (revealTimerRef.current) {
+            clearTimeout(revealTimerRef.current);
+            revealTimerRef.current = null;
+        }
+        setEnemyRevealId(null);
+    };
+
+    useEffect(() => {
+        return () => {
+            // cleanup on unmount
+            if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
+        };
+    }, []);
+
     const decFrozenAfterCardMove = () => {
         setFrozen((prev) => prev.map((v) => (v > 0 ? v - 1 : 0)));
     };
@@ -204,14 +221,15 @@ export default function Game({ onExit, me }) {
 
         setSpellMode(null);
         setFrozen(Array(9).fill(0));
-        setEnemyRevealId(null);
+        clearReveal();
         setPlayerSpells({ freeze: 1, reveal: 1 });
     };
 
     // если раскрытая карта уже ушла из руки — чистим
     useEffect(() => {
         if (!enemyRevealId) return;
-        if (!enemy.some((c) => c.id === enemyRevealId)) setEnemyRevealId(null);
+        if (!enemy.some((c) => c.id === enemyRevealId)) clearReveal();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [enemy, enemyRevealId]);
 
     const score = useMemo(() => {
@@ -232,7 +250,7 @@ export default function Game({ onExit, me }) {
         if (turn !== "player") return;
         if (!selected) return;
         if (board[i]) return;
-        if (frozen[i] > 0) return; // заморожено
+        if (frozen[i] > 0) return;
 
         const next = [...board];
         next[i] = { ...selected, owner: "player", placeKey: (selected.placeKey || 0) + 1 };
@@ -245,7 +263,7 @@ export default function Game({ onExit, me }) {
         setSelected(null);
         setSpellMode(null);
 
-        decFrozenAfterCardMove(); // уменьшаем заморозки после хода с картой
+        decFrozenAfterCardMove();
 
         aiGuard.current.handled = false;
         setTurn("enemy");
@@ -257,8 +275,8 @@ export default function Game({ onExit, me }) {
         // Spell: Freeze
         if (spellMode === "freeze") {
             if (turn !== "player") return;
-            if (board[i]) return; // замораживаем только пустые
-            if (frozen[i] > 0) return;
+            if (board[i]) return;      // замораживаем только пустые
+            if (frozen[i] > 0) return; // уже заморожено
 
             setFrozen((prev) => {
                 const next = [...prev];
@@ -296,9 +314,15 @@ export default function Game({ onExit, me }) {
 
         haptic("light");
 
-        // раскрываем случайную карту врага на 1 раз (до тех пор, пока она не будет сыграна/сброшена)
         const c = enemy[Math.floor(Math.random() * enemy.length)];
         setEnemyRevealId(c.id);
+
+        // auto-hide через 3 секунды
+        if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
+        revealTimerRef.current = setTimeout(() => {
+            setEnemyRevealId(null);
+            revealTimerRef.current = null;
+        }, REVEAL_MS);
 
         setSelected(null);
         setSpellMode(null);
@@ -336,7 +360,7 @@ export default function Game({ onExit, me }) {
             setBoard(next);
             setHands((h) => ({ ...h, enemy: h.enemy.filter((c) => c.id !== card.id) }));
 
-            decFrozenAfterCardMove(); // уменьшаем заморозки после хода с картой
+            decFrozenAfterCardMove();
 
             setTurn("player");
         }, 420);
@@ -374,7 +398,6 @@ export default function Game({ onExit, me }) {
     const myName = getPlayerName(me);
     const myAvatar = getPlayerAvatarUrl(me);
 
-    // Противник (пока AI) — фиксированный ник + локальный аватар
     const enemyName = "BunnyBot";
     const enemyAvatar = "/ui/avatar-enemy.png?v=1";
 
@@ -425,7 +448,15 @@ export default function Game({ onExit, me }) {
                     <div className="board">
                         {board.map((cell, i) => {
                             const isFrozen = frozen[i] > 0;
-                            const canHighlight = !gameOver && !spellMode && selected && !cell && !isFrozen;
+
+                            // подсветка:
+                            // 1) обычная — когда выбрана карта
+                            // 2) для freeze — когда активен режим и клетка пустая/не заморожена
+                            const canHighlight =
+                                !gameOver &&
+                                !cell &&
+                                !isFrozen &&
+                                ((spellMode === "freeze" && turn === "player") || (spellMode == null && selected));
 
                             return (
                                 <div
@@ -473,7 +504,7 @@ export default function Game({ onExit, me }) {
                                 className="magic-btn"
                                 onClick={onMagicReveal}
                                 disabled={!canUseMagic || playerSpells.reveal <= 0}
-                                title="Reveal: показать 1 карту врага"
+                                title="Reveal: показать 1 карту врага на 3 секунды"
                             >
                                 👁 {playerSpells.reveal}
                             </button>
