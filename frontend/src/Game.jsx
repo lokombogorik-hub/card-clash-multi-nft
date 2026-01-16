@@ -134,7 +134,6 @@ const posForHandIndex = (i) => (i < 3 ? { col: 1, row: i + 1 } : { col: 2, row: 
    Telegram user -> name/avatar
    ========================= */
 function getPlayerName(me) {
-    // НЕ "You": если Telegram не дал user, показываем "Guest"
     if (!me) return "Guest";
     const u = me.username ? `@${me.username}` : "";
     const full = [me.first_name, me.last_name].filter(Boolean).join(" ").trim();
@@ -152,6 +151,11 @@ function initialsFrom(name) {
     const n = (name || "").replace(/^@/, "").trim();
     return (n[0] || "?").toUpperCase();
 }
+
+/* =========================
+   Magic (spells)
+   ========================= */
+const FREEZE_DURATION_MOVES = 2; // на сколько "ходов с постановкой карты" держится заморозка
 
 /* =========================
    Game
@@ -172,6 +176,23 @@ export default function Game({ onExit, me }) {
     const [gameOver, setGameOver] = useState(false);
     const [winner, setWinner] = useState(null);
 
+    // spells
+    const [spellMode, setSpellMode] = useState(null); // null | "freeze"
+    const [frozen, setFrozen] = useState(() => Array(9).fill(0)); // counters
+    const [enemyRevealId, setEnemyRevealId] = useState(null);
+
+    const [playerSpells, setPlayerSpells] = useState({ freeze: 1, reveal: 1 });
+
+    const haptic = (kind = "light") => {
+        try {
+            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(kind);
+        } catch { }
+    };
+
+    const decFrozenAfterCardMove = () => {
+        setFrozen((prev) => prev.map((v) => (v > 0 ? v - 1 : 0)));
+    };
+
     const reset = () => {
         setHands(makeHands());
         setBoard(Array(9).fill(null));
@@ -180,7 +201,18 @@ export default function Game({ onExit, me }) {
         setGameOver(false);
         setWinner(null);
         aiGuard.current.handled = false;
+
+        setSpellMode(null);
+        setFrozen(Array(9).fill(0));
+        setEnemyRevealId(null);
+        setPlayerSpells({ freeze: 1, reveal: 1 });
     };
+
+    // если раскрытая карта уже ушла из руки — чистим
+    useEffect(() => {
+        if (!enemyRevealId) return;
+        if (!enemy.some((c) => c.id === enemyRevealId)) setEnemyRevealId(null);
+    }, [enemy, enemyRevealId]);
 
     const score = useMemo(() => {
         return board.reduce(
@@ -200,6 +232,7 @@ export default function Game({ onExit, me }) {
         if (turn !== "player") return;
         if (!selected) return;
         if (board[i]) return;
+        if (frozen[i] > 0) return; // заморожено
 
         const next = [...board];
         next[i] = { ...selected, owner: "player", placeKey: (selected.placeKey || 0) + 1 };
@@ -210,7 +243,67 @@ export default function Game({ onExit, me }) {
         setBoard(next);
         setHands((h) => ({ ...h, player: h.player.filter((c) => c.id !== selected.id) }));
         setSelected(null);
+        setSpellMode(null);
 
+        decFrozenAfterCardMove(); // уменьшаем заморозки после хода с картой
+
+        aiGuard.current.handled = false;
+        setTurn("enemy");
+    };
+
+    const onCellClick = (i) => {
+        if (gameOver) return;
+
+        // Spell: Freeze
+        if (spellMode === "freeze") {
+            if (turn !== "player") return;
+            if (board[i]) return; // замораживаем только пустые
+            if (frozen[i] > 0) return;
+
+            setFrozen((prev) => {
+                const next = [...prev];
+                next[i] = FREEZE_DURATION_MOVES;
+                return next;
+            });
+
+            setSpellMode(null);
+            aiGuard.current.handled = false;
+            setTurn("enemy");
+            haptic("light");
+            return;
+        }
+
+        // normal placement
+        placeCard(i);
+    };
+
+    const onMagicFreeze = () => {
+        if (gameOver) return;
+        if (turn !== "player") return;
+        if (playerSpells.freeze <= 0) return;
+
+        haptic("light");
+        setSelected(null);
+        setSpellMode("freeze");
+        setPlayerSpells((s) => ({ ...s, freeze: Math.max(0, s.freeze - 1) }));
+    };
+
+    const onMagicReveal = () => {
+        if (gameOver) return;
+        if (turn !== "player") return;
+        if (playerSpells.reveal <= 0) return;
+        if (!enemy.length) return;
+
+        haptic("light");
+
+        // раскрываем случайную карту врага на 1 раз (до тех пор, пока она не будет сыграна/сброшена)
+        const c = enemy[Math.floor(Math.random() * enemy.length)];
+        setEnemyRevealId(c.id);
+
+        setSelected(null);
+        setSpellMode(null);
+
+        setPlayerSpells((s) => ({ ...s, reveal: Math.max(0, s.reveal - 1) }));
         aiGuard.current.handled = false;
         setTurn("enemy");
     };
@@ -221,7 +314,10 @@ export default function Game({ onExit, me }) {
         if (aiGuard.current.handled) return;
         aiGuard.current.handled = true;
 
-        const empty = board.map((c, idx) => (c === null ? idx : null)).filter((v) => v !== null);
+        const empty = board
+            .map((c, idx) => (c === null && frozen[idx] === 0 ? idx : null))
+            .filter((v) => v !== null);
+
         if (!empty.length || !enemy.length) {
             setTurn("player");
             return;
@@ -239,11 +335,14 @@ export default function Game({ onExit, me }) {
         const t = setTimeout(() => {
             setBoard(next);
             setHands((h) => ({ ...h, enemy: h.enemy.filter((c) => c.id !== card.id) }));
+
+            decFrozenAfterCardMove(); // уменьшаем заморозки после хода с картой
+
             setTurn("player");
         }, 420);
 
         return () => clearTimeout(t);
-    }, [turn, gameOver, board, enemy]);
+    }, [turn, gameOver, board, enemy, frozen]);
 
     // game over
     useEffect(() => {
@@ -279,6 +378,8 @@ export default function Game({ onExit, me }) {
     const enemyName = "BunnyBot";
     const enemyAvatar = "/ui/avatar-enemy.png?v=1";
 
+    const canUseMagic = turn === "player" && !gameOver;
+
     return (
         <div className="game-root">
             <div className="game-ui tt-layout">
@@ -290,7 +391,7 @@ export default function Game({ onExit, me }) {
                 <div className="hud-corner hud-score red hud-near-left">🟥 {score.red}</div>
                 <div className="hud-corner hud-score blue hud-near-right">{score.blue} 🟦</div>
 
-                {/* top badges (CSS positions them; on mobile your CSS should push them up / inboard) */}
+                {/* badges */}
                 <PlayerBadge side="enemy" name={enemyName} avatarUrl={enemyAvatar} active={turn === "enemy"} />
                 <PlayerBadge side="player" name={myName} avatarUrl={myAvatar} active={turn === "player"} />
 
@@ -299,27 +400,44 @@ export default function Game({ onExit, me }) {
                     <div className="hand-grid">
                         {enemy.map((c, i) => {
                             const { col, row } = posForHandIndex(i);
+                            const isRevealed = enemyRevealId === c.id;
                             return (
                                 <div key={c.id} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
-                                    <Card hidden />
+                                    {isRevealed ? <Card card={c} disabled /> : <Card hidden />}
                                 </div>
                             );
                         })}
+
+                        {/* Magic slot (enemy side) */}
+                        <div className="magic-slot" aria-hidden="true">
+                            <button className="magic-btn" disabled title="Enemy magic (soon)">
+                                ❄
+                            </button>
+                            <button className="magic-btn" disabled title="Enemy magic (soon)">
+                                👁
+                            </button>
+                        </div>
                     </div>
                 </div>
 
                 {/* CENTER board */}
                 <div className="center-col">
                     <div className="board">
-                        {board.map((cell, i) => (
-                            <div
-                                key={i}
-                                className={`cell ${!gameOver && selected && !cell ? "highlight" : ""}`}
-                                onClick={() => placeCard(i)}
-                            >
-                                {cell && <Card card={cell} />}
-                            </div>
-                        ))}
+                        {board.map((cell, i) => {
+                            const isFrozen = frozen[i] > 0;
+                            const canHighlight = !gameOver && !spellMode && selected && !cell && !isFrozen;
+
+                            return (
+                                <div
+                                    key={i}
+                                    className={`cell ${canHighlight ? "highlight" : ""} ${isFrozen ? "frozen" : ""}`}
+                                    onClick={() => onCellClick(i)}
+                                    title={isFrozen ? `Frozen (${frozen[i]})` : undefined}
+                                >
+                                    {cell && <Card card={cell} />}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -333,12 +451,33 @@ export default function Game({ onExit, me }) {
                                     <Card
                                         card={c}
                                         selected={selected?.id === c.id}
-                                        disabled={gameOver || turn !== "player"}
+                                        disabled={gameOver || turn !== "player" || spellMode === "freeze"}
                                         onClick={() => setSelected((prev) => (prev?.id === c.id ? null : c))}
                                     />
                                 </div>
                             );
                         })}
+
+                        {/* Magic slot (player side) */}
+                        <div className="magic-slot">
+                            <button
+                                className={`magic-btn ${spellMode === "freeze" ? "active" : ""}`}
+                                onClick={onMagicFreeze}
+                                disabled={!canUseMagic || playerSpells.freeze <= 0}
+                                title="Freeze: заморозить пустую клетку"
+                            >
+                                ❄ {playerSpells.freeze}
+                            </button>
+
+                            <button
+                                className="magic-btn"
+                                onClick={onMagicReveal}
+                                disabled={!canUseMagic || playerSpells.reveal <= 0}
+                                title="Reveal: показать 1 карту врага"
+                            >
+                                👁 {playerSpells.reveal}
+                            </button>
+                        </div>
                     </div>
                 </div>
 
