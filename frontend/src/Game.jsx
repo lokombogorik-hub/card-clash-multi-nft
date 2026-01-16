@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 
 /* =========================
-   Triple Triad rules / helpers
+   Triple Triad (FF-style) + match-to-3 + win 1 NFT
    ========================= */
+
 const DIRS = [
     { dx: 0, dy: -1, a: "top", b: "bottom" },
     { dx: 1, dy: 0, a: "right", b: "left" },
@@ -11,10 +12,15 @@ const DIRS = [
     { dx: -1, dy: 0, a: "left", b: "right" },
 ];
 
-const RULES = { combo: true, same: true, plus: true };
+const RULES = {
+    same: true,
+    plus: true,
+    combo: true,
+    elementalSquares: true, // FF8-like: клетка стихии дает +1 на совп. стихии и -1 на чужой
+    elementalBattle: true, // вариация: стихии влияют на сравнения сторон
+};
 
-const rand9 = () => Math.ceil(Math.random() * 9);
-const randomFirstTurn = () => (Math.random() < 0.5 ? "player" : "enemy");
+const MATCH_WINS_TARGET = 3;
 
 const ART = [
     "/cards/card.jpg",
@@ -29,14 +35,70 @@ const ART = [
     "/cards/card9.jpg",
 ];
 
-const genCard = (owner, id) => ({
-    id,
-    owner,
-    values: { top: rand9(), right: rand9(), bottom: rand9(), left: rand9() },
-    imageUrl: ART[Math.floor(Math.random() * ART.length)],
-    placeKey: 0,
-    captureKey: 0,
-});
+/* =========================
+   Elements / Ranks
+   ========================= */
+const ELEMENTS = ["fire", "water", "nature", "lightning", "ice"];
+const ELEM_ICON = { fire: "🔥", water: "💧", nature: "🌿", lightning: "⚡", ice: "❄" };
+
+// вариация “камень-ножницы-бумага”
+const BEATS = {
+    fire: ["nature"],
+    nature: ["water"],
+    water: ["fire"],
+    lightning: ["water"],
+    ice: ["fire"],
+};
+
+const RANKS = [
+    { key: "common", label: "C", weight: 50, min: 1, max: 7, elemChance: 0.20 },
+    { key: "rare", label: "R", weight: 30, min: 2, max: 8, elemChance: 0.35 },
+    { key: "epic", label: "E", weight: 15, min: 3, max: 10, elemChance: 0.50 },
+    { key: "legendary", label: "L", weight: 5, min: 4, max: 10, elemChance: 0.65 },
+];
+
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const randInt = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
+const pick = (arr) => arr[(Math.random() * arr.length) | 0];
+
+function weightedPick(defs) {
+    const total = defs.reduce((s, d) => s + d.weight, 0);
+    let r = Math.random() * total;
+    for (const d of defs) {
+        r -= d.weight;
+        if (r <= 0) return d;
+    }
+    return defs[defs.length - 1];
+}
+
+const randomFirstTurn = () => (Math.random() < 0.5 ? "player" : "enemy");
+const showVal = (v) => (v === 10 ? "A" : String(v));
+
+function genCard(owner, id) {
+    const r = weightedPick(RANKS);
+
+    const values = {
+        top: randInt(r.min, r.max),
+        right: randInt(r.min, r.max),
+        bottom: randInt(r.min, r.max),
+        left: randInt(r.min, r.max),
+    };
+
+    const hasElem = Math.random() < r.elemChance;
+    const element = hasElem ? pick(ELEMENTS) : null;
+
+    return {
+        id,
+        owner,
+        values,
+        imageUrl: ART[Math.floor(Math.random() * ART.length)],
+        rank: r.key,
+        rankLabel: r.label,
+        element, // null | one of ELEMENTS
+        placeKey: 0,
+        captureKey: 0,
+    };
+}
 
 function neighborsOf(idx) {
     const x = idx % 3;
@@ -59,49 +121,108 @@ function flipToOwner(grid, ni, newOwner) {
     return true;
 }
 
-function resolvePlacementFlips(placedIdx, grid, rules) {
-    const placed = grid[placedIdx];
-    if (!placed) return { flipped: [] };
+/* =========================
+   Element deltas
+   ========================= */
+function squareDelta(cardElement, cellElement) {
+    if (!RULES.elementalSquares) return 0;
+    if (!cellElement) return 0;
+    if (!cardElement) return 0;
+    return cardElement === cellElement ? +1 : -1;
+}
 
-    const infos = neighborsOf(placedIdx)
+function battleElementDelta(attackerElement, defenderElement) {
+    if (!RULES.elementalBattle) return 0;
+    if (!attackerElement || !defenderElement) return 0;
+
+    if (attackerElement === defenderElement) return +1;
+
+    if (BEATS[attackerElement]?.includes(defenderElement)) return +1;
+    if (BEATS[defenderElement]?.includes(attackerElement)) return -1;
+
+    return 0;
+}
+
+function valueForSamePlus(card, side, idx, boardElems) {
+    const base = card.values[side];
+    const d = squareDelta(card.element, boardElems[idx]);
+    return clamp(base + d, 1, 10);
+}
+
+function attackerValueForBattle(attacker, side, aIdx, defender, boardElems) {
+    const base = valueForSamePlus(attacker, side, aIdx, boardElems);
+    const ed = battleElementDelta(attacker.element, defender.element);
+    return clamp(base + ed, 1, 10);
+}
+
+/* =========================
+   Correct TT resolution:
+   - Basic capture always checks
+   - Same/Plus (if triggered) flips participating cards
+   - Combo ONLY chains from Same/Plus flips (not from basic)
+   ========================= */
+function resolvePlacementTT(placedIdx, grid, boardElems) {
+    const placed = grid[placedIdx];
+    if (!placed) return { flippedAll: [], flippedSpecial: [] };
+
+    const adj = neighborsOf(placedIdx)
         .map(({ ni, a, b }) => {
-            const target = grid[ni];
-            if (!target) return null;
-            const p = placed.values[a];
-            const q = target.values[b];
-            return { ni, placedSide: p, targetSide: q, sum: p + q };
+            const t = grid[ni];
+            if (!t) return null;
+
+            const pSP = valueForSamePlus(placed, a, placedIdx, boardElems);
+            const tSP = valueForSamePlus(t, b, ni, boardElems);
+            const sum = pSP + tSP;
+
+            const pBattle = attackerValueForBattle(placed, a, placedIdx, t, boardElems);
+
+            return { ni, a, b, target: t, pSP, tSP, sum, pBattle };
         })
         .filter(Boolean);
 
-    const toFlip = new Set();
+    const basicSet = new Set();
+    const sameSet = new Set();
+    const plusSet = new Set();
 
-    // basic
-    for (const i of infos) if (i.placedSide > i.targetSide) toFlip.add(i.ni);
-
-    // same
-    if (rules.same) {
-        const eq = infos.filter((i) => i.placedSide === i.targetSide);
-        if (eq.length >= 2) eq.forEach((i) => toFlip.add(i.ni));
+    // BASIC capture (strict >)
+    for (const i of adj) {
+        if (i.target.owner !== placed.owner && i.pBattle > i.tSP) basicSet.add(i.ni);
     }
 
-    // plus
-    if (rules.plus) {
+    // SAME (>=2 equalities)
+    if (RULES.same) {
+        const eq = adj.filter((i) => i.pSP === i.tSP);
+        if (eq.length >= 2) eq.forEach((i) => sameSet.add(i.ni));
+    }
+
+    // PLUS (>=2 equal sums)
+    if (RULES.plus) {
         const groups = new Map();
-        for (const i of infos) {
+        for (const i of adj) {
             const arr = groups.get(i.sum) || [];
             arr.push(i);
             groups.set(i.sum, arr);
         }
-        for (const [, arr] of groups) if (arr.length >= 2) arr.forEach((i) => toFlip.add(i.ni));
+        for (const [, arr] of groups) if (arr.length >= 2) arr.forEach((i) => plusSet.add(i.ni));
     }
 
-    const flipped = [];
-    for (const ni of toFlip) if (flipToOwner(grid, ni, placed.owner)) flipped.push(ni);
+    const specialSet = new Set([...sameSet, ...plusSet]);
+    const toFlip = new Set([...basicSet, ...specialSet]);
 
-    return { flipped };
+    const flippedAll = [];
+    const flippedSpecial = [];
+
+    for (const ni of toFlip) {
+        if (flipToOwner(grid, ni, placed.owner)) {
+            flippedAll.push(ni);
+            if (specialSet.has(ni)) flippedSpecial.push(ni);
+        }
+    }
+
+    return { flippedAll, flippedSpecial };
 }
 
-function captureByPowerFrom(idx, grid) {
+function captureByPowerFrom(idx, grid, boardElems) {
     const src = grid[idx];
     if (!src) return [];
     const flipped = [];
@@ -110,19 +231,23 @@ function captureByPowerFrom(idx, grid) {
         const t = grid[ni];
         if (!t) continue;
         if (t.owner === src.owner) continue;
-        if (src.values[a] > t.values[b]) {
+
+        const atk = attackerValueForBattle(src, a, idx, t, boardElems);
+        const def = valueForSamePlus(t, b, ni, boardElems);
+
+        if (atk > def) {
             if (flipToOwner(grid, ni, src.owner)) flipped.push(ni);
         }
     }
     return flipped;
 }
 
-function resolveCombo(queue, grid, rules) {
-    if (!rules.combo) return;
+function resolveCombo(queue, grid, boardElems) {
+    if (!RULES.combo) return;
     const q = [...queue];
     while (q.length) {
         const idx = q.shift();
-        const more = captureByPowerFrom(idx, grid);
+        const more = captureByPowerFrom(idx, grid, boardElems);
         if (more.length) q.push(...more);
     }
 }
@@ -153,36 +278,61 @@ function initialsFrom(name) {
 }
 
 /* =========================
-   Magic (spells)
+   House-rule Magic (kept)
    ========================= */
 const FREEZE_DURATION_MOVES = 2;
 const REVEAL_MS = 3000;
 
+function makeBoardElements() {
+    if (!RULES.elementalSquares) return Array(9).fill(null);
+    const chance = 0.38;
+    return Array.from({ length: 9 }, () => (Math.random() < chance ? pick(ELEMENTS) : null));
+}
+
+function cloneDeckToHand(deck, owner) {
+    // копия, чтобы place/capture keys не “протекали” между раундами
+    return deck.map((c) => ({ ...c, owner, placeKey: 0, captureKey: 0 }));
+}
+
 /* =========================
-   Game
+   Game (match to 3)
    ========================= */
 export default function Game({ onExit, me }) {
     const aiGuard = useRef({ handled: false });
     const revealTimerRef = useRef(null);
 
-    const makeHands = () => ({
+    const [decks, setDecks] = useState(() => ({
         player: Array.from({ length: 5 }, (_, i) => genCard("player", `p${i}`)),
         enemy: Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`)),
-    });
+    }));
 
-    const [{ player, enemy }, setHands] = useState(makeHands);
+    const [hands, setHands] = useState(() => ({
+        player: cloneDeckToHand(decks.player, "player"),
+        enemy: cloneDeckToHand(decks.enemy, "enemy"),
+    }));
+
+    const [boardElems, setBoardElems] = useState(() => makeBoardElements());
     const [board, setBoard] = useState(Array(9).fill(null));
     const [selected, setSelected] = useState(null);
 
     const [turn, setTurn] = useState(() => randomFirstTurn());
-    const [gameOver, setGameOver] = useState(false);
-    const [winner, setWinner] = useState(null);
 
-    // spells
-    const [spellMode, setSpellMode] = useState(null); // null | "freeze"
+    const [series, setSeries] = useState({ player: 0, enemy: 0 });
+    const [roundNo, setRoundNo] = useState(1);
+
+    const [roundOver, setRoundOver] = useState(false);
+    const [roundWinner, setRoundWinner] = useState(null); // "player" | "enemy" | "draw"
+
+    const [matchOver, setMatchOver] = useState(false);
+
+    // claim winner takes 1 NFT (card) from loser (from their 5 used in match)
+    const [claimPickId, setClaimPickId] = useState(null);
+    const [claimDone, setClaimDone] = useState(false);
+
+    // house spells per round
+    const [spellMode, setSpellMode] = useState(null);
     const [frozen, setFrozen] = useState(() => Array(9).fill(0));
     const [enemyRevealId, setEnemyRevealId] = useState(null);
-
     const [playerSpells, setPlayerSpells] = useState({ freeze: 1, reveal: 1 });
 
     const haptic = (kind = "light") => {
@@ -209,29 +359,61 @@ export default function Game({ onExit, me }) {
         setFrozen((prev) => prev.map((v) => (v > 0 ? v - 1 : 0)));
     };
 
-    const reset = () => {
-        setHands(makeHands());
+    const startRound = ({ keepSeries = true } = {}) => {
+        aiGuard.current.handled = false;
+
         setBoard(Array(9).fill(null));
+        setBoardElems(makeBoardElements());
+
+        setHands({
+            player: cloneDeckToHand(decks.player, "player"),
+            enemy: cloneDeckToHand(decks.enemy, "enemy"),
+        });
+
         setSelected(null);
         setTurn(randomFirstTurn());
-        setGameOver(false);
-        setWinner(null);
-        aiGuard.current.handled = false;
+
+        setRoundOver(false);
+        setRoundWinner(null);
 
         setSpellMode(null);
         setFrozen(Array(9).fill(0));
         clearReveal();
         setPlayerSpells({ freeze: 1, reveal: 1 });
+
+        if (!keepSeries) {
+            setSeries({ player: 0, enemy: 0 });
+            setRoundNo(1);
+            setMatchOver(false);
+            setClaimPickId(null);
+            setClaimDone(false);
+        }
     };
 
+    // init (на случай если decks уже в стейте, а hands был создан до decks)
     useEffect(() => {
-        if (!enemyRevealId) return;
-        if (!enemy.some((c) => c.id === enemyRevealId)) clearReveal();
+        setHands({
+            player: cloneDeckToHand(decks.player, "player"),
+            enemy: cloneDeckToHand(decks.enemy, "enemy"),
+        });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [enemy, enemyRevealId]);
+    }, []);
+
+    const resetMatch = () => {
+        const newDecks = {
+            player: Array.from({ length: 5 }, (_, i) => genCard("player", `p${Date.now()}_${i}`)),
+            enemy: Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${Date.now()}_${i}`)),
+        };
+        setDecks(newDecks);
+        // round will use these decks
+        setTimeout(() => {
+            startRound({ keepSeries: false });
+        }, 0);
+    };
 
     const score = useMemo(() => {
-        return board.reduce(
+        // TT total score = cards on board + cards remaining in hand
+        const onBoard = board.reduce(
             (a, c) => {
                 if (!c) return a;
                 c.owner === "player" ? a.blue++ : a.red++;
@@ -239,12 +421,23 @@ export default function Game({ onExit, me }) {
             },
             { red: 0, blue: 0 }
         );
-    }, [board]);
 
-    const winnerText = winner === "player" ? "Победа" : winner === "enemy" ? "Поражение" : "Ничья";
+        return {
+            red: onBoard.red + hands.enemy.length,
+            blue: onBoard.blue + hands.player.length,
+        };
+    }, [board, hands.enemy.length, hands.player.length]);
+
+    const myName = getPlayerName(me);
+    const myAvatar = getPlayerAvatarUrl(me);
+
+    const enemyName = "BunnyBot";
+    const enemyAvatar = "/ui/avatar-enemy.png?v=1";
+
+    const canUseMagic = turn === "player" && !roundOver && !matchOver;
 
     const placeCard = (i) => {
-        if (gameOver) return;
+        if (roundOver || matchOver) return;
         if (turn !== "player") return;
         if (!selected) return;
         if (board[i]) return;
@@ -253,8 +446,8 @@ export default function Game({ onExit, me }) {
         const next = [...board];
         next[i] = { ...selected, owner: "player", placeKey: (selected.placeKey || 0) + 1 };
 
-        const { flipped } = resolvePlacementFlips(i, next, RULES);
-        resolveCombo(flipped, next, RULES);
+        const { flippedSpecial } = resolvePlacementTT(i, next, boardElems);
+        resolveCombo(flippedSpecial, next, boardElems);
 
         setBoard(next);
         setHands((h) => ({ ...h, player: h.player.filter((c) => c.id !== selected.id) }));
@@ -268,9 +461,9 @@ export default function Game({ onExit, me }) {
     };
 
     const onCellClick = (i) => {
-        if (gameOver) return;
+        if (roundOver || matchOver) return;
 
-        // Spell: Freeze (каст по клетке)
+        // Freeze (house rule)
         if (spellMode === "freeze") {
             if (turn !== "player") return;
             if (playerSpells.freeze <= 0) return;
@@ -284,7 +477,6 @@ export default function Game({ onExit, me }) {
             });
 
             setPlayerSpells((s) => ({ ...s, freeze: Math.max(0, s.freeze - 1) }));
-
             setSpellMode(null);
             aiGuard.current.handled = false;
             setTurn("enemy");
@@ -292,31 +484,26 @@ export default function Game({ onExit, me }) {
             return;
         }
 
-        // normal placement
         placeCard(i);
     };
 
     const onMagicFreeze = () => {
-        if (gameOver) return;
-        if (turn !== "player") return;
+        if (!canUseMagic) return;
         if (playerSpells.freeze <= 0) return;
 
         haptic("light");
         setSelected(null);
-
-        // toggle режима (без траты заряда пока не кликнул клетку)
         setSpellMode((m) => (m === "freeze" ? null : "freeze"));
     };
 
     const onMagicReveal = () => {
-        if (gameOver) return;
-        if (turn !== "player") return;
+        if (!canUseMagic) return;
         if (playerSpells.reveal <= 0) return;
-        if (!enemy.length) return;
+        if (!hands.enemy.length) return;
 
         haptic("light");
 
-        const c = enemy[Math.floor(Math.random() * enemy.length)];
+        const c = hands.enemy[Math.floor(Math.random() * hands.enemy.length)];
         setEnemyRevealId(c.id);
 
         if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
@@ -335,7 +522,7 @@ export default function Game({ onExit, me }) {
 
     // AI turn
     useEffect(() => {
-        if (turn !== "enemy" || gameOver) return;
+        if (turn !== "enemy" || roundOver || matchOver) return;
         if (aiGuard.current.handled) return;
         aiGuard.current.handled = true;
 
@@ -343,43 +530,66 @@ export default function Game({ onExit, me }) {
             .map((c, idx) => (c === null && frozen[idx] === 0 ? idx : null))
             .filter((v) => v !== null);
 
-        if (!empty.length || !enemy.length) {
+        if (!empty.length || !hands.enemy.length) {
             setTurn("player");
             return;
         }
 
         const cell = empty[Math.floor(Math.random() * empty.length)];
-        const card = enemy[Math.floor(Math.random() * enemy.length)];
+        const card = hands.enemy[Math.floor(Math.random() * hands.enemy.length)];
 
         const next = [...board];
         next[cell] = { ...card, owner: "enemy", placeKey: (card.placeKey || 0) + 1 };
 
-        const { flipped } = resolvePlacementFlips(cell, next, RULES);
-        resolveCombo(flipped, next, RULES);
+        const { flippedSpecial } = resolvePlacementTT(cell, next, boardElems);
+        resolveCombo(flippedSpecial, next, boardElems);
 
         const t = setTimeout(() => {
             setBoard(next);
             setHands((h) => ({ ...h, enemy: h.enemy.filter((c) => c.id !== card.id) }));
-
             decFrozenAfterCardMove();
             setTurn("player");
         }, 420);
 
         return () => clearTimeout(t);
-    }, [turn, gameOver, board, enemy, frozen]);
+    }, [turn, roundOver, matchOver, board, hands.enemy, frozen, boardElems]);
 
-    // game over
+    // round over when board filled
     useEffect(() => {
+        if (roundOver || matchOver) return;
         if (board.some((c) => c === null)) return;
-        const p = board.filter((c) => c.owner === "player").length;
-        const e = board.filter((c) => c.owner === "enemy").length;
-        setWinner(p > e ? "player" : e > p ? "enemy" : "draw");
-        setGameOver(true);
-    }, [board]);
 
-    // confetti on win
+        const pOwned = board.filter((c) => c && c.owner === "player").length + hands.player.length;
+        const eOwned = board.filter((c) => c && c.owner === "enemy").length + hands.enemy.length;
+
+        const w = pOwned > eOwned ? "player" : eOwned > pOwned ? "enemy" : "draw";
+        setRoundWinner(w);
+        setRoundOver(true);
+
+        // series update
+        setSeries((s) => {
+            const next = { ...s };
+            if (w === "player") next.player += 1;
+            if (w === "enemy") next.enemy += 1;
+            return next;
+        });
+    }, [board, roundOver, matchOver, hands.player.length, hands.enemy.length]);
+
+    // match over detector
     useEffect(() => {
-        if (!gameOver || winner !== "player") return;
+        if (matchOver) return;
+        if (series.player >= MATCH_WINS_TARGET || series.enemy >= MATCH_WINS_TARGET) {
+            setMatchOver(true);
+            // на матче — выбор NFT только если не draw финального раунда (у нас серия не растет на draw)
+            setClaimPickId(null);
+            setClaimDone(false);
+        }
+    }, [series, matchOver]);
+
+    // FX: confetti/dice per round
+    useEffect(() => {
+        if (!roundOver) return;
+        if (roundWinner !== "player") return;
 
         const safe = (opts) => {
             try {
@@ -389,19 +599,44 @@ export default function Game({ onExit, me }) {
 
         const origin = { x: 0.5, y: 0.35 };
         const timers = [];
-        timers.push(setTimeout(() => safe({ particleCount: 40, spread: 75, startVelocity: 30, origin }), 0));
-        timers.push(setTimeout(() => safe({ particleCount: 28, spread: 95, startVelocity: 26, origin }), 180));
-        timers.push(setTimeout(() => safe({ particleCount: 18, spread: 110, startVelocity: 24, origin }), 360));
+        timers.push(setTimeout(() => safe({ particleCount: 34, spread: 75, startVelocity: 30, origin }), 0));
+        timers.push(setTimeout(() => safe({ particleCount: 22, spread: 95, startVelocity: 26, origin }), 160));
         return () => timers.forEach(clearTimeout);
-    }, [gameOver, winner]);
+    }, [roundOver, roundWinner]);
 
-    const myName = getPlayerName(me);
-    const myAvatar = getPlayerAvatarUrl(me);
+    const onNextRound = () => {
+        setRoundNo((r) => r + 1);
+        startRound({ keepSeries: true });
+    };
 
-    const enemyName = "BunnyBot";
-    const enemyAvatar = "/ui/avatar-enemy.png?v=1";
+    const winnerText = roundWinner === "player" ? "Победа" : roundWinner === "enemy" ? "Поражение" : "Ничья";
 
-    const canUseMagic = turn === "player" && !gameOver;
+    // claim logic: winner takes 1 NFT from loser deck (the 5 used in match)
+    const matchWinner = series.player >= MATCH_WINS_TARGET ? "player" : series.enemy >= MATCH_WINS_TARGET ? "enemy" : null;
+    const loserSide = matchWinner === "player" ? "enemy" : matchWinner === "enemy" ? "player" : null;
+
+    const loserDeck = loserSide ? decks[loserSide] : [];
+    const winnerSide = matchWinner;
+
+    const onConfirmClaim = () => {
+        if (!matchOver) return;
+        if (!winnerSide || !loserSide) return;
+        if (!claimPickId) return;
+
+        const picked = decks[loserSide].find((c) => c.id === claimPickId);
+        if (!picked) return;
+
+        // переносим карту из колоды проигравшего в колоду победителя (локально)
+        setDecks((d) => {
+            const next = { ...d };
+            next[loserSide] = d[loserSide].filter((c) => c.id !== claimPickId);
+            next[winnerSide] = [...d[winnerSide], { ...picked, owner: winnerSide }];
+            return next;
+        });
+
+        setClaimDone(true);
+        haptic("medium");
+    };
 
     return (
         <div className="game-root">
@@ -410,18 +645,17 @@ export default function Game({ onExit, me }) {
                     ← Меню
                 </button>
 
-                {/* score */}
-                <div className="hud-corner hud-score red hud-near-left">🟥 {score.red}</div>
-                <div className="hud-corner hud-score blue hud-near-right">{score.blue} 🟦</div>
+                {/* Score: TT total + series in compact form */}
+                <div className="hud-corner hud-score red hud-near-left">🟥 {score.red}·{series.enemy}</div>
+                <div className="hud-corner hud-score blue hud-near-right">{series.player}·{score.blue} 🟦</div>
 
-                {/* badges */}
                 <PlayerBadge side="enemy" name={enemyName} avatarUrl={enemyAvatar} active={turn === "enemy"} />
                 <PlayerBadge side="player" name={myName} avatarUrl={myAvatar} active={turn === "player"} />
 
                 {/* LEFT enemy hand */}
                 <div className="hand left">
                     <div className="hand-grid">
-                        {enemy.map((c, i) => {
+                        {hands.enemy.map((c, i) => {
                             const { col, row } = posForHandIndex(i);
                             const isRevealed = enemyRevealId === c.id;
                             return (
@@ -448,21 +682,42 @@ export default function Game({ onExit, me }) {
                     <div className="board">
                         {board.map((cell, i) => {
                             const isFrozen = frozen[i] > 0;
-
                             const canHighlight =
-                                !gameOver &&
+                                !roundOver &&
+                                !matchOver &&
                                 !cell &&
                                 !isFrozen &&
                                 ((spellMode === "freeze" && turn === "player") || (spellMode == null && selected));
+
+                            const elem = boardElems[i];
 
                             return (
                                 <div
                                     key={i}
                                     className={`cell ${canHighlight ? "highlight" : ""} ${isFrozen ? "frozen" : ""}`}
                                     onClick={() => onCellClick(i)}
-                                    title={isFrozen ? `Frozen (${frozen[i]})` : undefined}
+                                    title={isFrozen ? `Frozen (${frozen[i]})` : elem ? `Element: ${elem}` : undefined}
                                 >
-                                    {cell && <Card card={cell} />}
+                                    {/* лёгкий индикатор стихии клетки (без обязательного CSS) */}
+                                    {elem && (
+                                        <div
+                                            style={{
+                                                position: "absolute",
+                                                inset: 0,
+                                                display: "grid",
+                                                placeItems: "center",
+                                                opacity: 0.16,
+                                                fontSize: 26,
+                                                pointerEvents: "none",
+                                                zIndex: 0,
+                                            }}
+                                            aria-hidden="true"
+                                        >
+                                            {ELEM_ICON[elem]}
+                                        </div>
+                                    )}
+
+                                    {cell && <Card card={cell} cellElement={elem} />}
                                 </div>
                             );
                         })}
@@ -472,14 +727,14 @@ export default function Game({ onExit, me }) {
                 {/* RIGHT player hand */}
                 <div className="hand right">
                     <div className="hand-grid">
-                        {player.map((c, i) => {
+                        {hands.player.map((c, i) => {
                             const { col, row } = posForHandIndex(i);
                             return (
                                 <div key={c.id} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
                                     <Card
                                         card={c}
                                         selected={selected?.id === c.id}
-                                        disabled={gameOver || turn !== "player" || spellMode === "freeze"}
+                                        disabled={roundOver || matchOver || turn !== "player" || spellMode === "freeze"}
                                         onClick={() => setSelected((prev) => (prev?.id === c.id ? null : c))}
                                     />
                                 </div>
@@ -493,7 +748,7 @@ export default function Game({ onExit, me }) {
                             className={`magic-btn freeze ${spellMode === "freeze" ? "active" : ""}`}
                             onClick={onMagicFreeze}
                             disabled={!canUseMagic || playerSpells.freeze <= 0}
-                            title="Freeze: заморозить пустую клетку"
+                            title="Freeze (house rule): заморозить пустую клетку"
                         >
                             <span className="magic-ic">❄</span>
                             <span className="magic-count">{playerSpells.freeze}</span>
@@ -503,7 +758,7 @@ export default function Game({ onExit, me }) {
                             className="magic-btn reveal"
                             onClick={onMagicReveal}
                             disabled={!canUseMagic || playerSpells.reveal <= 0}
-                            title="Reveal: показать 1 карту врага на 3 секунды"
+                            title="Reveal (house rule): показать 1 карту врага на 3 секунды"
                         >
                             <span className="magic-ic">👁</span>
                             <span className="magic-count">{playerSpells.reveal}</span>
@@ -511,14 +766,89 @@ export default function Game({ onExit, me }) {
                     </div>
                 </div>
 
-                {gameOver && winner === "enemy" && <DiceRain />}
-
-                {gameOver && (
+                {/* Round/Match modal */}
+                {(roundOver || matchOver) && (
                     <div className="game-over">
-                        <div className="game-over-box">
-                            <h2>{winnerText}</h2>
-                            <div className="game-over-buttons">
-                                <button onClick={reset}>Заново</button>
+                        <div className="game-over-box" style={{ minWidth: 320 }}>
+                            <h2 style={{ marginBottom: 8 }}>
+                                {matchOver
+                                    ? matchWinner === "player"
+                                        ? "Матч выигран"
+                                        : matchWinner === "enemy"
+                                            ? "Матч проигран"
+                                            : "Матч"
+                                    : winnerText}
+                            </h2>
+
+                            <div style={{ opacity: 0.9, fontSize: 12, marginBottom: 10 }}>
+                                Раунд {roundNo} • Серия до {MATCH_WINS_TARGET} побед • Счёт {series.player}:{series.enemy}
+                            </div>
+
+                            {/* Match reward: pick 1 NFT */}
+                            {matchOver && matchWinner && loserSide && (
+                                <>
+                                    <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 8 }}>
+                                        {matchWinner === "player" ? "Выбери 1 NFT соперника" : "Соперник забирает 1 твою NFT"}
+                                    </div>
+
+                                    {matchWinner === "player" ? (
+                                        <>
+                                            <div
+                                                style={{
+                                                    display: "grid",
+                                                    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+                                                    gap: 8,
+                                                    marginBottom: 10,
+                                                }}
+                                            >
+                                                {loserDeck.map((c) => (
+                                                    <div
+                                                        key={c.id}
+                                                        onClick={() => !claimDone && setClaimPickId(c.id)}
+                                                        style={{
+                                                            cursor: claimDone ? "default" : "pointer",
+                                                            outline: claimPickId === c.id ? "2px solid rgba(120,200,255,0.75)" : "1px solid rgba(255,255,255,0.12)",
+                                                            borderRadius: 12,
+                                                            padding: 4,
+                                                            opacity: claimDone ? 0.6 : 1,
+                                                        }}
+                                                    >
+                                                        <Card card={c} disabled />
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {!claimDone ? (
+                                                <button disabled={!claimPickId} onClick={onConfirmClaim}>
+                                                    Забрать выбранную NFT
+                                                </button>
+                                            ) : (
+                                                <div style={{ marginTop: 6, opacity: 0.9, fontSize: 12 }}>
+                                                    NFT получена. Можно начать новый матч или выйти в меню.
+                                                </div>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <div style={{ opacity: 0.85, fontSize: 12, marginBottom: 10 }}>
+                                            (Пока AI не выбирает. В PvP выбор будет на сервере/в UI.)
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 10, flexWrap: "wrap" }}>
+                                {!matchOver && (
+                                    <button onClick={onNextRound}>
+                                        Следующий раунд
+                                    </button>
+                                )}
+
+                                {matchOver && (
+                                    <button onClick={resetMatch}>
+                                        Новый матч
+                                    </button>
+                                )}
+
                                 <button onClick={onExit}>Меню</button>
                             </div>
                         </div>
@@ -556,47 +886,9 @@ function PlayerBadge({ side, name, avatarUrl, active }) {
 }
 
 /* =========================
-   Dice Rain (loss)
-   ========================= */
-function DiceRain() {
-    const dice = useMemo(() => {
-        const chars = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
-        const n = 44;
-        return Array.from({ length: n }, (_, i) => {
-            const left = Math.random() * 100;
-            const delay = Math.random() * 0.9;
-            const dur = 1.8 + Math.random() * 1.6;
-            const size = 18 + Math.random() * 22;
-            const rot = `${Math.floor(Math.random() * 900) - 450}deg`;
-            return { id: i, ch: chars[(Math.random() * chars.length) | 0], left, delay, dur, size, rot };
-        });
-    }, []);
-
-    return (
-        <div className="dice-rain" aria-hidden="true">
-            {dice.map((d) => (
-                <div
-                    key={d.id}
-                    className="die"
-                    style={{
-                        left: `${d.left}%`,
-                        fontSize: `${d.size}px`,
-                        animationDuration: `${d.dur}s`,
-                        animationDelay: `${d.delay}s`,
-                        ["--rot"]: d.rot,
-                    }}
-                >
-                    {d.ch}
-                </div>
-            ))}
-        </div>
-    );
-}
-
-/* =========================
    Card
    ========================= */
-function Card({ card, onClick, selected, disabled, hidden }) {
+function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
     const [placedAnim, setPlacedAnim] = useState(false);
     const [capturedAnim, setCapturedAnim] = useState(false);
 
@@ -624,6 +916,8 @@ function Card({ card, onClick, selected, disabled, hidden }) {
         );
     }
 
+    const squareDelta = card.element && cellElement ? (card.element === cellElement ? +1 : -1) : 0;
+
     return (
         <div
             className={[
@@ -638,11 +932,36 @@ function Card({ card, onClick, selected, disabled, hidden }) {
         >
             <div className="card-anim">
                 <img className="card-art-img" src={card.imageUrl} alt="" draggable="false" />
+
+                {/* rank + element (inline, чтобы не ломать твой CSS) */}
+                <div
+                    style={{
+                        position: "absolute",
+                        top: 6,
+                        right: 6,
+                        zIndex: 6,
+                        display: "flex",
+                        gap: 6,
+                        alignItems: "center",
+                        padding: "2px 6px",
+                        borderRadius: 999,
+                        background: "rgba(0,0,0,0.55)",
+                        border: "1px solid rgba(255,255,255,0.14)",
+                        fontSize: 11,
+                        fontWeight: 900,
+                        lineHeight: 1,
+                    }}
+                >
+                    <span>{card.rankLabel}</span>
+                    {card.element ? <span>{ELEM_ICON[card.element]}</span> : null}
+                    {squareDelta !== 0 ? <span style={{ opacity: 0.9 }}>{squareDelta > 0 ? "+1" : "-1"}</span> : null}
+                </div>
+
                 <div className="tt-badge" />
-                <span className="tt-num top">{card.values.top}</span>
-                <span className="tt-num left">{card.values.left}</span>
-                <span className="tt-num right">{card.values.right}</span>
-                <span className="tt-num bottom">{card.values.bottom}</span>
+                <span className="tt-num top">{showVal(card.values.top)}</span>
+                <span className="tt-num left">{showVal(card.values.left)}</span>
+                <span className="tt-num right">{showVal(card.values.right)}</span>
+                <span className="tt-num bottom">{showVal(card.values.bottom)}</span>
             </div>
         </div>
     );
