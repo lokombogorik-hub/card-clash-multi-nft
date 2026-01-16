@@ -38,6 +38,20 @@ button {
 /* Высота приложения (обновляется из main.jsx) */
 :root {
     --app-h: 100vh;
+
+    /* SAFE AREAS:
+       по умолчанию = реальный env(...)
+       на мобилках Android добавим минимальный bottom, чтобы было как на iPhone */
+    --safe-t: env(safe-area-inset-top, 0px);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+}
+
+/* На телефонах делаем Android “как iPhone” по нижнему отступу */
+@media (hover: none) and (pointer: coarse),
+(max-height: 520px) and (orientation: landscape) {
+    :root {
+        --safe-b: max(env(safe-area-inset-bottom, 0px), 18px);
+    }
 }
 
 
@@ -67,8 +81,8 @@ button {
     position: relative;
     z-index: 1;
     height: 100%;
-    padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 200px);
+    padding-top: calc(var(--safe-t) + 8px);
+    padding-bottom: calc(var(--safe-b) + 200px);
 }
 
 .home-center {
@@ -131,7 +145,7 @@ button {
     right: 0;
 
     /* регулируй высоту кнопки над нижним стеком */
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 230px);
+    bottom: calc(var(--safe-b) + 230px);
 
     z-index: 3;
     display: flex;
@@ -163,7 +177,7 @@ button {
     bottom: 0;
 
     z-index: 2;
-    padding: 10px 12px calc(env(safe-area-inset-bottom, 0px) + 10px);
+    padding: 10px 12px calc(var(--safe-b) + 10px);
     display: grid;
     gap: 10px;
 }
@@ -398,7 +412,7 @@ button {
     --card-w-vw: calc((var(--vw-safe) - (var(--edge-inset) * 2) - (var(--hand-col-gap) * 2) - (var(--hand-pad-x) * 4) - (var(--gap) * 6)) / 7);
 
     /* высота под поле 3 ряда */
-    --available-h: calc(var(--app-h, 100vh) - (var(--ui-pad) * 2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - (var(--gap) * 2));
+    --available-h: calc(var(--app-h, 100vh) - (var(--ui-pad) * 2) - var(--safe-t) - var(--safe-b) - (var(--gap) * 2));
 
     --card-h-fit: calc((var(--available-h) - (var(--gap) * 4)) / 3);
     --card-w-fit: calc(var(--card-h-fit) / 1.375);
@@ -425,8 +439,8 @@ button {
     height: var(--app-h, 100vh);
     width: 100%;
     padding: var(--ui-pad);
-    padding-top: calc(var(--ui-pad) + env(safe-area-inset-top, 0px));
-    padding-bottom: calc(var(--ui-pad) + env(safe-area-inset-bottom, 0px));
+    padding-top: calc(var(--ui-pad) + var(--safe-t));
+    padding-bottom: calc(var(--ui-pad) + var(--safe-b));
     overflow: hidden;
     isolation: isolate;
 }
@@ -469,7 +483,7 @@ button {
 @media (hover: none) and (pointer: coarse) {
     .exit {
         top: auto;
-        bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+        bottom: calc(var(--safe-b) + 12px);
     }
 }
 
@@ -523,7 +537,7 @@ button {
     z-index: 105;
 
     /* не залезаем в системные кнопки Telegram */
-    top: max(calc(env(safe-area-inset-top, 0px) + var(--tg-top-controls) + 6px),
+    top: max(calc(var(--safe-t) + var(--tg-top-controls) + 6px),
             calc(50% - (var(--board-h) / 2) - var(--badge-h) - 6px));
 
     height: var(--badge-h);
@@ -1062,7 +1076,7 @@ button {
     z-index: 50;
     pointer-events: none;
 
-    bottom: calc(env(safe-area-inset-bottom, 0px) + var(--bottom-stack-h) + 12px);
+    bottom: calc(var(--safe-b) + var(--bottom-stack-h) + 12px);
 }
 
 .wallet-btn {
@@ -1074,20 +1088,24 @@ button {
 (max-height: 520px) and (orientation: landscape) {
     .exit {
         top: auto !important;
-        bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
+        bottom: calc(var(--safe-b) + 12px) !important;
         left: 12px !important;
         right: auto !important;
     }
 }
 
-/* Бейджи игрока/врага на мобилке: внутрь верхних углов поля,
-   чтобы НЕ пересекались с руками/картами по бокам */
+/* Бейджи игрока/врага на мобилке: поднимаем ВЫШЕ стола,
+   и держим по краям поля, чтобы не пересекались с руками */
 @media (hover: none) and (pointer: coarse),
 (max-height: 520px) and (orientation: landscape) {
     .player-badge {
         max-width: 44vw;
         padding: 5px 8px;
         gap: 8px;
+
+        /* ВАЖНО: на мобилке поднимаем вверх (не даём залезать на board) */
+        top: max(calc(var(--safe-t) + 6px),
+                calc(50% - (var(--board-h) / 2) - var(--badge-h) - 10px));
     }
 
     .player-badge.enemy {
