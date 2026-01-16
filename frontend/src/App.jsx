@@ -40,14 +40,15 @@ function readTelegramUser() {
 export default function App() {
     const [screen, setScreen] = useState("home"); // home | market | inventory | profile | game
     const isLandscape = useIsLandscape();
+
     const [token, setToken] = useState(null);
+    const [me, setMe] = useState(null);
+
+    const [activeDeckCards, setActiveDeckCards] = useState(null); // массив из 5 карт для Game
+
     const logoRef = useRef(null);
     const [logoOk, setLogoOk] = useState(true);
 
-    // Telegram user (для бейджа/рейтинга)
-    const [me, setMe] = useState(null);
-
-    // Для “плавающей” кнопки кошелька (позиция зависит от высоты нижнего стека)
     const bottomStackRef = useRef(null);
 
     useEffect(() => {
@@ -64,46 +65,40 @@ export default function App() {
         tg.MainButton?.hide();
         tg.SecondaryButton?.hide();
         tg.BackButton?.hide();
-        useEffect(() => {
-            const tg = window.Telegram?.WebApp;
-            if (!tg) return;
 
-            tg.ready();
-            tg.expand();
-
-            // ... твои setHeaderColor/hide кнопок ...
-
-            const initAuth = async () => {
-                try {
-                    const initData = tg.initData || "";
-                    if (!initData) return; // в dev браузере может быть пусто
-                    const r = await apiFetch("/api/auth/telegram", {
-                        method: "POST",
-                        body: JSON.stringify({ initData }),
-                    });
-                    setToken(r.accessToken);
-                } catch (e) {
-                    console.error("Auth failed:", e);
-                }
-            };
-
-            initAuth();
-        }, []);
         // читаем user
         setMe(readTelegramUser());
 
-        // иногда WebApp докидывает viewport/user позже
         const sync = () => setMe(readTelegramUser());
-        try { tg.onEvent?.("viewportChanged", sync); } catch { }
+        try {
+            tg.onEvent?.("viewportChanged", sync);
+        } catch { }
+
+        // Telegram auth -> JWT
+        const initAuth = async () => {
+            try {
+                const initData = tg.initData || "";
+                if (!initData) return;
+                const r = await apiFetch("/api/auth/telegram", {
+                    method: "POST",
+                    body: JSON.stringify({ initData }),
+                });
+                setToken(r.accessToken);
+            } catch (e) {
+                console.error("Auth failed:", e);
+            }
+        };
+        initAuth();
 
         tg.disableVerticalSwipes?.();
         return () => {
-            try { tg.offEvent?.("viewportChanged", sync); } catch { }
+            try {
+                tg.offEvent?.("viewportChanged", sync);
+            } catch { }
             tg.enableVerticalSwipes?.();
         };
     }, []);
 
-    // измеряем нижний стек и кладём в CSS-переменную
     useLayoutEffect(() => {
         const el = bottomStackRef.current;
         if (!el) return;
@@ -116,7 +111,6 @@ export default function App() {
         apply();
         const ro = new ResizeObserver(apply);
         ro.observe(el);
-
         return () => ro.disconnect();
     }, [screen]);
 
@@ -127,45 +121,42 @@ export default function App() {
 
     const requestFullscreen = async () => {
         const tg = window.Telegram?.WebApp;
-
         try { tg?.HapticFeedback?.impactOccurred?.("light"); } catch { }
         try { tg?.requestFullscreen?.(); } catch { }
         try { tg?.expand?.(); } catch { }
-
-        // браузерный фоллбек
         try {
-            if (!document.fullscreenElement) {
-                await document.documentElement.requestFullscreen?.();
-            }
+            if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.();
         } catch { }
     };
 
-    const onPlay = () => {
-        // fullscreen должен быть вызван по клику
-        requestFullscreen();
-        setScreen("game");
-    };
-    const ensureDeck = async () => {
-        if (!token) return false;
+    const loadActiveDeck = async () => {
+        if (!token) return null;
         try {
-            const r = await apiFetch("/api/decks/active", { token });
-            return Array.isArray(r.cards) && r.cards.length === 5;
+            // новый endpoint (см backend ниже)
+            const r = await apiFetch("/api/decks/active/full", { token });
+            if (Array.isArray(r.cards) && r.cards.length === 5) return r.cards;
+            return null;
         } catch {
-            return false;
+            return null;
         }
     };
+
     const onPlay = async () => {
         requestFullscreen();
 
-        const ok = await ensureDeck();
-        if (!ok) {
+        const deck = await loadActiveDeck();
+        if (!deck) {
             setScreen("inventory");
             return;
         }
 
+        setActiveDeckCards(deck);
         setScreen("game");
     };
-    const onExitGame = () => setScreen("home");
+
+    const onExitGame = () => {
+        setScreen("home");
+    };
 
     const onConnectWallet = () => {
         try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light"); } catch { }
@@ -183,11 +174,9 @@ export default function App() {
         return (
             <div className="shell">
                 <StormBg />
-
                 <div className={`game-host ${showRotate ? "is-hidden" : ""}`}>
-                    <Game onExit={onExitGame} me={me} />
+                    <Game onExit={onExitGame} me={me} playerDeck={activeDeckCards} />
                 </div>
-
                 {showRotate && <RotateGate onBack={onExitGame} />}
             </div>
         );
@@ -224,7 +213,6 @@ export default function App() {
                                     <div className="page">Видео логотипа не поддерживается</div>
                                 )}
                             </div>
-
                             <span className="play-icon">
                                 <PlayIcon />
                             </span>
@@ -233,16 +221,10 @@ export default function App() {
                 )}
 
                 {screen === "market" && <Market />}
-                {screen === "inventory" && (
-                    <Inventory
-                        token={token}
-                        onDeckReady={() => setScreen("home")}
-                    />
-                )}
+                {screen === "inventory" && <Inventory token={token} onDeckReady={() => setScreen("home")} />}
                 {screen === "profile" && <Profile token={token} />}
             </div>
 
-            {/* Плавающая кнопка кошелька (чтобы не налезала при поворотах) */}
             <div className="wallet-float">
                 <button className="wallet-btn" onClick={onConnectWallet}>
                     Подключить кошелёк

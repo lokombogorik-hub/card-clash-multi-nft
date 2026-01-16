@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 
 /* =========================
-   Triple Triad (FF-style) + match-to-3 + win 1 NFT
+   Triple Triad (FF-style) + match-to-3 + win 1 NFT (local)
    ========================= */
 
 const DIRS = [
@@ -16,8 +16,8 @@ const RULES = {
     same: true,
     plus: true,
     combo: true,
-    elementalSquares: true, // FF8-like: клетка стихии дает +1 на совп. стихии и -1 на чужой
-    elementalBattle: true, // вариация: стихии влияют на сравнения сторон
+    elementalSquares: true,
+    elementalBattle: true,
 };
 
 const MATCH_WINS_TARGET = 3;
@@ -36,30 +36,45 @@ const ART = [
 ];
 
 /* =========================
-   Elements / Ranks
+   8 Elements (FF-style)
    ========================= */
-const ELEMENTS = ["fire", "water", "nature", "lightning", "ice"];
-const ELEM_ICON = { fire: "🔥", water: "💧", nature: "🌿", lightning: "⚡", ice: "❄" };
-
-// вариация “камень-ножницы-бумага”
-const BEATS = {
-    fire: ["nature"],
-    nature: ["water"],
-    water: ["fire"],
-    lightning: ["water"],
-    ice: ["fire"],
+const ELEMENTS = ["earth", "fire", "water", "poison", "holy", "thunder", "wind", "ice"];
+const ELEM_ICON = {
+    earth: "🟫",
+    fire: "🔥",
+    water: "💧",
+    poison: "☠️",
+    holy: "✨",
+    thunder: "⚡",
+    wind: "🌪️",
+    ice: "❄️",
 };
 
-const RANKS = [
-    { key: "common", label: "C", weight: 50, min: 1, max: 7, elemChance: 0.20 },
-    { key: "rare", label: "R", weight: 30, min: 2, max: 8, elemChance: 0.35 },
-    { key: "epic", label: "E", weight: 15, min: 3, max: 10, elemChance: 0.50 },
-    { key: "legendary", label: "L", weight: 5, min: 4, max: 10, elemChance: 0.65 },
-];
+/* Вариация “кто кого бьёт” (house-rule), только из этих 8 */
+const BEATS = {
+    earth: ["thunder"],
+    thunder: ["water"],
+    water: ["fire"],
+    fire: ["ice"],
+    ice: ["wind"],
+    wind: ["poison"],
+    poison: ["holy"],
+    holy: ["earth"],
+};
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const randInt = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
 const pick = (arr) => arr[(Math.random() * arr.length) | 0];
+const randomFirstTurn = () => (Math.random() < 0.5 ? "player" : "enemy");
+const showVal = (v) => (v === 10 ? "A" : String(v));
+
+/* ranks for random enemy/cards (until near integration) */
+const RANKS = [
+    { key: "common", label: "C", weight: 50, min: 1, max: 7, elemChance: 0.6 },
+    { key: "rare", label: "R", weight: 30, min: 2, max: 8, elemChance: 0.7 },
+    { key: "epic", label: "E", weight: 15, min: 3, max: 10, elemChance: 0.8 },
+    { key: "legendary", label: "L", weight: 5, min: 4, max: 10, elemChance: 0.9 },
+];
 
 function weightedPick(defs) {
     const total = defs.reduce((s, d) => s + d.weight, 0);
@@ -71,12 +86,8 @@ function weightedPick(defs) {
     return defs[defs.length - 1];
 }
 
-const randomFirstTurn = () => (Math.random() < 0.5 ? "player" : "enemy");
-const showVal = (v) => (v === 10 ? "A" : String(v));
-
 function genCard(owner, id) {
     const r = weightedPick(RANKS);
-
     const values = {
         top: randInt(r.min, r.max),
         right: randInt(r.min, r.max),
@@ -94,7 +105,7 @@ function genCard(owner, id) {
         imageUrl: ART[Math.floor(Math.random() * ART.length)],
         rank: r.key,
         rankLabel: r.label,
-        element, // null | one of ELEMENTS
+        element,
         placeKey: 0,
         captureKey: 0,
     };
@@ -156,10 +167,7 @@ function attackerValueForBattle(attacker, side, aIdx, defender, boardElems) {
 }
 
 /* =========================
-   Correct TT resolution:
-   - Basic capture always checks
-   - Same/Plus (if triggered) flips participating cards
-   - Combo ONLY chains from Same/Plus flips (not from basic)
+   TT resolve (basic + same/plus + combo)
    ========================= */
 function resolvePlacementTT(placedIdx, grid, boardElems) {
     const placed = grid[placedIdx];
@@ -184,18 +192,18 @@ function resolvePlacementTT(placedIdx, grid, boardElems) {
     const sameSet = new Set();
     const plusSet = new Set();
 
-    // BASIC capture (strict >)
+    // BASIC
     for (const i of adj) {
         if (i.target.owner !== placed.owner && i.pBattle > i.tSP) basicSet.add(i.ni);
     }
 
-    // SAME (>=2 equalities)
+    // SAME
     if (RULES.same) {
         const eq = adj.filter((i) => i.pSP === i.tSP);
         if (eq.length >= 2) eq.forEach((i) => sameSet.add(i.ni));
     }
 
-    // PLUS (>=2 equal sums)
+    // PLUS
     if (RULES.plus) {
         const groups = new Map();
         for (const i of adj) {
@@ -278,7 +286,7 @@ function initialsFrom(name) {
 }
 
 /* =========================
-   House-rule Magic (kept)
+   House-rule Magic
    ========================= */
 const FREEZE_DURATION_MOVES = 2;
 const REVEAL_MS = 3000;
@@ -290,19 +298,37 @@ function makeBoardElements() {
 }
 
 function cloneDeckToHand(deck, owner) {
-    // копия, чтобы place/capture keys не “протекали” между раундами
     return deck.map((c) => ({ ...c, owner, placeKey: 0, captureKey: 0 }));
+}
+
+const rankLabelFromRank = (r) => ({ common: "C", rare: "R", epic: "E", legendary: "L" }[r] || "C");
+
+function nftToCard(n, owner) {
+    return {
+        id: `${n.chain}:${n.contractId}:${n.tokenId}`,
+        owner,
+        values: { ...n.stats },
+        imageUrl: n.imageUrl || ART[0],
+        rank: n.rank,
+        rankLabel: n.rankLabel || rankLabelFromRank(n.rank),
+        element: n.element || null,
+        placeKey: 0,
+        captureKey: 0,
+    };
 }
 
 /* =========================
    Game (match to 3)
    ========================= */
-export default function Game({ onExit, me }) {
+export default function Game({ onExit, me, playerDeck }) {
     const aiGuard = useRef({ handled: false });
     const revealTimerRef = useRef(null);
 
+    // IMPORTANT: player deck comes from props (inventory -> backend -> App -> Game)
     const [decks, setDecks] = useState(() => ({
-        player: Array.from({ length: 5 }, (_, i) => genCard("player", `p${i}`)),
+        player: Array.isArray(playerDeck) && playerDeck.length === 5
+            ? playerDeck.map((n) => nftToCard(n, "player"))
+            : Array.from({ length: 5 }, (_, i) => genCard("player", `p${i}`)),
         enemy: Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`)),
     }));
 
@@ -316,29 +342,24 @@ export default function Game({ onExit, me }) {
     const [selected, setSelected] = useState(null);
 
     const [turn, setTurn] = useState(() => randomFirstTurn());
-
     const [series, setSeries] = useState({ player: 0, enemy: 0 });
     const [roundNo, setRoundNo] = useState(1);
 
     const [roundOver, setRoundOver] = useState(false);
-    const [roundWinner, setRoundWinner] = useState(null); // "player" | "enemy" | "draw"
+    const [roundWinner, setRoundWinner] = useState(null);
 
     const [matchOver, setMatchOver] = useState(false);
 
-    // claim winner takes 1 NFT (card) from loser (from their 5 used in match)
     const [claimPickId, setClaimPickId] = useState(null);
     const [claimDone, setClaimDone] = useState(false);
 
-    // house spells per round
     const [spellMode, setSpellMode] = useState(null);
     const [frozen, setFrozen] = useState(() => Array(9).fill(0));
     const [enemyRevealId, setEnemyRevealId] = useState(null);
     const [playerSpells, setPlayerSpells] = useState({ freeze: 1, reveal: 1 });
 
     const haptic = (kind = "light") => {
-        try {
-            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(kind);
-        } catch { }
+        try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(kind); } catch { }
     };
 
     const clearReveal = () => {
@@ -355,6 +376,14 @@ export default function Game({ onExit, me }) {
         };
     }, []);
 
+    // если decks поменялись (например, новый матч) — пересобираем hands
+    useEffect(() => {
+        setHands({
+            player: cloneDeckToHand(decks.player, "player"),
+            enemy: cloneDeckToHand(decks.enemy, "enemy"),
+        });
+    }, [decks]);
+
     const decFrozenAfterCardMove = () => {
         setFrozen((prev) => prev.map((v) => (v > 0 ? v - 1 : 0)));
     };
@@ -364,7 +393,6 @@ export default function Game({ onExit, me }) {
 
         setBoard(Array(9).fill(null));
         setBoardElems(makeBoardElements());
-
         setHands({
             player: cloneDeckToHand(decks.player, "player"),
             enemy: cloneDeckToHand(decks.enemy, "enemy"),
@@ -390,29 +418,16 @@ export default function Game({ onExit, me }) {
         }
     };
 
-    // init (на случай если decks уже в стейте, а hands был создан до decks)
-    useEffect(() => {
-        setHands({
-            player: cloneDeckToHand(decks.player, "player"),
-            enemy: cloneDeckToHand(decks.enemy, "enemy"),
-        });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
     const resetMatch = () => {
-        const newDecks = {
-            player: Array.from({ length: 5 }, (_, i) => genCard("player", `p${Date.now()}_${i}`)),
+        // player deck остаётся тем, что выбрал игрок; обновим только enemy
+        setDecks((d) => ({
+            ...d,
             enemy: Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${Date.now()}_${i}`)),
-        };
-        setDecks(newDecks);
-        // round will use these decks
-        setTimeout(() => {
-            startRound({ keepSeries: false });
-        }, 0);
+        }));
+        setTimeout(() => startRound({ keepSeries: false }), 0);
     };
 
     const score = useMemo(() => {
-        // TT total score = cards on board + cards remaining in hand
         const onBoard = board.reduce(
             (a, c) => {
                 if (!c) return a;
@@ -463,7 +478,6 @@ export default function Game({ onExit, me }) {
     const onCellClick = (i) => {
         if (roundOver || matchOver) return;
 
-        // Freeze (house rule)
         if (spellMode === "freeze") {
             if (turn !== "player") return;
             if (playerSpells.freeze <= 0) return;
@@ -490,7 +504,6 @@ export default function Game({ onExit, me }) {
     const onMagicFreeze = () => {
         if (!canUseMagic) return;
         if (playerSpells.freeze <= 0) return;
-
         haptic("light");
         setSelected(null);
         setSpellMode((m) => (m === "freeze" ? null : "freeze"));
@@ -566,7 +579,6 @@ export default function Game({ onExit, me }) {
         setRoundWinner(w);
         setRoundOver(true);
 
-        // series update
         setSeries((s) => {
             const next = { ...s };
             if (w === "player") next.player += 1;
@@ -580,21 +592,18 @@ export default function Game({ onExit, me }) {
         if (matchOver) return;
         if (series.player >= MATCH_WINS_TARGET || series.enemy >= MATCH_WINS_TARGET) {
             setMatchOver(true);
-            // на матче — выбор NFT только если не draw финального раунда (у нас серия не растет на draw)
             setClaimPickId(null);
             setClaimDone(false);
         }
     }, [series, matchOver]);
 
-    // FX: confetti/dice per round
+    // FX
     useEffect(() => {
         if (!roundOver) return;
         if (roundWinner !== "player") return;
 
         const safe = (opts) => {
-            try {
-                confetti({ zIndex: 99999, ...opts });
-            } catch { }
+            try { confetti({ zIndex: 99999, ...opts }); } catch { }
         };
 
         const origin = { x: 0.5, y: 0.35 };
@@ -611,10 +620,10 @@ export default function Game({ onExit, me }) {
 
     const winnerText = roundWinner === "player" ? "Победа" : roundWinner === "enemy" ? "Поражение" : "Ничья";
 
-    // claim logic: winner takes 1 NFT from loser deck (the 5 used in match)
-    const matchWinner = series.player >= MATCH_WINS_TARGET ? "player" : series.enemy >= MATCH_WINS_TARGET ? "enemy" : null;
-    const loserSide = matchWinner === "player" ? "enemy" : matchWinner === "enemy" ? "player" : null;
+    const matchWinner =
+        series.player >= MATCH_WINS_TARGET ? "player" : series.enemy >= MATCH_WINS_TARGET ? "enemy" : null;
 
+    const loserSide = matchWinner === "player" ? "enemy" : matchWinner === "enemy" ? "player" : null;
     const loserDeck = loserSide ? decks[loserSide] : [];
     const winnerSide = matchWinner;
 
@@ -626,7 +635,6 @@ export default function Game({ onExit, me }) {
         const picked = decks[loserSide].find((c) => c.id === claimPickId);
         if (!picked) return;
 
-        // переносим карту из колоды проигравшего в колоду победителя (локально)
         setDecks((d) => {
             const next = { ...d };
             next[loserSide] = d[loserSide].filter((c) => c.id !== claimPickId);
@@ -641,11 +649,8 @@ export default function Game({ onExit, me }) {
     return (
         <div className="game-root">
             <div className="game-ui tt-layout">
-                <button className="exit" onClick={onExit}>
-                    ← Меню
-                </button>
+                <button className="exit" onClick={onExit}>← Меню</button>
 
-                {/* Score: TT total + series in compact form */}
                 <div className="hud-corner hud-score red hud-near-left">🟥 {score.red}·{series.enemy}</div>
                 <div className="hud-corner hud-score blue hud-near-right">{series.player}·{score.blue} 🟦</div>
 
@@ -666,7 +671,6 @@ export default function Game({ onExit, me }) {
                         })}
                     </div>
 
-                    {/* MAGIC COLUMN (enemy) */}
                     <div className="magic-column enemy" aria-hidden="true">
                         <button className="magic-btn freeze" disabled title="Enemy magic (soon)">
                             <span className="magic-ic">❄</span>
@@ -677,7 +681,7 @@ export default function Game({ onExit, me }) {
                     </div>
                 </div>
 
-                {/* CENTER board */}
+                {/* CENTER */}
                 <div className="center-col">
                     <div className="board">
                         {board.map((cell, i) => {
@@ -698,7 +702,6 @@ export default function Game({ onExit, me }) {
                                     onClick={() => onCellClick(i)}
                                     title={isFrozen ? `Frozen (${frozen[i]})` : elem ? `Element: ${elem}` : undefined}
                                 >
-                                    {/* лёгкий индикатор стихии клетки (без обязательного CSS) */}
                                     {elem && (
                                         <div
                                             style={{
@@ -716,7 +719,6 @@ export default function Game({ onExit, me }) {
                                             {ELEM_ICON[elem]}
                                         </div>
                                     )}
-
                                     {cell && <Card card={cell} cellElement={elem} />}
                                 </div>
                             );
@@ -742,13 +744,12 @@ export default function Game({ onExit, me }) {
                         })}
                     </div>
 
-                    {/* MAGIC COLUMN (player) */}
                     <div className="magic-column player">
                         <button
                             className={`magic-btn freeze ${spellMode === "freeze" ? "active" : ""}`}
                             onClick={onMagicFreeze}
                             disabled={!canUseMagic || playerSpells.freeze <= 0}
-                            title="Freeze (house rule): заморозить пустую клетку"
+                            title="Freeze (house rule)"
                         >
                             <span className="magic-ic">❄</span>
                             <span className="magic-count">{playerSpells.freeze}</span>
@@ -758,7 +759,7 @@ export default function Game({ onExit, me }) {
                             className="magic-btn reveal"
                             onClick={onMagicReveal}
                             disabled={!canUseMagic || playerSpells.reveal <= 0}
-                            title="Reveal (house rule): показать 1 карту врага на 3 секунды"
+                            title="Reveal (house rule)"
                         >
                             <span className="magic-ic">👁</span>
                             <span className="magic-count">{playerSpells.reveal}</span>
@@ -766,7 +767,6 @@ export default function Game({ onExit, me }) {
                     </div>
                 </div>
 
-                {/* Round/Match modal */}
                 {(roundOver || matchOver) && (
                     <div className="game-over">
                         <div className="game-over-box" style={{ minWidth: 320 }}>
@@ -781,10 +781,9 @@ export default function Game({ onExit, me }) {
                             </h2>
 
                             <div style={{ opacity: 0.9, fontSize: 12, marginBottom: 10 }}>
-                                Раунд {roundNo} • Серия до {MATCH_WINS_TARGET} побед • Счёт {series.player}:{series.enemy}
+                                Раунд {roundNo} • Серия до {MATCH_WINS_TARGET} • Счёт {series.player}:{series.enemy}
                             </div>
 
-                            {/* Match reward: pick 1 NFT */}
                             {matchOver && matchWinner && loserSide && (
                                 <>
                                     <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 8 }}>
@@ -807,7 +806,10 @@ export default function Game({ onExit, me }) {
                                                         onClick={() => !claimDone && setClaimPickId(c.id)}
                                                         style={{
                                                             cursor: claimDone ? "default" : "pointer",
-                                                            outline: claimPickId === c.id ? "2px solid rgba(120,200,255,0.75)" : "1px solid rgba(255,255,255,0.12)",
+                                                            outline:
+                                                                claimPickId === c.id
+                                                                    ? "2px solid rgba(120,200,255,0.75)"
+                                                                    : "1px solid rgba(255,255,255,0.12)",
                                                             borderRadius: 12,
                                                             padding: 4,
                                                             opacity: claimDone ? 0.6 : 1,
@@ -830,25 +832,15 @@ export default function Game({ onExit, me }) {
                                         </>
                                     ) : (
                                         <div style={{ opacity: 0.85, fontSize: 12, marginBottom: 10 }}>
-                                            (Пока AI не выбирает. В PvP выбор будет на сервере/в UI.)
+                                            (Пока AI не выбирает.)
                                         </div>
                                     )}
                                 </>
                             )}
 
                             <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 10, flexWrap: "wrap" }}>
-                                {!matchOver && (
-                                    <button onClick={onNextRound}>
-                                        Следующий раунд
-                                    </button>
-                                )}
-
-                                {matchOver && (
-                                    <button onClick={resetMatch}>
-                                        Новый матч
-                                    </button>
-                                )}
-
+                                {!matchOver && <button onClick={onNextRound}>Следующий раунд</button>}
+                                {matchOver && <button onClick={resetMatch}>Новый матч</button>}
                                 <button onClick={onExit}>Меню</button>
                             </div>
                         </div>
@@ -933,7 +925,6 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
             <div className="card-anim">
                 <img className="card-art-img" src={card.imageUrl} alt="" draggable="false" />
 
-                {/* rank + element (inline, чтобы не ломать твой CSS) */}
                 <div
                     style={{
                         position: "absolute",
@@ -952,7 +943,7 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
                         lineHeight: 1,
                     }}
                 >
-                    <span>{card.rankLabel}</span>
+                    <span>{card.rankLabel || "C"}</span>
                     {card.element ? <span>{ELEM_ICON[card.element]}</span> : null}
                     {squareDelta !== 0 ? <span style={{ opacity: 0.9 }}>{squareDelta > 0 ? "+1" : "-1"}</span> : null}
                 </div>
