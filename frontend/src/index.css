@@ -1,11 +1,12 @@
 /* =========================================================
    Card Clash — index.css
-   IMPORTANT: ONLY CSS HERE. NO JS/IMPORTS.
+   ВАЖНО: ТОЛЬКО CSS. НИКАКОГО JS/IMPORT.
    ========================================================= */
 
-/* =========================
-   GLOBAL BASE
-   ========================= */
+
+/* =========================================================
+   1) GLOBAL BASE (общие базовые стили)
+   ========================================================= */
 * {
     box-sizing: border-box;
     font-family: sans-serif;
@@ -34,13 +35,14 @@ button {
     -webkit-tap-highlight-color: transparent;
 }
 
-/* app height set from main.jsx */
+/* Высота приложения (обновляется из main.jsx) */
 :root {
     --app-h: 100vh;
 }
 
+
 /* =========================================================
-   HOME / SHELL
+   2) HOME / SHELL (главное меню)
    ========================================================= */
 .shell {
     position: fixed;
@@ -52,6 +54,7 @@ button {
     color: #fff;
 }
 
+/* Canvas-фон */
 .storm-bg {
     position: absolute;
     inset: 0;
@@ -59,6 +62,7 @@ button {
     pointer-events: none;
 }
 
+/* Контент меню поверх фона */
 .shell-content {
     position: relative;
     z-index: 1;
@@ -73,6 +77,7 @@ button {
     place-items: center;
 }
 
+/* Кнопка Play (круг) */
 .play-logo {
     width: min(240px, 56vmin);
     height: min(240px, 56vmin);
@@ -117,12 +122,17 @@ button {
     padding: 18px;
 }
 
-/* нижние панели меню */
+/* ===== Нижние панели меню ===== */
+
+/* Контейнер кнопки кошелька */
 .wallet-float {
     position: absolute;
     left: 0;
     right: 0;
+
+    /* регулируй высоту кнопки над нижним стеком */
     bottom: calc(env(safe-area-inset-bottom, 0px) + 230px);
+
     z-index: 3;
     display: flex;
     justify-content: center;
@@ -145,17 +155,20 @@ button {
     letter-spacing: .2px;
 }
 
+/* Нижний стек (season bar + nav) */
 .bottom-stack {
     position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
+
     z-index: 2;
     padding: 10px 12px calc(env(safe-area-inset-bottom, 0px) + 10px);
     display: grid;
     gap: 10px;
 }
 
+/* Season bar */
 .season-bar {
     display: flex;
     align-items: center;
@@ -209,6 +222,7 @@ button {
     padding: 0;
 }
 
+/* Bottom nav */
 .bottom-nav {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -232,6 +246,17 @@ button {
     gap: 6px;
 }
 
+/* ВАЖНО: чтобы SVG-иконки не “прыгали” и были видны */
+.nav-ic {
+    line-height: 0;
+    display: grid;
+    place-items: center;
+}
+
+.nav-ic svg {
+    display: block;
+}
+
 .nav-txt {
     font-size: 11px;
     font-weight: 900;
@@ -253,15 +278,16 @@ button {
     pointer-events: none;
 }
 
-/* если App прячет game в портрете */
+/* Когда App прячет игру из-за rotate-gate */
 .game-host.is-hidden {
     opacity: 0;
     pointer-events: none;
 }
 
-/* =========================
-   ROTATE GATE
-   ========================= */
+
+/* =========================================================
+   3) ROTATE GATE (поверни телефон)
+   ========================================================= */
 .rotate-gate {
     position: fixed;
     inset: 0;
@@ -317,42 +343,61 @@ button {
     }
 }
 
+
 /* =========================================================
-   TT GAME — SETTINGS (edit here)
+   4) TT GAME — НАСТРОЙКИ (меняй тут)
    ========================================================= */
 :root {
+    /* padding всей игры от краев экрана (общее поле вокруг сцены) */
     --ui-pad: clamp(8px, 2vw, 14px);
+
+    /* общий gap: влияет на gap между колонками (руки/поле) и на gap внутри board */
     --gap: clamp(6px, 1.6vw, 10px);
 
+    /* отступ сцены игры внутри .game-ui (слева/справа) */
     --edge-inset: 14px;
 
+    /* максимальная ширина карты (если экран позволяет) */
     --card-w-max: 170px;
 
+    /* расстояние между 2 колонками карт в руке */
     --hand-col-gap: 18px;
+
+    /* расстояние между рядами карт в руке */
     --row-gap: 12px;
+
+    /* насколько “2 карты” (col2) подъезжают к столу */
     --towards-board: 12px;
 
+    /* padding внутри руки вокруг карт (важно для расчётов ширины) */
     --hand-pad-x: 10px;
     --hand-pad-y: 10px;
 
+    /* HUD score плашки */
     --score-w: 56px;
     --score-gap: 4px;
 
+    /* бейджи игрока (ник+аватар) */
     --badge-h: 44px;
     --badge-avatar: 32px;
 
-    /* зона системных кнопок Telegram (крестик / три точки) */
+    /* безопасная высота верхних системных кнопок Telegram */
     --tg-top-controls: 58px;
 }
 
+
 /* =========================================================
-   TT GAME — CALC
+   5) TT GAME — ВЫЧИСЛЕНИЯ (лучше не трогать)
    ========================================================= */
 :root {
+    /* реальная безопасная ширина */
     --vw-safe: calc(100vw - (var(--ui-pad) * 2) - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
 
+    /* ширина карты по ширине, чтобы НЕ вылезало:
+     total = 7*card + 2*handColGap + 4*handPadX + 6*gap + 2*edgeInset */
     --card-w-vw: calc((var(--vw-safe) - (var(--edge-inset) * 2) - (var(--hand-col-gap) * 2) - (var(--hand-pad-x) * 4) - (var(--gap) * 6)) / 7);
 
+    /* высота под поле 3 ряда */
     --available-h: calc(var(--app-h, 100vh) - (var(--ui-pad) * 2) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - (var(--gap) * 2));
 
     --card-h-fit: calc((var(--available-h) - (var(--gap) * 4)) / 3);
@@ -365,14 +410,15 @@ button {
     --board-h: calc((var(--card-h) * 3) + (var(--gap) * 4));
 
     --side-w: calc((var(--card-w) * 2) + var(--hand-col-gap) + (var(--hand-pad-x) * 2));
-    --half-step: calc((var(--card-h) + (var(--row-gap))) / 2);
+    --half-step: calc((var(--card-h) + var(--row-gap)) / 2);
 
     --stage-w: calc((var(--edge-inset) * 2) + (var(--side-w) * 2) + var(--board-w) + (var(--gap) * 2));
 }
 
-/* =========================
-   TT GAME — ROOT / STAGE
-   ========================= */
+
+/* =========================================================
+   6) TT GAME — СЦЕНА / КОНТЕЙНЕРЫ
+   ========================================================= */
 .game-root {
     position: fixed;
     inset: 0;
@@ -401,11 +447,12 @@ button {
     position: relative;
 }
 
-/* =========================
-   EXIT BUTTON
-   - Desktop: top-left corner
-   - Mobile: bottom-left (avoid Telegram close/…)
-   ========================= */
+
+/* =========================================================
+   7) EXIT BUTTON (Меню)
+   ========================================================= */
+/* На ПК: в левом верхнем углу.
+   На телефоне: будет внизу слева (см. media ниже), чтобы не путать с крестиком Telegram. */
 .exit {
     position: fixed;
     left: 12px;
@@ -419,7 +466,6 @@ button {
     min-width: 92px;
 }
 
-/* mobile: put exit down to avoid misclick with Telegram close */
 @media (hover: none) and (pointer: coarse) {
     .exit {
         top: auto;
@@ -427,9 +473,10 @@ button {
     }
 }
 
-/* =========================
-   HUD — SCORE (bottom, outside board)
-   ========================= */
+
+/* =========================================================
+   8) HUD SCORE (внизу рядом с полем, но СНАРУЖИ)
+   ========================================================= */
 .hud-corner {
     position: absolute;
     z-index: 100;
@@ -467,16 +514,15 @@ button {
     box-shadow: 0 0 14px rgba(0, 180, 255, 0.16);
 }
 
-/* =========================
-   Player badges (TOP, tight to board)
-   - no clipping on desktop
-   - width auto + max width + ellipsis
-   ========================= */
+
+/* =========================================================
+   9) PLAYER BADGES (ник+аватар сверху, впритык к полю)
+   ========================================================= */
 .player-badge {
     position: absolute;
     z-index: 105;
 
-    /* never goes into Telegram top-controls zone */
+    /* не залезаем в системные кнопки Telegram */
     top: max(calc(env(safe-area-inset-top, 0px) + var(--tg-top-controls) + 6px),
             calc(50% - (var(--board-h) / 2) - var(--badge-h) - 6px));
 
@@ -531,6 +577,7 @@ button {
     text-overflow: ellipsis;
 }
 
+/* подсветка “чей ход” */
 .player-badge.active.enemy {
     box-shadow: 0 0 22px rgba(255, 80, 80, 0.24);
     border-color: rgba(255, 80, 80, 0.35);
@@ -541,9 +588,8 @@ button {
     border-color: rgba(0, 180, 255, 0.35);
 }
 
-/* Position WITHOUT fixed badge width:
-   enemy: stick to left side of board, outside (using translateX(-100%))
-   player: stick to right side of board, outside */
+/* позиция у поля:
+   enemy слева от поля, player справа от поля */
 .player-badge.enemy {
     left: calc(50% - (var(--board-w) / 2) - 8px);
     transform: translateX(-100%);
@@ -551,11 +597,13 @@ button {
 
 .player-badge.player {
     left: calc(50% + (var(--board-w) / 2) + 8px);
+    transform: none;
 }
 
-/* =========================
-   HANDS (no frames, no clipping)
-   ========================= */
+
+/* =========================================================
+   10) HANDS (руки по бокам)
+   ========================================================= */
 .hand.left,
 .hand.right {
     background: transparent;
@@ -583,10 +631,12 @@ button {
     overflow: visible;
 }
 
+/* enemy: 2 карты ближе к столу */
 .hand.left .hand-slot.col2 {
     transform: translateX(var(--towards-board)) translateY(var(--half-step));
 }
 
+/* player: 2 карты ближе к столу (переставляем col2 во внутреннюю колонку) */
 .hand.right .hand-slot.col2 {
     grid-column: 1 !important;
     transform: translateX(calc(-1 * var(--towards-board))) translateY(var(--half-step));
@@ -597,9 +647,10 @@ button {
     transform: none;
 }
 
-/* =========================
-   BOARD
-   ========================= */
+
+/* =========================================================
+   11) BOARD
+   ========================================================= */
 .center-col {
     display: flex;
     align-items: center;
@@ -662,9 +713,10 @@ button {
     cursor: pointer;
 }
 
-/* =========================
-   CARD
-   ========================= */
+
+/* =========================================================
+   12) CARD
+   ========================================================= */
 .card {
     width: var(--card-w);
     height: var(--card-h);
@@ -695,6 +747,7 @@ button {
     z-index: 1;
 }
 
+/* selection (right hand) */
 .hand.right .card {
     transition: transform 200ms cubic-bezier(.2, .9, .2, 1), box-shadow 200ms ease, filter 200ms ease;
 }
@@ -706,6 +759,7 @@ button {
     box-shadow: 0 0 20px rgba(255, 215, 0, 0.20), 0 14px 34px rgba(0, 0, 0, 0.55);
 }
 
+/* owner glow */
 .card.player {
     border: 2px solid rgba(42, 107, 255, 0.98);
     box-shadow: 0 0 18px rgba(0, 180, 255, 0.30), 0 14px 30px rgba(0, 0, 0, 0.45);
@@ -748,7 +802,7 @@ button {
     }
 }
 
-/* place/capture */
+/* place/capture animations */
 .card.is-placed .card-anim {
     animation: placeSmooth 380ms cubic-bezier(.2, .9, .2, 1);
 }
@@ -866,9 +920,10 @@ button {
     filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.65)) drop-shadow(0 0 18px rgba(120, 200, 255, 0.18));
 }
 
-/* =========================
-   GAME OVER + DICE
-   ========================= */
+
+/* =========================================================
+   13) GAME OVER + DICE
+   ========================================================= */
 .game-over {
     position: fixed;
     inset: 0;
@@ -930,30 +985,37 @@ button {
     }
 }
 
-/* =========================
-   MOBILE LANDSCAPE SAFE
-   ========================= */
+
+/* =========================================================
+   14) MOBILE LANDSCAPE SAFE (чтобы влезало и не ломалось)
+   ========================================================= */
 @media (max-height: 520px) and (orientation: landscape),
 (hover: none) and (pointer: coarse) and (orientation: landscape) {
     :root {
+        /* меньше отступы -> больше места для сцены */
         --ui-pad: 6px;
         --gap: 6px;
-
         --edge-inset: 10px;
+
+        /* безопасный потолок карты */
         --card-w-max: 176px;
 
+        /* меньше “раздувание” рук */
         --hand-col-gap: 14px;
         --row-gap: 10px;
-
         --hand-pad-x: 8px;
         --hand-pad-y: 8px;
 
+        /* компактнее бейдж */
         --badge-h: 38px;
         --badge-avatar: 26px;
     }
 }
 
-/* reduce motion */
+
+/* =========================================================
+   15) REDUCE MOTION
+   ========================================================= */
 @media (prefers-reduced-motion: reduce) {
     .rotate-phone {
         animation: none !important;
