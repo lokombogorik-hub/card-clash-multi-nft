@@ -155,8 +155,8 @@ function initialsFrom(name) {
 /* =========================
    Magic (spells)
    ========================= */
-const FREEZE_DURATION_MOVES = 2; // сколько "ходов с постановкой карты" держится заморозка
-const REVEAL_MS = 3000;          // показать карту врага на 3 секунды
+const FREEZE_DURATION_MOVES = 2;
+const REVEAL_MS = 3000;
 
 /* =========================
    Game
@@ -180,7 +180,7 @@ export default function Game({ onExit, me }) {
 
     // spells
     const [spellMode, setSpellMode] = useState(null); // null | "freeze"
-    const [frozen, setFrozen] = useState(() => Array(9).fill(0)); // counters
+    const [frozen, setFrozen] = useState(() => Array(9).fill(0));
     const [enemyRevealId, setEnemyRevealId] = useState(null);
 
     const [playerSpells, setPlayerSpells] = useState({ freeze: 1, reveal: 1 });
@@ -201,7 +201,6 @@ export default function Game({ onExit, me }) {
 
     useEffect(() => {
         return () => {
-            // cleanup on unmount
             if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
         };
     }, []);
@@ -225,7 +224,6 @@ export default function Game({ onExit, me }) {
         setPlayerSpells({ freeze: 1, reveal: 1 });
     };
 
-    // если раскрытая карта уже ушла из руки — чистим
     useEffect(() => {
         if (!enemyRevealId) return;
         if (!enemy.some((c) => c.id === enemyRevealId)) clearReveal();
@@ -272,17 +270,20 @@ export default function Game({ onExit, me }) {
     const onCellClick = (i) => {
         if (gameOver) return;
 
-        // Spell: Freeze
+        // Spell: Freeze (каст по клетке)
         if (spellMode === "freeze") {
             if (turn !== "player") return;
-            if (board[i]) return;      // замораживаем только пустые
-            if (frozen[i] > 0) return; // уже заморожено
+            if (playerSpells.freeze <= 0) return;
+            if (board[i]) return;
+            if (frozen[i] > 0) return;
 
             setFrozen((prev) => {
                 const next = [...prev];
                 next[i] = FREEZE_DURATION_MOVES;
                 return next;
             });
+
+            setPlayerSpells((s) => ({ ...s, freeze: Math.max(0, s.freeze - 1) }));
 
             setSpellMode(null);
             aiGuard.current.handled = false;
@@ -302,8 +303,9 @@ export default function Game({ onExit, me }) {
 
         haptic("light");
         setSelected(null);
-        setSpellMode("freeze");
-        setPlayerSpells((s) => ({ ...s, freeze: Math.max(0, s.freeze - 1) }));
+
+        // toggle режима (без траты заряда пока не кликнул клетку)
+        setSpellMode((m) => (m === "freeze" ? null : "freeze"));
     };
 
     const onMagicReveal = () => {
@@ -317,7 +319,6 @@ export default function Game({ onExit, me }) {
         const c = enemy[Math.floor(Math.random() * enemy.length)];
         setEnemyRevealId(c.id);
 
-        // auto-hide через 3 секунды
         if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
         revealTimerRef.current = setTimeout(() => {
             setEnemyRevealId(null);
@@ -361,7 +362,6 @@ export default function Game({ onExit, me }) {
             setHands((h) => ({ ...h, enemy: h.enemy.filter((c) => c.id !== card.id) }));
 
             decFrozenAfterCardMove();
-
             setTurn("player");
         }, 420);
 
@@ -430,16 +430,16 @@ export default function Game({ onExit, me }) {
                                 </div>
                             );
                         })}
+                    </div>
 
-                        {/* Magic slot (enemy side) */}
-                        <div className="magic-slot" aria-hidden="true">
-                            <button className="magic-btn" disabled title="Enemy magic (soon)">
-                                ❄
-                            </button>
-                            <button className="magic-btn" disabled title="Enemy magic (soon)">
-                                👁
-                            </button>
-                        </div>
+                    {/* MAGIC COLUMN (enemy) */}
+                    <div className="magic-column enemy" aria-hidden="true">
+                        <button className="magic-btn freeze" disabled title="Enemy magic (soon)">
+                            <span className="magic-ic">❄</span>
+                        </button>
+                        <button className="magic-btn reveal" disabled title="Enemy magic (soon)">
+                            <span className="magic-ic">👁</span>
+                        </button>
                     </div>
                 </div>
 
@@ -449,9 +449,6 @@ export default function Game({ onExit, me }) {
                         {board.map((cell, i) => {
                             const isFrozen = frozen[i] > 0;
 
-                            // подсветка:
-                            // 1) обычная — когда выбрана карта
-                            // 2) для freeze — когда активен режим и клетка пустая/не заморожена
                             const canHighlight =
                                 !gameOver &&
                                 !cell &&
@@ -488,27 +485,29 @@ export default function Game({ onExit, me }) {
                                 </div>
                             );
                         })}
+                    </div>
 
-                        {/* Magic slot (player side) */}
-                        <div className="magic-slot">
-                            <button
-                                className={`magic-btn ${spellMode === "freeze" ? "active" : ""}`}
-                                onClick={onMagicFreeze}
-                                disabled={!canUseMagic || playerSpells.freeze <= 0}
-                                title="Freeze: заморозить пустую клетку"
-                            >
-                                ❄ {playerSpells.freeze}
-                            </button>
+                    {/* MAGIC COLUMN (player) */}
+                    <div className="magic-column player">
+                        <button
+                            className={`magic-btn freeze ${spellMode === "freeze" ? "active" : ""}`}
+                            onClick={onMagicFreeze}
+                            disabled={!canUseMagic || playerSpells.freeze <= 0}
+                            title="Freeze: заморозить пустую клетку"
+                        >
+                            <span className="magic-ic">❄</span>
+                            <span className="magic-count">{playerSpells.freeze}</span>
+                        </button>
 
-                            <button
-                                className="magic-btn"
-                                onClick={onMagicReveal}
-                                disabled={!canUseMagic || playerSpells.reveal <= 0}
-                                title="Reveal: показать 1 карту врага на 3 секунды"
-                            >
-                                👁 {playerSpells.reveal}
-                            </button>
-                        </div>
+                        <button
+                            className="magic-btn reveal"
+                            onClick={onMagicReveal}
+                            disabled={!canUseMagic || playerSpells.reveal <= 0}
+                            title="Reveal: показать 1 карту врага на 3 секунды"
+                        >
+                            <span className="magic-ic">👁</span>
+                            <span className="magic-count">{playerSpells.reveal}</span>
+                        </button>
                     </div>
                 </div>
 
