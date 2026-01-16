@@ -1094,8 +1094,8 @@ button {
     }
 }
 
-/* Бейджи игрока/врага на мобилке: поднимаем ВЫШЕ стола,
-   и держим по краям поля, чтобы не пересекались с руками */
+/* Бейджи игрока/врага на мобилке:
+   закрепляем ВЫШЕ стола (как счёт снизу — вне board), ПК не трогаем */
 @media (hover: none) and (pointer: coarse),
 (max-height: 520px) and (orientation: landscape) {
     .player-badge {
@@ -1103,18 +1103,19 @@ button {
         padding: 5px 8px;
         gap: 8px;
 
-        /* ВАЖНО: на мобилке поднимаем вверх (не даём залезать на board) */
-        top: max(calc(var(--safe-t) + 6px),
-                calc(50% - (var(--board-h) / 2) - var(--badge-h) - 10px));
+        /* ВАЖНО:
+           top здесь — это "линия над столом".
+           Сдвигаем сам бейдж вверх через transform, чтобы он НЕ перекрывал board. */
+        top: calc(50% - (var(--board-h) / 2) - 12px);
     }
 
     .player-badge.enemy {
         left: calc(50% - (var(--board-w) / 2) + 6px);
-        transform: none;
+        transform: translateY(-100%);
     }
 
     .player-badge.player {
         left: calc(50% + (var(--board-w) / 2) - 6px);
-        transform: translateX(-100%);
+        transform: translate(-100%, -100%);
     }
 }
