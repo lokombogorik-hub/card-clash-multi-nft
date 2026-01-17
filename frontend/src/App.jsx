@@ -298,35 +298,7 @@ function BottomNav({ active, onChange }) {
                     </button>
                 );
             })}
-            {new URLSearchParams(window.location.search).get("debug") === "1" && (
-                <div style={{
-                    position: "fixed",
-                    left: 10,
-                    bottom: 10,
-                    zIndex: 99999,
-                    background: "rgba(0,0,0,0.8)",
-                    color: "#fff",
-                    padding: 10,
-                    borderRadius: 8,
-                    maxWidth: 320,
-                    fontSize: 12
-                }}>
-                    <div style={{ marginBottom: 6 }}>
-                        debug panel
-                    </div>
-                    <button
-                        onClick={async () => {
-                            const tg = window.Telegram?.WebApp;
-                            const initData = tg?.initData || "";
-                            await navigator.clipboard.writeText(initData);
-                            alert("initData copied (" + initData.length + " chars)");
-                        }}
-                        style={{ padding: "6px 10px" }}
-                    >
-                        Copy initData
-                    </button>
-                </div>
-            )}
+
         </div>
     );
 }
