@@ -342,24 +342,3 @@ function UserIcon() {
         </svg>
     );
 }
-<div style={{
-    position: "fixed",
-    left: 10,
-    bottom: 10,
-    zIndex: 999999,
-    background: "rgba(0,0,0,0.85)",
-    color: "#fff",
-    padding: 10,
-    borderRadius: 8,
-    width: 380,
-    maxWidth: "95vw",
-    fontSize: 12
-}}>
-    <div><b>Telegram object:</b> {String(!!window.Telegram?.WebApp)}</div>
-    <div><b>initData length:</b> {(window.Telegram?.WebApp?.initData || "").length}</div>
-    <textarea
-        readOnly
-        value={window.Telegram?.WebApp?.initData || ""}
-        style={{ width: "100%", height: 120, fontSize: 10 }}
-    />
-</div>
