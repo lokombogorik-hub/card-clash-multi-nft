@@ -52,7 +52,19 @@ export default function App() {
     const bottomStackRef = useRef(null);
 
     const debugEnabled = useMemo(() => {
-        return new URLSearchParams(window.location.search).get("debug") === "1";
+        const fromSearch = window.location.search || "";
+        const fromHash = window.location.hash || "";
+        const combined =
+            (fromSearch.startsWith("?") ? fromSearch.slice(1) : fromSearch) +
+            "&" +
+            (fromHash.startsWith("#") ? fromHash.slice(1) : fromHash);
+
+        const p = new URLSearchParams(combined);
+        const v = p.get("debug");
+        if (v == null) return false;
+
+        const vv = String(v).toLowerCase();
+        return vv !== "0" && vv !== "false";
     }, []);
 
     // IMPORTANT: покажем, подхватился ли Vercel env
@@ -261,6 +273,37 @@ export default function App() {
                 <StormBg />
                 <div className={`game-host ${showRotate ? "is-hidden" : ""}`}>
                     <Game onExit={onExitGame} me={me} playerDeck={activeDeckCards} />
+                    {debugEnabled && (
+                        <div
+                            style={{
+                                position: "fixed",
+                                left: 10,
+                                bottom: 10,
+                                zIndex: 999999,
+                                background: "rgba(0,0,0,0.85)",
+                                color: "#fff",
+                                padding: 10,
+                                borderRadius: 8,
+                                width: 460,
+                                maxWidth: "95vw",
+                                fontSize: 12,
+                            }}
+                        >
+                            <div style={{ fontWeight: 700, marginBottom: 6 }}>DEBUG</div>
+
+                            <div>VITE_API_BASE_URL: {apiBase || "(empty!)"}</div>
+                            <div>
+                                token length: {token ? token.length : 0} | auth: {authState.status}
+                            </div>
+                            {authState.error ? (
+                                <div style={{ color: "#ffb3b3" }}>auth error: {authState.error}</div>
+                            ) : null}
+
+                            <div style={{ marginTop: 6 }}>window.Telegram: {String(dbg.hasTelegram)}</div>
+                            <div>Telegram.WebApp: {String(dbg.hasWebApp)}</div>
+                            <div>initData length: {dbg.initDataLen}</div>
+                        </div>
+                    )}
                 </div>
                 {showRotate && <RotateGate onBack={onExitGame} />}
             </div>
