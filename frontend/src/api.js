@@ -1,12 +1,11 @@
-export async function apiFetch(path, opts = {}) {
-    const {
-        method = "GET",
-        body,
-        token,
-        headers = {},
-    } = opts;
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
-    const res = await fetch(path, {
+export async function apiFetch(path, opts = {}) {
+    const { method = "GET", body, token, headers = {} } = opts;
+
+    const url = API_BASE ? `${API_BASE}${path}` : path;
+
+    const res = await fetch(url, {
         method,
         headers: {
             "Content-Type": "application/json",
@@ -24,10 +23,6 @@ export async function apiFetch(path, opts = {}) {
         data = text;
     }
 
-    if (!res.ok) {
-        const msg = typeof data === "string" ? data : JSON.stringify(data);
-        throw new Error(`${res.status} ${res.statusText}: ${msg}`);
-    }
-
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${text}`);
     return data;
 }
