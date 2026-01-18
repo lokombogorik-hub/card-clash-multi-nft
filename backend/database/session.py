@@ -1,46 +1,37 @@
+import os
 import ssl
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.engine.url import make_url
 
-from utils.config import settings
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is not set")
 
-def _normalize_db_url(url: str) -> str:
-    """
-    Render/Neon часто дают строку вида:
-      postgresql://user:pass@host/db?sslmode=require
-    Но для SQLAlchemy async нам нужен драйвер asyncpg:
-      postgresql+asyncpg://...
-    """
-    if not url:
-        return url
+# SQLAlchemy + asyncpg НЕ понимает ?sslmode=require (это параметр для psycopg).
+# Поэтому вырезаем sslmode из query и включаем SSL через connect_args["ssl"].
+url = make_url(DATABASE_URL)
+query = dict(url.query)
 
-    if url.startswith("postgresql+asyncpg://"):
-        return url
+sslmode = (query.pop("sslmode", None) or "").lower()
 
-    if url.startswith("postgresql://"):
-        return "postgresql+asyncpg://" + url[len("postgresql://") :]
+connect_args = {}
+if sslmode in ("require", "verify-ca", "verify-full"):
+    # default SSL context (обычно хватает для Neon/Render)
+    connect_args["ssl"] = ssl.create_default_context()
 
-    if url.startswith("postgres://"):
-        # иногда встречается короткая форма
-        return "postgresql+asyncpg://" + url[len("postgres://") :]
-
-    return url
-
-
-db_url = _normalize_db_url(settings.DATABASE_URL)
-
-# SSL для Neon
-ssl_ctx = ssl.create_default_context()
+# обновляем URL без sslmode
+url = url.set(query=query)
 
 engine = create_async_engine(
-    db_url,
+    str(url),
+    echo=False,
     pool_pre_ping=True,
-    connect_args={"ssl": ssl_ctx},
+    connect_args=connect_args,
 )
 
-SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
-
+AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 async def get_db():
-    async with SessionLocal() as session:
+    async with AsyncSessionLocal() as session:
         yield session
