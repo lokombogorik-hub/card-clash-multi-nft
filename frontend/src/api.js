@@ -1,28 +1,50 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
+function joinUrl(base, path) {
+    const b = (base || "").replace(/\/+$/, "");
+    const p = (path || "").startsWith("/") ? path : `/${path}`;
+    return b ? `${b}${p}` : p;
+}
+
+async function safeReadText(res) {
+    try {
+        return await res.text();
+    } catch {
+        return "";
+    }
+}
+
 export async function apiFetch(path, opts = {}) {
     const { method = "GET", body, token, headers = {} } = opts;
 
-    const url = API_BASE ? `${API_BASE}${path}` : path;
+    const url = joinUrl(API_BASE, path);
 
-    const res = await fetch(url, {
-        method,
-        headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            ...headers,
-        },
-        body,
-    });
+    const h = { ...headers };
+    if (body != null && !("Content-Type" in h)) h["Content-Type"] = "application/json";
+    if (token) h["Authorization"] = `Bearer ${token}`;
 
-    const text = await res.text();
-    let data = null;
+    let res;
     try {
-        data = text ? JSON.parse(text) : null;
-    } catch {
-        data = text;
+        res = await fetch(url, {
+            method,
+            headers: h,
+            body,
+            mode: "cors",
+            credentials: "omit",
+            cache: "no-store",
+        });
+    } catch (e) {
+        throw new Error(`Failed to fetch ${url} (network/CORS). ${String(e?.message || e)}`);
     }
 
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${text}`);
-    return data;
+    if (!res.ok) {
+        const text = await safeReadText(res);
+        throw new Error(`HTTP ${res.status} on ${url}${text ? `: ${text.slice(0, 300)}` : ""}`);
+    }
+
+    const ct = res.headers.get("content-type") || "";
+    if (ct.includes("application/json")) return await res.json();
+
+    const text = await safeReadText(res);
+    return text;
 }
