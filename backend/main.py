@@ -24,7 +24,7 @@ app.add_middleware(
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "ok", "build": "cors-1"}
 
 # Подключаем auth/users под /api
 app.include_router(auth_router, prefix="/api")
