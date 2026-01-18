@@ -10,21 +10,21 @@ if not DATABASE_URL:
 
 url: URL = make_url(DATABASE_URL)
 
-# 1) Принудительно используем asyncpg (иначе SQLAlchemy попытается psycopg2)
-# Возможные варианты из хостингов: postgres://, postgresql://
+# Принудительно используем asyncpg (иначе SQLAlchemy попытается psycopg2)
 if url.drivername in ("postgres", "postgresql", "postgresql+psycopg2"):
     url = url.set(drivername="postgresql+asyncpg")
 
-# 2) asyncpg НЕ понимает ?sslmode=require (это параметр psycopg2).
-# Вырезаем sslmode из query и передаем SSL через connect_args["ssl"]
-query = dict(url.query)
-sslmode = (query.pop("sslmode", None) or "").lower()
+# В query часто лежат libpq/psycopg параметры: sslmode, channel_binding, options и т.д.
+# asyncpg их НЕ понимает -> "unexpected keyword argument ..."
+raw_query = dict(url.query)
+sslmode = (raw_query.get("sslmode") or "").lower()
 
 connect_args = {}
 if sslmode in ("require", "verify-ca", "verify-full"):
     connect_args["ssl"] = ssl.create_default_context()
 
-url = url.set(query=query)
+# Полностью убираем query-параметры из DSN
+url = url.set(query={})
 
 engine = create_async_engine(
     str(url),
