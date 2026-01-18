@@ -44,7 +44,7 @@ export default function App() {
     const [token, setToken] = useState(null);
     const [me, setMe] = useState(null);
 
-    const [activeDeckCards, setActiveDeckCards] = useState(null); // массив из 5 карт для Game
+    const [activeDeckCards, setActiveDeckCards] = useState(null);
 
     const logoRef = useRef(null);
     const [logoOk, setLogoOk] = useState(true);
@@ -55,7 +55,14 @@ export default function App() {
         return new URLSearchParams(window.location.search).get("debug") === "1";
     }, []);
 
-    // DEBUG snapshot, чтобы данные обновлялись (Telegram SDK может прогрузиться позже)
+    // IMPORTANT: покажем, подхватился ли Vercel env
+    const apiBase = import.meta.env.VITE_API_BASE_URL || "";
+
+    const [authState, setAuthState] = useState({
+        status: "idle", // idle | loading | ok | err
+        error: "",
+    });
+
     const [dbg, setDbg] = useState(() => ({
         href: typeof window !== "undefined" ? window.location.href : "",
         hasTelegram: false,
@@ -72,10 +79,22 @@ export default function App() {
         const tick = () => {
             const tg = window.Telegram?.WebApp;
             const initData = tg?.initData || "";
-            const p = new URLSearchParams(window.location.search);
-            const rawTgWebAppData = p.get("tgWebAppData") || "";
+
+            // tgWebAppData иногда лежит в hash (#...), поэтому читаем и search, и hash
+            const fromSearch = window.location.search || "";
+            const fromHash = window.location.hash || "";
+            const combined = (fromSearch.startsWith("?") ? fromSearch.slice(1) : fromSearch) +
+                "&" +
+                (fromHash.startsWith("#") ? fromHash.slice(1) : fromHash);
+
+            const p = new URLSearchParams(combined);
+            const raw = p.get("tgWebAppData") || "";
             let decoded = "";
-            try { decoded = rawTgWebAppData ? decodeURIComponent(rawTgWebAppData) : ""; } catch { decoded = rawTgWebAppData; }
+            try {
+                decoded = raw ? decodeURIComponent(raw) : "";
+            } catch {
+                decoded = raw;
+            }
 
             setDbg({
                 href: window.location.href,
@@ -108,7 +127,6 @@ export default function App() {
         tg.SecondaryButton?.hide();
         tg.BackButton?.hide();
 
-        // читаем user
         setMe(readTelegramUser());
 
         const sync = () => setMe(readTelegramUser());
@@ -116,22 +134,34 @@ export default function App() {
             tg.onEvent?.("viewportChanged", sync);
         } catch { }
 
-        // Telegram auth -> JWT
         const initAuth = async () => {
             try {
+                setAuthState({ status: "loading", error: "" });
+
                 const initData = tg.initData || "";
-                if (!initData) return;
+                if (!initData) {
+                    setAuthState({ status: "err", error: "tg.initData is empty" });
+                    return;
+                }
 
                 const r = await apiFetch("/api/auth/telegram", {
                     method: "POST",
                     body: JSON.stringify({ initData }),
                 });
 
-                setToken(r.accessToken);
+                setToken(r.accessToken || null);
+
+                if (r?.accessToken) {
+                    setAuthState({ status: "ok", error: "" });
+                } else {
+                    setAuthState({ status: "err", error: "No accessToken in response" });
+                }
             } catch (e) {
+                setAuthState({ status: "err", error: String(e?.message || e) });
                 console.error("Auth failed:", e);
             }
         };
+
         initAuth();
 
         tg.disableVerticalSwipes?.();
@@ -165,11 +195,18 @@ export default function App() {
 
     const requestFullscreen = async () => {
         const tg = window.Telegram?.WebApp;
-        try { tg?.HapticFeedback?.impactOccurred?.("light"); } catch { }
-        try { tg?.requestFullscreen?.(); } catch { }
-        try { tg?.expand?.(); } catch { }
         try {
-            if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.();
+            tg?.HapticFeedback?.impactOccurred?.("light");
+        } catch { }
+        try {
+            tg?.requestFullscreen?.();
+        } catch { }
+        try {
+            tg?.expand?.();
+        } catch { }
+        try {
+            if (!document.fullscreenElement)
+                await document.documentElement.requestFullscreen?.();
         } catch { }
     };
 
@@ -179,11 +216,12 @@ export default function App() {
             const r = await apiFetch("/api/decks/active/full", { token });
 
             // backend может вернуть массив или {cards:[...]}
-            const cards = Array.isArray(r) ? r : (Array.isArray(r?.cards) ? r.cards : null);
+            const cards = Array.isArray(r) ? r : Array.isArray(r?.cards) ? r.cards : null;
 
             if (Array.isArray(cards) && cards.length === 5) return cards;
             return null;
-        } catch {
+        } catch (e) {
+            console.error("loadActiveDeck failed:", e);
             return null;
         }
     };
@@ -201,12 +239,12 @@ export default function App() {
         setScreen("game");
     };
 
-    const onExitGame = () => {
-        setScreen("home");
-    };
+    const onExitGame = () => setScreen("home");
 
     const onConnectWallet = () => {
-        try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light"); } catch { }
+        try {
+            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
+        } catch { }
         alert("Wallet connect (soon)");
     };
 
@@ -289,31 +327,42 @@ export default function App() {
             </div>
 
             {debugEnabled && (
-                <div style={{
-                    position: "fixed",
-                    left: 10,
-                    bottom: 10,
-                    zIndex: 999999,
-                    background: "rgba(0,0,0,0.85)",
-                    color: "#fff",
-                    padding: 10,
-                    borderRadius: 8,
-                    width: 440,
-                    maxWidth: "95vw",
-                    fontSize: 12
-                }}>
+                <div
+                    style={{
+                        position: "fixed",
+                        left: 10,
+                        bottom: 10,
+                        zIndex: 999999,
+                        background: "rgba(0,0,0,0.85)",
+                        color: "#fff",
+                        padding: 10,
+                        borderRadius: 8,
+                        width: 460,
+                        maxWidth: "95vw",
+                        fontSize: 12,
+                    }}
+                >
                     <div style={{ fontWeight: 700, marginBottom: 6 }}>DEBUG</div>
-                    <div>window.Telegram: {String(dbg.hasTelegram)}</div>
+
+                    <div>VITE_API_BASE_URL: {apiBase || "(empty!)"}</div>
+                    <div>
+                        token length: {token ? token.length : 0} | auth: {authState.status}
+                    </div>
+                    {authState.error ? (
+                        <div style={{ color: "#ffb3b3" }}>auth error: {authState.error}</div>
+                    ) : null}
+
+                    <div style={{ marginTop: 6 }}>window.Telegram: {String(dbg.hasTelegram)}</div>
                     <div>Telegram.WebApp: {String(dbg.hasWebApp)}</div>
                     <div>initData length: {dbg.initDataLen}</div>
 
                     <div style={{ marginTop: 6, opacity: 0.9 }}>location.href:</div>
-                    <textarea readOnly value={dbg.href} style={{ width: "100%", height: 60, fontSize: 10 }} />
+                    <textarea readOnly value={dbg.href} style={{ width: "100%", height: 70, fontSize: 10 }} />
 
                     <div style={{ marginTop: 6, opacity: 0.9 }}>initData:</div>
                     <textarea readOnly value={dbg.initData} style={{ width: "100%", height: 80, fontSize: 10 }} />
 
-                    <div style={{ marginTop: 6, opacity: 0.9 }}>tgWebAppData (from URL):</div>
+                    <div style={{ marginTop: 6, opacity: 0.9 }}>tgWebAppData (decoded):</div>
                     <textarea readOnly value={dbg.tgWebAppData} style={{ width: "100%", height: 60, fontSize: 10 }} />
 
                     <div style={{ marginTop: 6, opacity: 0.9 }}>initDataUnsafe.user:</div>
@@ -322,7 +371,7 @@ export default function App() {
                     </pre>
 
                     <div style={{ fontSize: 10, opacity: 0.75 }}>
-                        Открывай с кеш-бастом: ?debug=1&v=2
+                        Если VITE_API_BASE_URL пустой — переменная на Vercel не применена (нужен Redeploy).
                     </div>
                 </div>
             )}
@@ -355,7 +404,9 @@ function SeasonBar({ title, subtitle, progress, onRefresh }) {
                 <div className="season-progress">
                     <div className="season-progress-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
                 </div>
-                <button className="icon-btn" onClick={onRefresh} aria-label="Refresh">⟳</button>
+                <button className="icon-btn" onClick={onRefresh} aria-label="Refresh">
+                    ⟳
+                </button>
             </div>
         </div>
     );
@@ -399,7 +450,12 @@ function PlayIcon() {
 function HomeIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" stroke="white" strokeWidth="2" opacity="0.9" />
+            <path
+                d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z"
+                stroke="white"
+                strokeWidth="2"
+                opacity="0.9"
+            />
         </svg>
     );
 }
