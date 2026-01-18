@@ -1,11 +1,7 @@
 import os
 import ssl
-import logging
-
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.engine.url import URL, make_url
-
-logger = logging.getLogger("db")
 
 DATABASE_URL = (os.getenv("DATABASE_URL", "") or "").strip()
 if not DATABASE_URL:
@@ -13,24 +9,24 @@ if not DATABASE_URL:
 
 url: URL = make_url(DATABASE_URL)
 
-# Печатаем URL без пароля, чтобы в Render logs было видно host/db/user
-logger.warning("DB URL (password hidden): %s", url.render_as_string(hide_password=True))
-logger.warning(
-    "DB meta: driver=%s user=%s host=%s db=%s password_len=%s query_keys=%s",
-    url.drivername,
-    url.username,
-    url.host,
-    url.database,
-    (len(url.password) if url.password else 0),
-    list(dict(url.query).keys()),
-)
+# ЖЕЛЕЗНЫЙ дебаг: print гарантированно виден в Render logs
+if (os.getenv("DB_DEBUG", "") or "").strip() == "1":
+    try:
+        print("[DB_DEBUG] url =", url.render_as_string(hide_password=True))
+    except Exception:
+        print("[DB_DEBUG] url = <cannot render>")
+    print("[DB_DEBUG] driver =", url.drivername)
+    print("[DB_DEBUG] user =", url.username)
+    print("[DB_DEBUG] host =", url.host)
+    print("[DB_DEBUG] db   =", url.database)
+    print("[DB_DEBUG] password_len =", len(url.password or ""))
+    print("[DB_DEBUG] query_keys =", list(dict(url.query).keys()))
 
-# Всегда используем asyncpg
+# Принудительно asyncpg
 if url.drivername in ("postgres", "postgresql", "postgresql+psycopg2"):
     url = url.set(drivername="postgresql+asyncpg")
 
-# libpq-параметры (channel_binding и т.п.) asyncpg не понимает — чистим query,
-# но SSL включаем по sslmode
+# asyncpg не понимает libpq query-параметры (channel_binding и др.) => чистим query
 raw_query = dict(url.query)
 sslmode = (raw_query.get("sslmode") or "").lower()
 
