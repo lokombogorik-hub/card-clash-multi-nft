@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Game from "./Game";
 import StormBg from "./components/StormBg";
-import { apiFetch } from "./api";
+import { apiFetch } from "./api.js";
 import Inventory from "./pages/Inventory";
 import Profile from "./pages/Profile";
 import Market from "./pages/Market";
