@@ -4,11 +4,19 @@ import ssl
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.engine.url import URL, make_url
 
-DATABASE_URL = os.getenv("DATABASE_URL", "")
+import logging
+logger = logging.getLogger("db")
+
+DATABASE_URL = (os.getenv("DATABASE_URL", "") or "").strip()
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL is not set")
 
 url: URL = make_url(DATABASE_URL)
+
+logger.warning("DB URL (password hidden): %s", url.render_as_string(hide_password=True))
+logger.warning("DB password_len=%s user=%s host=%s db=%s",
+               (len(url.password) if url.password else 0),
+               url.username, url.host, url.database)
 
 # Принудительно используем asyncpg (иначе SQLAlchemy попытается psycopg2)
 if url.drivername in ("postgres", "postgresql", "postgresql+psycopg2"):
