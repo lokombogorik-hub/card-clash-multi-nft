@@ -13,3 +13,4 @@ venv/
 
 # node
 frontend/node_modules/telegram.env
+telegram.env
