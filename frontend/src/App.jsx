@@ -51,6 +51,30 @@ export default function App() {
 
     const bottomStackRef = useRef(null);
 
+    // включаем debug по ссылке ?debug=1
+    const debugEnabled = useMemo(() => {
+        return new URLSearchParams(window.location.search).get("debug") === "1";
+    }, []);
+
+    const onDebugInitData = () => {
+        const tg = window.Telegram?.WebApp;
+        const initData = tg?.initData || "";
+
+        console.log("[DEBUG] userAgent:", navigator.userAgent);
+        console.log("[DEBUG] window.Telegram exists:", !!window.Telegram);
+        console.log("[DEBUG] Telegram.WebApp exists:", !!tg);
+        console.log("[DEBUG] initData length:", initData.length);
+        console.log("[DEBUG] initData:", initData);
+        console.log("[DEBUG] initDataUnsafe:", tg?.initDataUnsafe);
+        console.log("[DEBUG] initDataUnsafe.user:", tg?.initDataUnsafe?.user);
+
+        try {
+            tg?.showAlert?.(`initData length: ${initData.length}. See console.`);
+        } catch {
+            alert(`initData length: ${initData.length}. See console.`);
+        }
+    };
+
     useEffect(() => {
         const tg = window.Telegram?.WebApp;
         if (!tg) return;
@@ -79,15 +103,18 @@ export default function App() {
             try {
                 const initData = tg.initData || "";
                 if (!initData) return;
+
                 const r = await apiFetch("/api/auth/telegram", {
                     method: "POST",
                     body: JSON.stringify({ initData }),
                 });
+
                 setToken(r.accessToken);
             } catch (e) {
                 console.error("Auth failed:", e);
             }
         };
+
         initAuth();
 
         tg.disableVerticalSwipes?.();
@@ -131,12 +158,19 @@ export default function App() {
 
     const loadActiveDeck = async () => {
         if (!token) return null;
+
         try {
-            // новый endpoint (см backend ниже)
             const r = await apiFetch("/api/decks/active/full", { token });
-            if (Array.isArray(r.cards) && r.cards.length === 5) return r.cards;
+
+            // backend может вернуть:
+            // 1) просто массив из 5 NFT объектов
+            // 2) или объект вида { cards: [...] } (на всякий случай)
+            const cards = Array.isArray(r) ? r : (Array.isArray(r?.cards) ? r.cards : null);
+
+            if (Array.isArray(cards) && cards.length === 5) return cards;
             return null;
-        } catch {
+        } catch (e) {
+            console.error("loadActiveDeck failed", e);
             return null;
         }
     };
@@ -226,6 +260,16 @@ export default function App() {
             </div>
 
             <div className="wallet-float">
+                {debugEnabled && (
+                    <button
+                        className="wallet-btn"
+                        onClick={onDebugInitData}
+                        style={{ marginBottom: 8, background: "#333" }}
+                    >
+                        Debug initData (console)
+                    </button>
+                )}
+
                 <button className="wallet-btn" onClick={onConnectWallet}>
                     Подключить кошелёк
                 </button>
@@ -298,7 +342,6 @@ function BottomNav({ active, onChange }) {
                     </button>
                 );
             })}
-
         </div>
     );
 }
