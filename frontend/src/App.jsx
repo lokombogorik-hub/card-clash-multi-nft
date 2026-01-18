@@ -44,7 +44,7 @@ export default function App() {
     const [token, setToken] = useState(null);
     const [me, setMe] = useState(null);
 
-    const [activeDeckCards, setActiveDeckCards] = useState(null);
+    const [activeDeckCards, setActiveDeckCards] = useState(null); // массив из 5 карт для Game
 
     const logoRef = useRef(null);
     const [logoOk, setLogoOk] = useState(true);
@@ -55,36 +55,43 @@ export default function App() {
         return new URLSearchParams(window.location.search).get("debug") === "1";
     }, []);
 
-    // Пытаемся подгрузить Telegram WebApp SDK, если Telegram объекта нет
+    // DEBUG snapshot, чтобы данные обновлялись (Telegram SDK может прогрузиться позже)
+    const [dbg, setDbg] = useState(() => ({
+        href: typeof window !== "undefined" ? window.location.href : "",
+        hasTelegram: false,
+        hasWebApp: false,
+        initData: "",
+        initDataLen: 0,
+        initDataUnsafeUser: null,
+        tgWebAppData: "",
+    }));
+
     useEffect(() => {
-        if (window.Telegram?.WebApp) return;
+        if (!debugEnabled) return;
 
-        const s = document.createElement("script");
-        s.src = "https://telegram.org/js/telegram-web-app.js";
-        s.async = true;
-        s.onload = () => {
-            // просто отметим в консоли, что скрипт загрузился
-            console.log("[TG SDK] loaded, window.Telegram:", window.Telegram);
+        const tick = () => {
+            const tg = window.Telegram?.WebApp;
+            const initData = tg?.initData || "";
+            const p = new URLSearchParams(window.location.search);
+            const rawTgWebAppData = p.get("tgWebAppData") || "";
+            let decoded = "";
+            try { decoded = rawTgWebAppData ? decodeURIComponent(rawTgWebAppData) : ""; } catch { decoded = rawTgWebAppData; }
+
+            setDbg({
+                href: window.location.href,
+                hasTelegram: !!window.Telegram,
+                hasWebApp: !!tg,
+                initData,
+                initDataLen: initData.length,
+                initDataUnsafeUser: tg?.initDataUnsafe?.user || null,
+                tgWebAppData: decoded,
+            });
         };
-        document.head.appendChild(s);
 
-        return () => {
-            // не удаляем, чтобы не ломать
-        };
-    }, []);
-
-    const tgUrlData = useMemo(() => {
-        const p = new URLSearchParams(window.location.search);
-        const raw = p.get("tgWebAppData") || "";
-        const startParam = p.get("tgWebAppStartParam") || "";
-        let decoded = "";
-        try {
-            decoded = raw ? decodeURIComponent(raw) : "";
-        } catch {
-            decoded = raw;
-        }
-        return { raw, decoded, startParam };
-    }, []);
+        tick();
+        const id = setInterval(tick, 500);
+        return () => clearInterval(id);
+    }, [debugEnabled]);
 
     useEffect(() => {
         const tg = window.Telegram?.WebApp;
@@ -101,6 +108,7 @@ export default function App() {
         tg.SecondaryButton?.hide();
         tg.BackButton?.hide();
 
+        // читаем user
         setMe(readTelegramUser());
 
         const sync = () => setMe(readTelegramUser());
@@ -108,6 +116,7 @@ export default function App() {
             tg.onEvent?.("viewportChanged", sync);
         } catch { }
 
+        // Telegram auth -> JWT
         const initAuth = async () => {
             try {
                 const initData = tg.initData || "";
@@ -123,7 +132,6 @@ export default function App() {
                 console.error("Auth failed:", e);
             }
         };
-
         initAuth();
 
         tg.disableVerticalSwipes?.();
@@ -157,36 +165,25 @@ export default function App() {
 
     const requestFullscreen = async () => {
         const tg = window.Telegram?.WebApp;
+        try { tg?.HapticFeedback?.impactOccurred?.("light"); } catch { }
+        try { tg?.requestFullscreen?.(); } catch { }
+        try { tg?.expand?.(); } catch { }
         try {
-            tg?.HapticFeedback?.impactOccurred?.("light");
-        } catch { }
-        try {
-            tg?.requestFullscreen?.();
-        } catch { }
-        try {
-            tg?.expand?.();
-        } catch { }
-        try {
-            if (!document.fullscreenElement)
-                await document.documentElement.requestFullscreen?.();
+            if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.();
         } catch { }
     };
 
     const loadActiveDeck = async () => {
         if (!token) return null;
-
         try {
             const r = await apiFetch("/api/decks/active/full", { token });
 
-            // backend может вернуть:
-            // - массив из 5 NFT
-            // - или { cards: [...] }
-            const cards = Array.isArray(r) ? r : Array.isArray(r?.cards) ? r.cards : null;
+            // backend может вернуть массив или {cards:[...]}
+            const cards = Array.isArray(r) ? r : (Array.isArray(r?.cards) ? r.cards : null);
 
             if (Array.isArray(cards) && cards.length === 5) return cards;
             return null;
-        } catch (e) {
-            console.error("loadActiveDeck failed", e);
+        } catch {
             return null;
         }
     };
@@ -204,12 +201,12 @@ export default function App() {
         setScreen("game");
     };
 
-    const onExitGame = () => setScreen("home");
+    const onExitGame = () => {
+        setScreen("home");
+    };
 
     const onConnectWallet = () => {
-        try {
-            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
-        } catch { }
+        try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light"); } catch { }
         alert("Wallet connect (soon)");
     };
 
@@ -271,9 +268,7 @@ export default function App() {
                 )}
 
                 {screen === "market" && <Market />}
-                {screen === "inventory" && (
-                    <Inventory token={token} onDeckReady={() => setScreen("home")} />
-                )}
+                {screen === "inventory" && <Inventory token={token} onDeckReady={() => setScreen("home")} />}
                 {screen === "profile" && <Profile token={token} />}
             </div>
 
@@ -293,72 +288,44 @@ export default function App() {
                 <BottomNav active={screen} onChange={setScreen} />
             </div>
 
-            {/* DEBUG PANEL: показываем initData и tgWebAppData прямо на экране */}
-            {debugEnabled && <DebugPanel tgUrlData={tgUrlData} />}
-        </div>
-    );
-}
+            {debugEnabled && (
+                <div style={{
+                    position: "fixed",
+                    left: 10,
+                    bottom: 10,
+                    zIndex: 999999,
+                    background: "rgba(0,0,0,0.85)",
+                    color: "#fff",
+                    padding: 10,
+                    borderRadius: 8,
+                    width: 440,
+                    maxWidth: "95vw",
+                    fontSize: 12
+                }}>
+                    <div style={{ fontWeight: 700, marginBottom: 6 }}>DEBUG</div>
+                    <div>window.Telegram: {String(dbg.hasTelegram)}</div>
+                    <div>Telegram.WebApp: {String(dbg.hasWebApp)}</div>
+                    <div>initData length: {dbg.initDataLen}</div>
 
-function DebugPanel({ tgUrlData }) {
-    const tg = window.Telegram?.WebApp;
-    const initData = tg?.initData || "";
-    const unsafe = tg?.initDataUnsafe;
+                    <div style={{ marginTop: 6, opacity: 0.9 }}>location.href:</div>
+                    <textarea readOnly value={dbg.href} style={{ width: "100%", height: 60, fontSize: 10 }} />
 
-    return (
-        <div
-            style={{
-                position: "fixed",
-                left: 10,
-                bottom: 10,
-                zIndex: 999999,
-                background: "rgba(0,0,0,0.85)",
-                color: "#fff",
-                padding: 10,
-                borderRadius: 8,
-                width: 420,
-                maxWidth: "95vw",
-                fontSize: 12,
-            }}
-        >
-            <div style={{ marginBottom: 6, fontWeight: 700 }}>DEBUG</div>
+                    <div style={{ marginTop: 6, opacity: 0.9 }}>initData:</div>
+                    <textarea readOnly value={dbg.initData} style={{ width: "100%", height: 80, fontSize: 10 }} />
 
-            <div>window.Telegram: {String(!!window.Telegram)}</div>
-            <div>Telegram.WebApp: {String(!!tg)}</div>
-            <div>initData length: {initData.length}</div>
+                    <div style={{ marginTop: 6, opacity: 0.9 }}>tgWebAppData (from URL):</div>
+                    <textarea readOnly value={dbg.tgWebAppData} style={{ width: "100%", height: 60, fontSize: 10 }} />
 
-            <div style={{ marginTop: 8, opacity: 0.9 }}>initData:</div>
-            <textarea
-                readOnly
-                value={initData}
-                style={{ width: "100%", height: 90, fontSize: 10 }}
-            />
+                    <div style={{ marginTop: 6, opacity: 0.9 }}>initDataUnsafe.user:</div>
+                    <pre style={{ fontSize: 10, whiteSpace: "pre-wrap" }}>
+                        {JSON.stringify(dbg.initDataUnsafeUser, null, 2)}
+                    </pre>
 
-            <div style={{ marginTop: 8, opacity: 0.9 }}>tgWebAppData (from URL):</div>
-            <textarea
-                readOnly
-                value={tgUrlData.decoded || ""}
-                style={{ width: "100%", height: 70, fontSize: 10 }}
-            />
-
-            <div style={{ marginTop: 8, opacity: 0.9 }}>initDataUnsafe.user:</div>
-            <pre
-                style={{
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                    fontSize: 10,
-                    background: "rgba(255,255,255,0.06)",
-                    padding: 6,
-                    borderRadius: 6,
-                    maxHeight: 100,
-                    overflow: "auto",
-                }}
-            >
-                {JSON.stringify(unsafe?.user || null, null, 2)}
-            </pre>
-
-            <div style={{ marginTop: 6, fontSize: 10, opacity: 0.75 }}>
-                Открой так: https://твой-домен.vercel.app/?debug=1
-            </div>
+                    <div style={{ fontSize: 10, opacity: 0.75 }}>
+                        Открывай с кеш-бастом: ?debug=1&v=2
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -368,9 +335,7 @@ function RotateGate({ onBack }) {
         <div className="rotate-gate">
             <div className="rotate-gate-box">
                 <div className="rotate-title">Поверни телефон</div>
-                <div className="rotate-subtitle">
-                    Игра работает только в горизонтальном режиме
-                </div>
+                <div className="rotate-subtitle">Игра работает только в горизонтальном режиме</div>
                 <div className="rotate-phone" />
                 <button onClick={onBack}>← Меню</button>
             </div>
@@ -388,14 +353,9 @@ function SeasonBar({ title, subtitle, progress, onRefresh }) {
 
             <div className="season-right">
                 <div className="season-progress">
-                    <div
-                        className="season-progress-fill"
-                        style={{ width: `${Math.round(progress * 100)}%` }}
-                    />
+                    <div className="season-progress-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
                 </div>
-                <button className="icon-btn" onClick={onRefresh} aria-label="Refresh">
-                    ⟳
-                </button>
+                <button className="icon-btn" onClick={onRefresh} aria-label="Refresh">⟳</button>
             </div>
         </div>
     );
@@ -439,24 +399,14 @@ function PlayIcon() {
 function HomeIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path
-                d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z"
-                stroke="white"
-                strokeWidth="2"
-                opacity="0.9"
-            />
+            <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" stroke="white" strokeWidth="2" opacity="0.9" />
         </svg>
     );
 }
 function GemIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path
-                d="M12 2 3 9l9 13 9-13-9-7Z"
-                stroke="white"
-                strokeWidth="2"
-                opacity="0.9"
-            />
+            <path d="M12 2 3 9l9 13 9-13-9-7Z" stroke="white" strokeWidth="2" opacity="0.9" />
             <path d="M3 9h18" stroke="white" strokeWidth="2" opacity="0.6" />
         </svg>
     );
@@ -464,38 +414,16 @@ function GemIcon() {
 function BagIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path
-                d="M6 8h12l-1 13H7L6 8Z"
-                stroke="white"
-                strokeWidth="2"
-                opacity="0.9"
-            />
-            <path
-                d="M9 8a3 3 0 0 1 6 0"
-                stroke="white"
-                strokeWidth="2"
-                strokeLinecap="round"
-                opacity="0.9"
-            />
+            <path d="M6 8h12l-1 13H7L6 8Z" stroke="white" strokeWidth="2" opacity="0.9" />
+            <path d="M9 8a3 3 0 0 1 6 0" stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.9" />
         </svg>
     );
 }
 function UserIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path
-                d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z"
-                stroke="white"
-                strokeWidth="2"
-                opacity="0.9"
-            />
-            <path
-                d="M4 20a8 8 0 0 1 16 0"
-                stroke="white"
-                strokeWidth="2"
-                strokeLinecap="round"
-                opacity="0.9"
-            />
+            <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" stroke="white" strokeWidth="2" opacity="0.9" />
+            <path d="M4 20a8 8 0 0 1 16 0" stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.9" />
         </svg>
     );
 }
