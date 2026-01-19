@@ -26,12 +26,11 @@ async def get_current_user(
     except (JWTError, ValueError):
         raise HTTPException(401, "invalid token")
 
-    # Пытаемся взять пользователя из БД
     try:
         res = await db.execute(select(User).where(User.id == user_id))
         user = res.scalar_one_or_none()
     except Exception:
-        # База недоступна — создаём временного пользователя в памяти.
+        # БД упала — создаём временного пользователя в памяти
         user = User(
             id=user_id,
             username=f"tg_{user_id}",

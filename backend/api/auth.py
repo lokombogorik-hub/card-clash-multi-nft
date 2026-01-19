@@ -17,7 +17,6 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 def _pick(obj: Any, key: str) -> Any:
-    """Поддержка extract_user, который может вернуть dict или объект."""
     if obj is None:
         return None
     if isinstance(obj, dict):
@@ -43,7 +42,7 @@ async def auth_telegram(payload: dict, db: AsyncSession = Depends(get_db)):
     if not init_data:
         raise HTTPException(status_code=400, detail="initData is required")
 
-    # 1) verify + extract (без утечки initData наружу)
+    # verify + extract
     try:
         verified = verify_init_data(init_data)
         tg_user = extract_user(verified)
@@ -85,7 +84,7 @@ async def auth_telegram(payload: dict, db: AsyncSession = Depends(get_db)):
             await db.commit()
 
     except IntegrityError:
-        logger.exception("DB integrity error in auth_telegram (likely constraint)")
+        logger.exception("DB integrity error in auth_telegram")
         if user is None:
             user = User(
                 id=tg_id,
@@ -115,7 +114,6 @@ async def auth_telegram(payload: dict, db: AsyncSession = Depends(get_db)):
     if user is None:
         raise HTTPException(status_code=500, detail="Unable to create user")
 
-    # 3) JWT под все варианты фронта
     token = create_access_token(sub=str(user.id))
     return {
         "accessToken": token,
