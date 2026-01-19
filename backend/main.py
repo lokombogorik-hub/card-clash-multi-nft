@@ -1,4 +1,5 @@
 import logging
+import traceback
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,7 +26,7 @@ app.add_middleware(
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "build": "v9-db-safe-startup"}
+    return {"status": "ok", "build": "v10-db-trace"}
 
 @app.on_event("startup")
 async def _startup_init_db():
@@ -33,8 +34,10 @@ async def _startup_init_db():
         async with engine.begin() as conn:
             await conn.run_sync(User.metadata.create_all)
         logging.info("DB init OK")
-    except Exception:
-        logging.exception("DB init failed (continuing without DB)")
+    except Exception as e:
+        # ВАЖНО: не падаем, но печатаем реальную причину
+        logging.error("DB init failed: %s: %s", type(e).__name__, str(e))
+        traceback.print_exc()
 
 app.include_router(auth_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
