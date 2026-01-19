@@ -9,7 +9,7 @@ import random
 # /api/auth/telegram и /api/users/me
 from api.auth import router as auth_router
 from api.users import router as users_router, get_current_user
-
+from .routers import mock_nfts
 
 app = FastAPI()
 
