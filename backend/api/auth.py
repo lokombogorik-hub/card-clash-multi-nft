@@ -94,4 +94,8 @@ async def auth_telegram(payload: dict, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
     token = create_access_token(sub=str(user.id))
-    return {"accessToken": token}
+    return {
+        "accessToken": token,
+        "access_token": token,
+        "token": token,
+    }
