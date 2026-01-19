@@ -2,9 +2,9 @@ import logging
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from database.session import get_db
 from database.models.user import User
@@ -27,7 +27,6 @@ def _pick(obj: Any, key: str) -> Any:
 
 def _to_int_or_keep(v: Any) -> Any:
     try:
-        # tg id обычно int или строка-цифры
         if isinstance(v, bool):
             return v
         return int(v)
@@ -58,13 +57,16 @@ async def auth_telegram(payload: dict, db: AsyncSession = Depends(get_db)):
     last_name = _pick(tg_user, "last_name")
 
     if tg_id is None:
-        logger.error("extract_user returned user without id: type=%s value=%r", type(tg_user).__name__, tg_user)
+        logger.error("extract_user returned user without id: type=%s value=%r",
+                     type(tg_user).__name__, tg_user)
         raise HTTPException(status_code=401, detail="Telegram user missing id")
 
-    # 2) DB upsert-ish
+    user: Optional[User] = None
+
+    # 2) Пытаемся upsert в БД, но НЕ валим запрос, если БД недоступна
     try:
         res = await db.execute(select(User).where(User.id == tg_id))
-        user: Optional[User] = res.scalar_one_or_none()
+        user = res.scalar_one_or_none()
 
         if not user:
             user = User(
@@ -84,15 +86,36 @@ async def auth_telegram(payload: dict, db: AsyncSession = Depends(get_db)):
 
     except IntegrityError:
         logger.exception("DB integrity error in auth_telegram (likely constraint)")
-        # без деталей наружу
-        raise HTTPException(status_code=500, detail="Database integrity error")
+        if user is None:
+            user = User(
+                id=tg_id,
+                username=username,
+                first_name=first_name,
+                last_name=last_name,
+            )
     except SQLAlchemyError:
-        logger.exception("DB error in auth_telegram")
-        raise HTTPException(status_code=500, detail="Database error")
+        logger.exception("DB SQLAlchemyError in auth_telegram (fallback to stateless)")
+        if user is None:
+            user = User(
+                id=tg_id,
+                username=username,
+                first_name=first_name,
+                last_name=last_name,
+            )
     except Exception:
-        logger.exception("Unexpected error in auth_telegram")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        logger.exception("Unexpected error in auth_telegram (fallback to stateless)")
+        if user is None:
+            user = User(
+                id=tg_id,
+                username=username,
+                first_name=first_name,
+                last_name=last_name,
+            )
 
+    if user is None:
+        raise HTTPException(status_code=500, detail="Unable to create user")
+
+    # 3) JWT под все варианты фронта
     token = create_access_token(sub=str(user.id))
     return {
         "accessToken": token,

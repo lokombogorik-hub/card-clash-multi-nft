@@ -11,6 +11,7 @@ from database.models.user import User
 router = APIRouter(prefix="/users", tags=["users"])
 bearer = HTTPBearer(auto_error=True)
 
+
 async def get_current_user(
     cred: HTTPAuthorizationCredentials = Depends(bearer),
     db: AsyncSession = Depends(get_db),
@@ -25,11 +26,24 @@ async def get_current_user(
     except (JWTError, ValueError):
         raise HTTPException(401, "invalid token")
 
-    res = await db.execute(select(User).where(User.id == user_id))
-    user = res.scalar_one_or_none()
+    # Пытаемся взять пользователя из БД
+    try:
+        res = await db.execute(select(User).where(User.id == user_id))
+        user = res.scalar_one_or_none()
+    except Exception:
+        # База недоступна — создаём временного пользователя в памяти.
+        user = User(
+            id=user_id,
+            username=f"tg_{user_id}",
+            first_name=None,
+            last_name=None,
+        )
+
     if not user:
         raise HTTPException(401, "user not found")
+
     return user
+
 
 @router.get("/me")
 async def me(user: User = Depends(get_current_user)):
