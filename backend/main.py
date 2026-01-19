@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Абсолютные импорты (БЕЗ точек!)
 from api.auth import router as auth_router
 from api.users import router as users_router
 from api.websocket import router as websocket_router
@@ -9,7 +8,6 @@ from routers.mock_nfts import router as mock_nfts_router
 
 app = FastAPI()
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -18,13 +16,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Health check (это ОК — не дублирует include_router)
 @app.get("/health")
 async def health():
-    return {"status": "ok", "build": "v5-ws-fix"}
+    return {"status": "ok", "build": "v6-api-prefix"}
 
-# Подключаем роутеры (ВАЖНО: только include_router, без дублей @app.get для тех же путей)
-app.include_router(auth_router)
-app.include_router(users_router)
-app.include_router(websocket_router)
+# ВАЖНО: auth/users/ws монтируем под /api, чтобы фронт мог дергать /api/auth/telegram
+app.include_router(auth_router, prefix="/api")
+app.include_router(users_router, prefix="/api")
+app.include_router(websocket_router, prefix="/api")
+
+# ВАЖНО: mock_nfts_router УЖЕ имеет prefix="/api" внутри, поэтому без дополнительного prefix
 app.include_router(mock_nfts_router)
