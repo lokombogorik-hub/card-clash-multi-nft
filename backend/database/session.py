@@ -1,7 +1,8 @@
 import os
 import ssl
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 from sqlalchemy.engine.url import URL, make_url
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 DATABASE_URL = (os.getenv("DATABASE_URL", "") or "").strip()
 if not DATABASE_URL:
@@ -28,12 +29,27 @@ if url.drivername in ("postgres", "postgresql", "postgresql+psycopg2"):
 
 # asyncpg не понимает libpq query-параметры (channel_binding и др.) => чистим query
 raw_query = dict(url.query)
-sslmode = (raw_query.get("sslmode") or "").lower()
+
+sslmode = (
+    (raw_query.get("sslmode") or "")
+    or (os.getenv("DB_SSLMODE") or "")
+    or (os.getenv("PGSSLMODE") or "")
+).lower()
+
+# Render/managed Postgres часто требует SSL, но DATABASE_URL может прийти без sslmode.
+on_render = bool(
+    (os.getenv("RENDER") or "").strip()
+    or (os.getenv("RENDER_SERVICE_ID") or "").strip()
+    or (os.getenv("RENDER_EXTERNAL_URL") or "").strip()
+)
+if not sslmode and on_render:
+    sslmode = "require"
 
 connect_args = {}
 if sslmode in ("require", "verify-ca", "verify-full"):
     connect_args["ssl"] = ssl.create_default_context()
 
+# убираем query параметры полностью (asyncpg/libpq параметры не нужны)
 url = url.set(query={})
 
 engine = create_async_engine(
@@ -44,6 +60,7 @@ engine = create_async_engine(
 )
 
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+
 
 async def get_db():
     async with AsyncSessionLocal() as session:
