@@ -8,7 +8,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from api.users import get_current_user
-from models import User
+from database.models.user import User
 
 router = APIRouter(prefix="/api", tags=["mock-nfts"])
 
