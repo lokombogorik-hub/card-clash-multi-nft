@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import random
-from typing import Dict, List, Literal
+from typing import Any, Dict, List, Literal
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from api.users import get_current_user
 from database.models.user import User
@@ -28,7 +28,7 @@ ELEM_ICONS = {
 }
 RANKS: List[str] = ["common", "rare", "epic", "legendary"]
 
-# Временное хранилище активных колод (user.id -> list of 5 keys)
+# Временное хранилище активных колод (user.id -> list of 5 keys) — опциональный override через PUT
 _ACTIVE_DECKS: Dict[int, List[str]] = {}
 
 
@@ -46,8 +46,8 @@ class MockNFT(BaseModel):
     imageUrl: str | None = None
 
 
-def _seed_for_user(user_id: int) -> int:
-    h = hashlib.sha256(f"mock-nfts:v2:{user_id}".encode("utf-8")).digest()
+def _seed_for_user(user_id: int, salt: str) -> int:
+    h = hashlib.sha256(f"mock-nfts:v3:{salt}:{user_id}".encode("utf-8")).digest()
     return int.from_bytes(h[:8], "big", signed=False)
 
 
@@ -66,7 +66,7 @@ def _rank_budget(rank: str) -> tuple[int, int]:
 
 
 def _gen_inventory_for_user(user_id: int, count: int = 16) -> List[MockNFT]:
-    rng = random.Random(_seed_for_user(user_id))
+    rng = random.Random(_seed_for_user(user_id, "inventory"))
     inv: List[MockNFT] = []
 
     for i in range(count):
@@ -108,41 +108,49 @@ def _get_inventory_map(user_id: int) -> Dict[str, MockNFT]:
     return {n.key: n for n in inv}
 
 
-def _get_or_init_active_deck_keys(user_id: int) -> List[str]:
-    if user_id in _ACTIVE_DECKS and len(_ACTIVE_DECKS[user_id]) == 5:
-        return _ACTIVE_DECKS[user_id]
+def _default_active_deck_keys(user_id: int) -> List[str]:
+    """
+    Детерминированная колода по user_id (не зависит от памяти процесса).
+    """
+    inv = _gen_inventory_for_user(user_id, count=16)
+    keys = [n.key for n in inv]
+    rng = random.Random(_seed_for_user(user_id, "active-deck"))
+    return rng.sample(keys, k=5)
 
-    inv = _gen_inventory_for_user(user_id)
-    keys = [n.key for n in inv[:5]]
-    _ACTIVE_DECKS[user_id] = keys
-    return keys
+
+def _get_active_deck_keys(user_id: int) -> List[str]:
+    """
+    Если пользователь делал PUT /decks/active — используем override из памяти.
+    Иначе — детерминированное значение.
+    """
+    overridden = _ACTIVE_DECKS.get(user_id)
+    if overridden and isinstance(overridden, list) and len(overridden) == 5:
+        return overridden
+    return _default_active_deck_keys(user_id)
 
 
 @router.get("/nfts/my")
 async def my_nfts(current_user: User = Depends(get_current_user)):
-    """Возвращает инвентарь NFT пользователя"""
     user_id = int(current_user.id)
     items = _gen_inventory_for_user(user_id, count=16)
-    return {"items": [n.dict() for n in items]}
+    return {"items": [n.model_dump() for n in items]}
 
 
 @router.get("/decks/active")
 async def get_active_deck(current_user: User = Depends(get_current_user)):
-    """Возвращает ключи активной колоды (5 карт)"""
     user_id = int(current_user.id)
-    keys = _get_or_init_active_deck_keys(user_id)
+    keys = _get_active_deck_keys(user_id)
     return {"cards": keys}
 
 
 @router.put("/decks/active")
-async def put_active_deck(payload=Body(...), current_user: User = Depends(get_current_user)):
+async def put_active_deck(payload: Any = Body(...), current_user: User = Depends(get_current_user)):
     """
     Обновляет активную колоду.
     Принимает: ["key1","key2",...] или {"cards":[...]}
     """
     user_id = int(current_user.id)
 
-    # Поддержка обоих форматов
     if isinstance(payload, dict) and "cards" in payload:
         keys = payload["cards"]
     elif isinstance(payload, list):
@@ -150,7 +158,7 @@ async def put_active_deck(payload=Body(...), current_user: User = Depends(get_cu
     else:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Payload must be a list of 5 keys or {'cards': [...]}"
+            detail="Payload must be a list of 5 keys or {'cards': [...]}",
         )
 
     if not isinstance(keys, list) or len(keys) != 5:
@@ -167,17 +175,19 @@ async def put_active_deck(payload=Body(...), current_user: User = Depends(get_cu
 
 @router.get("/decks/active/full")
 async def get_active_deck_full(current_user: User = Depends(get_current_user)):
-    """Возвращает полные данные активной колоды (5 NFT объектов) для Game"""
+    """
+    ВАЖНО: возвращает МАССИВ из 5 NFT объектов (без обёртки),
+    чтобы фронт мог сделать setPlayerDeck(data) и передать в <Game />.
+    """
     user_id = int(current_user.id)
-    keys = _get_or_init_active_deck_keys(user_id)
-
+    keys = _get_active_deck_keys(user_id)
     inv_map = _get_inventory_map(user_id)
-    full: List[MockNFT] = []
 
+    full: List[MockNFT] = []
     for k in keys:
         nft = inv_map.get(k)
         if nft is None:
             raise HTTPException(status_code=500, detail=f"Active deck contains unknown key: {k}")
         full.append(nft)
 
-    return {"cards": [n.dict() for n in full]}
+    return [n.model_dump() for n in full]

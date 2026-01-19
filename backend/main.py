@@ -4,7 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 # Абсолютные импорты (БЕЗ точек!)
 from api.auth import router as auth_router
 from api.users import router as users_router
-from routers import mock_nfts
+from api.websocket import router as websocket_router
+from routers.mock_nfts import router as mock_nfts_router
 
 app = FastAPI()
 
@@ -17,13 +18,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Health check
+# Health check (это ОК — не дублирует include_router)
 @app.get("/health")
 async def health():
-    return {"status": "ok", "build": "v4-clean"}
+    return {"status": "ok", "build": "v5-ws-fix"}
 
-# Подключаем роутеры
+# Подключаем роутеры (ВАЖНО: только include_router, без дублей @app.get для тех же путей)
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(websocket_router)
-app.include_router(mock_nfts.router)
+app.include_router(mock_nfts_router)
