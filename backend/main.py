@@ -4,7 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 # Абсолютные импорты (БЕЗ точек!)
 from api.auth import router as auth_router
 from api.users import router as users_router
-from api.websocket_server import router as websocket_router
 from routers import mock_nfts
 
 app = FastAPI()
