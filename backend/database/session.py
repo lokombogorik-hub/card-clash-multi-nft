@@ -1,4 +1,5 @@
 import os
+import hashlib
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.engine.url import URL, make_url
@@ -10,7 +11,13 @@ if not DATABASE_URL:
 url: URL = make_url(DATABASE_URL)
 
 
-# ЖЕЛЕЗНЫЙ дебаг: print гарантированно виден в Render logs
+def _pw_fingerprint(pw: str | None) -> str:
+    if not pw:
+        return "none"
+    return hashlib.sha256(pw.encode("utf-8")).hexdigest()[:12]
+
+
+# ЖЁСТКИЙ дебаг: видно host/user/длину и отпечаток пароля
 if (os.getenv("DB_DEBUG", "") or "").strip() == "1":
     try:
         print("[DB_DEBUG] url =", url.render_as_string(hide_password=True))
@@ -21,6 +28,7 @@ if (os.getenv("DB_DEBUG", "") or "").strip() == "1":
     print("[DB_DEBUG] host =", url.host)
     print("[DB_DEBUG] db   =", url.database)
     print("[DB_DEBUG] password_len =", len(url.password or ""))
+    print("[DB_DEBUG] password_sha256_12 =", _pw_fingerprint(url.password))
     print("[DB_DEBUG] query_keys =", list(dict(url.query).keys()))
 
 # Используем psycopg (как в локальном тесте), а не asyncpg
@@ -28,8 +36,6 @@ if url.drivername in ("postgres", "postgresql", "postgresql+psycopg2", "postgres
     url = url.set(drivername="postgresql+psycopg")
 
 # ВАЖНО: не вычищаем query, оставляем ?sslmode=require и т.п.
-# psycopg понимает sslmode сам (как твой локальный тест)
-
 engine = create_async_engine(
     str(url),
     echo=False,
