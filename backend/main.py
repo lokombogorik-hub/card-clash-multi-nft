@@ -17,7 +17,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -29,7 +29,7 @@ async def health():
 # Подключаем auth/users под /api
 app.include_router(auth_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
-
+app.include_router(mock_nfts.router)
 
 # !!! ВРЕМЕННО: in-memory storage по user_id (потом заменим на Postgres)
 ACTIVE_DECK: Dict[int, List[str]] = {}
@@ -130,24 +130,6 @@ def _get_or_init_deck(user_id: int) -> List[str]:
   ACTIVE_DECK[user_id] = keys
   return keys
 
-
-@app.get("/api/nfts/my", response_model=NftList)
-async def my_nfts(user=Depends(get_current_user)):
-  items = _inventory_for_user(int(user.id), count=16)
-  return {"items": items}
-
-
-@app.get("/api/decks/active", response_model=DeckOut)
-async def get_active_deck(user=Depends(get_current_user)):
-  cards = _get_or_init_deck(int(user.id))
-  return {"cards": cards}
-
-
-@app.put("/api/decks/active", response_model=DeckOut)
-async def put_active_deck(payload: DeckIn, user=Depends(get_current_user)):
-  if len(payload.cards) != 5:
-    raise HTTPException(status_code=400, detail="Deck must contain exactly 5 cards")
-
   inv = _inventory_map(int(user.id))
   missing = [k for k in payload.cards if k not in inv]
   if missing:
@@ -155,12 +137,3 @@ async def put_active_deck(payload: DeckIn, user=Depends(get_current_user)):
 
   ACTIVE_DECK[int(user.id)] = payload.cards
   return {"cards": payload.cards}
-
-
-@app.get("/api/decks/active/full", response_model=DeckFullOut)
-async def get_active_deck_full(user=Depends(get_current_user)):
-  user_id = int(user.id)
-  keys = _get_or_init_deck(user_id)
-  inv = _inventory_map(user_id)
-  full = [inv[k] for k in keys]
-  return {"cards": full}

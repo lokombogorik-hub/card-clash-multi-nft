@@ -38,28 +38,28 @@ const ART = [
 /* =========================
    8 Elements (FF-style)
    ========================= */
-const ELEMENTS = ["earth", "fire", "water", "poison", "holy", "thunder", "wind", "ice"];
+const ELEMENTS = ["Earth", "Fire", "Water", "Poison", "Holy", "Thunder", "Wind", "Ice"];
 const ELEM_ICON = {
-    earth: "🟫",
-    fire: "🔥",
-    water: "💧",
-    poison: "☠️",
-    holy: "✨",
-    thunder: "⚡",
-    wind: "🌪️",
-    ice: "❄️",
+    Earth: "🟫",
+    Fire: "🔥",
+    Water: "💧",
+    Poison: "☠️",
+    Holy: "✨",
+    Thunder: "⚡",
+    Wind: "🌪️",
+    Ice: "❄️",
 };
 
-/* Вариация “кто кого бьёт” (house-rule), только из этих 8 */
+/* Вариация "кто кого бьёт" (house-rule), только из этих 8 */
 const BEATS = {
-    earth: ["thunder"],
-    thunder: ["water"],
-    water: ["fire"],
-    fire: ["ice"],
-    ice: ["wind"],
-    wind: ["poison"],
-    poison: ["holy"],
-    holy: ["earth"],
+    Earth: ["Thunder"],
+    Thunder: ["Water"],
+    Water: ["Fire"],
+    Fire: ["Ice"],
+    Ice: ["Wind"],
+    Wind: ["Poison"],
+    Poison: ["Holy"],
+    Holy: ["Earth"],
 };
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -68,7 +68,7 @@ const pick = (arr) => arr[(Math.random() * arr.length) | 0];
 const randomFirstTurn = () => (Math.random() < 0.5 ? "player" : "enemy");
 const showVal = (v) => (v === 10 ? "A" : String(v));
 
-/* ranks for random enemy/cards (until near integration) */
+/* ranks for random enemy cards */
 const RANKS = [
     { key: "common", label: "C", weight: 50, min: 1, max: 7, elemChance: 0.6 },
     { key: "rare", label: "R", weight: 30, min: 2, max: 8, elemChance: 0.7 },
@@ -301,34 +301,60 @@ function cloneDeckToHand(deck, owner) {
     return deck.map((c) => ({ ...c, owner, placeKey: 0, captureKey: 0 }));
 }
 
-const rankLabelFromRank = (r) => ({ common: "C", rare: "R", epic: "E", legendary: "L" }[r] || "C");
-
-function nftToCard(n, owner) {
+/* =========================
+   Конвертация NFT в формат карты
+   ========================= */
+function nftToCard(nft, idx) {
     return {
-        id: `${n.chain}:${n.contractId}:${n.tokenId}`,
-        owner,
-        values: { ...n.stats },
-        imageUrl: n.imageUrl || ART[0],
-        rank: n.rank,
-        rankLabel: n.rankLabel || rankLabelFromRank(n.rank),
-        element: n.element || null,
+        id: nft.key || nft.tokenId || `nft_${idx}`,
+        owner: "player",
+        values: nft.stats || { top: 5, right: 5, bottom: 5, left: 5 },
+        imageUrl: nft.imageUrl || ART[0],
+        rank: nft.rank || "common",
+        rankLabel: nft.rankLabel || "C",
+        element: nft.element || null,
         placeKey: 0,
         captureKey: 0,
+        nftData: nft,
     };
 }
 
 /* =========================
-   Game (match to 3)
+   Game Component
    ========================= */
 export default function Game({ onExit, me, playerDeck }) {
     const aiGuard = useRef({ handled: false });
     const revealTimerRef = useRef(null);
 
-    // IMPORTANT: player deck comes from props (inventory -> backend -> App -> Game)
+    // ==================== ВАЛИДАЦИЯ playerDeck ====================
+    if (!playerDeck || !Array.isArray(playerDeck) || playerDeck.length !== 5) {
+        return (
+            <div className="game-root">
+                <div className="game-ui tt-layout">
+                    <button className="exit" onClick={onExit}>
+                        ← Меню
+                    </button>
+                    <div
+                        style={{
+                            color: "#fff",
+                            padding: 20,
+                            textAlign: "center",
+                            gridColumn: "1 / -1",
+                            fontSize: 14,
+                        }}
+                    >
+                        ⚠️ Ошибка: активная колода не содержит 5 карт.
+                        <br />
+                        Вернитесь в Инвентарь и выберите 5 NFT.
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // ==================== STATE ====================
     const [decks, setDecks] = useState(() => ({
-        player: Array.isArray(playerDeck) && playerDeck.length === 5
-            ? playerDeck.map((n) => nftToCard(n, "player"))
-            : Array.from({ length: 5 }, (_, i) => genCard("player", `p${i}`)),
+        player: playerDeck.map((n, idx) => nftToCard(n, idx)),
         enemy: Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`)),
     }));
 
@@ -358,8 +384,21 @@ export default function Game({ onExit, me, playerDeck }) {
     const [enemyRevealId, setEnemyRevealId] = useState(null);
     const [playerSpells, setPlayerSpells] = useState({ freeze: 1, reveal: 1 });
 
+    // ==================== СИНХРОНИЗАЦИЯ playerDeck ====================
+    useEffect(() => {
+        if (!playerDeck || playerDeck.length !== 5) return;
+
+        setDecks((prev) => ({
+            ...prev,
+            player: playerDeck.map((n, idx) => nftToCard(n, idx)),
+        }));
+    }, [playerDeck]);
+
+    // ==================== HELPERS ====================
     const haptic = (kind = "light") => {
-        try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(kind); } catch { }
+        try {
+            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(kind);
+        } catch { }
     };
 
     const clearReveal = () => {
@@ -376,7 +415,6 @@ export default function Game({ onExit, me, playerDeck }) {
         };
     }, []);
 
-    // если decks поменялись (например, новый матч) — пересобираем hands
     useEffect(() => {
         setHands({
             player: cloneDeckToHand(decks.player, "player"),
@@ -419,7 +457,6 @@ export default function Game({ onExit, me, playerDeck }) {
     };
 
     const resetMatch = () => {
-        // player deck остаётся тем, что выбрал игрок; обновим только enemy
         setDecks((d) => ({
             ...d,
             enemy: Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${Date.now()}_${i}`)),
@@ -533,7 +570,7 @@ export default function Game({ onExit, me, playerDeck }) {
         setTurn("enemy");
     };
 
-    // AI turn
+    // ==================== AI TURN ====================
     useEffect(() => {
         if (turn !== "enemy" || roundOver || matchOver) return;
         if (aiGuard.current.handled) return;
@@ -567,7 +604,7 @@ export default function Game({ onExit, me, playerDeck }) {
         return () => clearTimeout(t);
     }, [turn, roundOver, matchOver, board, hands.enemy, frozen, boardElems]);
 
-    // round over when board filled
+    // ==================== ROUND OVER ====================
     useEffect(() => {
         if (roundOver || matchOver) return;
         if (board.some((c) => c === null)) return;
@@ -587,7 +624,7 @@ export default function Game({ onExit, me, playerDeck }) {
         });
     }, [board, roundOver, matchOver, hands.player.length, hands.enemy.length]);
 
-    // match over detector
+    // ==================== MATCH OVER ====================
     useEffect(() => {
         if (matchOver) return;
         if (series.player >= MATCH_WINS_TARGET || series.enemy >= MATCH_WINS_TARGET) {
@@ -597,13 +634,15 @@ export default function Game({ onExit, me, playerDeck }) {
         }
     }, [series, matchOver]);
 
-    // FX
+    // ==================== CONFETTI ====================
     useEffect(() => {
         if (!roundOver) return;
         if (roundWinner !== "player") return;
 
         const safe = (opts) => {
-            try { confetti({ zIndex: 99999, ...opts }); } catch { }
+            try {
+                confetti({ zIndex: 99999, ...opts });
+            } catch { }
         };
 
         const origin = { x: 0.5, y: 0.35 };
@@ -646,13 +685,20 @@ export default function Game({ onExit, me, playerDeck }) {
         haptic("medium");
     };
 
+    // ==================== RENDER ====================
     return (
         <div className="game-root">
             <div className="game-ui tt-layout">
-                <button className="exit" onClick={onExit}>← Меню</button>
+                <button className="exit" onClick={onExit}>
+                    ← Меню
+                </button>
 
-                <div className="hud-corner hud-score red hud-near-left">🟥 {score.red}·{series.enemy}</div>
-                <div className="hud-corner hud-score blue hud-near-right">{series.player}·{score.blue} 🟦</div>
+                <div className="hud-corner hud-score red hud-near-left">
+                    🟥 {score.red}·{series.enemy}
+                </div>
+                <div className="hud-corner hud-score blue hud-near-right">
+                    {series.player}·{score.blue} 🟦
+                </div>
 
                 <PlayerBadge side="enemy" name={enemyName} avatarUrl={enemyAvatar} active={turn === "enemy"} />
                 <PlayerBadge side="player" name={myName} avatarUrl={myAvatar} active={turn === "player"} />
@@ -664,7 +710,11 @@ export default function Game({ onExit, me, playerDeck }) {
                             const { col, row } = posForHandIndex(i);
                             const isRevealed = enemyRevealId === c.id;
                             return (
-                                <div key={c.id} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
+                                <div
+                                    key={c.id}
+                                    className={`hand-slot col${col}`}
+                                    style={{ gridColumn: col, gridRow: row }}
+                                >
                                     {isRevealed ? <Card card={c} disabled /> : <Card hidden />}
                                 </div>
                             );
@@ -681,7 +731,7 @@ export default function Game({ onExit, me, playerDeck }) {
                     </div>
                 </div>
 
-                {/* CENTER */}
+                {/* CENTER BOARD */}
                 <div className="center-col">
                     <div className="board">
                         {board.map((cell, i) => {
@@ -732,7 +782,11 @@ export default function Game({ onExit, me, playerDeck }) {
                         {hands.player.map((c, i) => {
                             const { col, row } = posForHandIndex(i);
                             return (
-                                <div key={c.id} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
+                                <div
+                                    key={c.id}
+                                    className={`hand-slot col${col}`}
+                                    style={{ gridColumn: col, gridRow: row }}
+                                >
                                     <Card
                                         card={c}
                                         selected={selected?.id === c.id}
@@ -767,6 +821,7 @@ export default function Game({ onExit, me, playerDeck }) {
                     </div>
                 </div>
 
+                {/* GAME OVER OVERLAY */}
                 {(roundOver || matchOver) && (
                     <div className="game-over">
                         <div className="game-over-box" style={{ minWidth: 320 }}>
@@ -787,7 +842,9 @@ export default function Game({ onExit, me, playerDeck }) {
                             {matchOver && matchWinner && loserSide && (
                                 <>
                                     <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 8 }}>
-                                        {matchWinner === "player" ? "Выбери 1 NFT соперника" : "Соперник забирает 1 твою NFT"}
+                                        {matchWinner === "player"
+                                            ? "Выбери 1 NFT соперника"
+                                            : "Соперник забирает 1 твою NFT"}
                                     </div>
 
                                     {matchWinner === "player" ? (
@@ -838,7 +895,15 @@ export default function Game({ onExit, me, playerDeck }) {
                                 </>
                             )}
 
-                            <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 10, flexWrap: "wrap" }}>
+                            <div
+                                style={{
+                                    display: "flex",
+                                    gap: 10,
+                                    justifyContent: "center",
+                                    marginTop: 10,
+                                    flexWrap: "wrap",
+                                }}
+                            >
                                 {!matchOver && <button onClick={onNextRound}>Следующий раунд</button>}
                                 {matchOver && <button onClick={resetMatch}>Новый матч</button>}
                                 <button onClick={onExit}>Меню</button>
@@ -852,7 +917,7 @@ export default function Game({ onExit, me, playerDeck }) {
 }
 
 /* =========================
-   Player badge
+   Player Badge
    ========================= */
 function PlayerBadge({ side, name, avatarUrl, active }) {
     const [imgOk, setImgOk] = useState(Boolean(avatarUrl));
@@ -878,7 +943,7 @@ function PlayerBadge({ side, name, avatarUrl, active }) {
 }
 
 /* =========================
-   Card
+   Card Component
    ========================= */
 function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
     const [placedAnim, setPlacedAnim] = useState(false);
@@ -902,7 +967,12 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
         return (
             <div className="card back" aria-hidden="true">
                 <div className="card-back-inner">
-                    <img className="card-back-logo-img" src="/ui/cardclash-logo.png?v=3" alt="CardClash" draggable="false" />
+                    <img
+                        className="card-back-logo-img"
+                        src="/ui/cardclash-logo.png?v=3"
+                        alt="CardClash"
+                        draggable="false"
+                    />
                 </div>
             </div>
         );

@@ -38,17 +38,15 @@ function readTelegramUser() {
 }
 
 export default function App() {
-    const [screen, setScreen] = useState("home"); // home | market | inventory | profile | game
+    const [screen, setScreen] = useState("home");
     const isLandscape = useIsLandscape();
 
     const [token, setToken] = useState(null);
     const [me, setMe] = useState(null);
-
-    const [activeDeckCards, setActiveDeckCards] = useState(null);
+    const [playerDeck, setPlayerDeck] = useState(null);
 
     const logoRef = useRef(null);
     const [logoOk, setLogoOk] = useState(true);
-
     const bottomStackRef = useRef(null);
 
     const debugEnabled = useMemo(() => {
@@ -67,11 +65,10 @@ export default function App() {
         return vv !== "0" && vv !== "false";
     }, []);
 
-    // IMPORTANT: покажем, подхватился ли Vercel env
     const apiBase = import.meta.env.VITE_API_BASE_URL || "";
 
     const [authState, setAuthState] = useState({
-        status: "idle", // idle | loading | ok | err
+        status: "idle",
         error: "",
     });
 
@@ -92,10 +89,10 @@ export default function App() {
             const tg = window.Telegram?.WebApp;
             const initData = tg?.initData || "";
 
-            // tgWebAppData иногда лежит в hash (#...), поэтому читаем и search, и hash
             const fromSearch = window.location.search || "";
             const fromHash = window.location.hash || "";
-            const combined = (fromSearch.startsWith("?") ? fromSearch.slice(1) : fromSearch) +
+            const combined =
+                (fromSearch.startsWith("?") ? fromSearch.slice(1) : fromSearch) +
                 "&" +
                 (fromHash.startsWith("#") ? fromHash.slice(1) : fromHash);
 
@@ -217,8 +214,7 @@ export default function App() {
             tg?.expand?.();
         } catch { }
         try {
-            if (!document.fullscreenElement)
-                await document.documentElement.requestFullscreen?.();
+            if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.();
         } catch { }
     };
 
@@ -227,7 +223,6 @@ export default function App() {
         try {
             const r = await apiFetch("/api/decks/active/full", { token });
 
-            // backend может вернуть массив или {cards:[...]}
             const cards = Array.isArray(r) ? r : Array.isArray(r?.cards) ? r.cards : null;
 
             if (Array.isArray(cards) && cards.length === 5) return cards;
@@ -247,11 +242,14 @@ export default function App() {
             return;
         }
 
-        setActiveDeckCards(deck);
+        setPlayerDeck(deck);
         setScreen("game");
     };
 
-    const onExitGame = () => setScreen("home");
+    const onExitGame = () => {
+        setScreen("home");
+        setPlayerDeck(null);
+    };
 
     const onConnectWallet = () => {
         try {
@@ -272,40 +270,34 @@ export default function App() {
             <div className="shell">
                 <StormBg />
                 <div className={`game-host ${showRotate ? "is-hidden" : ""}`}>
-                    <Game onExit={onExitGame} me={me} playerDeck={activeDeckCards} />
-                    {debugEnabled && (
-                        <div
-                            style={{
-                                position: "fixed",
-                                left: 10,
-                                bottom: 10,
-                                zIndex: 999999,
-                                background: "rgba(0,0,0,0.85)",
-                                color: "#fff",
-                                padding: 10,
-                                borderRadius: 8,
-                                width: 460,
-                                maxWidth: "95vw",
-                                fontSize: 12,
-                            }}
-                        >
-                            <div style={{ fontWeight: 700, marginBottom: 6 }}>DEBUG</div>
-
-                            <div>VITE_API_BASE_URL: {apiBase || "(empty!)"}</div>
-                            <div>
-                                token length: {token ? token.length : 0} | auth: {authState.status}
-                            </div>
-                            {authState.error ? (
-                                <div style={{ color: "#ffb3b3" }}>auth error: {authState.error}</div>
-                            ) : null}
-
-                            <div style={{ marginTop: 6 }}>window.Telegram: {String(dbg.hasTelegram)}</div>
-                            <div>Telegram.WebApp: {String(dbg.hasWebApp)}</div>
-                            <div>initData length: {dbg.initDataLen}</div>
-                        </div>
+                    {playerDeck ? (
+                        <Game onExit={onExitGame} me={me} playerDeck={playerDeck} />
+                    ) : (
+                        <div style={{ color: "#fff", padding: 20 }}>Loading deck...</div>
                     )}
                 </div>
                 {showRotate && <RotateGate onBack={onExitGame} />}
+
+                {debugEnabled && (
+                    <div
+                        style={{
+                            position: "fixed",
+                            left: 10,
+                            bottom: 10,
+                            zIndex: 999999,
+                            background: "rgba(0,0,0,0.85)",
+                            color: "#fff",
+                            padding: 10,
+                            borderRadius: 8,
+                            width: 460,
+                            maxWidth: "95vw",
+                            fontSize: 12,
+                        }}
+                    >
+                        <div style={{ fontWeight: 700, marginBottom: 6 }}>DEBUG (Game)</div>
+                        <div>playerDeck: {playerDeck ? `${playerDeck.length} cards` : "null"}</div>
+                    </div>
+                )}
             </div>
         );
     }
@@ -412,10 +404,6 @@ export default function App() {
                     <pre style={{ fontSize: 10, whiteSpace: "pre-wrap" }}>
                         {JSON.stringify(dbg.initDataUnsafeUser, null, 2)}
                     </pre>
-
-                    <div style={{ fontSize: 10, opacity: 0.75 }}>
-                        Если VITE_API_BASE_URL пустой — переменная на Vercel не применена (нужен Redeploy).
-                    </div>
                 </div>
             )}
         </div>
@@ -482,7 +470,6 @@ function BottomNav({ active, onChange }) {
     );
 }
 
-/* Icons */
 function PlayIcon() {
     return (
         <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
