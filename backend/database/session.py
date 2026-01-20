@@ -1,5 +1,4 @@
 import os
-import ssl
 import hashlib
 
 from sqlalchemy.engine.url import make_url
@@ -16,7 +15,7 @@ def _build_database_url() -> str:
     """
     Приоритет:
     1) DATABASE_URL если задан
-    2) PG* переменные (Railway обычно их даёт: PGHOST/PGPORT/PGDATABASE/PGUSER/PGPASSWORD)
+    2) PG* переменные (Railway): PGHOST/PGPORT/PGDATABASE/PGUSER/PGPASSWORD
     """
     raw = (os.getenv("DATABASE_URL", "") or "").strip()
     if raw:
@@ -37,23 +36,11 @@ def _build_database_url() -> str:
 DATABASE_URL = _build_database_url()
 url = make_url(DATABASE_URL)
 
-# Включаем sslmode=require если его нет (для внешнего подключения к Railway proxy)
+# Если sslmode не задан — добавим require (Railway public proxy обычно требует SSL)
 raw_query = dict(url.query)
 sslmode = (raw_query.get("sslmode") or "").lower()
-
-connect_args = {}
-
-# Railway public proxy часто требует SSL, подстрахуемся
 if not sslmode:
-    # добавим sslmode=require прямо в URL
-    url = url.set(query={"sslmode": "require"})
-else:
-    # оставляем как есть
-    pass
-
-# psycopg умеет sslmode сам, connect_args не обязателен, но пусть будет совместимо
-if (dict(url.query).get("sslmode") or "").lower() in ("require", "verify-ca", "verify-full"):
-    connect_args["ssl"] = ssl.create_default_context()
+    url = url.set(query={**raw_query, "sslmode": "require"})
 
 # Нормализуем драйвер на psycopg
 if url.drivername in ("postgres", "postgresql", "postgresql+psycopg2", "postgresql+asyncpg"):
@@ -72,12 +59,10 @@ if (os.getenv("DB_DEBUG", "") or "").strip() == "1":
     print("[DB_DEBUG] password_sha256_12 =", _pw_fingerprint(url.password))
     print("[DB_DEBUG] query_keys =", list(dict(url.query).keys()))
 
-
 engine = create_async_engine(
     str(url),
     echo=False,
     pool_pre_ping=True,
-    connect_args=connect_args,
 )
 
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
