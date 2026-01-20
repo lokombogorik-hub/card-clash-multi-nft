@@ -38,9 +38,11 @@ url = make_url(DATABASE_URL)
 
 # Если sslmode не задан — добавим require (Railway public proxy обычно требует SSL)
 raw_query = dict(url.query)
-sslmode = (raw_query.get("sslmode") or "").lower()
-if not sslmode:
-    url = url.set(query={**raw_query, "sslmode": "require"})
+if not (raw_query.get("sslmode") or ""):
+    raw_query["sslmode"] = "require"
+if not (raw_query.get("connect_timeout") or ""):
+    raw_query["connect_timeout"] = "10"
+url = url.set(query=raw_query)
 
 # Нормализуем драйвер на psycopg
 if url.drivername in ("postgres", "postgresql", "postgresql+psycopg2", "postgresql+asyncpg"):
