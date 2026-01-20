@@ -1,14 +1,9 @@
 import os
+import ssl
 import hashlib
 
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.engine.url import URL, make_url
-
-DATABASE_URL = (os.getenv("DATABASE_URL", "") or "").strip()
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL is not set")
-
-url: URL = make_url(DATABASE_URL)
 
 
 def _pw_fingerprint(pw: str | None) -> str:
@@ -17,7 +12,53 @@ def _pw_fingerprint(pw: str | None) -> str:
     return hashlib.sha256(pw.encode("utf-8")).hexdigest()[:12]
 
 
-# ЖЁСТКИЙ дебаг: видно host/user/длину и отпечаток пароля
+def _build_database_url() -> str:
+    """
+    Приоритет:
+    1) DATABASE_URL если задан
+    2) PG* переменные (Railway обычно их даёт: PGHOST/PGPORT/PGDATABASE/PGUSER/PGPASSWORD)
+    """
+    raw = (os.getenv("DATABASE_URL", "") or "").strip()
+    if raw:
+        return raw
+
+    pghost = (os.getenv("PGHOST", "") or "").strip()
+    pgport = (os.getenv("PGPORT", "") or "5432").strip()
+    pgdb = (os.getenv("PGDATABASE", "") or "").strip()
+    pguser = (os.getenv("PGUSER", "") or "").strip()
+    pgpass = (os.getenv("PGPASSWORD", "") or "").strip()
+
+    if not (pghost and pgdb and pguser and pgpass):
+        raise RuntimeError("DATABASE_URL is not set and PG* variables are incomplete")
+
+    return f"postgresql://{pguser}:{pgpass}@{pghost}:{pgport}/{pgdb}"
+
+
+DATABASE_URL = _build_database_url()
+url = make_url(DATABASE_URL)
+
+# Включаем sslmode=require если его нет (для внешнего подключения к Railway proxy)
+raw_query = dict(url.query)
+sslmode = (raw_query.get("sslmode") or "").lower()
+
+connect_args = {}
+
+# Railway public proxy часто требует SSL, подстрахуемся
+if not sslmode:
+    # добавим sslmode=require прямо в URL
+    url = url.set(query={"sslmode": "require"})
+else:
+    # оставляем как есть
+    pass
+
+# psycopg умеет sslmode сам, connect_args не обязателен, но пусть будет совместимо
+if (dict(url.query).get("sslmode") or "").lower() in ("require", "verify-ca", "verify-full"):
+    connect_args["ssl"] = ssl.create_default_context()
+
+# Нормализуем драйвер на psycopg
+if url.drivername in ("postgres", "postgresql", "postgresql+psycopg2", "postgresql+asyncpg"):
+    url = url.set(drivername="postgresql+psycopg")
+
 if (os.getenv("DB_DEBUG", "") or "").strip() == "1":
     try:
         print("[DB_DEBUG] url =", url.render_as_string(hide_password=True))
@@ -31,15 +72,12 @@ if (os.getenv("DB_DEBUG", "") or "").strip() == "1":
     print("[DB_DEBUG] password_sha256_12 =", _pw_fingerprint(url.password))
     print("[DB_DEBUG] query_keys =", list(dict(url.query).keys()))
 
-# Используем psycopg (как в локальном тесте), а не asyncpg
-if url.drivername in ("postgres", "postgresql", "postgresql+psycopg2", "postgresql+asyncpg"):
-    url = url.set(drivername="postgresql+psycopg")
 
-# ВАЖНО: не вычищаем query, оставляем ?sslmode=require и т.п.
 engine = create_async_engine(
     str(url),
     echo=False,
     pool_pre_ping=True,
+    connect_args=connect_args,
 )
 
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
