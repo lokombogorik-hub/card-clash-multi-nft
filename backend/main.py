@@ -8,6 +8,7 @@ from api.auth import router as auth_router
 from api.users import router as users_router
 from api.websocket import router as websocket_router
 from routers.mock_nfts import router as mock_nfts_router
+from api.db_ping import router as db_ping_router
 
 from database.session import engine
 from database.models.user import User
@@ -43,3 +44,4 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
 app.include_router(websocket_router, prefix="/api")
 app.include_router(mock_nfts_router)
+app.include_router(db_ping_router, prefix="/api")
