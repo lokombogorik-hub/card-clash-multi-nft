@@ -50,6 +50,9 @@ export default function App() {
     const [logoOk, setLogoOk] = useState(true);
     const bottomStackRef = useRef(null);
 
+    // показываем коннектор только на главной, чтобы не мешал в инвентаре/игре
+    const showWalletConnector = screen === "home";
+
     const debugEnabled = useMemo(() => {
         const fromSearch = window.location.search || "";
         const fromHash = window.location.hash || "";
@@ -159,7 +162,8 @@ export default function App() {
                     body: JSON.stringify({ initData }),
                 });
 
-                const accessToken = r?.accessToken || r?.access_token || r?.token || null;
+                const accessToken =
+                    r?.accessToken || r?.access_token || r?.token || null;
                 setToken(accessToken);
 
                 if (accessToken) {
@@ -216,7 +220,8 @@ export default function App() {
             tg?.expand?.();
         } catch { }
         try {
-            if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.();
+            if (!document.fullscreenElement)
+                await document.documentElement.requestFullscreen?.();
         } catch { }
     };
 
@@ -254,7 +259,11 @@ export default function App() {
     const showRotate = screen === "game" && !isLandscape;
 
     const seasonInfo = useMemo(
-        () => ({ title: "Digitall Bunny Турнир", subtitle: "Ends in 3d 12h", progress: 0.62 }),
+        () => ({
+            title: "Digitall Bunny Турнир",
+            subtitle: "Ends in 3d 12h",
+            progress: 0.62,
+        }),
         []
     );
 
@@ -262,7 +271,7 @@ export default function App() {
         return (
             <div className="shell">
                 <StormBg />
-                <WalletConnector />
+                {showWalletConnector ? <WalletConnector /> : null}
 
                 <div className={`game-host ${showRotate ? "is-hidden" : ""}`}>
                     {playerDeck ? (
@@ -291,7 +300,9 @@ export default function App() {
                         }}
                     >
                         <div style={{ fontWeight: 700, marginBottom: 6 }}>DEBUG (Game)</div>
-                        <div>playerDeck: {playerDeck ? `${playerDeck.length} cards` : "null"}</div>
+                        <div>
+                            playerDeck: {playerDeck ? `${playerDeck.length} cards` : "null"}
+                        </div>
                     </div>
                 )}
             </div>
@@ -301,7 +312,7 @@ export default function App() {
     return (
         <div className="shell">
             <StormBg />
-            <WalletConnector />
+            {showWalletConnector ? <WalletConnector /> : null}
 
             <div className="shell-content">
                 {screen === "home" && (
@@ -338,7 +349,9 @@ export default function App() {
                 )}
 
                 {screen === "market" && <Market />}
-                {screen === "inventory" && <Inventory token={token} onDeckReady={() => setScreen("home")} />}
+                {screen === "inventory" && (
+                    <Inventory token={token} onDeckReady={() => setScreen("home")} />
+                )}
                 {screen === "profile" && <Profile token={token} />}
             </div>
 
@@ -374,23 +387,43 @@ export default function App() {
                     <div>
                         token length: {token ? token.length : 0} | auth: {authState.status}
                     </div>
-                    {authState.error ? <div style={{ color: "#ffb3b3" }}>auth error: {authState.error}</div> : null}
+                    {authState.error ? (
+                        <div style={{ color: "#ffb3b3" }}>auth error: {authState.error}</div>
+                    ) : null}
 
-                    <div style={{ marginTop: 6 }}>window.Telegram: {String(dbg.hasTelegram)}</div>
+                    <div style={{ marginTop: 6 }}>
+                        window.Telegram: {String(dbg.hasTelegram)}
+                    </div>
                     <div>Telegram.WebApp: {String(dbg.hasWebApp)}</div>
                     <div>initData length: {dbg.initDataLen}</div>
 
                     <div style={{ marginTop: 6, opacity: 0.9 }}>location.href:</div>
-                    <textarea readOnly value={dbg.href} style={{ width: "100%", height: 70, fontSize: 10 }} />
+                    <textarea
+                        readOnly
+                        value={dbg.href}
+                        style={{ width: "100%", height: 70, fontSize: 10 }}
+                    />
 
                     <div style={{ marginTop: 6, opacity: 0.9 }}>initData:</div>
-                    <textarea readOnly value={dbg.initData} style={{ width: "100%", height: 80, fontSize: 10 }} />
+                    <textarea
+                        readOnly
+                        value={dbg.initData}
+                        style={{ width: "100%", height: 80, fontSize: 10 }}
+                    />
 
-                    <div style={{ marginTop: 6, opacity: 0.9 }}>tgWebAppData (decoded):</div>
-                    <textarea readOnly value={dbg.tgWebAppData} style={{ width: "100%", height: 60, fontSize: 10 }} />
+                    <div style={{ marginTop: 6, opacity: 0.9 }}>
+                        tgWebAppData (decoded):
+                    </div>
+                    <textarea
+                        readOnly
+                        value={dbg.tgWebAppData}
+                        style={{ width: "100%", height: 60, fontSize: 10 }}
+                    />
 
                     <div style={{ marginTop: 6, opacity: 0.9 }}>initDataUnsafe.user:</div>
-                    <pre style={{ fontSize: 10, whiteSpace: "pre-wrap" }}>{JSON.stringify(dbg.initDataUnsafeUser, null, 2)}</pre>
+                    <pre style={{ fontSize: 10, whiteSpace: "pre-wrap" }}>
+                        {JSON.stringify(dbg.initDataUnsafeUser, null, 2)}
+                    </pre>
                 </div>
             )}
         </div>
@@ -402,7 +435,9 @@ function RotateGate({ onBack }) {
         <div className="rotate-gate">
             <div className="rotate-gate-box">
                 <div className="rotate-title">Поверни телефон</div>
-                <div className="rotate-subtitle">Игра работает только в горизонтальном режиме</div>
+                <div className="rotate-subtitle">
+                    Игра работает только в горизонтальном режиме
+                </div>
                 <div className="rotate-phone" />
                 <button onClick={onBack}>← Меню</button>
             </div>
@@ -420,7 +455,10 @@ function SeasonBar({ title, subtitle, progress, onRefresh }) {
 
             <div className="season-right">
                 <div className="season-progress">
-                    <div className="season-progress-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
+                    <div
+                        className="season-progress-fill"
+                        style={{ width: `${Math.round(progress * 100)}%` }}
+                    />
                 </div>
                 <button className="icon-btn" onClick={onRefresh} aria-label="Refresh">
                     ⟳
@@ -443,7 +481,11 @@ function BottomNav({ active, onChange }) {
             {items.map((it) => {
                 const isActive = active === it.key;
                 return (
-                    <button key={it.key} className={`nav-item ${isActive ? "active" : ""}`} onClick={() => onChange(it.key)}>
+                    <button
+                        key={it.key}
+                        className={`nav-item ${isActive ? "active" : ""}`}
+                        onClick={() => onChange(it.key)}
+                    >
                         <span className="nav-ic">{it.icon}</span>
                         <span className="nav-txt">{it.label}</span>
                     </button>
@@ -456,7 +498,11 @@ function BottomNav({ active, onChange }) {
 function PlayIcon() {
     return (
         <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
-            <path d="M9 7.5v9l8-4.5-8-4.5Z" fill="white" opacity="0.95" />
+            <path
+                d="M9 7.5v9l8-4.5-8-4.5Z"
+                fill="white"
+                opacity="0.95"
+            />
         </svg>
     );
 }
@@ -475,7 +521,12 @@ function HomeIcon() {
 function GemIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2 3 9l9 13 9-13-9-7Z" stroke="white" strokeWidth="2" opacity="0.9" />
+            <path
+                d="M12 2 3 9l9 13 9-13-9-7Z"
+                stroke="white"
+                strokeWidth="2"
+                opacity="0.9"
+            />
             <path d="M3 9h18" stroke="white" strokeWidth="2" opacity="0.6" />
         </svg>
     );
@@ -483,8 +534,15 @@ function GemIcon() {
 function BagIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M6 8h12l-1 13H7L6 8Z" stroke="white" strokeWidth="2" opacity="0.9" />
-            <path d="M9 8a3 3 0 0 1 6 0" stroke="white"
+            <path
+                d="M6 8h12l-1 13H7L6 8Z"
+                stroke="white"
+                strokeWidth="2"
+                opacity="0.9"
+            />
+            <path
+                d="M9 8a3 3 0 0 1 6 0"
+                stroke="white"
                 strokeWidth="2"
                 strokeLinecap="round"
                 opacity="0.9"
@@ -495,8 +553,19 @@ function BagIcon() {
 function UserIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" stroke="white" strokeWidth="2" opacity="0.9" />
-            <path d="M4 20a8 8 0 0 1 16 0" stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.9" />
+            <path
+                d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z"
+                stroke="white"
+                strokeWidth="2"
+                opacity="0.9"
+            />
+            <path
+                d="M4 20a8 8 0 0 1 16 0"
+                stroke="white"
+                strokeWidth="2"
+                strokeLinecap="round"
+                opacity="0.9"
+            />
         </svg>
     );
 }

@@ -29,6 +29,14 @@ function getRpcUrl(networkId) {
         : "https://rpc.mainnet.near.org";
 }
 
+function isTelegramWebApp() {
+    try {
+        return !!window.Telegram?.WebApp;
+    } catch {
+        return false;
+    }
+}
+
 function yoctoToNearFloat(yoctoStr) {
     try {
         const yocto = BigInt(yoctoStr || "0");
@@ -36,7 +44,7 @@ function yoctoToNearFloat(yoctoStr) {
         const whole = yocto / base;
         const frac = yocto % base;
 
-        // первые 6 знаков после запятой
+        // первые 6 знаков после запятой (дальше UI сделает toFixed(4))
         const fracStr = frac.toString().padStart(24, "0").slice(0, 6);
         return Number(`${whole.toString()}.${fracStr}`);
     } catch {
@@ -78,7 +86,7 @@ async function fetchNearBalance(networkId, accountId) {
 let state = {
     connected: false,
     walletAddress: "",
-    network: "near", // для вашего UI
+    network: "near", // для текущего UI
     nearNetworkId: getNearNetworkId(), // mainnet | testnet
     balance: 0,
     availableNetworks: ["near"],
@@ -103,6 +111,33 @@ let nearInitPromise = null;
 let selector = null;
 let modal = null;
 let storeSubscription = null;
+
+function syncFromUrlIfPresent() {
+    // после возврата с кошелька иногда прилетает account_id в query
+    // + убираем “стремную” ссылку из адресной строки
+    try {
+        const url = new URL(window.location.href);
+
+        const accountId =
+            url.searchParams.get("account_id") ||
+            url.searchParams.get("accountId") ||
+            "";
+
+        if (!accountId) return;
+
+        setState({ connected: true, walletAddress: accountId });
+
+        fetchNearBalance(getNearNetworkId(), accountId)
+            .then((b) => setState({ balance: b }))
+            .catch(() => setState({ balance: 0 }));
+
+        url.searchParams.delete("account_id");
+        url.searchParams.delete("accountId");
+        window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+    } catch {
+        // ignore
+    }
+}
 
 async function ensureNear() {
     if (selector && modal) return { selector, modal };
@@ -168,6 +203,9 @@ async function ensureNear() {
             setState({ connected: false, walletAddress: "", balance: 0 });
         }
 
+        // подхват аккаунта из URL, если прилетел после редиректа
+        syncFromUrlIfPresent();
+
         return { selector, modal };
     })();
 
@@ -181,7 +219,34 @@ async function connectWallet(network) {
     if (network && network !== "near") {
         throw new Error(`Unsupported network: ${network}`);
     }
-    const { modal } = await ensureNear();
+
+    const { selector, modal } = await ensureNear();
+
+    // В Telegram WebView попапы режутся. Делаем redirect вместо window.open().
+    if (isTelegramWebApp()) {
+        const wallet = await selector.wallet("my-near-wallet");
+
+        const originalOpen = window.open;
+        window.open = (url) => {
+            window.location.assign(url);
+            // возвращаем "похожий на window" объект, чтобы модуль не ругался на blocked
+            return { focus() { }, closed: false };
+        };
+
+        try {
+            await wallet.signIn?.({
+                contractId: defaultContractId,
+                methodNames: [],
+                successUrl: window.location.href,
+                failureUrl: window.location.href,
+            });
+            return;
+        } finally {
+            window.open = originalOpen;
+        }
+    }
+
+    // Обычный браузер — используем модалку
     modal.show();
 }
 
@@ -190,21 +255,28 @@ async function disconnectWallet() {
         setState({ connected: false, walletAddress: "", balance: 0 });
         return;
     }
-    const w = await selector.wallet();
-    await w.signOut();
-    setState({ connected: false, walletAddress: "", balance: 0 });
+
+    try {
+        const w = await selector.wallet();
+        await w.signOut();
+    } catch {
+        // ignore
+    } finally {
+        setState({ connected: false, walletAddress: "", balance: 0 });
+    }
 }
 
 async function restoreSession() {
     await ensureNear();
+    syncFromUrlIfPresent();
 }
 
 async function switchNetwork(net) {
-    // пока только "near" (без реального переключения)
+    // пока только "near" (UI показывает селектор только если сетей > 1)
     if (net !== "near") throw new Error(`Unsupported network: ${net}`);
 }
 
-// прокидываем actions в state (стабильные ссылки)
+// стабильные ссылки на actions
 state = {
     ...state,
     connectWallet,
