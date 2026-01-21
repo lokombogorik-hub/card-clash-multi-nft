@@ -5,6 +5,7 @@ import { apiFetch } from "./api.js";
 import Inventory from "./pages/Inventory";
 import Profile from "./pages/Profile";
 import Market from "./pages/Market";
+import WalletConnector from "./components/MultiChainWallet/WalletConnector";
 
 function useIsLandscape() {
     const get = () =>
@@ -158,9 +159,10 @@ export default function App() {
                     body: JSON.stringify({ initData }),
                 });
 
-                setToken(r.accessToken || null);
+                const accessToken = r?.accessToken || r?.access_token || r?.token || null;
+                setToken(accessToken);
 
-                if (r?.accessToken) {
+                if (accessToken) {
                     setAuthState({ status: "ok", error: "" });
                 } else {
                     setAuthState({ status: "err", error: "No accessToken in response" });
@@ -222,9 +224,7 @@ export default function App() {
         if (!token) return null;
         try {
             const r = await apiFetch("/api/decks/active/full", { token });
-
             const cards = Array.isArray(r) ? r : Array.isArray(r?.cards) ? r.cards : null;
-
             if (Array.isArray(cards) && cards.length === 5) return cards;
             return null;
         } catch (e) {
@@ -251,13 +251,6 @@ export default function App() {
         setPlayerDeck(null);
     };
 
-    const onConnectWallet = () => {
-        try {
-            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
-        } catch { }
-        alert("Wallet connect (soon)");
-    };
-
     const showRotate = screen === "game" && !isLandscape;
 
     const seasonInfo = useMemo(
@@ -269,6 +262,8 @@ export default function App() {
         return (
             <div className="shell">
                 <StormBg />
+                <WalletConnector />
+
                 <div className={`game-host ${showRotate ? "is-hidden" : ""}`}>
                     {playerDeck ? (
                         <Game onExit={onExitGame} me={me} playerDeck={playerDeck} />
@@ -276,6 +271,7 @@ export default function App() {
                         <div style={{ color: "#fff", padding: 20 }}>Loading deck...</div>
                     )}
                 </div>
+
                 {showRotate && <RotateGate onBack={onExitGame} />}
 
                 {debugEnabled && (
@@ -305,6 +301,7 @@ export default function App() {
     return (
         <div className="shell">
             <StormBg />
+            <WalletConnector />
 
             <div className="shell-content">
                 {screen === "home" && (
@@ -345,12 +342,6 @@ export default function App() {
                 {screen === "profile" && <Profile token={token} />}
             </div>
 
-            <div className="wallet-float">
-                <button className="wallet-btn" onClick={onConnectWallet}>
-                    Подключить кошелёк
-                </button>
-            </div>
-
             <div className="bottom-stack" ref={bottomStackRef}>
                 <SeasonBar
                     title={seasonInfo.title}
@@ -383,9 +374,7 @@ export default function App() {
                     <div>
                         token length: {token ? token.length : 0} | auth: {authState.status}
                     </div>
-                    {authState.error ? (
-                        <div style={{ color: "#ffb3b3" }}>auth error: {authState.error}</div>
-                    ) : null}
+                    {authState.error ? <div style={{ color: "#ffb3b3" }}>auth error: {authState.error}</div> : null}
 
                     <div style={{ marginTop: 6 }}>window.Telegram: {String(dbg.hasTelegram)}</div>
                     <div>Telegram.WebApp: {String(dbg.hasWebApp)}</div>
@@ -401,9 +390,7 @@ export default function App() {
                     <textarea readOnly value={dbg.tgWebAppData} style={{ width: "100%", height: 60, fontSize: 10 }} />
 
                     <div style={{ marginTop: 6, opacity: 0.9 }}>initDataUnsafe.user:</div>
-                    <pre style={{ fontSize: 10, whiteSpace: "pre-wrap" }}>
-                        {JSON.stringify(dbg.initDataUnsafeUser, null, 2)}
-                    </pre>
+                    <pre style={{ fontSize: 10, whiteSpace: "pre-wrap" }}>{JSON.stringify(dbg.initDataUnsafeUser, null, 2)}</pre>
                 </div>
             )}
         </div>
@@ -456,11 +443,7 @@ function BottomNav({ active, onChange }) {
             {items.map((it) => {
                 const isActive = active === it.key;
                 return (
-                    <button
-                        key={it.key}
-                        className={`nav-item ${isActive ? "active" : ""}`}
-                        onClick={() => onChange(it.key)}
-                    >
+                    <button key={it.key} className={`nav-item ${isActive ? "active" : ""}`} onClick={() => onChange(it.key)}>
                         <span className="nav-ic">{it.icon}</span>
                         <span className="nav-txt">{it.label}</span>
                     </button>
