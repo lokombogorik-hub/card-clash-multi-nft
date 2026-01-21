@@ -1,328 +1,225 @@
-// frontend/src/components/MultiChainWallet/WalletConnector.jsx
-import React, { useEffect, useState } from "react";
-import { useWalletStore } from "../../store/walletStore";
+import { useSyncExternalStore } from "react";
 
-export default function WalletConnector() {
-    const {
-        connected,
-        walletAddress,
-        network,
-        balance,
-        availableNetworks,
-        connectWallet,
-        disconnectWallet,
-        switchNetwork,
-        restoreSession,
-    } = useWalletStore();
+import { setupWalletSelector } from "@near-wallet-selector/core";
+import { setupModal } from "@near-wallet-selector/modal-ui";
+import { setupMyNearWallet } from "@near-wallet-selector/my-near-wallet";
 
-    const [showNetworks, setShowNetworks] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [err, setErr] = useState("");
+const LS_NEAR_NETWORK_ID = "cc_near_network_id";
 
-    useEffect(() => {
-        // Восстановление сессии после возврата со страницы кошелька
-        restoreSession?.().catch(() => { });
-    }, [restoreSession]);
+const envNetworkId = (import.meta.env.VITE_NEAR_NETWORK_ID || "").toLowerCase(); // mainnet | testnet
+const defaultNetworkId = envNetworkId === "testnet" ? "testnet" : "mainnet";
 
-    const tgNotify = async (message) => {
-        try {
-            const tg = window.Telegram?.WebApp;
-            if (tg?.showPopup) {
-                await tg.showPopup({ message, buttons: [{ type: "ok", text: "OK" }] });
-                return;
+const envContractId = import.meta.env.VITE_NEAR_CONTRACT_ID || "";
+const defaultContractId =
+    envContractId ||
+    (defaultNetworkId === "testnet" ? "cardclash.testnet" : "cardclash.near");
+
+const envRpcUrl = import.meta.env.VITE_NEAR_RPC_URL || "";
+
+function getNearNetworkId() {
+    const fromLs = (localStorage.getItem(LS_NEAR_NETWORK_ID) || "").toLowerCase();
+    if (fromLs === "testnet" || fromLs === "mainnet") return fromLs;
+    return defaultNetworkId;
+}
+
+function getRpcUrl(networkId) {
+    if (envRpcUrl) return envRpcUrl;
+    return networkId === "testnet"
+        ? "https://rpc.testnet.near.org"
+        : "https://rpc.mainnet.near.org";
+}
+
+function yoctoToNearFloat(yoctoStr) {
+    try {
+        const yocto = BigInt(yoctoStr || "0");
+        const base = 10n ** 24n;
+        const whole = yocto / base;
+        const frac = yocto % base;
+
+        // первые 6 знаков после запятой
+        const fracStr = frac.toString().padStart(24, "0").slice(0, 6);
+        return Number(`${whole.toString()}.${fracStr}`);
+    } catch {
+        return 0;
+    }
+}
+
+async function fetchNearBalance(networkId, accountId) {
+    const rpcUrl = getRpcUrl(networkId);
+
+    const res = await fetch(rpcUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: "cc-balance",
+            method: "query",
+            params: {
+                request_type: "view_account",
+                finality: "final",
+                account_id: accountId,
+            },
+        }),
+    });
+
+    if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(`NEAR RPC error: ${res.status} ${text}`);
+    }
+
+    const json = await res.json();
+    const amount = json?.result?.amount;
+    return yoctoToNearFloat(amount);
+}
+
+// ---------------------------
+// tiny external store (без zustand)
+// ---------------------------
+let state = {
+    connected: false,
+    walletAddress: "",
+    network: "near", // для вашего UI
+    nearNetworkId: getNearNetworkId(), // mainnet | testnet
+    balance: 0,
+    availableNetworks: ["near"],
+
+    connectWallet: async (_network) => { },
+    disconnectWallet: async () => { },
+    switchNetwork: async (_network) => { },
+    restoreSession: async () => { },
+};
+
+const listeners = new Set();
+
+function setState(patch) {
+    state = { ...state, ...patch };
+    for (const l of listeners) l();
+}
+
+// ---------------------------
+// NEAR selector singleton
+// ---------------------------
+let nearInitPromise = null;
+let selector = null;
+let modal = null;
+let storeSubscription = null;
+
+async function ensureNear() {
+    if (selector && modal) return { selector, modal };
+    if (nearInitPromise) return nearInitPromise;
+
+    nearInitPromise = (async () => {
+        const nearNetworkId = getNearNetworkId();
+
+        selector = await setupWalletSelector({
+            network: nearNetworkId,
+            modules: [setupMyNearWallet()],
+        });
+
+        modal = setupModal(selector, {
+            contractId: defaultContractId,
+            theme: "dark",
+        });
+
+        setState({ nearNetworkId });
+
+        if (!storeSubscription) {
+            storeSubscription = selector.store.observable.subscribe((s) => {
+                const active =
+                    s.accounts?.find((a) => a.active) || s.accounts?.[0] || null;
+
+                if (!active?.accountId) {
+                    setState({
+                        connected: false,
+                        walletAddress: "",
+                        balance: 0,
+                    });
+                    return;
+                }
+
+                setState({
+                    connected: true,
+                    walletAddress: active.accountId,
+                });
+
+                fetchNearBalance(getNearNetworkId(), active.accountId)
+                    .then((b) => setState({ balance: b }))
+                    .catch(() => setState({ balance: 0 }));
+            });
+        }
+
+        // initial sync
+        const s = selector.store.getState();
+        const active =
+            s.accounts?.find((a) => a.active) || s.accounts?.[0] || null;
+
+        if (active?.accountId) {
+            setState({
+                connected: true,
+                walletAddress: active.accountId,
+            });
+            try {
+                const b = await fetchNearBalance(nearNetworkId, active.accountId);
+                setState({ balance: b });
+            } catch {
+                setState({ balance: 0 });
             }
-            if (tg?.showAlert) {
-                await tg.showAlert(message);
-                return;
-            }
-        } catch { }
-        // fallback
-        try {
-            alert(message);
-        } catch { }
-    };
-
-    const haptic = () => {
-        try {
-            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
-        } catch { }
-    };
-
-    const formatAddress = (address) => {
-        if (!address) return "";
-        if (address.length <= 18) return address;
-        return `${address.slice(0, 10)}...${address.slice(-6)}`;
-    };
-
-    const copyToClipboard = async (text) => {
-        if (!text) throw new Error("Empty text");
-
-        // modern
-        if (navigator.clipboard?.writeText) {
-            await navigator.clipboard.writeText(text);
-            return;
+        } else {
+            setState({ connected: false, walletAddress: "", balance: 0 });
         }
 
-        // fallback
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        ta.setAttribute("readonly", "true");
-        ta.style.position = "fixed";
-        ta.style.left = "-9999px";
-        ta.style.top = "0";
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
-        const ok = document.execCommand("copy");
-        document.body.removeChild(ta);
-        if (!ok) throw new Error("Copy failed");
-    };
+        return { selector, modal };
+    })();
 
-    const copyAddress = async () => {
-        try {
-            await copyToClipboard(walletAddress);
-            await tgNotify("Адрес скопирован");
-        } catch {
-            await tgNotify("Не удалось скопировать");
-        }
-    };
+    return nearInitPromise;
+}
 
-    const explorerUrl =
-        network === "near" && walletAddress
-            ? `https://nearblocks.io/address/${walletAddress}`
-            : "#";
+// ---------------------------
+// Actions
+// ---------------------------
+async function connectWallet(network) {
+    if (network && network !== "near") {
+        throw new Error(`Unsupported network: ${network}`);
+    }
+    const { modal } = await ensureNear();
+    modal.show();
+}
 
-    const onConnect = async () => {
-        haptic();
-        setErr("");
-        setLoading(true);
-        try {
-            await connectWallet("near");
-            // Обычно будет редирект/модалка; после возврата restoreSession() всё подхватит
-        } catch (e) {
-            setErr(String(e?.message || e));
-        } finally {
-            setLoading(false);
-        }
-    };
+async function disconnectWallet() {
+    if (!selector) {
+        setState({ connected: false, walletAddress: "", balance: 0 });
+        return;
+    }
+    const w = await selector.wallet();
+    await w.signOut();
+    setState({ connected: false, walletAddress: "", balance: 0 });
+}
 
-    const onDisconnect = async () => {
-        haptic();
-        setErr("");
-        setLoading(true);
-        try {
-            await disconnectWallet();
-        } catch (e) {
-            setErr(String(e?.message || e));
-        } finally {
-            setLoading(false);
-        }
-    };
+async function restoreSession() {
+    await ensureNear();
+}
 
-    // Позиция ниже верхней границы (safe-area + запас под Telegram controls)
-    const topOffset =
-        "calc(var(--safe-t, env(safe-area-inset-top, 0px)) + var(--tg-top-controls, 58px) + 6px)";
+async function switchNetwork(net) {
+    // пока только "near" (без реального переключения)
+    if (net !== "near") throw new Error(`Unsupported network: ${net}`);
+}
 
-    return (
-        <div style={{ position: "fixed", top: topOffset, right: 16, zIndex: 9999 }}>
-            {!connected ? (
-                <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
-                    <button
-                        onClick={onConnect}
-                        disabled={loading}
-                        style={{
-                            padding: "10px 14px",
-                            borderRadius: 999,
-                            border: "1px solid rgba(255,255,255,0.15)",
-                            background: "linear-gradient(90deg,#2563eb,#7c3aed)",
-                            color: "#fff",
-                            fontWeight: 700,
-                            cursor: loading ? "not-allowed" : "pointer",
-                            opacity: loading ? 0.8 : 1,
-                        }}
-                    >
-                        {loading ? "Подключение..." : "Подключить кошелёк"}
-                    </button>
+// прокидываем actions в state (стабильные ссылки)
+state = {
+    ...state,
+    connectWallet,
+    disconnectWallet,
+    restoreSession,
+    switchNetwork,
+};
 
-                    {err ? (
-                        <div
-                            style={{
-                                maxWidth: 320,
-                                padding: "8px 10px",
-                                borderRadius: 12,
-                                background: "rgba(120, 20, 20, 0.75)",
-                                border: "1px solid rgba(255,255,255,0.12)",
-                                color: "#fff",
-                                fontSize: 12,
-                                lineHeight: 1.25,
-                            }}
-                        >
-                            {err}
-                        </div>
-                    ) : null}
-                </div>
-            ) : (
-                <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
-                    <div
-                        style={{
-                            display: "flex",
-                            gap: 8,
-                            alignItems: "center",
-                            padding: 10,
-                            borderRadius: 16,
-                            background: "rgba(20,20,20,0.85)",
-                            border: "1px solid rgba(255,255,255,0.12)",
-                            color: "#fff",
-                            backdropFilter: "blur(8px)",
-                        }}
-                    >
-                        {/* Селектор сети показываем только когда сетей > 1 */}
-                        {Array.isArray(availableNetworks) && availableNetworks.length > 1 ? (
-                            <div style={{ position: "relative" }}>
-                                <button
-                                    onClick={() => setShowNetworks((v) => !v)}
-                                    style={{
-                                        padding: "8px 10px",
-                                        borderRadius: 10,
-                                        background: "#0b0b0b",
-                                        border: "1px solid rgba(255,255,255,0.12)",
-                                        color: "#fff",
-                                        cursor: "pointer",
-                                        fontWeight: 700,
-                                    }}
-                                >
-                                    Сеть ▾
-                                </button>
-
-                                {showNetworks && (
-                                    <div
-                                        style={{
-                                            position: "absolute",
-                                            top: "110%",
-                                            left: 0,
-                                            width: 180,
-                                            borderRadius: 12,
-                                            overflow: "hidden",
-                                            background: "#0b0b0b",
-                                            border: "1px solid rgba(255,255,255,0.12)",
-                                        }}
-                                    >
-                                        {availableNetworks.map((net) => (
-                                            <button
-                                                key={net}
-                                                onClick={() => {
-                                                    switchNetwork(net);
-                                                    setShowNetworks(false);
-                                                }}
-                                                style={{
-                                                    display: "block",
-                                                    width: "100%",
-                                                    textAlign: "left",
-                                                    padding: "10px 12px",
-                                                    background:
-                                                        net === network
-                                                            ? "rgba(255,255,255,0.08)"
-                                                            : "transparent",
-                                                    border: "none",
-                                                    color: "#fff",
-                                                    cursor: "pointer",
-                                                }}
-                                            >
-                                                {net.toUpperCase()}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        ) : null}
-
-                        {/* Баланс */}
-                        <div
-                            style={{
-                                padding: "8px 10px",
-                                borderRadius: 10,
-                                background: "#0b0b0b",
-                                border: "1px solid rgba(255,255,255,0.12)",
-                                fontWeight: 700,
-                                whiteSpace: "nowrap",
-                            }}
-                            title="Баланс"
-                        >
-                            {Number(balance || 0).toFixed(4)} Ⓝ
-                        </div>
-
-                        {/* Адрес */}
-                        <button
-                            onClick={copyAddress}
-                            style={{
-                                padding: "8px 10px",
-                                borderRadius: 10,
-                                background: "#113a8a",
-                                border: "1px solid rgba(255,255,255,0.12)",
-                                color: "#fff",
-                                cursor: "pointer",
-                                fontFamily: "monospace",
-                            }}
-                            title="Скопировать адрес"
-                        >
-                            {formatAddress(walletAddress)}
-                        </button>
-
-                        {/* Explorer */}
-                        <a
-                            href={explorerUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{
-                                padding: "8px 10px",
-                                borderRadius: 10,
-                                background: "#0b0b0b",
-                                border: "1px solid rgba(255,255,255,0.12)",
-                                color: "#fff",
-                                textDecoration: "none",
-                            }}
-                            title="Открыть в эксплорере"
-                        >
-                            ↗
-                        </a>
-
-                        {/* Disconnect */}
-                        <button
-                            onClick={onDisconnect}
-                            disabled={loading}
-                            style={{
-                                padding: "8px 10px",
-                                borderRadius: 10,
-                                background: "rgba(200,40,40,0.25)",
-                                border: "1px solid rgba(255,255,255,0.12)",
-                                color: "#fff",
-                                cursor: loading ? "not-allowed" : "pointer",
-                                opacity: loading ? 0.8 : 1,
-                            }}
-                            title="Отключить"
-                        >
-                            {loading ? "..." : "⎋"}
-                        </button>
-                    </div>
-
-                    {err ? (
-                        <div
-                            style={{
-                                maxWidth: 360,
-                                padding: "8px 10px",
-                                borderRadius: 12,
-                                background: "rgba(120, 20, 20, 0.75)",
-                                border: "1px solid rgba(255,255,255,0.12)",
-                                color: "#fff",
-                                fontSize: 12,
-                                lineHeight: 1.25,
-                            }}
-                        >
-                            {err}
-                        </div>
-                    ) : null}
-                </div>
-            )}
-        </div>
+export function useWalletStore() {
+    return useSyncExternalStore(
+        (cb) => {
+            listeners.add(cb);
+            return () => listeners.delete(cb);
+        },
+        () => state,
+        () => state
     );
 }
