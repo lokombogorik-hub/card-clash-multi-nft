@@ -3,6 +3,9 @@ import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
 import "./index.css";
 
+// CSS модалки NEAR Wallet Selector — импортируем в entrypoint
+import "@near-wallet-selector/modal-ui/styles.css";
+
 const getAppHeight = () => {
   const tg = window.Telegram?.WebApp;
   return tg?.viewportStableHeight || tg?.viewportHeight || window.innerHeight;
@@ -15,7 +18,6 @@ const setAppHeight = () => {
 setAppHeight();
 window.addEventListener("resize", setAppHeight);
 
-// Telegram viewport change (если доступно)
 try {
   const tg = window.Telegram?.WebApp;
   tg?.onEvent?.("viewportChanged", setAppHeight);
