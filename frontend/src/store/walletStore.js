@@ -1,12 +1,7 @@
 import { create } from "zustand";
-import { connect, keyStores } from "near-api-js";
-
-import { setupWalletSelector } from "@near-wallet-selector/core";
-import { setupModal } from "@near-wallet-selector/modal-ui";
-import { setupMyNearWallet } from "@near-wallet-selector/my-near-wallet";
-import { setupHereWallet } from "@near-wallet-selector/here-wallet";
 
 const NEAR_NETWORK = "mainnet";
+const NEAR_RPC = "https://rpc.mainnet.near.org";
 
 let selector = null;
 let modal = null;
@@ -14,16 +9,46 @@ let modal = null;
 async function initNearSelector() {
     if (selector && modal) return { selector, modal };
 
+    // динамические импорты — меньше проблем на сборке/SSR
+    const { setupWalletSelector } = await import("@near-wallet-selector/core");
+    const { setupModal } = await import("@near-wallet-selector/modal-ui");
+    const { setupMyNearWallet } = await import("@near-wallet-selector/my-near-wallet");
+
     selector = await setupWalletSelector({
         network: NEAR_NETWORK,
-        modules: [setupMyNearWallet(), setupHereWallet()],
+        modules: [
+            setupMyNearWallet(),
+            // HERE wallet можно добавить позже, когда всё стабильно (он чаще требует node polyfills)
+            // (await import("@near-wallet-selector/here-wallet")).setupHereWallet(),
+        ],
     });
 
-    modal = setupModal(selector, {
-        contractId: undefined,
-    });
-
+    modal = setupModal(selector, { contractId: undefined });
     return { selector, modal };
+}
+
+async function fetchNearBalance(accountId) {
+    const body = {
+        jsonrpc: "2.0",
+        id: "1",
+        method: "query",
+        params: {
+            request_type: "view_account",
+            finality: "final",
+            account_id: accountId,
+        },
+    };
+
+    const res = await fetch(NEAR_RPC, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+    });
+
+    if (!res.ok) throw new Error(`NEAR RPC error: ${res.status}`);
+    const json = await res.json();
+    const yocto = json?.result?.amount || "0";
+    return Number(yocto) / 1e24;
 }
 
 async function getNearAccountId() {
@@ -33,19 +58,14 @@ async function getNearAccountId() {
     return accounts?.[0]?.accountId || null;
 }
 
-async function getNearBalance(accountId) {
-    const near = await connect({
-        networkId: NEAR_NETWORK,
-        nodeUrl: "https://rpc.mainnet.near.org",
-        walletUrl: "https://wallet.near.org",
-        helperUrl: "https://helper.mainnet.near.org",
-        deps: { keyStore: new keyStores.BrowserLocalStorageKeyStore() },
-    });
-
-    const account = await near.account(accountId);
-    const state = await account.state();
-    const yocto = state?.amount || "0";
-    return Number(yocto) / 1e24;
+async function waitForAccountId(timeoutMs = 15000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+        const id = await getNearAccountId();
+        if (id) return id;
+        await new Promise((r) => setTimeout(r, 300));
+    }
+    return null;
 }
 
 export const useWalletStore = create((set, get) => ({
@@ -61,12 +81,10 @@ export const useWalletStore = create((set, get) => ({
         const { modal } = await initNearSelector();
         modal.show();
 
-        await new Promise((r) => setTimeout(r, 600));
-
-        const accountId = await getNearAccountId();
+        const accountId = await waitForAccountId(15000);
         if (!accountId) throw new Error("Wallet not connected");
 
-        const bal = await getNearBalance(accountId).catch(() => 0);
+        const bal = await fetchNearBalance(accountId).catch(() => 0);
 
         set({
             connected: true,
@@ -80,6 +98,7 @@ export const useWalletStore = create((set, get) => ({
         const { selector } = await initNearSelector();
         const wallet = await selector.wallet();
         await wallet.signOut();
+
         set({
             connected: false,
             walletAddress: "",

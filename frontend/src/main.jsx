@@ -3,7 +3,6 @@ import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
 import "./index.css";
 
-// CSS модалки NEAR Wallet Selector — импортируем в entrypoint
 import "@near-wallet-selector/modal-ui/styles.css";
 
 const getAppHeight = () => {
