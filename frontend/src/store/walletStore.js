@@ -1,3 +1,4 @@
+// frontend/src/components/MultiChainWallet/WalletConnector.jsx
 import React, { useEffect, useState } from "react";
 import { useWalletStore } from "../../store/walletStore";
 
@@ -23,6 +24,24 @@ export default function WalletConnector() {
         restoreSession?.().catch(() => { });
     }, [restoreSession]);
 
+    const tgNotify = async (message) => {
+        try {
+            const tg = window.Telegram?.WebApp;
+            if (tg?.showPopup) {
+                await tg.showPopup({ message, buttons: [{ type: "ok", text: "OK" }] });
+                return;
+            }
+            if (tg?.showAlert) {
+                await tg.showAlert(message);
+                return;
+            }
+        } catch { }
+        // fallback
+        try {
+            alert(message);
+        } catch { }
+    };
+
     const haptic = () => {
         try {
             window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
@@ -35,17 +54,43 @@ export default function WalletConnector() {
         return `${address.slice(0, 10)}...${address.slice(-6)}`;
     };
 
+    const copyToClipboard = async (text) => {
+        if (!text) throw new Error("Empty text");
+
+        // modern
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+            return;
+        }
+
+        // fallback
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.setAttribute("readonly", "true");
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        ta.style.top = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+        if (!ok) throw new Error("Copy failed");
+    };
+
     const copyAddress = async () => {
         try {
-            await navigator.clipboard.writeText(walletAddress);
-            alert("Адрес скопирован");
+            await copyToClipboard(walletAddress);
+            await tgNotify("Адрес скопирован");
         } catch {
-            alert("Не удалось скопировать");
+            await tgNotify("Не удалось скопировать");
         }
     };
 
     const explorerUrl =
-        network === "near" ? `https://nearblocks.io/address/${walletAddress}` : "#";
+        network === "near" && walletAddress
+            ? `https://nearblocks.io/address/${walletAddress}`
+            : "#";
 
     const onConnect = async () => {
         haptic();
@@ -53,7 +98,7 @@ export default function WalletConnector() {
         setLoading(true);
         try {
             await connectWallet("near");
-            // Обычно произойдёт редирект на кошелёк, а после возврата restoreSession() всё подхватит
+            // Обычно будет редирект/модалка; после возврата restoreSession() всё подхватит
         } catch (e) {
             setErr(String(e?.message || e));
         } finally {
@@ -74,8 +119,9 @@ export default function WalletConnector() {
         }
     };
 
-    // Позиция ниже верхней границы (safe-area + запас под хедер)
-    const topOffset = "calc(env(safe-area-inset-top, 0px) + 56px)";
+    // Позиция ниже верхней границы (safe-area + запас под Telegram controls)
+    const topOffset =
+        "calc(var(--safe-t, env(safe-area-inset-top, 0px)) + var(--tg-top-controls, 58px) + 6px)";
 
     return (
         <div style={{ position: "fixed", top: topOffset, right: 16, zIndex: 9999 }}>
@@ -174,7 +220,9 @@ export default function WalletConnector() {
                                                     textAlign: "left",
                                                     padding: "10px 12px",
                                                     background:
-                                                        net === network ? "rgba(255,255,255,0.08)" : "transparent",
+                                                        net === network
+                                                            ? "rgba(255,255,255,0.08)"
+                                                            : "transparent",
                                                     border: "none",
                                                     color: "#fff",
                                                     cursor: "pointer",
