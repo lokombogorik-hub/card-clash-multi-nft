@@ -1,8 +1,8 @@
-import React, { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Wallet, LogOut, Copy, ExternalLink, ChevronDown } from 'lucide-react'
-import toast from 'react-hot-toast'
-import { useWalletStore } from '../../store/walletStore'
+import React, { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Wallet, LogOut, Copy, ExternalLink, ChevronDown } from "lucide-react";
+import toast from "react-hot-toast";
+import { useWalletStore } from "../../store/walletStore";
 
 const WalletConnector = () => {
     const {
@@ -13,35 +13,40 @@ const WalletConnector = () => {
         connectWallet,
         disconnectWallet,
         switchNetwork,
-        availableNetworks
-    } = useWalletStore()
+        availableNetworks,
+    } = useWalletStore();
 
-    const [showNetworks, setShowNetworks] = useState(false)
+    const [showNetworks, setShowNetworks] = useState(false);
 
     const handleConnect = async () => {
         try {
-            await connectWallet('near') // По умолчанию NEAR
-            toast.success('Кошелек подключен!')
+            await connectWallet("near");
+            toast.success("Кошелек подключен!");
         } catch (error) {
-            toast.error('Ошибка подключения кошелька')
-            console.error(error)
+            toast.error("Ошибка подключения кошелька");
+            console.error(error);
         }
-    }
+    };
 
-    const handleDisconnect = () => {
-        disconnectWallet()
-        toast.success('Кошелек отключен')
-    }
+    const handleDisconnect = async () => {
+        await disconnectWallet();
+        toast.success("Кошелек отключен");
+    };
 
     const handleCopyAddress = () => {
-        navigator.clipboard.writeText(walletAddress)
-        toast.success('Адрес скопирован в буфер')
-    }
+        navigator.clipboard.writeText(walletAddress);
+        toast.success("Адрес скопирован в буфер");
+    };
 
     const formatAddress = (address) => {
-        if (!address) return ''
-        return `${address.slice(0, 6)}...${address.slice(-4)}`
-    }
+        if (!address) return "";
+        return `${address.slice(0, 10)}...${address.slice(-6)}`;
+    };
+
+    const explorerUrl =
+        network === "near"
+            ? `https://nearblocks.io/address/${walletAddress}`
+            : `https://explorer.${network}.org/accounts/${walletAddress}`;
 
     return (
         <div className="fixed top-4 right-4 z-50">
@@ -67,23 +72,15 @@ const WalletConnector = () => {
                         className="relative"
                     >
                         <div className="flex items-center gap-4 p-3 bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-700">
-                            {/* Информация о сети */}
                             <div className="relative">
                                 <button
                                     onClick={() => setShowNetworks(!showNetworks)}
                                     className="flex items-center gap-2 px-3 py-2 bg-gray-900 rounded-lg hover:bg-gray-700 transition-colors"
                                 >
-                                    <img
-                                        src={`/static/images/chain-logos/${network}.png`}
-                                        alt={network}
-                                        className="w-6 h-6 rounded-full"
-                                        onError={(e) => e.target.src = '/static/images/chain-logos/default.png'}
-                                    />
                                     <span className="font-bold text-sm">{network.toUpperCase()}</span>
                                     <ChevronDown className="w-4 h-4" />
                                 </button>
 
-                                {/* Выбор сети */}
                                 <AnimatePresence>
                                     {showNetworks && (
                                         <motion.div
@@ -96,22 +93,15 @@ const WalletConnector = () => {
                                                 <button
                                                     key={net}
                                                     onClick={() => {
-                                                        switchNetwork(net)
-                                                        setShowNetworks(false)
-                                                        toast.success(`Переключено на ${net.toUpperCase()}`)
+                                                        switchNetwork(net);
+                                                        setShowNetworks(false);
+                                                        toast.success(`Переключено на ${net.toUpperCase()}`);
                                                     }}
                                                     className={`flex items-center gap-3 w-full px-4 py-3 hover:bg-gray-800 transition-colors
-                                    ${network === net ? 'bg-gray-800' : ''}`}
+                                    ${network === net ? "bg-gray-800" : ""}`}
                                                 >
-                                                    <img
-                                                        src={`/static/images/chain-logos/${net}.png`}
-                                                        alt={net}
-                                                        className="w-5 h-5 rounded-full"
-                                                    />
                                                     <span className="font-medium">{net.toUpperCase()}</span>
-                                                    {network === net && (
-                                                        <div className="ml-auto w-2 h-2 bg-green-400 rounded-full"></div>
-                                                    )}
+                                                    {network === net && <div className="ml-auto w-2 h-2 bg-green-400 rounded-full"></div>}
                                                 </button>
                                             ))}
                                         </motion.div>
@@ -119,14 +109,10 @@ const WalletConnector = () => {
                                 </AnimatePresence>
                             </div>
 
-                            {/* Баланс */}
                             <div className="px-3 py-2 bg-gray-900 rounded-lg">
-                                <span className="font-bold">
-                                    {balance.toFixed(4)} {network === 'near' ? 'Ⓝ' : network === 'ethereum' ? 'Ξ' : '◎'}
-                                </span>
+                                <span className="font-bold">{Number(balance || 0).toFixed(4)} Ⓝ</span>
                             </div>
 
-                            {/* Адрес кошелька */}
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={handleCopyAddress}
@@ -139,7 +125,7 @@ const WalletConnector = () => {
                                 </button>
 
                                 <a
-                                    href={`https://explorer.${network}.org/accounts/${walletAddress}`}
+                                    href={explorerUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="p-2 bg-gray-900 rounded-lg hover:bg-gray-700 transition-colors"
@@ -161,7 +147,7 @@ const WalletConnector = () => {
                 )}
             </AnimatePresence>
         </div>
-    )
-}
+    );
+};
 
-export default WalletConnector
+export default WalletConnector;

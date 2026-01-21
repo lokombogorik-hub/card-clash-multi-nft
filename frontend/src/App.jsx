@@ -484,7 +484,11 @@ function BagIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
             <path d="M6 8h12l-1 13H7L6 8Z" stroke="white" strokeWidth="2" opacity="0.9" />
-            <path d="M9 8a3 3 0 0 1 6 0" stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.9" />
+            <path d="M9 8a3 3 0 0 1 6 0" stroke="white"
+                strokeWidth="2"
+                strokeLinecap="round"
+                opacity="0.9"
+            />
         </svg>
     );
 }
