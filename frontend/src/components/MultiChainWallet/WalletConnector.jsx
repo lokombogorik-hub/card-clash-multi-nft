@@ -1,10 +1,7 @@
 import React, { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Wallet, LogOut, Copy, ExternalLink, ChevronDown } from "lucide-react";
-import toast from "react-hot-toast";
 import { useWalletStore } from "../../store/walletStore";
 
-const WalletConnector = () => {
+export default function WalletConnector() {
     const {
         connected,
         walletAddress,
@@ -18,29 +15,19 @@ const WalletConnector = () => {
 
     const [showNetworks, setShowNetworks] = useState(false);
 
-    const handleConnect = async () => {
-        try {
-            await connectWallet("near");
-            toast.success("Кошелек подключен!");
-        } catch (error) {
-            toast.error("Ошибка подключения кошелька");
-            console.error(error);
-        }
-    };
-
-    const handleDisconnect = async () => {
-        await disconnectWallet();
-        toast.success("Кошелек отключен");
-    };
-
-    const handleCopyAddress = () => {
-        navigator.clipboard.writeText(walletAddress);
-        toast.success("Адрес скопирован в буфер");
-    };
-
     const formatAddress = (address) => {
         if (!address) return "";
+        if (address.length <= 18) return address;
         return `${address.slice(0, 10)}...${address.slice(-6)}`;
+    };
+
+    const copyAddress = async () => {
+        try {
+            await navigator.clipboard.writeText(walletAddress);
+            alert("Адрес скопирован");
+        } catch {
+            alert("Не удалось скопировать");
+        }
     };
 
     const explorerUrl =
@@ -49,105 +36,156 @@ const WalletConnector = () => {
             : `https://explorer.${network}.org/accounts/${walletAddress}`;
 
     return (
-        <div className="fixed top-4 right-4 z-50">
-            <AnimatePresence>
-                {!connected ? (
-                    <motion.button
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.9 }}
-                        onClick={handleConnect}
-                        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 
-                     text-white font-bold rounded-full shadow-lg hover:shadow-xl 
-                     transform hover:-translate-y-1 transition-all duration-300"
+        <div style={{ position: "fixed", top: 16, right: 16, zIndex: 9999 }}>
+            {!connected ? (
+                <button
+                    onClick={() => connectWallet("near")}
+                    style={{
+                        padding: "10px 14px",
+                        borderRadius: 999,
+                        border: "1px solid rgba(255,255,255,0.15)",
+                        background: "linear-gradient(90deg,#2563eb,#7c3aed)",
+                        color: "#fff",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                    }}
+                >
+                    Подключить кошелёк
+                </button>
+            ) : (
+                <div
+                    style={{
+                        display: "flex",
+                        gap: 8,
+                        alignItems: "center",
+                        padding: 10,
+                        borderRadius: 16,
+                        background: "rgba(20,20,20,0.85)",
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        color: "#fff",
+                        backdropFilter: "blur(8px)",
+                    }}
+                >
+                    {/* Network dropdown */}
+                    <div style={{ position: "relative" }}>
+                        <button
+                            onClick={() => setShowNetworks((v) => !v)}
+                            style={{
+                                padding: "8px 10px",
+                                borderRadius: 10,
+                                background: "#0b0b0b",
+                                border: "1px solid rgba(255,255,255,0.12)",
+                                color: "#fff",
+                                cursor: "pointer",
+                                fontWeight: 700,
+                            }}
+                        >
+                            {network.toUpperCase()} ▾
+                        </button>
+
+                        {showNetworks && (
+                            <div
+                                style={{
+                                    position: "absolute",
+                                    top: "110%",
+                                    left: 0,
+                                    width: 180,
+                                    borderRadius: 12,
+                                    overflow: "hidden",
+                                    background: "#0b0b0b",
+                                    border: "1px solid rgba(255,255,255,0.12)",
+                                }}
+                            >
+                                {availableNetworks.map((net) => (
+                                    <button
+                                        key={net}
+                                        onClick={() => {
+                                            switchNetwork(net);
+                                            setShowNetworks(false);
+                                        }}
+                                        style={{
+                                            display: "block",
+                                            width: "100%",
+                                            textAlign: "left",
+                                            padding: "10px 12px",
+                                            background: net === network ? "rgba(255,255,255,0.08)" : "transparent",
+                                            border: "none",
+                                            color: "#fff",
+                                            cursor: "pointer",
+                                        }}
+                                    >
+                                        {net.toUpperCase()}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Balance */}
+                    <div
+                        style={{
+                            padding: "8px 10px",
+                            borderRadius: 10,
+                            background: "#0b0b0b",
+                            border: "1px solid rgba(255,255,255,0.12)",
+                            fontWeight: 700,
+                            whiteSpace: "nowrap",
+                        }}
+                        title="Баланс"
                     >
-                        <Wallet className="w-5 h-5" />
-                        <span>Подключить кошелек</span>
-                    </motion.button>
-                ) : (
-                    <motion.div
-                        initial={{ opacity: 0, y: -20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        className="relative"
+                        {Number(balance || 0).toFixed(4)} Ⓝ
+                    </div>
+
+                    {/* Address + actions */}
+                    <button
+                        onClick={copyAddress}
+                        style={{
+                            padding: "8px 10px",
+                            borderRadius: 10,
+                            background: "#113a8a",
+                            border: "1px solid rgba(255,255,255,0.12)",
+                            color: "#fff",
+                            cursor: "pointer",
+                            fontFamily: "monospace",
+                        }}
+                        title="Скопировать адрес"
                     >
-                        <div className="flex items-center gap-4 p-3 bg-gray-800/90 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-700">
-                            <div className="relative">
-                                <button
-                                    onClick={() => setShowNetworks(!showNetworks)}
-                                    className="flex items-center gap-2 px-3 py-2 bg-gray-900 rounded-lg hover:bg-gray-700 transition-colors"
-                                >
-                                    <span className="font-bold text-sm">{network.toUpperCase()}</span>
-                                    <ChevronDown className="w-4 h-4" />
-                                </button>
+                        {formatAddress(walletAddress)}
+                    </button>
 
-                                <AnimatePresence>
-                                    {showNetworks && (
-                                        <motion.div
-                                            initial={{ opacity: 0, y: 10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, y: 10 }}
-                                            className="absolute top-full left-0 mt-2 w-48 bg-gray-900 rounded-xl shadow-2xl border border-gray-700 overflow-hidden z-50"
-                                        >
-                                            {availableNetworks.map((net) => (
-                                                <button
-                                                    key={net}
-                                                    onClick={() => {
-                                                        switchNetwork(net);
-                                                        setShowNetworks(false);
-                                                        toast.success(`Переключено на ${net.toUpperCase()}`);
-                                                    }}
-                                                    className={`flex items-center gap-3 w-full px-4 py-3 hover:bg-gray-800 transition-colors
-                                    ${network === net ? "bg-gray-800" : ""}`}
-                                                >
-                                                    <span className="font-medium">{net.toUpperCase()}</span>
-                                                    {network === net && <div className="ml-auto w-2 h-2 bg-green-400 rounded-full"></div>}
-                                                </button>
-                                            ))}
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-                            </div>
+                    <a
+                        href={explorerUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                            padding: "8px 10px",
+                            borderRadius: 10,
+                            background: "#0b0b0b",
+                            border: "1px solid rgba(255,255,255,0.12)",
+                            color: "#fff",
+                            textDecoration: "none",
+                        }}
+                        title="Открыть в эксплорере"
+                    >
+                        ↗
+                    </a>
 
-                            <div className="px-3 py-2 bg-gray-900 rounded-lg">
-                                <span className="font-bold">{Number(balance || 0).toFixed(4)} Ⓝ</span>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={handleCopyAddress}
-                                    className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-700 to-blue-800 
-                           rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all"
-                                    title="Скопировать адрес"
-                                >
-                                    <Copy className="w-4 h-4" />
-                                    <span className="font-mono text-sm">{formatAddress(walletAddress)}</span>
-                                </button>
-
-                                <a
-                                    href={explorerUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="p-2 bg-gray-900 rounded-lg hover:bg-gray-700 transition-colors"
-                                    title="Открыть в эксплорере"
-                                >
-                                    <ExternalLink className="w-4 h-4" />
-                                </a>
-
-                                <button
-                                    onClick={handleDisconnect}
-                                    className="p-2 bg-red-900/30 rounded-lg hover:bg-red-800/50 transition-colors"
-                                    title="Отключить кошелек"
-                                >
-                                    <LogOut className="w-4 h-4" />
-                                </button>
-                            </div>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                    <button
+                        onClick={disconnectWallet}
+                        style={{
+                            padding: "8px 10px",
+                            borderRadius: 10,
+                            background: "rgba(200,40,40,0.25)",
+                            border: "1px solid rgba(255,255,255,0.12)",
+                            color: "#fff",
+                            cursor: "pointer",
+                        }}
+                        title="Отключить"
+                    >
+                        ⎋
+                    </button>
+                </div>
+            )}
         </div>
     );
-};
-
-export default WalletConnector;
+}
