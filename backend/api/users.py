@@ -1,7 +1,7 @@
 import logging
 from typing import Optional
 
-import jwt
+from jose import jwt, JWTError, ExpiredSignatureError
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -20,9 +20,9 @@ def _decode_jwt(token: str) -> dict:
 
     try:
         return jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALG])
-    except jwt.ExpiredSignatureError:
+    except ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="token expired")
-    except jwt.InvalidTokenError:
+    except JWTError:
         raise HTTPException(status_code=401, detail="invalid token")
 
 
@@ -37,21 +37,13 @@ async def get_current_user(
     if not sub:
         raise HTTPException(status_code=401, detail="invalid token")
 
-    # Важно: tg_id может быть большим, но у нас User.id int.
-    # Для Stage1 используем tg_id как id.
     try:
         user_id = int(sub)
     except Exception:
         raise HTTPException(status_code=401, detail="invalid token")
 
-    # DB может быть недоступна — делаем in-memory fallback
-    try:
-        # если у вас есть реальная БД модель/сессия — можно тут доставать пользователя
-        # но сейчас stage1 достаточно in-memory
-        return User(id=user_id, username=f"tg_{user_id}")
-    except Exception as e:
-        log.warning("DB user lookup failed (fallback). err=%s", e)
-        return User(id=user_id, username=f"tg_{user_id}")
+    # stage1: db-fallback user
+    return User(id=user_id, username=f"tg_{user_id}")
 
 
 @router.get("/users/me")

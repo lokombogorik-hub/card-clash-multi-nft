@@ -1,14 +1,13 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
-import jwt
+from jose import jwt
 
 from utils.config import settings
 
 
 def create_access_token(data: Dict[str, Any]) -> str:
     if not settings.JWT_SECRET:
-        # лучше явно падать, чем выдавать "битые" токены
         raise RuntimeError("JWT_SECRET is not set")
 
     now = datetime.now(timezone.utc)
