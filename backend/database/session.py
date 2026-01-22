@@ -1,75 +1,83 @@
+import logging
 import os
-import hashlib
 
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
+
+log = logging.getLogger(__name__)
 
 
-def _pw_fingerprint(pw: str | None) -> str:
-    if not pw:
-        return "none"
-    return hashlib.sha256(pw.encode("utf-8")).hexdigest()[:12]
-
-
-def _build_database_url() -> str:
+def _normalize_database_url(raw: str) -> str:
     """
-    Приоритет:
-    1) DATABASE_URL если задан
-    2) PG* переменные (Railway): PGHOST/PGPORT/PGDATABASE/PGUSER/PGPASSWORD
+    Normalizes DATABASE_URL for:
+    - SQLAlchemy async + psycopg3: postgresql+psycopg://
+    - Aiven/Neon SSL (require / verify-full + sslrootcert)
+    - pooler/pgbouncer: prepare_threshold=0
     """
-    raw = (os.getenv("DATABASE_URL", "") or "").strip()
-    if raw:
+    if not raw:
         return raw
 
-    pghost = (os.getenv("PGHOST", "") or "").strip()
-    pgport = (os.getenv("PGPORT", "") or "5432").strip()
-    pgdb = (os.getenv("PGDATABASE", "") or "").strip()
-    pguser = (os.getenv("PGUSER", "") or "").strip()
-    pgpass = (os.getenv("PGPASSWORD", "") or "").strip()
+    url = raw.strip()
 
-    if not (pghost and pgdb and pguser and pgpass):
-        raise RuntimeError("DATABASE_URL is not set and PG* variables are incomplete")
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://") :]
 
-    return f"postgresql://{pguser}:{pgpass}@{pghost}:{pgport}/{pgdb}"
+    # Force psycopg3 dialect if user provided plain postgresql://
+    if url.startswith("postgresql://") and "postgresql+psycopg://" not in url and "postgresql+asyncpg://" not in url:
+        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
 
-
-DATABASE_URL = _build_database_url()
-url = make_url(DATABASE_URL)
-
-# Если sslmode не задан — добавим require (Railway public proxy обычно требует SSL)
-raw_query = dict(url.query)
-if not (raw_query.get("sslmode") or ""):
-    raw_query["sslmode"] = "require"
-if not (raw_query.get("connect_timeout") or ""):
-    raw_query["connect_timeout"] = "10"
-url = url.set(query=raw_query)
-
-# Нормализуем драйвер на psycopg
-if url.drivername in ("postgres", "postgresql", "postgresql+psycopg2", "postgresql+asyncpg"):
-    url = url.set(drivername="postgresql+psycopg")
-
-if (os.getenv("DB_DEBUG", "") or "").strip() == "1":
     try:
-        print("[DB_DEBUG] url =", url.render_as_string(hide_password=True))
-    except Exception:
-        print("[DB_DEBUG] url = <cannot render>")
-    print("[DB_DEBUG] driver =", url.drivername)
-    print("[DB_DEBUG] user =", url.username)
-    print("[DB_DEBUG] host =", url.host)
-    print("[DB_DEBUG] db   =", url.database)
-    print("[DB_DEBUG] password_len =", len(url.password or ""))
-    print("[DB_DEBUG] password_sha256_12 =", _pw_fingerprint(url.password))
-    print("[DB_DEBUG] query_keys =", list(dict(url.query).keys()))
+        u = make_url(url)
+        host = (u.host or "").lower()
+        q = dict(u.query or {})
 
-engine = create_async_engine(
-    str(url),
-    echo=False,
-    pool_pre_ping=True,
+        # Default SSL for managed DBs if not set
+        if "sslmode" not in q:
+            if host.endswith(".aivencloud.com") or host.endswith(".neon.tech"):
+                q["sslmode"] = "require"
+
+        # If Aiven requires verify-full and you provide CA cert path
+        sslrootcert = os.getenv("PG_SSLROOTCERT", "").strip()
+        if q.get("sslmode") == "verify-full" and sslrootcert and "sslrootcert" not in q:
+            q["sslrootcert"] = sslrootcert
+
+        # pooler/pgbouncer prepared statements issue
+        if ("pooler" in host or "pgbouncer" in host) and "prepare_threshold" not in q:
+            q["prepare_threshold"] = "0"
+
+        url = u.set(query=q).render_as_string(hide_password=False)
+
+        log.info(
+            "DB url parsed: host=%s db=%s user=%s sslmode=%s sslrootcert=%s",
+            u.host,
+            u.database,
+            u.username,
+            q.get("sslmode"),
+            ("set" if q.get("sslrootcert") else "none"),
+        )
+    except Exception as e:
+        log.warning("Failed to normalize DATABASE_URL (will use raw). err=%s", e)
+
+    return url
+
+
+RAW_DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+DATABASE_URL = _normalize_database_url(RAW_DATABASE_URL)
+
+_ENGINE_KW = dict(echo=False, pool_pre_ping=True)
+
+# If using pooler, disable SQLAlchemy pooling
+if "pooler" in DATABASE_URL or "pgbouncer" in DATABASE_URL:
+    _ENGINE_KW["poolclass"] = NullPool
+
+engine = create_async_engine(DATABASE_URL, **_ENGINE_KW)
+
+AsyncSessionLocal = async_sessionmaker(
+    engine, expire_on_commit=False, class_=AsyncSession
 )
 
-AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
-
-async def get_db():
+async def get_session() -> AsyncSession:
     async with AsyncSessionLocal() as session:
         yield session
