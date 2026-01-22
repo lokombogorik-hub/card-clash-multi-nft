@@ -5,41 +5,22 @@ export default function WalletConnector() {
     const {
         connected,
         walletAddress,
-        network,
         balance,
-        availableNetworks,
         status,
         connectWallet,
         disconnectWallet,
-        switchNetwork,
         restoreSession,
+        setManualAccountId,
         clearStatus,
     } = useWalletStore();
 
-    const [showNetworks, setShowNetworks] = useState(false);
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState("");
+    const [manual, setManual] = useState("");
 
     useEffect(() => {
         restoreSession?.().catch(() => { });
     }, [restoreSession]);
-
-    const tgNotify = async (message) => {
-        try {
-            const tg = window.Telegram?.WebApp;
-            if (tg?.showPopup) {
-                await tg.showPopup({ message, buttons: [{ type: "ok", text: "OK" }] });
-                return;
-            }
-            if (tg?.showAlert) {
-                await tg.showAlert(message);
-                return;
-            }
-        } catch { }
-        try {
-            alert(message);
-        } catch { }
-    };
 
     const haptic = () => {
         try {
@@ -53,48 +34,13 @@ export default function WalletConnector() {
         return `${address.slice(0, 10)}...${address.slice(-6)}`;
     };
 
-    const copyToClipboard = async (text) => {
-        if (!text) throw new Error("Empty text");
-
-        if (navigator.clipboard?.writeText) {
-            await navigator.clipboard.writeText(text);
-            return;
-        }
-
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        ta.setAttribute("readonly", "true");
-        ta.style.position = "fixed";
-        ta.style.left = "-9999px";
-        ta.style.top = "0";
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
-        const ok = document.execCommand("copy");
-        document.body.removeChild(ta);
-        if (!ok) throw new Error("Copy failed");
-    };
-
-    const copyAddress = async () => {
-        try {
-            await copyToClipboard(walletAddress);
-            await tgNotify("Адрес скопирован");
-        } catch {
-            await tgNotify("Не удалось скопировать");
-        }
-    };
-
-    const explorerUrl =
-        network === "near" && walletAddress ? `https://nearblocks.io/address/${walletAddress}` : "#";
-
     const onConnect = async () => {
         haptic();
         setErr("");
         setLoading(true);
         try {
             await connectWallet("near");
-            // важное: дальше может быть redirect, но мы не держим вечный loader
-            setTimeout(() => setLoading(false), 600);
+            setTimeout(() => setLoading(false), 700);
         } catch (e) {
             setErr(String(e?.message || e));
             setLoading(false);
@@ -107,6 +53,7 @@ export default function WalletConnector() {
         setLoading(true);
         try {
             await disconnectWallet();
+            clearStatus?.();
         } catch (e) {
             setErr(String(e?.message || e));
         } finally {
@@ -128,13 +75,24 @@ export default function WalletConnector() {
         }
     };
 
+    const onManualSet = () => {
+        haptic();
+        try {
+            setManualAccountId(manual);
+            setManual("");
+            clearStatus?.();
+        } catch (e) {
+            setErr(String(e?.message || e));
+        }
+    };
+
     const topOffset =
         "calc(var(--safe-t, env(safe-area-inset-top, 0px)) + var(--tg-top-controls, 58px) + 6px)";
 
     return (
         <div style={{ position: "fixed", top: topOffset, right: 16, zIndex: 9999 }}>
             {!connected ? (
-                <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
+                <div style={{ display: "grid", gap: 8, justifyItems: "end", maxWidth: 360 }}>
                     <button
                         onClick={onConnect}
                         disabled={loading}
@@ -155,7 +113,6 @@ export default function WalletConnector() {
                     {status ? (
                         <div
                             style={{
-                                maxWidth: 320,
                                 padding: "8px 10px",
                                 borderRadius: 12,
                                 background: "rgba(0,0,0,0.55)",
@@ -165,8 +122,9 @@ export default function WalletConnector() {
                                 lineHeight: 1.25,
                             }}
                         >
-                            {status}
-                            <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+                            <div style={{ marginBottom: 8 }}>{status}</div>
+
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                                 <button
                                     onClick={onIConnected}
                                     disabled={loading}
@@ -183,13 +141,47 @@ export default function WalletConnector() {
                                     Я уже подключил
                                 </button>
                             </div>
+
+                            <div style={{ marginTop: 10, opacity: 0.9 }}>
+                                Если возврата в WebApp нет, введи свой accountId вручную:
+                            </div>
+
+                            <div style={{ marginTop: 6, display: "flex", gap: 8 }}>
+                                <input
+                                    value={manual}
+                                    onChange={(e) => setManual(e.target.value)}
+                                    placeholder="например: yourname.near"
+                                    style={{
+                                        flex: 1,
+                                        padding: "10px 10px",
+                                        borderRadius: 10,
+                                        border: "1px solid rgba(255,255,255,0.14)",
+                                        background: "rgba(0,0,0,0.35)",
+                                        color: "#fff",
+                                        outline: "none",
+                                    }}
+                                />
+                                <button
+                                    onClick={onManualSet}
+                                    disabled={!manual.trim()}
+                                    style={{
+                                        padding: "10px 12px",
+                                        borderRadius: 10,
+                                        background: "#0b0b0b",
+                                        border: "1px solid rgba(255,255,255,0.14)",
+                                        color: "#fff",
+                                        fontWeight: 900,
+                                    }}
+                                >
+                                    OK
+                                </button>
+                            </div>
                         </div>
                     ) : null}
 
                     {err ? (
                         <div
                             style={{
-                                maxWidth: 320,
                                 padding: "8px 10px",
                                 borderRadius: 12,
                                 background: "rgba(120, 20, 20, 0.75)",
@@ -218,62 +210,6 @@ export default function WalletConnector() {
                             backdropFilter: "blur(8px)",
                         }}
                     >
-                        {Array.isArray(availableNetworks) && availableNetworks.length > 1 ? (
-                            <div style={{ position: "relative" }}>
-                                <button
-                                    onClick={() => setShowNetworks((v) => !v)}
-                                    style={{
-                                        padding: "8px 10px",
-                                        borderRadius: 10,
-                                        background: "#0b0b0b",
-                                        border: "1px solid rgba(255,255,255,0.12)",
-                                        color: "#fff",
-                                        cursor: "pointer",
-                                        fontWeight: 700,
-                                    }}
-                                >
-                                    Сеть ▾
-                                </button>
-
-                                {showNetworks && (
-                                    <div
-                                        style={{
-                                            position: "absolute",
-                                            top: "110%",
-                                            left: 0,
-                                            width: 180,
-                                            borderRadius: 12,
-                                            overflow: "hidden",
-                                            background: "#0b0b0b",
-                                            border: "1px solid rgba(255,255,255,0.12)",
-                                        }}
-                                    >
-                                        {availableNetworks.map((net) => (
-                                            <button
-                                                key={net}
-                                                onClick={() => {
-                                                    switchNetwork(net);
-                                                    setShowNetworks(false);
-                                                }}
-                                                style={{
-                                                    display: "block",
-                                                    width: "100%",
-                                                    textAlign: "left",
-                                                    padding: "10px 12px",
-                                                    background: net === network ? "rgba(255,255,255,0.08)" : "transparent",
-                                                    border: "none",
-                                                    color: "#fff",
-                                                    cursor: "pointer",
-                                                }}
-                                            >
-                                                {net.toUpperCase()}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        ) : null}
-
                         <div
                             style={{
                                 padding: "8px 10px",
@@ -288,38 +224,19 @@ export default function WalletConnector() {
                             {Number(balance || 0).toFixed(4)} Ⓝ
                         </div>
 
-                        <button
-                            onClick={copyAddress}
+                        <div
                             style={{
                                 padding: "8px 10px",
                                 borderRadius: 10,
                                 background: "#113a8a",
                                 border: "1px solid rgba(255,255,255,0.12)",
                                 color: "#fff",
-                                cursor: "pointer",
                                 fontFamily: "monospace",
                             }}
-                            title="Скопировать адрес"
+                            title="Account"
                         >
                             {formatAddress(walletAddress)}
-                        </button>
-
-                        <a
-                            href={explorerUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{
-                                padding: "8px 10px",
-                                borderRadius: 10,
-                                background: "#0b0b0b",
-                                border: "1px solid rgba(255,255,255,0.12)",
-                                color: "#fff",
-                                textDecoration: "none",
-                            }}
-                            title="Открыть в эксплорере"
-                        >
-                            ↗
-                        </a>
+                        </div>
 
                         <button
                             onClick={onDisconnect}
@@ -338,23 +255,6 @@ export default function WalletConnector() {
                             {loading ? "..." : "⎋"}
                         </button>
                     </div>
-
-                    {err ? (
-                        <div
-                            style={{
-                                maxWidth: 360,
-                                padding: "8px 10px",
-                                borderRadius: 12,
-                                background: "rgba(120, 20, 20, 0.75)",
-                                border: "1px solid rgba(255,255,255,0.12)",
-                                color: "#fff",
-                                fontSize: 12,
-                                lineHeight: 1.25,
-                            }}
-                        >
-                            {err}
-                        </div>
-                    ) : null}
                 </div>
             )}
         </div>

@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
-
+function getNearAccountId() {
+    try { return localStorage.getItem("cc_near_account_id") || ""; } catch { return ""; }
+}
 function nftKey(n) {
-    return `${n.chain}:${n.contractId}:${n.tokenId}`;
+    // поддерживаем и mock формат, и near формат
+    if (n.key) return n.key;
+    if (n.chain && n.contractId && n.tokenId) return `${n.chain}:${n.contractId}:${n.tokenId}`;
+    if (n.contract_id && n.token_id) return `near:${n.contract_id}:${n.token_id}`;
+    return `${n.chain || "mock"}:${n.contractId || "x"}:${n.tokenId || "0"}`;
 }
 
 export default function Inventory({ token, onDeckReady }) {
@@ -56,6 +62,8 @@ export default function Inventory({ token, onDeckReady }) {
         });
     };
 
+    const clear = () => setSelected(new Set());
+
     const saveDeck = async () => {
         try {
             if (selected.size !== 5) return;
@@ -73,6 +81,7 @@ export default function Inventory({ token, onDeckReady }) {
     return (
         <div className="page">
             <h2>Инвентарь</h2>
+
             <div style={{ opacity: 0.85, fontSize: 13, marginBottom: 10 }}>
                 Выбери 5 NFT-карт для колоды ({selected.size}/5)
             </div>
@@ -80,6 +89,10 @@ export default function Inventory({ token, onDeckReady }) {
             {error && <div style={{ color: "#ff9aa9", marginBottom: 10 }}>{error}</div>}
             {!token && <div style={{ opacity: 0.75 }}>Ожидание авторизации Telegram…</div>}
             {loading && <div style={{ opacity: 0.75 }}>Загрузка NFT…</div>}
+
+            <div style={{ marginBottom: 10, opacity: 0.8, fontSize: 12 }}>
+                Выбрано: {selectedArr.length ? selectedArr.join(", ") : "—"}
+            </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 10 }}>
                 {nfts.map((n) => {
@@ -92,25 +105,26 @@ export default function Inventory({ token, onDeckReady }) {
                             className={`nav-item ${isSel ? "active" : ""}`}
                             style={{ padding: 8, textAlign: "left", borderRadius: 14 }}
                         >
-                            <div style={{ fontWeight: 900, fontSize: 12 }}>{n.name || `#${n.tokenId}`}</div>
+                            <div style={{ fontWeight: 900, fontSize: 12 }}>{n.name || `#${n.tokenId || n.token_id}`}</div>
                             <div style={{ opacity: 0.9, fontSize: 12, marginTop: 4 }}>
-                                {n.elementIcon} {n.element} • {n.rank}
+                                {(n.elementIcon || "")} {(n.element || "—")} • {n.rank || "—"}
                             </div>
                             <div style={{ opacity: 0.8, fontSize: 12, marginTop: 6 }}>
-                                {n.stats.top}/{n.stats.right}/{n.stats.bottom}/{n.stats.left}
+                                {n.stats?.top}/{n.stats?.right}/{n.stats?.bottom}/{n.stats?.left}
                             </div>
                         </button>
                     );
                 })}
             </div>
 
-            <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center" }}>
+            <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <button onClick={clear} disabled={!selected.size}>
+                    Очистить
+                </button>
                 <button disabled={selected.size !== 5} onClick={saveDeck}>
                     Сохранить колоду
                 </button>
-                <div style={{ opacity: 0.7, fontSize: 12 }}>
-                    После сохранения можно нажимать Play.
-                </div>
+                <div style={{ opacity: 0.7, fontSize: 12 }}>После сохранения можно нажимать Play.</div>
             </div>
         </div>
     );
