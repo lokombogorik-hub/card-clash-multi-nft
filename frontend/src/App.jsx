@@ -7,6 +7,8 @@ import Profile from "./pages/Profile";
 import Market from "./pages/Market";
 import WalletConnector from "./components/MultiChainWallet/WalletConnector";
 
+const LS_NEAR_ACCOUNT_ID = "cc_near_account_id";
+
 function useIsLandscape() {
     const get = () =>
         window.matchMedia?.("(orientation: landscape)")?.matches ??
@@ -38,7 +40,124 @@ function readTelegramUser() {
     }
 }
 
+function buildTelegramWebAppLink(accountId) {
+    const base = import.meta.env.VITE_TG_WEBAPP_LINK || "";
+    if (!base) return "";
+
+    // startapp должен быть коротким; account_id обычно ок по длине
+    const startParam = accountId ? `near_${accountId}` : "near";
+
+    try {
+        const u = new URL(base);
+        u.searchParams.set("startapp", startParam);
+        return u.toString();
+    } catch {
+        // если base невалидный URL, попробуем простую склейку
+        const sep = base.includes("?") ? "&" : "?";
+        return `${base}${sep}startapp=${encodeURIComponent(startParam)}`;
+    }
+}
+
 export default function App() {
+    // --- NEAR CALLBACK MODE ---
+    // Когда кошелёк вернул на successUrl вида /?near_cb=1&account_id=...
+    // Мы сохраняем account_id и кидаем обратно в Telegram WebApp deep-linkом.
+    const nearCbParams = useMemo(() => {
+        try {
+            const p = new URLSearchParams(window.location.search || "");
+            if (p.get("near_cb") !== "1") return null;
+
+            const accountId = p.get("account_id") || "";
+            const tgLink = buildTelegramWebAppLink(accountId);
+
+            return { accountId, tgLink };
+        } catch {
+            return null;
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!nearCbParams) return;
+
+        try {
+            if (nearCbParams.accountId) {
+                // ВАЖНО: это сохранится в storage текущего браузера.
+                // Основной перенос в Telegram WebApp мы делаем через startapp параметр.
+                localStorage.setItem(LS_NEAR_ACCOUNT_ID, nearCbParams.accountId);
+            }
+        } catch { }
+
+        // автопереход обратно в Telegram (если настроен VITE_TG_WEBAPP_LINK)
+        if (nearCbParams.tgLink) {
+            setTimeout(() => {
+                window.location.replace(nearCbParams.tgLink);
+            }, 150);
+        }
+    }, [nearCbParams]);
+
+    if (nearCbParams) {
+        return (
+            <div
+                style={{
+                    minHeight: "100vh",
+                    background: "#000",
+                    color: "#fff",
+                    display: "grid",
+                    placeItems: "center",
+                    padding: 18,
+                    textAlign: "center",
+                }}
+            >
+                <div style={{ maxWidth: 520 }}>
+                    <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 10 }}>
+                        Подключение кошелька…
+                    </div>
+
+                    {nearCbParams.accountId ? (
+                        <div style={{ opacity: 0.9, marginBottom: 10 }}>
+                            Account: <code>{nearCbParams.accountId}</code>
+                        </div>
+                    ) : (
+                        <div style={{ opacity: 0.9, marginBottom: 10 }}>
+                            Не удалось получить account_id из кошелька.
+                        </div>
+                    )}
+
+                    {nearCbParams.tgLink ? (
+                        <>
+                            <div style={{ opacity: 0.85, marginBottom: 14 }}>
+                                Возвращаюсь в Telegram WebApp…
+                            </div>
+                            <a
+                                href={nearCbParams.tgLink}
+                                style={{
+                                    display: "inline-block",
+                                    padding: "10px 14px",
+                                    borderRadius: 12,
+                                    background: "#2563eb",
+                                    color: "#fff",
+                                    textDecoration: "none",
+                                    fontWeight: 800,
+                                }}
+                            >
+                                Вернуться в игру
+                            </a>
+                        </>
+                    ) : (
+                        <>
+                            <div style={{ opacity: 0.85, marginBottom: 14 }}>
+                                Нет <code>VITE_TG_WEBAPP_LINK</code>. Добавь env вида:
+                                <br />
+                                <code>VITE_TG_WEBAPP_LINK=https://t.me/&lt;bot&gt;/&lt;app&gt;</code>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
+    // --- NORMAL APP ---
     const [screen, setScreen] = useState("home");
     const isLandscape = useIsLandscape();
 
@@ -50,7 +169,7 @@ export default function App() {
     const [logoOk, setLogoOk] = useState(true);
     const bottomStackRef = useRef(null);
 
-    // показываем коннектор только на главной, чтобы не мешал в инвентаре/игре
+    // показываем коннектор только на Home, чтобы не мешал в игре/инвентаре
     const showWalletConnector = screen === "home";
 
     const debugEnabled = useMemo(() => {
@@ -139,6 +258,15 @@ export default function App() {
         tg.MainButton?.hide();
         tg.SecondaryButton?.hide();
         tg.BackButton?.hide();
+
+        // подхват near account_id из deep-link startapp (near_<account>)
+        try {
+            const sp = tg.initDataUnsafe?.start_param || "";
+            if (typeof sp === "string" && sp.startsWith("near_")) {
+                const accountId = sp.slice("near_".length).trim();
+                if (accountId) localStorage.setItem(LS_NEAR_ACCOUNT_ID, accountId);
+            }
+        } catch { }
 
         setMe(readTelegramUser());
 
@@ -229,7 +357,11 @@ export default function App() {
         if (!token) return null;
         try {
             const r = await apiFetch("/api/decks/active/full", { token });
-            const cards = Array.isArray(r) ? r : Array.isArray(r?.cards) ? r.cards : null;
+            const cards = Array.isArray(r)
+                ? r
+                : Array.isArray(r?.cards)
+                    ? r.cards
+                    : null;
             if (Array.isArray(cards) && cards.length === 5) return cards;
             return null;
         } catch (e) {
@@ -498,11 +630,7 @@ function BottomNav({ active, onChange }) {
 function PlayIcon() {
     return (
         <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
-            <path
-                d="M9 7.5v9l8-4.5-8-4.5Z"
-                fill="white"
-                opacity="0.95"
-            />
+            <path d="M9 7.5v9l8-4.5-8-4.5Z" fill="white" opacity="0.95" />
         </svg>
     );
 }
@@ -521,12 +649,7 @@ function HomeIcon() {
 function GemIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path
-                d="M12 2 3 9l9 13 9-13-9-7Z"
-                stroke="white"
-                strokeWidth="2"
-                opacity="0.9"
-            />
+            <path d="M12 2 3 9l9 13 9-13-9-7Z" stroke="white" strokeWidth="2" opacity="0.9" />
             <path d="M3 9h18" stroke="white" strokeWidth="2" opacity="0.6" />
         </svg>
     );
@@ -534,12 +657,7 @@ function GemIcon() {
 function BagIcon() {
     return (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path
-                d="M6 8h12l-1 13H7L6 8Z"
-                stroke="white"
-                strokeWidth="2"
-                opacity="0.9"
-            />
+            <path d="M6 8h12l-1 13H7L6 8Z" stroke="white" strokeWidth="2" opacity="0.9" />
             <path
                 d="M9 8a3 3 0 0 1 6 0"
                 stroke="white"
