@@ -50,6 +50,7 @@ const ELEM_ICON = {
     Ice: "❄️",
 };
 
+/* house-rule */
 const BEATS = {
     Earth: ["Thunder"],
     Thunder: ["Water"],
@@ -142,6 +143,7 @@ function battleElementDelta(attackerElement, defenderElement) {
     if (!attackerElement || !defenderElement) return 0;
 
     if (attackerElement === defenderElement) return +1;
+
     if (BEATS[attackerElement]?.includes(defenderElement)) return +1;
     if (BEATS[defenderElement]?.includes(attackerElement)) return -1;
 
@@ -183,15 +185,18 @@ function resolvePlacementTT(placedIdx, grid, boardElems) {
     const sameSet = new Set();
     const plusSet = new Set();
 
+    // BASIC
     for (const i of adj) {
         if (i.target.owner !== placed.owner && i.pBattle > i.tSP) basicSet.add(i.ni);
     }
 
+    // SAME
     if (RULES.same) {
         const eq = adj.filter((i) => i.pSP === i.tSP);
         if (eq.length >= 2) eq.forEach((i) => sameSet.add(i.ni));
     }
 
+    // PLUS
     if (RULES.plus) {
         const groups = new Map();
         for (const i of adj) {
@@ -248,6 +253,7 @@ function resolveCombo(queue, grid, boardElems) {
     }
 }
 
+/* 5 cards layout (3 + 2). CSS swaps columns for player side. */
 const posForHandIndex = (i) => (i < 3 ? { col: 1, row: i + 1 } : { col: 2, row: i - 2 });
 
 function getPlayerName(me) {
@@ -269,6 +275,9 @@ function initialsFrom(name) {
     return (n[0] || "?").toUpperCase();
 }
 
+/* =========================
+   House-rule Magic
+   ========================= */
 const FREEZE_DURATION_MOVES = 2;
 const REVEAL_MS = 3000;
 
@@ -282,6 +291,9 @@ function cloneDeckToHand(deck, owner) {
     return deck.map((c) => ({ ...c, owner, placeKey: 0, captureKey: 0 }));
 }
 
+/* =========================
+   NFT -> Card
+   ========================= */
 function nftToCard(nft, idx) {
     return {
         id: nft.key || nft.tokenId || `nft_${idx}`,
@@ -326,11 +338,11 @@ export default function Game({ onExit, me, playerDeck }) {
         );
     }
 
-    // IMPORTANT: не используем decks внутри init hands (чтобы не ломалось)
     const [enemyDeck, setEnemyDeck] = useState(() =>
         Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`))
     );
 
+    // IMPORTANT: hands init without depending on decks closure
     const [hands, setHands] = useState(() => ({
         player: cloneDeckToHand(playerDeck.map((n, idx) => nftToCard(n, idx)), "player"),
         enemy: cloneDeckToHand(enemyDeck, "enemy"),
@@ -357,7 +369,7 @@ export default function Game({ onExit, me, playerDeck }) {
     const [enemyRevealId, setEnemyRevealId] = useState(null);
     const [playerSpells, setPlayerSpells] = useState({ freeze: 1, reveal: 1 });
 
-    // sync player deck into hand when props changes
+    // sync player deck -> player hand
     useEffect(() => {
         setHands((h) => ({
             ...h,
@@ -366,7 +378,7 @@ export default function Game({ onExit, me, playerDeck }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [playerDeck]);
 
-    // sync enemy hand on enemy deck refresh
+    // sync enemy deck -> enemy hand
     useEffect(() => {
         setHands((h) => ({ ...h, enemy: cloneDeckToHand(enemyDeck, "enemy") }));
     }, [enemyDeck]);
@@ -390,6 +402,11 @@ export default function Game({ onExit, me, playerDeck }) {
             if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
         };
     }, []);
+
+    // IMPORTANT: when entering enemy turn, always allow AI to act
+    useEffect(() => {
+        if (turn === "enemy") aiGuard.current.handled = false;
+    }, [turn]);
 
     const decFrozenAfterCardMove = () => {
         setFrozen((prev) => prev.map((v) => (v > 0 ? v - 1 : 0)));
@@ -431,7 +448,7 @@ export default function Game({ onExit, me, playerDeck }) {
         setTimeout(() => startRound({ keepSeries: false }), 0);
     };
 
-    // Classic TT score: only board control (0..9)
+    // ONE DIGIT SCORE: only board control (0..9)
     const boardScore = useMemo(() => {
         return board.reduce(
             (a, c) => {
@@ -533,9 +550,17 @@ export default function Game({ onExit, me, playerDeck }) {
         setTurn("enemy");
     };
 
+    // ==================== AI TURN (anti-stuck) ====================
     useEffect(() => {
         if (turn !== "enemy" || roundOver || matchOver) return;
-        if (aiGuard.current.handled) return;
+
+        if (aiGuard.current.handled) {
+            const tReset = setTimeout(() => {
+                aiGuard.current.handled = false;
+            }, 250);
+            return () => clearTimeout(tReset);
+        }
+
         aiGuard.current.handled = true;
 
         const empty = board
@@ -563,9 +588,18 @@ export default function Game({ onExit, me, playerDeck }) {
             setTurn("player");
         }, 420);
 
-        return () => clearTimeout(t);
+        const safety = setTimeout(() => {
+            setTurn((cur) => (cur === "enemy" ? "player" : cur));
+            aiGuard.current.handled = false;
+        }, 1200);
+
+        return () => {
+            clearTimeout(t);
+            clearTimeout(safety);
+        };
     }, [turn, roundOver, matchOver, board, hands.enemy, frozen, boardElems]);
 
+    // ==================== ROUND OVER ====================
     useEffect(() => {
         if (roundOver || matchOver) return;
         if (board.some((c) => c === null)) return;
@@ -585,6 +619,7 @@ export default function Game({ onExit, me, playerDeck }) {
         });
     }, [board, roundOver, matchOver, hands.player.length, hands.enemy.length]);
 
+    // ==================== MATCH OVER ====================
     useEffect(() => {
         if (matchOver) return;
         if (series.player >= MATCH_WINS_TARGET || series.enemy >= MATCH_WINS_TARGET) {
@@ -594,6 +629,7 @@ export default function Game({ onExit, me, playerDeck }) {
         }
     }, [series, matchOver]);
 
+    // ==================== CONFETTI ====================
     useEffect(() => {
         if (!roundOver) return;
         if (roundWinner !== "player") return;
@@ -622,14 +658,17 @@ export default function Game({ onExit, me, playerDeck }) {
         series.player >= MATCH_WINS_TARGET ? "player" : series.enemy >= MATCH_WINS_TARGET ? "enemy" : null;
 
     const loserSide = matchWinner === "player" ? "enemy" : matchWinner === "enemy" ? "player" : null;
-    const loserDeck = loserSide ? (loserSide === "enemy" ? enemyDeck : playerDeck.map((n, idx) => nftToCard(n, idx))) : [];
+    const loserDeck = loserSide
+        ? loserSide === "enemy"
+            ? enemyDeck
+            : playerDeck.map((n, idx) => nftToCard(n, idx))
+        : [];
     const winnerSide = matchWinner;
 
     const onConfirmClaim = () => {
         if (!matchOver) return;
         if (!winnerSide || !loserSide) return;
         if (!claimPickId) return;
-
         setClaimDone(true);
         haptic("medium");
     };
@@ -641,13 +680,13 @@ export default function Game({ onExit, me, playerDeck }) {
                     ← Меню
                 </button>
 
-                {/* SCORE: только 0..9 на поле */}
                 <div className="hud-corner hud-score red hud-near-left">🟥 {boardScore.red}</div>
                 <div className="hud-corner hud-score blue hud-near-right">{boardScore.blue} 🟦</div>
 
                 <PlayerBadge side="enemy" name={enemyName} avatarUrl={enemyAvatar} active={turn === "enemy"} />
                 <PlayerBadge side="player" name={myName} avatarUrl={myAvatar} active={turn === "player"} />
 
+                {/* LEFT enemy hand */}
                 <div className="hand left">
                     <div className="hand-grid">
                         {hands.enemy.map((c, i) => {
@@ -671,6 +710,7 @@ export default function Game({ onExit, me, playerDeck }) {
                     </div>
                 </div>
 
+                {/* CENTER BOARD */}
                 <div className="center-col">
                     <div className="board">
                         {board.map((cell, i) => {
@@ -691,14 +731,7 @@ export default function Game({ onExit, me, playerDeck }) {
                                     onClick={() => onCellClick(i)}
                                     title={isFrozen ? `Frozen (${frozen[i]})` : elem ? `Element: ${elem}` : undefined}
                                 >
-                                    {elem && (
-                                        <div
-                                            className="elem-bg"
-                                            aria-hidden="true"
-                                        >
-                                            {ELEM_ICON[elem]}
-                                        </div>
-                                    )}
+                                    {elem && <div className="elem-bg" aria-hidden="true">{ELEM_ICON[elem]}</div>}
                                     {cell && <Card card={cell} cellElement={elem} />}
                                 </div>
                             );
@@ -706,6 +739,7 @@ export default function Game({ onExit, me, playerDeck }) {
                     </div>
                 </div>
 
+                {/* RIGHT player hand */}
                 <div className="hand right">
                     <div className="hand-grid">
                         {hands.player.map((c, i) => {
@@ -746,6 +780,7 @@ export default function Game({ onExit, me, playerDeck }) {
                     </div>
                 </div>
 
+                {/* GAME OVER OVERLAY */}
                 {(roundOver || matchOver) && (
                     <div className="game-over">
                         <div className="game-over-box" style={{ minWidth: 320 }}>
@@ -786,7 +821,9 @@ export default function Game({ onExit, me, playerDeck }) {
                                                         style={{
                                                             cursor: claimDone ? "default" : "pointer",
                                                             outline:
-                                                                claimPickId === c.id ? "2px solid rgba(120,200,255,0.75)" : "1px solid rgba(255,255,255,0.12)",
+                                                                claimPickId === c.id
+                                                                    ? "2px solid rgba(120,200,255,0.75)"
+                                                                    : "1px solid rgba(255,255,255,0.12)",
                                                             borderRadius: 12,
                                                             padding: 4,
                                                             opacity: claimDone ? 0.6 : 1,
@@ -826,6 +863,9 @@ export default function Game({ onExit, me, playerDeck }) {
     );
 }
 
+/* =========================
+   Player Badge
+   ========================= */
 function PlayerBadge({ side, name, avatarUrl, active }) {
     const [imgOk, setImgOk] = useState(Boolean(avatarUrl));
     const initials = initialsFrom(name);
@@ -849,6 +889,9 @@ function PlayerBadge({ side, name, avatarUrl, active }) {
     );
 }
 
+/* =========================
+   Card Component
+   ========================= */
 function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
     const [placedAnim, setPlacedAnim] = useState(false);
     const [capturedAnim, setCapturedAnim] = useState(false);
@@ -894,7 +937,7 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
             <div className="card-anim">
                 <img className="card-art-img" src={card.imageUrl} alt="" draggable="false" />
 
-                {/* only element icon; no rank letter; bigger and animated */}
+                {/* no rank letter; BIG element + animated */}
                 {card.element ? (
                     <div className="card-elem-pill" title={card.element}>
                         <span className="card-elem-ic">{ELEM_ICON[card.element]}</span>

@@ -1,5 +1,4 @@
 import { useSyncExternalStore } from "react";
-
 import { setupWalletSelector } from "@near-wallet-selector/core";
 import { setupMyNearWallet } from "@near-wallet-selector/my-near-wallet";
 
@@ -49,11 +48,7 @@ async function fetchNearBalance(networkId, accountId) {
             jsonrpc: "2.0",
             id: "cc-balance",
             method: "query",
-            params: {
-                request_type: "view_account",
-                finality: "final",
-                account_id: accountId,
-            },
+            params: { request_type: "view_account", finality: "final", account_id: accountId },
         }),
     });
 
@@ -80,6 +75,7 @@ let state = {
     disconnectWallet: async () => { },
     switchNetwork: async (_network) => { },
     restoreSession: async () => { },
+    clearStatus: () => { },
 };
 
 const listeners = new Set();
@@ -193,14 +189,13 @@ async function ensureNear() {
 async function connectWallet(network) {
     if (network && network !== "near") throw new Error(`Unsupported network: ${network}`);
 
-    setState({ status: "Открываю кошелёк…" });
+    setState({ status: "Открываю MyNearWallet…" });
 
     const sel = await ensureNear();
     const wallet = await sel.wallet("my-near-wallet");
 
     const originalOpen = window.open;
     window.open = (url) => {
-        // В Telegram WebView попапы режутся — редиректим
         window.location.assign(url);
         return { focus() { }, closed: false };
     };
@@ -208,7 +203,7 @@ async function connectWallet(network) {
     try {
         const backUrl = window.location.href;
 
-        // ВАЖНО: НЕ await — иначе “висим” навсегда в WebView
+        // IMPORTANT: do NOT await -> avoids infinite hang in WebView
         wallet
             .signIn?.({
                 contractId: defaultContractId,
@@ -218,7 +213,7 @@ async function connectWallet(network) {
             })
             ?.catch(() => { });
 
-        setState({ status: "Заверши вход в MyNearWallet и вернись в игру." });
+        setState({ status: "Заверши вход в кошельке и вернись в Telegram/WebApp." });
     } finally {
         window.open = originalOpen;
     }
@@ -241,8 +236,13 @@ async function disconnectWallet() {
 
 async function restoreSession() {
     await ensureNear();
-    syncFromUrlIfPresent();
-    applyFallbackFromStorage();
+    const okUrl = syncFromUrlIfPresent();
+    const okLs = applyFallbackFromStorage();
+    if (okUrl || okLs) setState({ status: "" });
+}
+
+function clearStatus() {
+    setState({ status: "" });
 }
 
 async function switchNetwork(net) {
@@ -255,6 +255,7 @@ state = {
     disconnectWallet,
     restoreSession,
     switchNetwork,
+    clearStatus,
 };
 
 export function useWalletStore() {

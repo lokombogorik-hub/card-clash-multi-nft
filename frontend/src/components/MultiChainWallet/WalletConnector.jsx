@@ -8,10 +8,12 @@ export default function WalletConnector() {
         network,
         balance,
         availableNetworks,
+        status,
         connectWallet,
         disconnectWallet,
         switchNetwork,
         restoreSession,
+        clearStatus,
     } = useWalletStore();
 
     const [showNetworks, setShowNetworks] = useState(false);
@@ -83,9 +85,7 @@ export default function WalletConnector() {
     };
 
     const explorerUrl =
-        network === "near" && walletAddress
-            ? `https://nearblocks.io/address/${walletAddress}`
-            : "#";
+        network === "near" && walletAddress ? `https://nearblocks.io/address/${walletAddress}` : "#";
 
     const onConnect = async () => {
         haptic();
@@ -93,7 +93,8 @@ export default function WalletConnector() {
         setLoading(true);
         try {
             await connectWallet("near");
-            // дальше будет redirect -> код сюда обычно не вернется
+            // важное: дальше может быть redirect, но мы не держим вечный loader
+            setTimeout(() => setLoading(false), 600);
         } catch (e) {
             setErr(String(e?.message || e));
             setLoading(false);
@@ -106,6 +107,20 @@ export default function WalletConnector() {
         setLoading(true);
         try {
             await disconnectWallet();
+        } catch (e) {
+            setErr(String(e?.message || e));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const onIConnected = async () => {
+        haptic();
+        setErr("");
+        setLoading(true);
+        try {
+            await restoreSession?.();
+            clearStatus?.();
         } catch (e) {
             setErr(String(e?.message || e));
         } finally {
@@ -136,6 +151,40 @@ export default function WalletConnector() {
                     >
                         {loading ? "Открываю кошелёк..." : "Подключить кошелёк"}
                     </button>
+
+                    {status ? (
+                        <div
+                            style={{
+                                maxWidth: 320,
+                                padding: "8px 10px",
+                                borderRadius: 12,
+                                background: "rgba(0,0,0,0.55)",
+                                border: "1px solid rgba(255,255,255,0.12)",
+                                color: "#fff",
+                                fontSize: 12,
+                                lineHeight: 1.25,
+                            }}
+                        >
+                            {status}
+                            <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+                                <button
+                                    onClick={onIConnected}
+                                    disabled={loading}
+                                    style={{
+                                        padding: "8px 10px",
+                                        borderRadius: 10,
+                                        background: "rgba(255,255,255,0.08)",
+                                        border: "1px solid rgba(255,255,255,0.14)",
+                                        color: "#fff",
+                                        fontSize: 12,
+                                        fontWeight: 800,
+                                    }}
+                                >
+                                    Я уже подключил
+                                </button>
+                            </div>
+                        </div>
+                    ) : null}
 
                     {err ? (
                         <div
@@ -211,10 +260,7 @@ export default function WalletConnector() {
                                                     width: "100%",
                                                     textAlign: "left",
                                                     padding: "10px 12px",
-                                                    background:
-                                                        net === network
-                                                            ? "rgba(255,255,255,0.08)"
-                                                            : "transparent",
+                                                    background: net === network ? "rgba(255,255,255,0.08)" : "transparent",
                                                     border: "none",
                                                     color: "#fff",
                                                     cursor: "pointer",
