@@ -1,32 +1,33 @@
 import os
-from typing import Optional
-
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from dataclasses import dataclass
 
 
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+def _get(name: str, default: str = "") -> str:
+    return (os.getenv(name, default) or "").strip()
+
+
+@dataclass(frozen=True)
+class Settings:
+    # Telegram
+    # поддерживаем оба имени переменной:
+    # - TELEGRAM_BOT_TOKEN (старое/явное)
+    # - BOT_TOKEN (то, что вы ставите на хостинге)
+    TELEGRAM_BOT_TOKEN: str = _get("TELEGRAM_BOT_TOKEN")
+    BOT_TOKEN: str = _get("BOT_TOKEN")
+
+    TG_INITDATA_MAX_AGE_SEC: int = int(_get("TG_INITDATA_MAX_AGE_SEC", "86400"))  # 24h default
 
     # JWT
-    JWT_SECRET: str = "dev-secret"
-    JWT_ALG: str = "HS256"
+    JWT_SECRET: str = _get("JWT_SECRET")
+    JWT_ALG: str = _get("JWT_ALG", "HS256")
 
-    # Telegram bot token (для verify_init_data)
-    TELEGRAM_BOT_TOKEN: str = ""
+    # DB
+    DATABASE_URL: str = _get("DATABASE_URL")
 
-    # DB (делаем НЕ обязательным, потому что на Railway можем собирать из PG*)
-    DATABASE_URL: Optional[str] = None
+    @property
+    def effective_bot_token(self) -> str:
+        # TELEGRAM_BOT_TOKEN имеет приоритет, BOT_TOKEN — fallback
+        return self.TELEGRAM_BOT_TOKEN or self.BOT_TOKEN
 
 
 settings = Settings()
-
-# Если DATABASE_URL не задан через env, берём тот, который собрал database.session (из PG*)
-if not (settings.DATABASE_URL or "").strip():
-    try:
-        # локальный импорт, чтобы не ломать порядок загрузки
-        from database.session import DATABASE_URL as BUILT_DATABASE_URL  # type: ignore
-
-        settings.DATABASE_URL = BUILT_DATABASE_URL
-    except Exception:
-        # оставляем None — некоторые части приложения могут работать без БД
-        settings.DATABASE_URL = None
