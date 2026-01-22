@@ -19,9 +19,25 @@ export default function WalletConnector() {
     const [err, setErr] = useState("");
 
     useEffect(() => {
-        // Восстановление сессии после возврата со страницы кошелька
         restoreSession?.().catch(() => { });
     }, [restoreSession]);
+
+    const tgNotify = async (message) => {
+        try {
+            const tg = window.Telegram?.WebApp;
+            if (tg?.showPopup) {
+                await tg.showPopup({ message, buttons: [{ type: "ok", text: "OK" }] });
+                return;
+            }
+            if (tg?.showAlert) {
+                await tg.showAlert(message);
+                return;
+            }
+        } catch { }
+        try {
+            alert(message);
+        } catch { }
+    };
 
     const haptic = () => {
         try {
@@ -35,17 +51,41 @@ export default function WalletConnector() {
         return `${address.slice(0, 10)}...${address.slice(-6)}`;
     };
 
+    const copyToClipboard = async (text) => {
+        if (!text) throw new Error("Empty text");
+
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+            return;
+        }
+
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.setAttribute("readonly", "true");
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        ta.style.top = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+        if (!ok) throw new Error("Copy failed");
+    };
+
     const copyAddress = async () => {
         try {
-            await navigator.clipboard.writeText(walletAddress);
-            alert("Адрес скопирован");
+            await copyToClipboard(walletAddress);
+            await tgNotify("Адрес скопирован");
         } catch {
-            alert("Не удалось скопировать");
+            await tgNotify("Не удалось скопировать");
         }
     };
 
     const explorerUrl =
-        network === "near" ? `https://nearblocks.io/address/${walletAddress}` : "#";
+        network === "near" && walletAddress
+            ? `https://nearblocks.io/address/${walletAddress}`
+            : "#";
 
     const onConnect = async () => {
         haptic();
@@ -53,10 +93,9 @@ export default function WalletConnector() {
         setLoading(true);
         try {
             await connectWallet("near");
-            // Обычно произойдёт редирект на кошелёк, а после возврата restoreSession() всё подхватит
+            // дальше будет redirect -> код сюда обычно не вернется
         } catch (e) {
             setErr(String(e?.message || e));
-        } finally {
             setLoading(false);
         }
     };
@@ -74,8 +113,8 @@ export default function WalletConnector() {
         }
     };
 
-    // Позиция ниже верхней границы (safe-area + запас под хедер)
-    const topOffset = "calc(env(safe-area-inset-top, 0px) + 56px)";
+    const topOffset =
+        "calc(var(--safe-t, env(safe-area-inset-top, 0px)) + var(--tg-top-controls, 58px) + 6px)";
 
     return (
         <div style={{ position: "fixed", top: topOffset, right: 16, zIndex: 9999 }}>
@@ -95,7 +134,7 @@ export default function WalletConnector() {
                             opacity: loading ? 0.8 : 1,
                         }}
                     >
-                        {loading ? "Подключение..." : "Подключить кошелёк"}
+                        {loading ? "Открываю кошелёк..." : "Подключить кошелёк"}
                     </button>
 
                     {err ? (
@@ -130,7 +169,6 @@ export default function WalletConnector() {
                             backdropFilter: "blur(8px)",
                         }}
                     >
-                        {/* Селектор сети показываем только когда сетей > 1 */}
                         {Array.isArray(availableNetworks) && availableNetworks.length > 1 ? (
                             <div style={{ position: "relative" }}>
                                 <button
@@ -174,7 +212,9 @@ export default function WalletConnector() {
                                                     textAlign: "left",
                                                     padding: "10px 12px",
                                                     background:
-                                                        net === network ? "rgba(255,255,255,0.08)" : "transparent",
+                                                        net === network
+                                                            ? "rgba(255,255,255,0.08)"
+                                                            : "transparent",
                                                     border: "none",
                                                     color: "#fff",
                                                     cursor: "pointer",
@@ -188,7 +228,6 @@ export default function WalletConnector() {
                             </div>
                         ) : null}
 
-                        {/* Баланс */}
                         <div
                             style={{
                                 padding: "8px 10px",
@@ -203,7 +242,6 @@ export default function WalletConnector() {
                             {Number(balance || 0).toFixed(4)} Ⓝ
                         </div>
 
-                        {/* Адрес */}
                         <button
                             onClick={copyAddress}
                             style={{
@@ -220,7 +258,6 @@ export default function WalletConnector() {
                             {formatAddress(walletAddress)}
                         </button>
 
-                        {/* Explorer */}
                         <a
                             href={explorerUrl}
                             target="_blank"
@@ -238,7 +275,6 @@ export default function WalletConnector() {
                             ↗
                         </a>
 
-                        {/* Disconnect */}
                         <button
                             onClick={onDisconnect}
                             disabled={loading}

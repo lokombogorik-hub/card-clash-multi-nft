@@ -1,11 +1,10 @@
 import { useSyncExternalStore } from "react";
 
 import { setupWalletSelector } from "@near-wallet-selector/core";
-import { setupModal } from "@near-wallet-selector/modal-ui";
 import { setupMyNearWallet } from "@near-wallet-selector/my-near-wallet";
 
 const LS_NEAR_NETWORK_ID = "cc_near_network_id";
-const LS_NEAR_ACCOUNT_ID = "cc_near_account_id"; // fallback (Telegram flow)
+const LS_NEAR_ACCOUNT_ID = "cc_near_account_id";
 
 const envNetworkId = (import.meta.env.VITE_NEAR_NETWORK_ID || "").toLowerCase(); // mainnet | testnet
 const defaultNetworkId = envNetworkId === "testnet" ? "testnet" : "mainnet";
@@ -28,14 +27,6 @@ function getRpcUrl(networkId) {
     return networkId === "testnet"
         ? "https://rpc.testnet.near.org"
         : "https://rpc.mainnet.near.org";
-}
-
-function isTelegramWebApp() {
-    try {
-        return !!window.Telegram?.WebApp;
-    } catch {
-        return false;
-    }
 }
 
 function yoctoToNearFloat(yoctoStr) {
@@ -81,22 +72,6 @@ async function fetchNearBalance(networkId, accountId) {
     return yoctoToNearFloat(amount);
 }
 
-function applyFallbackAccountIfPresent() {
-    try {
-        const accountId = localStorage.getItem(LS_NEAR_ACCOUNT_ID) || "";
-        if (!accountId) return false;
-
-        setState({ connected: true, walletAddress: accountId });
-        fetchNearBalance(getNearNetworkId(), accountId)
-            .then((b) => setState({ balance: b }))
-            .catch(() => setState({ balance: 0 }));
-
-        return true;
-    } catch {
-        return false;
-    }
-}
-
 // ---------------------------
 // tiny external store (без zustand)
 // ---------------------------
@@ -115,10 +90,66 @@ let state = {
 };
 
 const listeners = new Set();
-
 function setState(patch) {
     state = { ...state, ...patch };
     for (const l of listeners) l();
+}
+
+function applyAccount(accountId) {
+    if (!accountId) return;
+
+    setState({ connected: true, walletAddress: accountId });
+
+    try {
+        localStorage.setItem(LS_NEAR_ACCOUNT_ID, accountId);
+    } catch { }
+
+    fetchNearBalance(getNearNetworkId(), accountId)
+        .then((b) => setState({ balance: b }))
+        .catch(() => setState({ balance: 0 }));
+}
+
+function applyFallbackFromStorage() {
+    try {
+        const accountId = localStorage.getItem(LS_NEAR_ACCOUNT_ID) || "";
+        if (!accountId) return false;
+        applyAccount(accountId);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function syncFromUrlIfPresent() {
+    // MyNearWallet после логина может вернуть ?account_id=...&all_keys=... и т.п.
+    try {
+        const url = new URL(window.location.href);
+        const p = url.searchParams;
+
+        const accountId = p.get("account_id") || p.get("accountId") || "";
+        if (!accountId) return false;
+
+        applyAccount(accountId);
+
+        // чистим "стремную ссылку"
+        const keysToRemove = [
+            "account_id",
+            "accountId",
+            "all_keys",
+            "public_key",
+            "meta",
+            "errorCode",
+            "errorMessage",
+            "transactionHashes",
+            "signInErrorType",
+        ];
+        for (const k of keysToRemove) p.delete(k);
+
+        window.history.replaceState({}, "", url.pathname + (p.toString() ? `?${p.toString()}` : "") + url.hash);
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 // ---------------------------
@@ -126,11 +157,10 @@ function setState(patch) {
 // ---------------------------
 let nearInitPromise = null;
 let selector = null;
-let modal = null;
 let storeSubscription = null;
 
 async function ensureNear() {
-    if (selector && modal) return { selector, modal };
+    if (selector) return selector;
     if (nearInitPromise) return nearInitPromise;
 
     nearInitPromise = (async () => {
@@ -141,66 +171,37 @@ async function ensureNear() {
             modules: [setupMyNearWallet()],
         });
 
-        modal = setupModal(selector, {
-            contractId: defaultContractId,
-            theme: "dark",
-        });
-
         setState({ nearNetworkId });
 
-        // подписка на selector (полезна в обычном браузере)
         if (!storeSubscription) {
             storeSubscription = selector.store.observable.subscribe((s) => {
                 const active =
                     s.accounts?.find((a) => a.active) || s.accounts?.[0] || null;
 
                 if (!active?.accountId) {
-                    // если есть fallback аккаунт (telegram-flow) — держим connected
-                    if (applyFallbackAccountIfPresent()) return;
-
-                    setState({
-                        connected: false,
-                        walletAddress: "",
-                        balance: 0,
-                    });
+                    // если selector пустой — пробуем fallback из localStorage
+                    if (!applyFallbackFromStorage()) {
+                        setState({ connected: false, walletAddress: "", balance: 0 });
+                    }
                     return;
                 }
 
-                setState({
-                    connected: true,
-                    walletAddress: active.accountId,
-                });
-
-                fetchNearBalance(getNearNetworkId(), active.accountId)
-                    .then((b) => setState({ balance: b }))
-                    .catch(() => setState({ balance: 0 }));
+                applyAccount(active.accountId);
             });
         }
 
-        // initial sync
-        const s = selector.store.getState();
-        const active =
-            s.accounts?.find((a) => a.active) || s.accounts?.[0] || null;
+        // initial
+        const s0 = selector.store.getState();
+        const active0 =
+            s0.accounts?.find((a) => a.active) || s0.accounts?.[0] || null;
 
-        if (active?.accountId) {
-            setState({
-                connected: true,
-                walletAddress: active.accountId,
-            });
-            try {
-                const b = await fetchNearBalance(nearNetworkId, active.accountId);
-                setState({ balance: b });
-            } catch {
-                setState({ balance: 0 });
-            }
-        } else {
-            // если selector пустой — попробуем fallback из localStorage
-            if (!applyFallbackAccountIfPresent()) {
-                setState({ connected: false, walletAddress: "", balance: 0 });
-            }
+        if (active0?.accountId) applyAccount(active0.accountId);
+        else {
+            // сначала попробуем account_id из URL, затем localStorage
+            if (!syncFromUrlIfPresent()) applyFallbackFromStorage();
         }
 
-        return { selector, modal };
+        return selector;
     })();
 
     return nearInitPromise;
@@ -214,74 +215,54 @@ async function connectWallet(network) {
         throw new Error(`Unsupported network: ${network}`);
     }
 
-    const { selector, modal } = await ensureNear();
+    const sel = await ensureNear();
+    const wallet = await sel.wallet("my-near-wallet");
 
-    // Telegram WebApp: попапы могут быть убиты. Делаем вход через redirect в кошелёк,
-    // а обратно возвращаемся через callback URL (App.jsx обработает near_cb=1).
-    if (isTelegramWebApp()) {
-        const tg = window.Telegram?.WebApp;
+    // ВАЖНО: никаких popup / tg.openLink.
+    // Делаем redirect в ЭТОМ ЖЕ WebView/вкладке => кошелек вернет обратно сам на successUrl.
+    const originalOpen = window.open;
+    window.open = (url) => {
+        window.location.assign(url);
+        return { focus() { }, closed: false };
+    };
 
-        const wallet = await selector.wallet("my-near-wallet");
-
-        const callbackUrl = `${window.location.origin}/?near_cb=1`;
-
-        // Перехватываем window.open (который кошелёк использует под popup),
-        // и открываем ссылку через Telegram openLink (обычно уедет во внутренний браузер/системный).
-        const originalOpen = window.open;
-        window.open = (url) => {
-            try {
-                if (tg?.openLink) tg.openLink(url);
-                else window.location.assign(url);
-            } catch {
-                window.location.assign(url);
-            }
-            return { focus() { }, closed: false };
-        };
-
-        try {
-            await wallet.signIn?.({
-                contractId: defaultContractId,
-                methodNames: [],
-                successUrl: callbackUrl,
-                failureUrl: callbackUrl,
-            });
-            return;
-        } finally {
-            window.open = originalOpen;
-        }
+    try {
+        const backUrl = window.location.href; // вернёт сюда же, но уже с account_id
+        await wallet.signIn?.({
+            contractId: defaultContractId,
+            methodNames: [],
+            successUrl: backUrl,
+            failureUrl: backUrl,
+        });
+    } finally {
+        window.open = originalOpen;
     }
-
-    // Обычный браузер (не Telegram) — показываем модалку
-    modal.show();
 }
 
 async function disconnectWallet() {
-    // чистим fallback (telegram-flow)
     try {
         localStorage.removeItem(LS_NEAR_ACCOUNT_ID);
     } catch { }
 
-    if (!selector) {
-        setState({ connected: false, walletAddress: "", balance: 0 });
-        return;
-    }
-
+    // пытаемся разлогинить selector (если доступен)
     try {
-        const w = await selector.wallet();
-        await w.signOut();
+        if (selector) {
+            const w = await selector.wallet();
+            await w.signOut();
+        }
     } catch {
         // ignore
-    } finally {
-        setState({ connected: false, walletAddress: "", balance: 0 });
     }
+
+    setState({ connected: false, walletAddress: "", balance: 0 });
 }
 
 async function restoreSession() {
     await ensureNear();
-
-    // если после перезапуска selector пуст — но у нас есть fallback accountId (telegram-flow),
-    // показываем как connected
-    applyFallbackAccountIfPresent();
+    // если вернулись с кошелька и URL содержит account_id — подхватим
+    syncFromUrlIfPresent();
+    // если selector пустой — fallback
+    applyFallbackFromStorage();
 }
 
 async function switchNetwork(net) {
