@@ -38,6 +38,19 @@ function readTelegramUser() {
     }
 }
 
+function getStoredToken() {
+    try {
+        return (
+            localStorage.getItem("token") ||
+            localStorage.getItem("accessToken") ||
+            localStorage.getItem("access_token") ||
+            ""
+        );
+    } catch {
+        return "";
+    }
+}
+
 export default function App() {
     const [screen, setScreen] = useState("home");
     const isLandscape = useIsLandscape();
@@ -50,7 +63,6 @@ export default function App() {
     const [logoOk, setLogoOk] = useState(true);
     const bottomStackRef = useRef(null);
 
-    // показываем WalletConnector только на home, чтобы не мешал
     const showWalletConnector = screen === "home";
 
     const debugEnabled = useMemo(() => {
@@ -165,6 +177,14 @@ export default function App() {
                 const accessToken = r?.accessToken || r?.access_token || r?.token || null;
                 setToken(accessToken);
 
+                try {
+                    if (accessToken) {
+                        localStorage.setItem("token", accessToken);
+                        localStorage.setItem("accessToken", accessToken);
+                        localStorage.setItem("access_token", accessToken);
+                    }
+                } catch { }
+
                 if (accessToken) {
                     setAuthState({ status: "ok", error: "" });
                 } else {
@@ -224,9 +244,11 @@ export default function App() {
     };
 
     const loadActiveDeck = async () => {
-        if (!token) return null;
+        const t = token || getStoredToken();
+        if (!t) return null;
+
         try {
-            const r = await apiFetch("/api/decks/active/full", { token });
+            const r = await apiFetch("/api/decks/active/full", { token: t });
             const cards = Array.isArray(r) ? r : Array.isArray(r?.cards) ? r.cards : null;
             if (Array.isArray(cards) && cards.length === 5) return cards;
             return null;
@@ -238,6 +260,11 @@ export default function App() {
 
     const onPlay = async () => {
         requestFullscreen();
+
+        if (authState.status !== "ok") {
+            setScreen("home");
+            return;
+        }
 
         const deck = await loadActiveDeck();
         if (!deck) {
@@ -265,7 +292,6 @@ export default function App() {
         return (
             <div className="shell">
                 <StormBg />
-                {/* WalletConnector в игре скрываем */}
                 {showWalletConnector ? <WalletConnector /> : null}
 
                 <div className={`game-host ${showRotate ? "is-hidden" : ""}`}>
@@ -342,8 +368,8 @@ export default function App() {
                 )}
 
                 {screen === "market" && <Market />}
-                {screen === "inventory" && <Inventory token={token} onDeckReady={() => setScreen("home")} />}
-                {screen === "profile" && <Profile token={token} />}
+                {screen === "inventory" && <Inventory token={token || getStoredToken()} onDeckReady={() => setScreen("home")} />}
+                {screen === "profile" && <Profile token={token || getStoredToken()} />}
             </div>
 
             <div className="bottom-stack" ref={bottomStackRef}>
@@ -376,7 +402,8 @@ export default function App() {
 
                     <div>VITE_API_BASE_URL: {apiBase || "(empty!)"}</div>
                     <div>
-                        token length: {token ? token.length : 0} | auth: {authState.status}
+                        token length: {(token || getStoredToken()) ? String((token || getStoredToken()).length) : 0} | auth:{" "}
+                        {authState.status}
                     </div>
                     {authState.error ? <div style={{ color: "#ffb3b3" }}>auth error: {authState.error}</div> : null}
 
