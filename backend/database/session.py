@@ -24,7 +24,11 @@ def _normalize_database_url(raw: str) -> str:
         url = "postgresql://" + url[len("postgres://") :]
 
     # Force psycopg3 dialect if user provided plain postgresql://
-    if url.startswith("postgresql://") and "postgresql+psycopg://" not in url and "postgresql+asyncpg://" not in url:
+    if (
+        url.startswith("postgresql://")
+        and "postgresql+psycopg://" not in url
+        and "postgresql+asyncpg://" not in url
+    ):
         url = url.replace("postgresql://", "postgresql+psycopg://", 1)
 
     try:
@@ -37,7 +41,7 @@ def _normalize_database_url(raw: str) -> str:
             if host.endswith(".aivencloud.com") or host.endswith(".neon.tech"):
                 q["sslmode"] = "require"
 
-        # If Aiven requires verify-full and you provide CA cert path
+        # If sslmode=verify-full and CA cert path provided
         sslrootcert = os.getenv("PG_SSLROOTCERT", "").strip()
         if q.get("sslmode") == "verify-full" and sslrootcert and "sslrootcert" not in q:
             q["sslrootcert"] = sslrootcert
@@ -73,11 +77,14 @@ if "pooler" in DATABASE_URL or "pgbouncer" in DATABASE_URL:
 
 engine = create_async_engine(DATABASE_URL, **_ENGINE_KW)
 
-AsyncSessionLocal = async_sessionmaker(
-    engine, expire_on_commit=False, class_=AsyncSession
-)
+AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 
 async def get_session() -> AsyncSession:
     async with AsyncSessionLocal() as session:
         yield session
+
+
+# --- Backward compatible alias ---
+# Some modules still import get_db from database.session
+get_db = get_session
