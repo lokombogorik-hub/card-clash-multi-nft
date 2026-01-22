@@ -1357,3 +1357,58 @@ button {
     filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.55));
     pointer-events: none;
 }
+
+/* ===== Elements UI (bigger + animated) ===== */
+.elem-bg {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    opacity: .16;
+    font-size: 34px;
+    pointer-events: none;
+    z-index: 0;
+    filter: drop-shadow(0 0 10px rgba(120, 200, 255, 0.10));
+}
+
+.card-elem-pill {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 7;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.card-elem-ic {
+    font-size: 18px;
+    line-height: 1;
+    animation: elemPulse 1.6s ease-in-out infinite;
+    transform-origin: center;
+    filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
+}
+
+.card-elem-delta {
+    font-size: 11px;
+    font-weight: 900;
+    opacity: .9;
+}
+
+@keyframes elemPulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+        filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
+    }
+
+    50% {
+        transform: scale(1.18);
+        filter: drop-shadow(0 10px 16px rgba(120, 200, 255, 0.18));
+    }
+}

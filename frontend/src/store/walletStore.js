@@ -6,13 +6,12 @@ import { setupMyNearWallet } from "@near-wallet-selector/my-near-wallet";
 const LS_NEAR_NETWORK_ID = "cc_near_network_id";
 const LS_NEAR_ACCOUNT_ID = "cc_near_account_id";
 
-const envNetworkId = (import.meta.env.VITE_NEAR_NETWORK_ID || "").toLowerCase(); // mainnet | testnet
+const envNetworkId = (import.meta.env.VITE_NEAR_NETWORK_ID || "").toLowerCase();
 const defaultNetworkId = envNetworkId === "testnet" ? "testnet" : "mainnet";
 
 const envContractId = import.meta.env.VITE_NEAR_CONTRACT_ID || "";
 const defaultContractId =
-    envContractId ||
-    (defaultNetworkId === "testnet" ? "cardclash.testnet" : "cardclash.near");
+    envContractId || (defaultNetworkId === "testnet" ? "cardclash.testnet" : "cardclash.near");
 
 const envRpcUrl = import.meta.env.VITE_NEAR_RPC_URL || "";
 
@@ -24,9 +23,7 @@ function getNearNetworkId() {
 
 function getRpcUrl(networkId) {
     if (envRpcUrl) return envRpcUrl;
-    return networkId === "testnet"
-        ? "https://rpc.testnet.near.org"
-        : "https://rpc.mainnet.near.org";
+    return networkId === "testnet" ? "https://rpc.testnet.near.org" : "https://rpc.mainnet.near.org";
 }
 
 function yoctoToNearFloat(yoctoStr) {
@@ -35,8 +32,6 @@ function yoctoToNearFloat(yoctoStr) {
         const base = 10n ** 24n;
         const whole = yocto / base;
         const frac = yocto % base;
-
-        // первые 6 знаков после запятой (дальше UI делает toFixed(4))
         const fracStr = frac.toString().padStart(24, "0").slice(0, 6);
         return Number(`${whole.toString()}.${fracStr}`);
     } catch {
@@ -72,9 +67,6 @@ async function fetchNearBalance(networkId, accountId) {
     return yoctoToNearFloat(amount);
 }
 
-// ---------------------------
-// tiny external store (без zustand)
-// ---------------------------
 let state = {
     connected: false,
     walletAddress: "",
@@ -82,6 +74,7 @@ let state = {
     nearNetworkId: getNearNetworkId(),
     balance: 0,
     availableNetworks: ["near"],
+    status: "",
 
     connectWallet: async (_network) => { },
     disconnectWallet: async () => { },
@@ -98,7 +91,7 @@ function setState(patch) {
 function applyAccount(accountId) {
     if (!accountId) return;
 
-    setState({ connected: true, walletAddress: accountId });
+    setState({ connected: true, walletAddress: accountId, status: "" });
 
     try {
         localStorage.setItem(LS_NEAR_ACCOUNT_ID, accountId);
@@ -121,7 +114,6 @@ function applyFallbackFromStorage() {
 }
 
 function syncFromUrlIfPresent() {
-    // MyNearWallet после логина может вернуть ?account_id=...&all_keys=... и т.п.
     try {
         const url = new URL(window.location.href);
         const p = url.searchParams;
@@ -131,7 +123,6 @@ function syncFromUrlIfPresent() {
 
         applyAccount(accountId);
 
-        // чистим "стремную ссылку"
         const keysToRemove = [
             "account_id",
             "accountId",
@@ -152,9 +143,6 @@ function syncFromUrlIfPresent() {
     }
 }
 
-// ---------------------------
-// NEAR selector singleton
-// ---------------------------
 let nearInitPromise = null;
 let selector = null;
 let storeSubscription = null;
@@ -175,11 +163,9 @@ async function ensureNear() {
 
         if (!storeSubscription) {
             storeSubscription = selector.store.observable.subscribe((s) => {
-                const active =
-                    s.accounts?.find((a) => a.active) || s.accounts?.[0] || null;
+                const active = s.accounts?.find((a) => a.active) || s.accounts?.[0] || null;
 
                 if (!active?.accountId) {
-                    // если selector пустой — пробуем fallback из localStorage
                     if (!applyFallbackFromStorage()) {
                         setState({ connected: false, walletAddress: "", balance: 0 });
                     }
@@ -190,14 +176,11 @@ async function ensureNear() {
             });
         }
 
-        // initial
         const s0 = selector.store.getState();
-        const active0 =
-            s0.accounts?.find((a) => a.active) || s0.accounts?.[0] || null;
+        const active0 = s0.accounts?.find((a) => a.active) || s0.accounts?.[0] || null;
 
         if (active0?.accountId) applyAccount(active0.accountId);
         else {
-            // сначала попробуем account_id из URL, затем localStorage
             if (!syncFromUrlIfPresent()) applyFallbackFromStorage();
         }
 
@@ -207,33 +190,35 @@ async function ensureNear() {
     return nearInitPromise;
 }
 
-// ---------------------------
-// Actions
-// ---------------------------
 async function connectWallet(network) {
-    if (network && network !== "near") {
-        throw new Error(`Unsupported network: ${network}`);
-    }
+    if (network && network !== "near") throw new Error(`Unsupported network: ${network}`);
+
+    setState({ status: "Открываю кошелёк…" });
 
     const sel = await ensureNear();
     const wallet = await sel.wallet("my-near-wallet");
 
-    // ВАЖНО: никаких popup / tg.openLink.
-    // Делаем redirect в ЭТОМ ЖЕ WebView/вкладке => кошелек вернет обратно сам на successUrl.
     const originalOpen = window.open;
     window.open = (url) => {
+        // В Telegram WebView попапы режутся — редиректим
         window.location.assign(url);
         return { focus() { }, closed: false };
     };
 
     try {
-        const backUrl = window.location.href; // вернёт сюда же, но уже с account_id
-        await wallet.signIn?.({
-            contractId: defaultContractId,
-            methodNames: [],
-            successUrl: backUrl,
-            failureUrl: backUrl,
-        });
+        const backUrl = window.location.href;
+
+        // ВАЖНО: НЕ await — иначе “висим” навсегда в WebView
+        wallet
+            .signIn?.({
+                contractId: defaultContractId,
+                methodNames: [],
+                successUrl: backUrl,
+                failureUrl: backUrl,
+            })
+            ?.catch(() => { });
+
+        setState({ status: "Заверши вход в MyNearWallet и вернись в игру." });
     } finally {
         window.open = originalOpen;
     }
@@ -244,24 +229,19 @@ async function disconnectWallet() {
         localStorage.removeItem(LS_NEAR_ACCOUNT_ID);
     } catch { }
 
-    // пытаемся разлогинить selector (если доступен)
     try {
         if (selector) {
             const w = await selector.wallet();
             await w.signOut();
         }
-    } catch {
-        // ignore
-    }
+    } catch { }
 
-    setState({ connected: false, walletAddress: "", balance: 0 });
+    setState({ connected: false, walletAddress: "", balance: 0, status: "" });
 }
 
 async function restoreSession() {
     await ensureNear();
-    // если вернулись с кошелька и URL содержит account_id — подхватим
     syncFromUrlIfPresent();
-    // если selector пустой — fallback
     applyFallbackFromStorage();
 }
 
