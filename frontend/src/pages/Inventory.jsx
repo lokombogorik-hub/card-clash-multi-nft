@@ -1,14 +1,33 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
-function getNearAccountId() {
-    try { return localStorage.getItem("cc_near_account_id") || ""; } catch { return ""; }
-}
+
 function nftKey(n) {
-    // поддерживаем и mock формат, и near формат
     if (n.key) return n.key;
     if (n.chain && n.contractId && n.tokenId) return `${n.chain}:${n.contractId}:${n.tokenId}`;
     if (n.contract_id && n.token_id) return `near:${n.contract_id}:${n.token_id}`;
     return `${n.chain || "mock"}:${n.contractId || "x"}:${n.tokenId || "0"}`;
+}
+
+function MiniStats({ stats }) {
+    const s = stats || {};
+    return (
+        <div
+            style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: 6,
+                fontSize: 11,
+                fontWeight: 900,
+                opacity: 0.95,
+                marginTop: 8,
+            }}
+        >
+            <div>↑ {s.top ?? "-"}</div>
+            <div style={{ textAlign: "right" }}>→ {s.right ?? "-"}</div>
+            <div>← {s.left ?? "-"}</div>
+            <div style={{ textAlign: "right" }}>↓ {s.bottom ?? "-"}</div>
+        </div>
+    );
 }
 
 export default function Inventory({ token, onDeckReady }) {
@@ -94,23 +113,49 @@ export default function Inventory({ token, onDeckReady }) {
                 Выбрано: {selectedArr.length ? selectedArr.join(", ") : "—"}
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 10 }}>
+            <div
+                style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+                    gap: 10,
+                }}
+            >
                 {nfts.map((n) => {
                     const k = nftKey(n);
                     const isSel = selected.has(k);
+
                     return (
                         <button
                             key={k}
                             onClick={() => toggle(k)}
-                            className={`nav-item ${isSel ? "active" : ""}`}
-                            style={{ padding: 8, textAlign: "left", borderRadius: 14 }}
+                            style={{
+                                padding: 10,
+                                textAlign: "left",
+                                borderRadius: 14,
+                                border: `1px solid ${isSel ? "rgba(120,200,255,0.55)" : "rgba(255,255,255,0.12)"}`,
+                                background: isSel
+                                    ? "radial-gradient(90% 130% at 20% 20%, rgba(120,200,255,0.14), transparent 60%), rgba(0,0,0,0.45)"
+                                    : "rgba(0,0,0,0.35)",
+                                color: "#fff",
+                            }}
+                            title={k}
                         >
-                            <div style={{ fontWeight: 900, fontSize: 12 }}>{n.name || `#${n.tokenId || n.token_id}`}</div>
-                            <div style={{ opacity: 0.9, fontSize: 12, marginTop: 4 }}>
-                                {(n.elementIcon || "")} {(n.element || "—")} • {n.rank || "—"}
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <div style={{ fontSize: 18, lineHeight: 1 }}>{n.elementIcon || "?"}</div>
+                                <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontWeight: 900, fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                        {n.name || `#${n.tokenId || n.token_id}`}
+                                    </div>
+                                    <div style={{ opacity: 0.85, fontSize: 11, marginTop: 2 }}>
+                                        {n.element || "—"} • {n.rank || "—"}
+                                    </div>
+                                </div>
                             </div>
-                            <div style={{ opacity: 0.8, fontSize: 12, marginTop: 6 }}>
-                                {n.stats?.top}/{n.stats?.right}/{n.stats?.bottom}/{n.stats?.left}
+
+                            <MiniStats stats={n.stats} />
+
+                            <div style={{ marginTop: 8, fontSize: 11, opacity: 0.75 }}>
+                                {isSel ? "В колоде" : "Нажми чтобы добавить"}
                             </div>
                         </button>
                     );

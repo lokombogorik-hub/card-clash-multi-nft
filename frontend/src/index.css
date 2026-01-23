@@ -3,9 +3,8 @@
    ВАЖНО: ТОЛЬКО CSS. НИКАКОГО JS/IMPORT.
    ========================================================= */
 
-
 /* =========================================================
-   1) GLOBAL BASE (общие базовые стили)
+   1) GLOBAL BASE
    ========================================================= */
 * {
     box-sizing: border-box;
@@ -35,28 +34,55 @@ button {
     -webkit-tap-highlight-color: transparent;
 }
 
-/* Высота приложения (обновляется из main.jsx) */
 :root {
     --app-h: 100vh;
 
-    /* SAFE AREAS:
-       по умолчанию = реальный env(...)
-       на мобилках Android добавим минимальный bottom, чтобы было как на iPhone */
     --safe-t: env(safe-area-inset-top, 0px);
     --safe-b: env(safe-area-inset-bottom, 0px);
+
+    /* выставляется JS-ом через ResizeObserver в App.jsx */
+    --bottom-stack-h: 160px;
+
+    /* TT UI vars */
+    --ui-pad: clamp(8px, 2vw, 14px);
+    --gap: clamp(6px, 1.6vw, 10px);
+
+    --edge-inset: 14px;
+    --card-w-max: 170px;
+
+    --hand-col-gap: 18px;
+    --row-gap: 12px;
+    --towards-board: 12px;
+    --hand-pad-x: 10px;
+    --hand-pad-y: 10px;
+
+    --score-w: 56px;
+    --score-gap: 4px;
+
+    --badge-h: 44px;
+    --badge-avatar: 32px;
+
+    --tg-top-controls: 58px;
+
+    /* Magic column */
+    --magic-w: 52px;
+    --magic-gap: 12px;
+    --magic-offset: 12px;
 }
 
-/* На телефонах делаем Android “как iPhone” по нижнему отступу */
+/* Android landscape bottom safe area */
 @media (hover: none) and (pointer: coarse),
 (max-height: 520px) and (orientation: landscape) {
     :root {
         --safe-b: max(env(safe-area-inset-bottom, 0px), 18px);
+        --magic-w: 46px;
+        --magic-gap: 10px;
+        --magic-offset: 10px;
     }
 }
 
-
 /* =========================================================
-   2) HOME / SHELL (главное меню)
+   2) HOME / SHELL
    ========================================================= */
 .shell {
     position: fixed;
@@ -68,7 +94,6 @@ button {
     color: #fff;
 }
 
-/* Canvas-фон */
 .storm-bg {
     position: absolute;
     inset: 0;
@@ -76,13 +101,14 @@ button {
     pointer-events: none;
 }
 
-/* Контент меню поверх фона */
 .shell-content {
     position: relative;
     z-index: 1;
     height: 100%;
     padding-top: calc(var(--safe-t) + 8px);
-    padding-bottom: calc(var(--safe-b) + 200px);
+
+    /* важно: не залезать под bottom-stack */
+    padding-bottom: calc(var(--safe-b) + var(--bottom-stack-h) + 18px);
 }
 
 .home-center {
@@ -91,13 +117,12 @@ button {
     place-items: center;
 }
 
-/* Кнопка Play (круг) */
 .play-logo {
     width: min(240px, 56vmin);
     height: min(240px, 56vmin);
     border-radius: 999px;
     padding: 0;
-    border: 1px solid rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     background: rgba(0, 0, 0, 0.18);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
@@ -114,7 +139,7 @@ button {
     border-radius: 999px;
     overflow: hidden;
     background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .logo-video {
@@ -136,53 +161,19 @@ button {
     padding: 18px;
 }
 
-/* ===== Нижние панели меню ===== */
-
-/* Контейнер кнопки кошелька */
-.wallet-float {
-    position: absolute;
-    left: 0;
-    right: 0;
-
-    /* регулируй высоту кнопки над нижним стеком */
-    bottom: calc(var(--safe-b) + 230px);
-
-    z-index: 3;
-    display: flex;
-    justify-content: center;
-    pointer-events: none;
-}
-
-.wallet-btn {
-    pointer-events: auto;
-    width: min(220px, 70vw);
-    height: 40px;
-    font-size: 12px;
-    border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    background:
-        radial-gradient(80% 140% at 20% 20%, rgba(120, 200, 255, 0.18), transparent 62%),
-        radial-gradient(80% 140% at 80% 80%, rgba(255, 61, 242, 0.10), transparent 62%),
-        rgba(0, 0, 0, 0.62);
-    color: #fff;
-    font-weight: 900;
-    letter-spacing: .2px;
-}
-
-/* Нижний стек (season bar + nav) */
+/* Bottom stack */
 .bottom-stack {
     position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
-
     z-index: 2;
+
     padding: 10px 12px calc(var(--safe-b) + 10px);
     display: grid;
     gap: 10px;
 }
 
-/* Season bar */
 .season-bar {
     display: flex;
     align-items: center;
@@ -201,7 +192,7 @@ button {
 }
 
 .season-sub {
-    opacity: .8;
+    opacity: 0.8;
     font-size: 12px;
     margin-top: 2px;
 }
@@ -217,13 +208,15 @@ button {
     width: 120px;
     height: 8px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.10);
+    background: rgba(255, 255, 255, 0.1);
     overflow: hidden;
 }
 
 .season-progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, rgba(120, 200, 255, 0.85), rgba(255, 61, 242, 0.45));
+    background: linear-gradient(90deg,
+            rgba(120, 200, 255, 0.85),
+            rgba(255, 61, 242, 0.45));
 }
 
 .icon-btn {
@@ -236,7 +229,6 @@ button {
     padding: 0;
 }
 
-/* Bottom nav */
 .bottom-nav {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -260,7 +252,21 @@ button {
     gap: 6px;
 }
 
-/* ВАЖНО: чтобы SVG-иконки не “прыгали” и были видны */
+.nav-item.active {
+    color: #fff;
+    border-color: rgba(120, 200, 255, 0.28);
+    background:
+        radial-gradient(80% 140% at 20% 20%, rgba(120, 200, 255, 0.16), transparent 60%),
+        radial-gradient(80% 140% at 80% 80%, rgba(255, 61, 242, 0.12), transparent 60%),
+        rgba(255, 255, 255, 0.03);
+    box-shadow: 0 0 24px rgba(120, 200, 255, 0.1);
+}
+
+.nav-item.disabled {
+    opacity: 0.35;
+    pointer-events: none;
+}
+
 .nav-ic {
     line-height: 0;
     display: grid;
@@ -274,33 +280,17 @@ button {
 .nav-txt {
     font-size: 11px;
     font-weight: 900;
-    letter-spacing: .2px;
+    letter-spacing: 0.2px;
 }
 
-.nav-item.active {
-    color: #fff;
-    border-color: rgba(120, 200, 255, 0.28);
-    background:
-        radial-gradient(80% 140% at 20% 20%, rgba(120, 200, 255, 0.16), transparent 60%),
-        radial-gradient(80% 140% at 80% 80%, rgba(255, 61, 242, 0.12), transparent 60%),
-        rgba(255, 255, 255, 0.03);
-    box-shadow: 0 0 24px rgba(120, 200, 255, 0.10);
-}
-
-.nav-item.disabled {
-    opacity: 0.35;
-    pointer-events: none;
-}
-
-/* Когда App прячет игру из-за rotate-gate */
+/* Rotate-gate hides host */
 .game-host.is-hidden {
     opacity: 0;
     pointer-events: none;
 }
 
-
 /* =========================================================
-   3) ROTATE GATE (поверни телефон)
+   3) ROTATE GATE
    ========================================================= */
 .rotate-gate {
     position: fixed;
@@ -357,61 +347,14 @@ button {
     }
 }
 
-
 /* =========================================================
-   4) TT GAME — НАСТРОЙКИ (меняй тут)
+   4) TT GAME — CALCULATIONS
    ========================================================= */
 :root {
-    /* padding всей игры от краев экрана (общее поле вокруг сцены) */
-    --ui-pad: clamp(8px, 2vw, 14px);
-
-    /* общий gap: влияет на gap между колонками (руки/поле) и на gap внутри board */
-    --gap: clamp(6px, 1.6vw, 10px);
-
-    /* отступ сцены игры внутри .game-ui (слева/справа) */
-    --edge-inset: 14px;
-
-    /* максимальная ширина карты (если экран позволяет) */
-    --card-w-max: 170px;
-
-    /* расстояние между 2 колонками карт в руке */
-    --hand-col-gap: 18px;
-
-    /* расстояние между рядами карт в руке */
-    --row-gap: 12px;
-
-    /* насколько “2 карты” (col2) подъезжают к столу */
-    --towards-board: 12px;
-
-    /* padding внутри руки вокруг карт (важно для расчётов ширины) */
-    --hand-pad-x: 10px;
-    --hand-pad-y: 10px;
-
-    /* HUD score плашки */
-    --score-w: 56px;
-    --score-gap: 4px;
-
-    /* бейджи игрока (ник+аватар) */
-    --badge-h: 44px;
-    --badge-avatar: 32px;
-
-    /* безопасная высота верхних системных кнопок Telegram */
-    --tg-top-controls: 58px;
-}
-
-
-/* =========================================================
-   5) TT GAME — ВЫЧИСЛЕНИЯ (лучше не трогать)
-   ========================================================= */
-:root {
-    /* реальная безопасная ширина */
     --vw-safe: calc(100vw - (var(--ui-pad) * 2) - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
 
-    /* ширина карты по ширине, чтобы НЕ вылезало:
-     total = 7*card + 2*handColGap + 4*handPadX + 6*gap + 2*edgeInset */
     --card-w-vw: calc((var(--vw-safe) - (var(--edge-inset) * 2) - (var(--hand-col-gap) * 2) - (var(--hand-pad-x) * 4) - (var(--gap) * 6)) / 7);
 
-    /* высота под поле 3 ряда */
     --available-h: calc(var(--app-h, 100vh) - (var(--ui-pad) * 2) - var(--safe-t) - var(--safe-b) - (var(--gap) * 2));
 
     --card-h-fit: calc((var(--available-h) - (var(--gap) * 4)) / 3);
@@ -429,9 +372,8 @@ button {
     --stage-w: calc((var(--edge-inset) * 2) + (var(--side-w) * 2) + var(--board-w) + (var(--gap) * 2));
 }
 
-
 /* =========================================================
-   6) TT GAME — СЦЕНА / КОНТЕЙНЕРЫ
+   5) TT GAME — STAGE
    ========================================================= */
 .game-root {
     position: fixed;
@@ -457,16 +399,10 @@ button {
     padding-left: var(--edge-inset);
     padding-right: var(--edge-inset);
     box-sizing: border-box;
-
     position: relative;
 }
 
-
-/* =========================================================
-   7) EXIT BUTTON (Меню)
-   ========================================================= */
-/* На ПК: в левом верхнем углу.
-   На телефоне: будет внизу слева (см. media ниже), чтобы не путать с крестиком Telegram. */
+/* Exit button (Menu) */
 .exit {
     position: fixed;
     left: 12px;
@@ -474,22 +410,24 @@ button {
     z-index: 999;
     padding: 10px 12px;
     border-radius: 12px;
-    background: rgba(0, 0, 0, 0.60);
+    background: rgba(0, 0, 0, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.18);
     color: #fff;
     min-width: 92px;
 }
 
-@media (hover: none) and (pointer: coarse) {
+@media (hover: none) and (pointer: coarse),
+(max-height: 520px) and (orientation: landscape) {
     .exit {
-        top: auto;
-        bottom: calc(var(--safe-b) + 12px);
+        top: auto !important;
+        bottom: calc(var(--safe-b) + 12px) !important;
+        left: 12px !important;
+        right: auto !important;
     }
 }
 
-
 /* =========================================================
-   8) HUD SCORE (внизу рядом с полем, но СНАРУЖИ)
+   6) HUD SCORE
    ========================================================= */
 .hud-corner {
     position: absolute;
@@ -528,20 +466,17 @@ button {
     box-shadow: 0 0 14px rgba(0, 180, 255, 0.16);
 }
 
-
 /* =========================================================
-   9) PLAYER BADGES (ник+аватар сверху, впритык к полю)
+   7) PLAYER BADGES
    ========================================================= */
 .player-badge {
     position: absolute;
     z-index: 105;
 
-    /* не залезаем в системные кнопки Telegram */
     top: max(calc(var(--safe-t) + var(--tg-top-controls) + 6px),
             calc(50% - (var(--board-h) / 2) - var(--badge-h) - 6px));
 
     height: var(--badge-h);
-    width: auto;
     max-width: min(260px, 34vw);
 
     display: flex;
@@ -584,14 +519,13 @@ button {
     min-width: 0;
     font-weight: 900;
     font-size: 12px;
-    letter-spacing: .2px;
-    opacity: .95;
+    letter-spacing: 0.2px;
+    opacity: 0.95;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-/* подсветка “чей ход” */
 .player-badge.active.enemy {
     box-shadow: 0 0 22px rgba(255, 80, 80, 0.24);
     border-color: rgba(255, 80, 80, 0.35);
@@ -602,8 +536,6 @@ button {
     border-color: rgba(0, 180, 255, 0.35);
 }
 
-/* позиция у поля:
-   enemy слева от поля, player справа от поля */
 .player-badge.enemy {
     left: calc(50% - (var(--board-w) / 2) - 8px);
     transform: translateX(-100%);
@@ -611,12 +543,30 @@ button {
 
 .player-badge.player {
     left: calc(50% + (var(--board-w) / 2) + 8px);
-    transform: none;
 }
 
+@media (hover: none) and (pointer: coarse),
+(max-height: 520px) and (orientation: landscape) {
+    .player-badge {
+        max-width: 44vw;
+        padding: 5px 8px;
+        gap: 8px;
+        top: calc(50% - (var(--board-h) / 2) - 12px);
+    }
+
+    .player-badge.enemy {
+        left: calc(50% - (var(--board-w) / 2) + 6px);
+        transform: translateY(-100%);
+    }
+
+    .player-badge.player {
+        left: calc(50% + (var(--board-w) / 2) - 6px);
+        transform: translate(-100%, -100%);
+    }
+}
 
 /* =========================================================
-   10) HANDS (руки по бокам)
+   8) HANDS
    ========================================================= */
 .hand.left,
 .hand.right {
@@ -624,6 +574,8 @@ button {
     border: none;
     border-radius: 0;
     overflow: visible;
+    position: relative;
+    /* for magic column */
 }
 
 .hand-grid {
@@ -645,12 +597,10 @@ button {
     overflow: visible;
 }
 
-/* enemy: 2 карты ближе к столу */
 .hand.left .hand-slot.col2 {
     transform: translateX(var(--towards-board)) translateY(var(--half-step));
 }
 
-/* player: 2 карты ближе к столу (переставляем col2 во внутреннюю колонку) */
 .hand.right .hand-slot.col2 {
     grid-column: 1 !important;
     transform: translateX(calc(-1 * var(--towards-board))) translateY(var(--half-step));
@@ -661,9 +611,8 @@ button {
     transform: none;
 }
 
-
 /* =========================================================
-   11) BOARD
+   9) BOARD
    ========================================================= */
 .center-col {
     display: flex;
@@ -691,17 +640,19 @@ button {
     border-radius: 16px;
     pointer-events: none;
     z-index: 0;
+
     background:
         repeating-linear-gradient(90deg,
-            rgba(24, 231, 255, 0.00) 0,
-            rgba(24, 231, 255, 0.00) calc(var(--card-w) - 2px),
-            rgba(24, 231, 255, 0.40) calc(var(--card-w) - 2px),
-            rgba(24, 231, 255, 0.00) var(--card-w)),
+            rgba(24, 231, 255, 0) 0,
+            rgba(24, 231, 255, 0) calc(var(--card-w) - 2px),
+            rgba(24, 231, 255, 0.4) calc(var(--card-w) - 2px),
+            rgba(24, 231, 255, 0) var(--card-w)),
         repeating-linear-gradient(0deg,
-            rgba(255, 61, 242, 0.00) 0,
-            rgba(255, 61, 242, 0.00) calc(var(--card-h) - 2px),
+            rgba(255, 61, 242, 0) 0,
+            rgba(255, 61, 242, 0) calc(var(--card-h) - 2px),
             rgba(255, 61, 242, 0.32) calc(var(--card-h) - 2px),
-            rgba(255, 61, 242, 0.00) var(--card-h));
+            rgba(255, 61, 242, 0) var(--card-h));
+
     filter: drop-shadow(0 0 22px rgba(24, 231, 255, 0.22));
     opacity: 0.9;
 }
@@ -712,24 +663,43 @@ button {
 }
 
 .cell {
+    position: relative;
     width: var(--card-w);
     height: var(--card-h);
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.05);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 .cell.highlight {
     background: rgba(24, 231, 255, 0.12);
     box-shadow:
-        inset 0 0 0 2px rgba(24, 231, 255, 0.40),
-        0 0 26px rgba(24, 231, 255, 0.20);
+        inset 0 0 0 2px rgba(24, 231, 255, 0.4),
+        0 0 26px rgba(24, 231, 255, 0.2);
     cursor: pointer;
 }
 
+/* Frozen cell */
+.cell.frozen {
+    background: rgba(120, 200, 255, 0.1);
+    box-shadow:
+        inset 0 0 0 2px rgba(120, 200, 255, 0.26),
+        0 0 18px rgba(120, 200, 255, 0.12);
+}
+
+.cell.frozen::after {
+    content: "❄";
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    font-size: 16px;
+    opacity: 0.9;
+    pointer-events: none;
+    filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.55));
+}
 
 /* =========================================================
-   12) CARD
+   10) CARD
    ========================================================= */
 .card {
     width: var(--card-w);
@@ -761,7 +731,7 @@ button {
     z-index: 1;
 }
 
-/* selection (right hand) */
+/* selection */
 .hand.right .card {
     transition: transform 200ms cubic-bezier(.2, .9, .2, 1), box-shadow 200ms ease, filter 200ms ease;
 }
@@ -770,13 +740,13 @@ button {
     transform: translateX(-4px) scale(1.03);
     z-index: 50;
     filter: saturate(1.06);
-    box-shadow: 0 0 20px rgba(255, 215, 0, 0.20), 0 14px 34px rgba(0, 0, 0, 0.55);
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.2), 0 14px 34px rgba(0, 0, 0, 0.55);
 }
 
 /* owner glow */
 .card.player {
     border: 2px solid rgba(42, 107, 255, 0.98);
-    box-shadow: 0 0 18px rgba(0, 180, 255, 0.30), 0 14px 30px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 0 18px rgba(0, 180, 255, 0.3), 0 14px 30px rgba(0, 0, 0, 0.45);
     animation: pulseBlue 2.6s ease-in-out infinite;
 }
 
@@ -788,7 +758,6 @@ button {
 
 .card.disabled {
     cursor: default;
-    opacity: 1;
     animation: none;
 }
 
@@ -812,7 +781,7 @@ button {
     }
 
     50% {
-        box-shadow: 0 0 26px rgba(255, 80, 80, 0.40), 0 16px 34px rgba(0, 0, 0, 0.52);
+        box-shadow: 0 0 26px rgba(255, 80, 80, 0.4), 0 16px 34px rgba(0, 0, 0, 0.52);
     }
 }
 
@@ -855,7 +824,7 @@ button {
     }
 }
 
-/* TT numbers fixed */
+/* TT numbers */
 .tt-badge {
     position: absolute;
     top: 9px;
@@ -875,11 +844,8 @@ button {
     font-weight: 900;
     color: #fff;
     text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85);
-    display: inline-block !important;
-    width: auto !important;
-    max-width: none !important;
-    white-space: nowrap !important;
     line-height: 1 !important;
+    white-space: nowrap !important;
 }
 
 .card .tt-num.top {
@@ -920,7 +886,7 @@ button {
     background:
         radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.06), transparent 55%),
         radial-gradient(circle at 70% 70%, rgba(255, 255, 255, 0.05), transparent 55%),
-        repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.04) 0 6px, rgba(255, 255, 255, 0.00) 6px 12px);
+        repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.04) 0 6px, rgba(255, 255, 255, 0) 6px 12px);
     display: grid;
     place-items: center;
 }
@@ -931,9 +897,244 @@ button {
     object-fit: contain;
     display: block;
     opacity: 0.95;
-    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.65)) drop-shadow(0 0 18px rgba(120, 200, 255, 0.18));
+    filter:
+        drop-shadow(0 10px 18px rgba(0, 0, 0, 0.65)) drop-shadow(0 0 18px rgba(120, 200, 255, 0.18));
 }
 
+/* =========================================================
+   11) ELEMENT UI (background + card pill)
+   ========================================================= */
+.elem-bg {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    z-index: 0;
+
+    opacity: 0.16;
+    font-size: 34px;
+}
+
+.card-elem-pill {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 7;
+
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    padding: 3px 7px;
+    border-radius: 999px;
+
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.card-elem-ic {
+    font-size: 17px;
+    line-height: 1;
+    transform-origin: center;
+    animation: elemPulse 1.6s ease-in-out infinite;
+    filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
+}
+
+.card-elem-delta {
+    font-size: 11px;
+    font-weight: 900;
+    opacity: 0.9;
+}
+
+@keyframes elemPulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+        filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
+    }
+
+    50% {
+        transform: scale(1.18);
+        filter: drop-shadow(0 10px 16px rgba(120, 200, 255, 0.18));
+    }
+}
+
+/* Mobile tuning for TT numbers */
+@media (hover: none) and (pointer: coarse),
+(max-height: 520px) and (orientation: landscape) {
+    .tt-badge {
+        width: 36px;
+        height: 36px;
+        top: 8px;
+        left: 8px;
+    }
+
+    .card .tt-num {
+        font-size: 11px !important;
+    }
+
+    .card .tt-num.top {
+        top: 5px;
+        left: 26px;
+    }
+
+    .card .tt-num.left {
+        top: 22px;
+        left: 10px;
+    }
+
+    .card .tt-num.right {
+        top: 22px;
+        left: 40px;
+    }
+
+    .card .tt-num.bottom {
+        top: 38px;
+        left: 26px;
+    }
+}
+
+/* =========================================================
+   12) MAGIC COLUMN
+   ========================================================= */
+.magic-column {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: var(--magic-w);
+    display: flex;
+    flex-direction: column;
+    gap: var(--magic-gap);
+    z-index: 120;
+    pointer-events: auto;
+}
+
+.hand.left .magic-column {
+    left: calc(-1 * (var(--magic-w) + var(--magic-offset)));
+}
+
+.hand.right .magic-column {
+    right: calc(-1 * (var(--magic-w) + var(--magic-offset)));
+}
+
+.magic-btn {
+    --c1: rgba(120, 200, 255, 0.9);
+    --c2: rgba(255, 61, 242, 0.45);
+
+    width: var(--magic-w);
+    height: var(--magic-w);
+    border-radius: 16px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(0, 0, 0, 0.55);
+    position: relative;
+    overflow: hidden;
+
+    box-shadow:
+        0 12px 28px rgba(0, 0, 0, 0.65),
+        0 0 22px rgba(120, 200, 255, 0.08);
+}
+
+.magic-btn::before {
+    content: "";
+    position: absolute;
+    inset: -55%;
+    background:
+        conic-gradient(from 90deg,
+            transparent 0 12%,
+            var(--c1) 18%,
+            transparent 34%,
+            var(--c2) 52%,
+            transparent 70%,
+            var(--c1) 86%,
+            transparent 100%);
+    opacity: 0.95;
+    animation: magicSpin 2.8s linear infinite;
+    z-index: 0;
+}
+
+.magic-btn::after {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    border-radius: 15px;
+    background:
+        radial-gradient(120% 120% at 30% 25%, rgba(255, 255, 255, 0.18), transparent 58%),
+        radial-gradient(120% 120% at 70% 80%, rgba(255, 255, 255, 0.08), transparent 62%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.10)),
+        rgba(0, 0, 0, 0.55);
+    z-index: 1;
+}
+
+.magic-btn .magic-ic {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    font-size: 22px;
+    line-height: 1;
+}
+
+.magic-btn .magic-count {
+    position: absolute;
+    z-index: 3;
+    right: 6px;
+    top: 6px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    font-weight: 900;
+    color: rgba(255, 255, 255, 0.95);
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.magic-btn:active {
+    transform: translateY(1px) scale(0.99);
+}
+
+.magic-btn.active {
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.7), 0 0 34px rgba(120, 200, 255, 0.16);
+}
+
+.magic-btn:disabled {
+    opacity: 0.32;
+    filter: saturate(0.75);
+    pointer-events: none;
+}
+
+.magic-btn:disabled::before {
+    animation: none;
+    opacity: 0.35;
+}
+
+.magic-btn.freeze {
+    --c1: rgba(120, 220, 255, 0.95);
+    --c2: rgba(90, 140, 255, 0.4);
+}
+
+.magic-btn.reveal {
+    --c1: rgba(255, 61, 242, 0.85);
+    --c2: rgba(255, 215, 0, 0.32);
+}
+
+@keyframes magicSpin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
 
 /* =========================================================
    13) GAME OVER + DICE
@@ -941,7 +1142,7 @@ button {
 .game-over {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.70);
+    background: rgba(0, 0, 0, 0.7);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -999,33 +1200,27 @@ button {
     }
 }
 
-
 /* =========================================================
-   14) MOBILE LANDSCAPE SAFE (чтобы влезало и не ломалось)
+   14) MOBILE LANDSCAPE SAFE
    ========================================================= */
 @media (max-height: 520px) and (orientation: landscape),
 (hover: none) and (pointer: coarse) and (orientation: landscape) {
     :root {
-        /* меньше отступы -> больше места для сцены */
         --ui-pad: 6px;
         --gap: 6px;
         --edge-inset: 10px;
 
-        /* безопасный потолок карты */
         --card-w-max: 176px;
 
-        /* меньше “раздувание” рук */
         --hand-col-gap: 14px;
         --row-gap: 10px;
         --hand-pad-x: 8px;
         --hand-pad-y: 8px;
 
-        /* компактнее бейдж */
         --badge-h: 38px;
         --badge-avatar: 26px;
     }
 }
-
 
 /* =========================================================
    15) REDUCE MOTION
@@ -1043,372 +1238,5 @@ button {
     .card.is-placed .card-anim,
     .card.is-captured .card-anim {
         animation: none !important;
-    }
-}
-
-/* =========================
-   FIXES (paste at end)
-   ========================= */
-
-/* Иконки в bottom-nav всегда видны (SVG не "схлопывается") */
-.nav-ic {
-    line-height: 0;
-    display: grid;
-    place-items: center;
-}
-
-.nav-ic svg {
-    display: block;
-}
-
-/* Плавающая кнопка кошелька:
-   --bottom-stack-h выставляется JS-ом через ResizeObserver в App.jsx */
-:root {
-    --bottom-stack-h: 160px;
-}
-
-.wallet-float {
-    position: fixed;
-    left: 0;
-    right: 0;
-    display: flex;
-    justify-content: center;
-    z-index: 50;
-    pointer-events: none;
-
-    bottom: calc(var(--safe-b) + var(--bottom-stack-h) + 12px);
-}
-
-.wallet-btn {
-    pointer-events: auto;
-}
-
-/* Кнопка "Меню" (твоя) — на всех мобилках внизу слева (и iOS, и Android одинаково) */
-@media (hover: none) and (pointer: coarse),
-(max-height: 520px) and (orientation: landscape) {
-    .exit {
-        top: auto !important;
-        bottom: calc(var(--safe-b) + 12px) !important;
-        left: 12px !important;
-        right: auto !important;
-    }
-}
-
-/* Бейджи игрока/врага на мобилке:
-   закрепляем ВЫШЕ стола (как счёт снизу — вне board), ПК не трогаем */
-@media (hover: none) and (pointer: coarse),
-(max-height: 520px) and (orientation: landscape) {
-    .player-badge {
-        max-width: 44vw;
-        padding: 5px 8px;
-        gap: 8px;
-
-        /* ВАЖНО:
-           top здесь — это "линия над столом".
-           Сдвигаем сам бейдж вверх через transform, чтобы он НЕ перекрывал board. */
-        top: calc(50% - (var(--board-h) / 2) - 12px);
-    }
-
-    .player-badge.enemy {
-        left: calc(50% - (var(--board-w) / 2) + 6px);
-        transform: translateY(-100%);
-    }
-
-    .player-badge.player {
-        left: calc(50% + (var(--board-w) / 2) - 6px);
-        transform: translate(-100%, -100%);
-    }
-}
-
-/* =========================
-   MAGIC COLUMN (after cards) + FX
-   ========================= */
-:root {
-    --magic-w: 52px;
-    --magic-gap: 12px;
-    --magic-offset: 12px;
-}
-
-@media (hover: none) and (pointer: coarse),
-(max-height: 520px) and (orientation: landscape) {
-    :root {
-        --magic-w: 46px;
-        --magic-gap: 10px;
-        --magic-offset: 10px;
-    }
-}
-
-/* anchor for absolute magic column */
-.hand.left,
-.hand.right {
-    position: relative;
-}
-
-/* column: "после карт" — снаружи от руки, вертикально */
-.magic-column {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    width: var(--magic-w);
-    display: flex;
-    flex-direction: column;
-    gap: var(--magic-gap);
-    z-index: 120;
-    pointer-events: auto;
-}
-
-.hand.left .magic-column {
-    left: calc(-1 * (var(--magic-w) + var(--magic-offset)));
-}
-
-.hand.right .magic-column {
-    right: calc(-1 * (var(--magic-w) + var(--magic-offset)));
-}
-
-/* base button */
-.magic-btn {
-    --c1: rgba(120, 200, 255, 0.90);
-    --c2: rgba(255, 61, 242, 0.45);
-
-    width: var(--magic-w);
-    height: var(--magic-w);
-    border-radius: 16px;
-    padding: 0;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    background: rgba(0, 0, 0, 0.55);
-    position: relative;
-    overflow: hidden;
-
-    box-shadow:
-        0 12px 28px rgba(0, 0, 0, 0.65),
-        0 0 22px rgba(120, 200, 255, 0.08);
-
-    transform: translateZ(0);
-    will-change: transform, filter;
-}
-
-.magic-btn::before {
-    content: "";
-    position: absolute;
-    inset: -55%;
-    background:
-        conic-gradient(from 90deg,
-            transparent 0 12%,
-            var(--c1) 18%,
-            transparent 34%,
-            var(--c2) 52%,
-            transparent 70%,
-            var(--c1) 86%,
-            transparent 100%);
-    opacity: 0.95;
-    animation: magicSpin 2.8s linear infinite;
-    filter: blur(0.2px);
-    z-index: 0;
-}
-
-.magic-btn::after {
-    content: "";
-    position: absolute;
-    inset: 1px;
-    border-radius: 15px;
-    background:
-        radial-gradient(120% 120% at 30% 25%, rgba(255, 255, 255, 0.18), transparent 58%),
-        radial-gradient(120% 120% at 70% 80%, rgba(255, 255, 255, 0.08), transparent 62%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.10)),
-        rgba(0, 0, 0, 0.55);
-    box-shadow:
-        inset 0 0 0 1px rgba(255, 255, 255, 0.10),
-        inset 0 -14px 22px rgba(0, 0, 0, 0.40);
-    z-index: 1;
-}
-
-.magic-btn .magic-ic {
-    position: relative;
-    z-index: 2;
-    display: grid;
-    place-items: center;
-    width: 100%;
-    height: 100%;
-    font-size: 22px;
-    line-height: 1;
-    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.55));
-    text-shadow: 0 10px 18px rgba(0, 0, 0, 0.55);
-}
-
-.magic-btn .magic-count {
-    position: absolute;
-    z-index: 3;
-    right: 6px;
-    top: 6px;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    border-radius: 999px;
-    display: grid;
-    place-items: center;
-    font-size: 11px;
-    font-weight: 900;
-    color: rgba(255, 255, 255, 0.95);
-    background: rgba(0, 0, 0, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.45);
-}
-
-/* hover/active */
-.magic-btn:active {
-    transform: translateY(1px) scale(0.99);
-}
-
-.magic-btn.active {
-    box-shadow:
-        0 14px 32px rgba(0, 0, 0, 0.70),
-        0 0 34px rgba(120, 200, 255, 0.16),
-        0 0 52px rgba(255, 255, 255, 0.06);
-}
-
-/* disabled */
-.magic-btn:disabled {
-    opacity: 0.32;
-    filter: saturate(0.75);
-    pointer-events: none;
-}
-
-.magic-btn:disabled::before {
-    animation: none;
-    opacity: 0.35;
-}
-
-/* spell themes */
-.magic-btn.freeze {
-    --c1: rgba(120, 220, 255, 0.95);
-    --c2: rgba(90, 140, 255, 0.40);
-    box-shadow:
-        0 12px 28px rgba(0, 0, 0, 0.65),
-        0 0 28px rgba(120, 220, 255, 0.14);
-    animation: icePulse 2.4s ease-in-out infinite;
-}
-
-.magic-btn.reveal {
-    --c1: rgba(255, 61, 242, 0.85);
-    --c2: rgba(255, 215, 0, 0.32);
-    box-shadow:
-        0 12px 28px rgba(0, 0, 0, 0.65),
-        0 0 30px rgba(255, 61, 242, 0.14);
-    animation: arcaneFlicker 3.0s ease-in-out infinite;
-}
-
-@keyframes magicSpin {
-    0% {
-        transform: rotate(0deg);
-    }
-
-    100% {
-        transform: rotate(360deg);
-    }
-}
-
-@keyframes icePulse {
-
-    0%,
-    100% {
-        filter: drop-shadow(0 0 0 rgba(120, 220, 255, 0.0));
-    }
-
-    50% {
-        filter: drop-shadow(0 0 18px rgba(120, 220, 255, 0.22));
-    }
-}
-
-@keyframes arcaneFlicker {
-
-    0%,
-    100% {
-        filter: drop-shadow(0 0 10px rgba(255, 61, 242, 0.10));
-    }
-
-    45% {
-        filter: drop-shadow(0 0 22px rgba(255, 61, 242, 0.22));
-    }
-
-    55% {
-        filter: drop-shadow(0 0 14px rgba(255, 215, 0, 0.10));
-    }
-}
-
-/* frozen cell */
-.cell {
-    position: relative;
-}
-
-.cell.frozen {
-    background: rgba(120, 200, 255, 0.10);
-    box-shadow:
-        inset 0 0 0 2px rgba(120, 200, 255, 0.26),
-        0 0 18px rgba(120, 200, 255, 0.12);
-}
-
-.cell.frozen::after {
-    content: "❄";
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    font-size: 16px;
-    opacity: 0.9;
-    filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.55));
-    pointer-events: none;
-}
-
-/* ===== Elements UI (bigger + animated) ===== */
-.elem-bg {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    opacity: .16;
-    font-size: 34px;
-    pointer-events: none;
-    z-index: 0;
-    filter: drop-shadow(0 0 10px rgba(120, 200, 255, 0.10));
-}
-
-.card-elem-pill {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    z-index: 7;
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    padding: 4px 8px;
-    border-radius: 999px;
-    background: rgba(0, 0, 0, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-}
-
-.card-elem-ic {
-    font-size: 18px;
-    line-height: 1;
-    animation: elemPulse 1.6s ease-in-out infinite;
-    transform-origin: center;
-    filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
-}
-
-.card-elem-delta {
-    font-size: 11px;
-    font-weight: 900;
-    opacity: .9;
-}
-
-@keyframes elemPulse {
-
-    0%,
-    100% {
-        transform: scale(1);
-        filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
-    }
-
-    50% {
-        transform: scale(1.18);
-        filter: drop-shadow(0 10px 16px rgba(120, 200, 255, 0.18));
     }
 }
