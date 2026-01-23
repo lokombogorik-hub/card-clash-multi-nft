@@ -9,22 +9,30 @@ from sqlalchemy.exc import ArgumentError
 logger = logging.getLogger(__name__)
 
 
+def _has_module(name: str) -> bool:
+    try:
+        __import__(name)
+        return True
+    except Exception:
+        return False
+
+
 def _normalize_database_url(raw: str) -> str:
     """
-    Fix Render/Heroku style:
+    Fix Aiven/Railway/Heroku style:
       postgres://...  -> postgresql://...
 
     Then enforce async driver:
-      postgresql://... -> postgresql+psycopg://...
-
-    (psycopg3 supports async and matches your stack)
+      postgresql://... -> postgresql+psycopg://... (preferred)
+      fallback: postgresql+asyncpg://... if psycopg missing
     """
     url = (raw or "").strip()
     if not url:
         return ""
 
+    # Fix the exact error you posted: dialect "postgres" doesn't exist in SQLAlchemy
     if url.startswith("postgres://"):
-        url = "postgresql://" + url[len("postgres://"):]
+        url = "postgresql://" + url[len("postgres://") :]
 
     try:
         u = make_url(url)
@@ -32,13 +40,13 @@ def _normalize_database_url(raw: str) -> str:
         logger.exception("Invalid DATABASE_URL")
         return ""
 
-    # normalize drivername
-    if u.drivername in ("postgres", "postgresql"):
-        u = u.set(drivername="postgresql+psycopg")
+    # Pick driver
+    use_psycopg = _has_module("psycopg")
+    driver = "postgresql+psycopg" if use_psycopg else "postgresql+asyncpg"
 
-    # if already async driver - keep it
-    if u.drivername.startswith("postgresql+"):
-        return str(u)
+    # Normalize driver name
+    if u.drivername in ("postgres", "postgresql", "postgresql+psycopg", "postgresql+asyncpg"):
+        u = u.set(drivername=driver)
 
     return str(u)
 
@@ -61,13 +69,13 @@ if ASYNC_DATABASE_URL:
             expire_on_commit=False,
             class_=AsyncSession,
         )
-        logger.info("DB engine created")
+        logger.info("DB engine created: %s", ASYNC_DATABASE_URL.split("@")[0] + "@***")
     except Exception:
         logger.exception("DB engine init failed; service will still run with DB disabled")
         engine = None
         AsyncSessionLocal = None
 else:
-    logger.warning("DATABASE_URL empty; DB disabled")
+    logger.warning("DATABASE_URL empty/invalid; DB disabled")
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import os
+import json
 import asyncio
+import urllib.request
 from typing import Any, Dict
 
-import aiohttp
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from api.users import get_current_user
@@ -24,19 +25,22 @@ def _is_valid_account_id(account_id: str) -> bool:
     return all(ch in allowed for ch in a)
 
 
+def _post_json(url: str, payload: Dict[str, Any], timeout: float = 20.0) -> Any:
+    raw = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=raw,
+        headers={"content-type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8", errors="replace"))
+
+
 @router.post("/rpc")
 async def near_rpc(payload: Dict[str, Any] = Body(...)):
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                NEAR_RPC_URL,
-                json=payload,
-                headers={"content-type": "application/json"},
-                timeout=aiohttp.ClientTimeout(total=20),
-            ) as resp:
-                return await resp.json()
-    except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail="NEAR RPC timeout")
+        return await asyncio.to_thread(_post_json, NEAR_RPC_URL, payload, 20.0)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"NEAR RPC proxy error: {e}")
 
@@ -61,6 +65,7 @@ async def link_near_account(
             await session.commit()
             break
     except Exception:
+        # DB может быть временно недоступна — UI всё равно будет работать
         pass
 
     return {"ok": True, "accountId": account_id}
