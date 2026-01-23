@@ -1,54 +1,61 @@
-import logging
-from typing import Optional
+from __future__ import annotations
 
-from jose import jwt, JWTError, ExpiredSignatureError
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from database.models.user import User
+from jose import jwt, JWTError
+from sqlalchemy.exc import SQLAlchemyError
+
 from utils.config import settings
+from database.session import get_session
+from database.models.user import User
 
-log = logging.getLogger(__name__)
-
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["users"])
 bearer = HTTPBearer(auto_error=False)
 
 
-def _decode_jwt(token: str) -> dict:
-    if not settings.JWT_SECRET:
-        raise HTTPException(status_code=500, detail="JWT_SECRET is not set")
-
-    try:
-        return jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALG])
-    except ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="token expired")
-    except JWTError:
-        raise HTTPException(status_code=401, detail="invalid token")
-
-
 async def get_current_user(
-    creds: Optional[HTTPAuthorizationCredentials] = Depends(bearer),
+    creds: HTTPAuthorizationCredentials = Depends(bearer),
 ) -> User:
     if not creds or not creds.credentials:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+        raise HTTPException(status_code=401, detail="Missing Bearer token")
 
-    payload = _decode_jwt(creds.credentials)
+    token = creds.credentials
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALG])
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
     sub = payload.get("sub")
     if not sub:
-        raise HTTPException(status_code=401, detail="invalid token")
+        raise HTTPException(status_code=401, detail="Invalid token: sub missing")
 
+    tg_id = int(sub)
+
+    # DB-first, but don't hard-fail
     try:
-        user_id = int(sub)
+        async for session in get_session():
+            u = await session.get(User, tg_id)
+            if u is None:
+                u = User(id=tg_id, username=f"tg_{tg_id}")
+                session.add(u)
+                await session.commit()
+            return u
     except Exception:
-        raise HTTPException(status_code=401, detail="invalid token")
+        logger.exception("DB error in get_current_user, falling back to in-memory user")
 
-    # stage1: db-fallback user
-    return User(id=user_id, username=f"tg_{user_id}")
+    return User(id=tg_id, username=f"tg_{tg_id}")
 
 
 @router.get("/users/me")
-async def me(user: User = Depends(get_current_user)):
+async def users_me(user: User = Depends(get_current_user)):
     return {
-        "id": user.id,
-        "username": getattr(user, "username", None),
+        "id": int(user.id),
+        "username": user.username,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "photo_url": user.photo_url,
+        "near_account_id": user.near_account_id,
     }

@@ -1,52 +1,53 @@
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from database.session import engine
+from database.models import Base  # важно: импортирует все модели
 
 from api.auth import router as auth_router
 from api.users import router as users_router
 from api.websocket import router as websocket_router
+
 from routers.mock_nfts import router as mock_nfts_router
+from routers.near import router as near_router
+from routers.matches import router as matches_router
 
-from database.session import engine
-from database.models.user import User
-
-import os
-import logging
-
-logging.basicConfig(level=logging.INFO)
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # stage1
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-@app.get("/")
-async def root():
-    return {"ok": True, "service": "card-clash-backend"}
-
-
 @app.get("/health")
 async def health():
-    return {"status": "ok", "build": os.getenv("RAILWAY_GIT_COMMIT_SHA", os.getenv("RENDER_GIT_COMMIT", "dev"))}
+    return {"status": "ok", "build": "stage2-db"}
 
 
 app.include_router(auth_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
-app.include_router(websocket_router, prefix="/api")  # /api/ws/{game_id}/{player_id}
-app.include_router(mock_nfts_router)  # prefix="/api" inside
+app.include_router(websocket_router, prefix="/api")
+app.include_router(mock_nfts_router)  # already has prefix="/api"
+app.include_router(near_router)       # has prefix="/api/near"
+app.include_router(matches_router)    # has prefix="/api/matches"
 
 
 @app.on_event("startup")
-async def startup():
+async def on_startup():
+    # create_all but do not hard fail on DB issues
+    if engine is None:
+        logger.warning("DB engine is not configured (DATABASE_URL empty)")
+        return
     try:
         async with engine.begin() as conn:
-            await conn.run_sync(User.metadata.create_all)
-        log.info("DB init OK")
-    except Exception as e:
-        log.warning(f"DB init failed: {e}")
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("DB schema ensured (create_all)")
+    except Exception:
+        logger.exception("DB init failed (service will still run)")

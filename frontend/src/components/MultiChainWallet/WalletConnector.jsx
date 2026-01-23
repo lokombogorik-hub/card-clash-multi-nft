@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useWalletStore } from "../../store/walletStore";
+import { apiFetch } from "../../api.js";
 
 export default function WalletConnector() {
     const {
@@ -21,6 +22,26 @@ export default function WalletConnector() {
     useEffect(() => {
         restoreSession?.().catch(() => { });
     }, [restoreSession]);
+
+    // Stage2: persist NEAR accountId to backend DB
+    useEffect(() => {
+        if (!connected) return;
+        if (!walletAddress) return;
+
+        const token =
+            localStorage.getItem("token") ||
+            localStorage.getItem("accessToken") ||
+            localStorage.getItem("access_token") ||
+            "";
+
+        if (!token) return;
+
+        apiFetch("/api/near/link", {
+            method: "POST",
+            token,
+            body: JSON.stringify({ accountId: walletAddress }),
+        }).catch(() => { });
+    }, [connected, walletAddress]);
 
     const haptic = () => {
         try {
