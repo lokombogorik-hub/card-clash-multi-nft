@@ -8,28 +8,6 @@ function nftKey(n) {
     return `${n.chain || "mock"}:${n.contractId || "x"}:${n.tokenId || "0"}`;
 }
 
-function MiniStats({ stats }) {
-    const s = stats || {};
-    return (
-        <div
-            style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                gap: 6,
-                fontSize: 11,
-                fontWeight: 900,
-                opacity: 0.95,
-                marginTop: 8,
-            }}
-        >
-            <div>↑ {s.top ?? "-"}</div>
-            <div style={{ textAlign: "right" }}>→ {s.right ?? "-"}</div>
-            <div>← {s.left ?? "-"}</div>
-            <div style={{ textAlign: "right" }}>↓ {s.bottom ?? "-"}</div>
-        </div>
-    );
-}
-
 export default function Inventory({ token, onDeckReady }) {
     const [loading, setLoading] = useState(false);
     const [nfts, setNfts] = useState([]);
@@ -113,13 +91,7 @@ export default function Inventory({ token, onDeckReady }) {
                 Выбрано: {selectedArr.length ? selectedArr.join(", ") : "—"}
             </div>
 
-            <div
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
-                    gap: 10,
-                }}
-            >
+            <div className="inv-grid">
                 {nfts.map((n) => {
                     const k = nftKey(n);
                     const isSel = selected.has(k);
@@ -128,35 +100,27 @@ export default function Inventory({ token, onDeckReady }) {
                         <button
                             key={k}
                             onClick={() => toggle(k)}
-                            style={{
-                                padding: 10,
-                                textAlign: "left",
-                                borderRadius: 14,
-                                border: `1px solid ${isSel ? "rgba(120,200,255,0.55)" : "rgba(255,255,255,0.12)"}`,
-                                background: isSel
-                                    ? "radial-gradient(90% 130% at 20% 20%, rgba(120,200,255,0.14), transparent 60%), rgba(0,0,0,0.45)"
-                                    : "rgba(0,0,0,0.35)",
-                                color: "#fff",
-                            }}
+                            className={`inv-card ${isSel ? "is-selected" : ""}`}
                             title={k}
                         >
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                <div style={{ fontSize: 18, lineHeight: 1 }}>{n.elementIcon || "?"}</div>
-                                <div style={{ minWidth: 0 }}>
-                                    <div style={{ fontWeight: 900, fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                        {n.name || `#${n.tokenId || n.token_id}`}
-                                    </div>
-                                    <div style={{ opacity: 0.85, fontSize: 11, marginTop: 2 }}>
-                                        {n.element || "—"} • {n.rank || "—"}
+                            <div className="inv-top">
+                                <div className="inv-elem">{n.elementIcon || "?"}</div>
+                                <div className="inv-meta">
+                                    <div className="inv-name">{n.name || `#${n.tokenId || n.token_id}`}</div>
+                                    <div className="inv-sub">
+                                        {(n.element || "—")} • {(n.rank || "—")}
                                     </div>
                                 </div>
                             </div>
 
-                            <MiniStats stats={n.stats} />
-
-                            <div style={{ marginTop: 8, fontSize: 11, opacity: 0.75 }}>
-                                {isSel ? "В колоде" : "Нажми чтобы добавить"}
+                            <div className="inv-stats">
+                                <div>↑ {n.stats?.top ?? "-"}</div>
+                                <div style={{ textAlign: "right" }}>→ {n.stats?.right ?? "-"}</div>
+                                <div>← {n.stats?.left ?? "-"}</div>
+                                <div style={{ textAlign: "right" }}>↓ {n.stats?.bottom ?? "-"}</div>
                             </div>
+
+                            <div className="inv-hint">{isSel ? "В колоде" : "Нажми, чтобы добавить"}</div>
                         </button>
                     );
                 })}

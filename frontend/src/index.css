@@ -1240,3 +1240,119 @@ button {
         animation: none !important;
     }
 }
+
+/* === Make pages scrollable (body is overflow hidden) === */
+.shell-content {
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* === Inventory grid/card === */
+.inv-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.inv-card {
+    padding: 10px;
+    text-align: left;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.35);
+    color: #fff;
+}
+
+.inv-card.is-selected {
+    border-color: rgba(120, 200, 255, 0.55);
+    background:
+        radial-gradient(90% 130% at 20% 20%, rgba(120, 200, 255, 0.14), transparent 60%),
+        rgba(0, 0, 0, 0.45);
+}
+
+.inv-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.inv-elem {
+    font-size: 18px;
+    line-height: 1;
+}
+
+.inv-meta {
+    min-width: 0;
+}
+
+.inv-name {
+    font-weight: 900;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.inv-sub {
+    opacity: 0.85;
+    font-size: 11px;
+    margin-top: 2px;
+}
+
+.inv-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 8px;
+    font-size: 11px;
+    font-weight: 900;
+    opacity: 0.95;
+}
+
+.inv-hint {
+    margin-top: 8px;
+    font-size: 11px;
+    opacity: 0.75;
+}
+
+/* Mobile/touch: fewer columns so it doesn't "slide away" */
+@media (hover: none) and (pointer: coarse) {
+    .inv-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+/* Mobile/touch ONLY: TT numbers smaller + spaced (PC unchanged) */
+@media (hover: none) and (pointer: coarse) {
+    .tt-badge {
+        width: 36px !important;
+        height: 36px !important;
+        top: 8px !important;
+        left: 8px !important;
+    }
+
+    .card .tt-num {
+        font-size: 11px !important;
+    }
+
+    .card .tt-num.top {
+        top: 5px !important;
+        left: 26px !important;
+    }
+
+    .card .tt-num.left {
+        top: 22px !important;
+        left: 10px !important;
+    }
+
+    .card .tt-num.right {
+        top: 22px !important;
+        left: 40px !important;
+    }
+
+    .card .tt-num.bottom {
+        top: 38px !important;
+        left: 26px !important;
+    }
+}

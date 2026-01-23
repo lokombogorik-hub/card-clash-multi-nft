@@ -13,6 +13,14 @@ function getStoredToken() {
     }
 }
 
+function getNearAccountId() {
+    try {
+        return localStorage.getItem("cc_near_account_id") || "";
+    } catch {
+        return "";
+    }
+}
+
 export async function apiFetch(path, opts = {}) {
     const url = `${API_BASE}${path}`;
 
@@ -24,6 +32,7 @@ export async function apiFetch(path, opts = {}) {
     } = opts;
 
     const token = tokenFromOpts || getStoredToken();
+    const nearAccountId = getNearAccountId();
 
     const finalHeaders = {
         "content-type": "application/json",
@@ -32,6 +41,11 @@ export async function apiFetch(path, opts = {}) {
 
     if (token) {
         finalHeaders.Authorization = `Bearer ${token}`;
+    }
+
+    // если подключен near account — автоматически включаем для real NFTs
+    if (nearAccountId && !finalHeaders["X-NEAR-ACCOUNT-ID"]) {
+        finalHeaders["X-NEAR-ACCOUNT-ID"] = nearAccountId;
     }
 
     const res = await fetch(url, {
