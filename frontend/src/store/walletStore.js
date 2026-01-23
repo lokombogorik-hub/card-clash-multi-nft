@@ -1,9 +1,23 @@
 import { useSyncExternalStore } from "react";
 
-import { setupWalletSelector } from "@near-wallet-selector/core";
-import { setupMyNearWallet } from "@near-wallet-selector/my-near-wallet";
-import { setupHereWallet } from "@near-wallet-selector/here-wallet";
-import { transactions } from "near-api-js";
+// Namespace imports to avoid "named export not found" in Rollup builds
+import * as WalletSelectorCore from "@near-wallet-selector/core";
+import * as MyNearWalletPkg from "@near-wallet-selector/my-near-wallet";
+import * as HereWalletPkg from "@near-wallet-selector/here-wallet";
+
+const setupWalletSelector =
+    WalletSelectorCore.setupWalletSelector ||
+    WalletSelectorCore.default?.setupWalletSelector;
+
+const setupMyNearWallet =
+    MyNearWalletPkg.setupMyNearWallet ||
+    MyNearWalletPkg.default?.setupMyNearWallet ||
+    MyNearWalletPkg.default;
+
+const setupHereWallet =
+    HereWalletPkg.setupHereWallet ||
+    HereWalletPkg.default?.setupHereWallet ||
+    HereWalletPkg.default;
 
 const LS_NEAR_ACCOUNT_ID = "cc_near_account_id";
 
@@ -13,18 +27,20 @@ const nearNetworkId = envNetworkId === "testnet" ? "testnet" : "mainnet";
 const envRpcUrl = import.meta.env.VITE_NEAR_RPC_URL || "";
 const rpcUrl =
     envRpcUrl ||
-    (nearNetworkId === "testnet" ? "https://rpc.testnet.near.org" : "https://rpc.mainnet.near.org");
+    (nearNetworkId === "testnet"
+        ? "https://rpc.testnet.near.org"
+        : "https://rpc.mainnet.near.org");
 
 // Контракт должен существовать (для sign-in context)
 const envLoginContractId = import.meta.env.VITE_NEAR_LOGIN_CONTRACT_ID || "";
 const loginContractId =
     envLoginContractId || (nearNetworkId === "testnet" ? "guest-book.testnet" : "wrap.near");
 
-// Stage2 escrow contract
+// Stage2 escrow contract id (must be deployed)
 const escrowContractId = (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim();
 
-const GAS_100_TGAS = "100000000000000";
-const GAS_150_TGAS = "150000000000000";
+const GAS_100_TGAS = "100000000000000"; // 100 Tgas
+const GAS_150_TGAS = "150000000000000"; // 150 Tgas
 const ONE_YOCTO = "1";
 
 function yoctoToNearFloat(yoctoStr) {
@@ -85,6 +101,7 @@ let state = {
     setManualAccountId: (_id) => { },
     clearStatus: () => { },
 
+    // Stage2 helpers
     signAndSendTransaction: async (_tx) => { },
     nftTransferCall: async (_p) => { },
     escrowClaim: async (_p) => { },
@@ -161,9 +178,16 @@ async function ensureSelector() {
     if (selectorPromise) return selectorPromise;
 
     selectorPromise = (async () => {
+        if (!setupWalletSelector) throw new Error("setupWalletSelector export not found");
+        if (!setupHereWallet) throw new Error("setupHereWallet export not found");
+        if (!setupMyNearWallet) throw new Error("setupMyNearWallet export not found");
+
         selector = await setupWalletSelector({
             network: nearNetworkId,
-            modules: [setupHereWallet(), setupMyNearWallet()],
+            modules: [
+                setupHereWallet(),
+                setupMyNearWallet(),
+            ],
         });
 
         if (!subscription) {
@@ -212,7 +236,8 @@ async function getActiveWallet(sel) {
     return await sel.wallet("here-wallet");
 }
 
-async function connectWallet() {
+// keep compatibility with WalletConnector: connectWallet("near")
+async function connectWallet(_provider = "near") {
     setState({
         status: `Открываю HERE Wallet (${nearNetworkId})…`,
         balanceError: "",
@@ -278,6 +303,11 @@ function extractTxHash(outcome) {
     );
 }
 
+/**
+ * Wallet-selector compatible actions format (NO near-api-js dependency)
+ * action:
+ *  { type: "FunctionCall", params: { methodName, args, gas, deposit } }
+ */
 async function signAndSendTransaction({ receiverId, actions }) {
     if (!receiverId) throw new Error("receiverId is required");
     if (!actions || !actions.length) throw new Error("actions are required");
@@ -327,7 +357,15 @@ async function nftTransferCall({
     };
 
     const actions = [
-        transactions.functionCall("nft_transfer_call", args, GAS_150_TGAS, ONE_YOCTO),
+        {
+            type: "FunctionCall",
+            params: {
+                methodName: "nft_transfer_call",
+                args,
+                gas: GAS_150_TGAS,
+                deposit: ONE_YOCTO,
+            },
+        },
     ];
 
     const outcome = await signAndSendTransaction({
@@ -360,7 +398,15 @@ async function escrowClaim({
     };
 
     const actions = [
-        transactions.functionCall("claim", args, GAS_100_TGAS, "0"),
+        {
+            type: "FunctionCall",
+            params: {
+                methodName: "claim",
+                args,
+                gas: GAS_100_TGAS,
+                deposit: "0",
+            },
+        },
     ];
 
     const outcome = await signAndSendTransaction({
