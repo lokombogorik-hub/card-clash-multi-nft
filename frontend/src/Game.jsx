@@ -828,4 +828,4 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
             </div>
         </div>
     );
-} В
+}
