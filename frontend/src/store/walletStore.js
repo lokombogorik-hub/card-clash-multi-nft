@@ -1,31 +1,23 @@
 import { useSyncExternalStore } from "react";
+
 import { setupWalletSelector } from "@near-wallet-selector/core";
 import { setupMyNearWallet } from "@near-wallet-selector/my-near-wallet";
+import { setupHereWallet } from "@near-wallet-selector/here-wallet";
 
-const LS_NEAR_NETWORK_ID = "cc_near_network_id";
 const LS_NEAR_ACCOUNT_ID = "cc_near_account_id";
 
 const envNetworkId = (import.meta.env.VITE_NEAR_NETWORK_ID || "").toLowerCase();
-const defaultNetworkId = envNetworkId === "testnet" ? "testnet" : "mainnet";
+const nearNetworkId = envNetworkId === "testnet" ? "testnet" : "mainnet";
 
 const envRpcUrl = import.meta.env.VITE_NEAR_RPC_URL || "";
+const rpcUrl =
+    envRpcUrl ||
+    (nearNetworkId === "testnet" ? "https://rpc.testnet.near.org" : "https://rpc.mainnet.near.org");
 
-// ВАЖНО: contractId должен существовать. Для stage1 используем "guest-book.testnet" или любой существующий.
-// Можно переопределить env VITE_NEAR_LOGIN_CONTRACT_ID.
+// Контракт должен существовать (для sign-in context)
 const envLoginContractId = import.meta.env.VITE_NEAR_LOGIN_CONTRACT_ID || "";
-const defaultLoginContractId =
-    envLoginContractId || (defaultNetworkId === "testnet" ? "guest-book.testnet" : "wrap.near");
-
-function getNearNetworkId() {
-    const fromLs = (localStorage.getItem(LS_NEAR_NETWORK_ID) || "").toLowerCase();
-    if (fromLs === "testnet" || fromLs === "mainnet") return fromLs;
-    return defaultNetworkId;
-}
-
-function getRpcUrl(networkId) {
-    if (envRpcUrl) return envRpcUrl;
-    return networkId === "testnet" ? "https://rpc.testnet.near.org" : "https://rpc.mainnet.near.org";
-}
+const loginContractId =
+    envLoginContractId || (nearNetworkId === "testnet" ? "guest-book.testnet" : "wrap.near");
 
 function yoctoToNearFloat(yoctoStr) {
     try {
@@ -40,9 +32,7 @@ function yoctoToNearFloat(yoctoStr) {
     }
 }
 
-async function fetchNearBalance(networkId, accountId) {
-    const rpcUrl = getRpcUrl(networkId);
-
+async function fetchNearBalance(accountId) {
     const res = await fetch(rpcUrl, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -54,13 +44,18 @@ async function fetchNearBalance(networkId, accountId) {
         }),
     });
 
-    if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error(`NEAR RPC error: ${res.status} ${text}`);
+    const json = await res.json().catch(() => null);
+    if (!res.ok) throw new Error(`RPC HTTP ${res.status}`);
+    if (!json) throw new Error("RPC invalid JSON");
+    if (json.error) {
+        const msg =
+            json?.error?.data?.message ||
+            json?.error?.message ||
+            "NEAR RPC error (account/network mismatch?)";
+        throw new Error(msg);
     }
-
-    const json = await res.json();
     const amount = json?.result?.amount;
+    if (!amount) throw new Error("No amount in RPC response");
     return yoctoToNearFloat(amount);
 }
 
@@ -68,15 +63,15 @@ let state = {
     connected: false,
     walletAddress: "",
     network: "near",
-    nearNetworkId: getNearNetworkId(),
+    nearNetworkId,
     balance: 0,
-    availableNetworks: ["near"],
+    balanceError: "",
     status: "",
 
-    connectWallet: async (_network) => { },
+    connectWallet: async () => { },
     disconnectWallet: async () => { },
     restoreSession: async () => { },
-    setManualAccountId: (_accountId) => { },
+    setManualAccountId: (_id) => { },
     clearStatus: () => { },
 };
 
@@ -87,24 +82,25 @@ function setState(patch) {
 }
 
 function applyAccount(accountId) {
-    if (!accountId) return;
+    const id = String(accountId || "").trim();
+    if (!id) return;
 
-    setState({ connected: true, walletAddress: accountId, status: "" });
+    setState({ connected: true, walletAddress: id, status: "", balanceError: "" });
 
     try {
-        localStorage.setItem(LS_NEAR_ACCOUNT_ID, accountId);
+        localStorage.setItem(LS_NEAR_ACCOUNT_ID, id);
     } catch { }
 
-    fetchNearBalance(getNearNetworkId(), accountId)
-        .then((b) => setState({ balance: b }))
-        .catch(() => setState({ balance: 0 }));
+    fetchNearBalance(id)
+        .then((b) => setState({ balance: b, balanceError: "" }))
+        .catch((e) => setState({ balance: 0, balanceError: String(e?.message || e) }));
 }
 
-function applyFallbackFromStorage() {
+function applyFromStorage() {
     try {
-        const accountId = localStorage.getItem(LS_NEAR_ACCOUNT_ID) || "";
-        if (!accountId) return false;
-        applyAccount(accountId);
+        const id = localStorage.getItem(LS_NEAR_ACCOUNT_ID) || "";
+        if (!id) return false;
+        applyAccount(id);
         return true;
     } catch {
         return false;
@@ -141,54 +137,84 @@ function syncFromUrlIfPresent() {
     }
 }
 
-let nearInitPromise = null;
+let selectorPromise = null;
 let selector = null;
+let subscription = null;
 
-async function ensureNear() {
+async function ensureSelector() {
     if (selector) return selector;
-    if (nearInitPromise) return nearInitPromise;
+    if (selectorPromise) return selectorPromise;
 
-    nearInitPromise = (async () => {
+    selectorPromise = (async () => {
         selector = await setupWalletSelector({
-            network: getNearNetworkId(),
-            modules: [setupMyNearWallet()],
+            network: nearNetworkId,
+            modules: [
+                // HERE first (Telegram-friendly)
+                setupHereWallet(),
+                // fallback
+                setupMyNearWallet(),
+            ],
         });
+
+        // subscribe to accounts (auto-pick active)
+        if (!subscription) {
+            subscription = selector.store.observable.subscribe((s) => {
+                const active = s.accounts?.find((a) => a.active) || s.accounts?.[0] || null;
+                if (active?.accountId) applyAccount(active.accountId);
+            });
+        }
+
+        // initial sync
+        const s0 = selector.store.getState();
+        const active0 = s0.accounts?.find((a) => a.active) || s0.accounts?.[0] || null;
+        if (active0?.accountId) applyAccount(active0.accountId);
+
         return selector;
     })();
 
-    return nearInitPromise;
+    return selectorPromise;
 }
 
-async function connectWallet(network) {
-    if (network && network !== "near") throw new Error(`Unsupported network: ${network}`);
-
+async function connectWallet() {
     setState({
-        status:
-            "Открываю MyNearWallet… Если открылся внешний браузер — после логина вернись в Telegram и нажми «Я уже подключил».",
+        status: `Открываю HERE Wallet (${nearNetworkId})…`,
+        balanceError: "",
     });
 
-    const sel = await ensureNear();
-    const wallet = await sel.wallet("my-near-wallet");
+    const sel = await ensureSelector();
+    const tg = window.Telegram?.WebApp;
+
+    // HERE wallet id in selector: "here-wallet"
+    const wallet = await sel.wallet("here-wallet");
 
     const originalOpen = window.open;
     window.open = (url) => {
-        window.location.assign(url);
+        try {
+            tg?.openLink?.(url);
+        } catch { }
+        try {
+            if (!tg?.openLink) window.location.assign(url);
+        } catch { }
         return { focus() { }, closed: false };
     };
 
     try {
         const backUrl = window.location.href;
 
-        // IMPORTANT: do NOT await
+        // IMPORTANT: do NOT await (Telegram flows can hang)
         wallet
             .signIn?.({
-                // ВАЖНО: должен существовать
-                contractId: defaultLoginContractId,
+                contractId: loginContractId,
                 methodNames: [],
                 successUrl: backUrl,
                 failureUrl: backUrl,
             })
             ?.catch(() => { });
+
+        setState({
+            status:
+                "Если HERE открылся в Telegram и ты подтвердил — вернись в игру. Если не подтянулось автоматически, нажми «Я уже подключил».",
+        });
     } finally {
         window.open = originalOpen;
     }
@@ -198,19 +224,25 @@ async function disconnectWallet() {
     try {
         localStorage.removeItem(LS_NEAR_ACCOUNT_ID);
     } catch { }
-    setState({ connected: false, walletAddress: "", balance: 0, status: "" });
+
+    // попытка signOut (не критично)
+    try {
+        const sel = await ensureSelector();
+        const w = await sel.wallet();
+        await w.signOut?.();
+    } catch { }
+
+    setState({ connected: false, walletAddress: "", balance: 0, balanceError: "", status: "" });
 }
 
 async function restoreSession() {
-    await ensureNear();
+    await ensureSelector();
     const okUrl = syncFromUrlIfPresent();
-    const okLs = applyFallbackFromStorage();
+    const okLs = applyFromStorage();
     if (okUrl || okLs) setState({ status: "" });
 }
 
-function setManualAccountId(accountIdRaw) {
-    const accountId = String(accountIdRaw || "").trim();
-    if (!accountId) return;
+function setManualAccountId(accountId) {
     applyAccount(accountId);
 }
 
@@ -218,14 +250,7 @@ function clearStatus() {
     setState({ status: "" });
 }
 
-state = {
-    ...state,
-    connectWallet,
-    disconnectWallet,
-    restoreSession,
-    setManualAccountId,
-    clearStatus,
-};
+state = { ...state, connectWallet, disconnectWallet, restoreSession, setManualAccountId, clearStatus };
 
 export function useWalletStore() {
     return useSyncExternalStore(
