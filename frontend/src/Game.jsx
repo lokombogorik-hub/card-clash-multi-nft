@@ -879,7 +879,7 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
         return (
             <div className="card back" aria-hidden="true">
                 <div className="card-back-inner">
-                    <img className="card-back-logo-img" src="/ui/cardclash-logo.png?v=3" alt="CardClash" draggable="false" />
+                    <img className="card-back-logo-img" src="/ui/cardclash-logo.png?v=3" ... loading="lazy" />
                 </div>
             </div>
         );
@@ -900,7 +900,16 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
             onClick={disabled ? undefined : onClick}
         >
             <div className="card-anim">
-                <img className="card-art-img" src={card.imageUrl} alt="" draggable="false" />
+                <img
+                    className="card-art-img"
+                    src={card.imageUrl || "/cards/card.jpg"}
+                    alt=""
+                    draggable="false"
+                    loading="lazy"
+                    onError={(e) => {
+                        try { e.currentTarget.src = "/cards/card.jpg"; } catch { }
+                    }}
+                />
 
                 {card.element ? (
                     <div className="card-elem-pill" title={card.element}>
