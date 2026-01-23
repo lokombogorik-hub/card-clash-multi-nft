@@ -879,7 +879,13 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
         return (
             <div className="card back" aria-hidden="true">
                 <div className="card-back-inner">
-                    <img className="card-back-logo-img" src="/ui/cardclash-logo.png?v=3" ... loading="lazy" />
+                    <img
+                        className="card-back-logo-img"
+                        src="/ui/cardclash-logo.png?v=3"
+                        alt="CardClash"
+                        draggable="false"
+                        loading="lazy"
+                    />
                 </div>
             </div>
         );
