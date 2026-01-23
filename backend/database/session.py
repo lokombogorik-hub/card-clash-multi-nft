@@ -1,5 +1,6 @@
 import os
 import logging
+import hashlib
 from typing import AsyncGenerator, Optional
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
@@ -17,36 +18,60 @@ def _has_module(name: str) -> bool:
         return False
 
 
+def _strip_wrapping_quotes(s: str) -> str:
+    s = (s or "").strip()
+    if len(s) >= 2 and ((s[0] == s[-1] == '"') or (s[0] == s[-1] == "'")):
+        return s[1:-1].strip()
+    return s
+
+
+def _fp_secret(secret: str) -> str:
+    if secret is None:
+        return "none"
+    sec = str(secret)
+    h = hashlib.sha256(sec.encode("utf-8", errors="ignore")).hexdigest()[:10]
+    return f"len={len(sec)} sha256[:10]={h}"
+
+
 def _normalize_database_url(raw: str) -> str:
     """
-    Fix Aiven/Railway/Heroku style:
-      postgres://...  -> postgresql://...
-
-    Then enforce async driver:
-      postgresql://... -> postgresql+psycopg://... (preferred)
-      fallback: postgresql+asyncpg://... if psycopg missing
+    - Fix postgres:// -> postgresql://
+    - Force async driver:
+        psycopg if installed else asyncpg
+    - Keep query params (sslmode=require etc.)
     """
-    url = (raw or "").strip()
+    url = _strip_wrapping_quotes(raw)
     if not url:
         return ""
 
-    # Fix the exact error you posted: dialect "postgres" doesn't exist in SQLAlchemy
     if url.startswith("postgres://"):
-        url = "postgresql://" + url[len("postgres://") :]
+        url = "postgresql://" + url[len("postgres://"):]
 
     try:
         u = make_url(url)
     except ArgumentError:
-        logger.exception("Invalid DATABASE_URL")
+        logger.exception("Invalid DATABASE_URL (parse failed)")
         return ""
 
-    # Pick driver
-    use_psycopg = _has_module("psycopg")
-    driver = "postgresql+psycopg" if use_psycopg else "postgresql+asyncpg"
+    driver = "postgresql+psycopg" if _has_module("psycopg") else "postgresql+asyncpg"
 
-    # Normalize driver name
     if u.drivername in ("postgres", "postgresql", "postgresql+psycopg", "postgresql+asyncpg"):
         u = u.set(drivername=driver)
+
+    # Log safe fingerprint (NO password)
+    try:
+        logger.info(
+            "DB URL parsed: driver=%s user=%s host=%s port=%s db=%s password_fp={%s} query=%s",
+            u.drivername,
+            u.username,
+            u.host,
+            u.port,
+            u.database,
+            _fp_secret(u.password or ""),
+            dict(u.query or {}),
+        )
+    except Exception:
+        logger.exception("DB URL fingerprint log failed")
 
     return str(u)
 
@@ -69,7 +94,7 @@ if ASYNC_DATABASE_URL:
             expire_on_commit=False,
             class_=AsyncSession,
         )
-        logger.info("DB engine created: %s", ASYNC_DATABASE_URL.split("@")[0] + "@***")
+        logger.info("DB engine created")
     except Exception:
         logger.exception("DB engine init failed; service will still run with DB disabled")
         engine = None
