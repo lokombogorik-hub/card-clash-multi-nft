@@ -23,10 +23,9 @@ export default function WalletConnector() {
         restoreSession?.().catch(() => { });
     }, [restoreSession]);
 
-    // Stage2: persist NEAR accountId to backend DB
+    // Stage2: persist near accountId to backend
     useEffect(() => {
-        if (!connected) return;
-        if (!walletAddress) return;
+        if (!connected || !walletAddress) return;
 
         const token =
             localStorage.getItem("token") ||

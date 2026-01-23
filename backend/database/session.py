@@ -1,48 +1,77 @@
 import os
 import logging
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 
-from sqlalchemy.ext.asyncio import (
-    create_async_engine,
-    async_sessionmaker,
-    AsyncSession,
-)
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.engine.url import make_url
+from sqlalchemy.exc import ArgumentError
 
 logger = logging.getLogger(__name__)
 
 
-def _make_async_database_url(url: str) -> str:
+def _normalize_database_url(raw: str) -> str:
     """
-    Accepts:
-      - postgresql://...
-      - postgresql+asyncpg://...
-    Returns asyncpg url.
+    Fix Render/Heroku style:
+      postgres://...  -> postgresql://...
+
+    Then enforce async driver:
+      postgresql://... -> postgresql+psycopg://...
+
+    (psycopg3 supports async and matches your stack)
     """
-    u = make_url(url)
-    if u.drivername == "postgresql":
-        u = u.set(drivername="postgresql+asyncpg")
+    url = (raw or "").strip()
+    if not url:
+        return ""
+
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
+
+    try:
+        u = make_url(url)
+    except ArgumentError:
+        logger.exception("Invalid DATABASE_URL")
+        return ""
+
+    # normalize drivername
+    if u.drivername in ("postgres", "postgresql"):
+        u = u.set(drivername="postgresql+psycopg")
+
+    # if already async driver - keep it
+    if u.drivername.startswith("postgresql+"):
+        return str(u)
+
     return str(u)
 
 
-DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
-ASYNC_DATABASE_URL = _make_async_database_url(DATABASE_URL) if DATABASE_URL else ""
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+ASYNC_DATABASE_URL = _normalize_database_url(DATABASE_URL)
 
-engine = create_async_engine(
-    ASYNC_DATABASE_URL,
-    echo=False,
-    pool_pre_ping=True,
-) if ASYNC_DATABASE_URL else None
+engine = None
+AsyncSessionLocal: Optional[async_sessionmaker[AsyncSession]] = None
 
-AsyncSessionLocal = async_sessionmaker(
-    bind=engine,
-    expire_on_commit=False,
-    class_=AsyncSession,
-) if engine else None
+if ASYNC_DATABASE_URL:
+    try:
+        engine = create_async_engine(
+            ASYNC_DATABASE_URL,
+            echo=False,
+            pool_pre_ping=True,
+        )
+        AsyncSessionLocal = async_sessionmaker(
+            bind=engine,
+            expire_on_commit=False,
+            class_=AsyncSession,
+        )
+        logger.info("DB engine created")
+    except Exception:
+        logger.exception("DB engine init failed; service will still run with DB disabled")
+        engine = None
+        AsyncSessionLocal = None
+else:
+    logger.warning("DATABASE_URL empty; DB disabled")
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     if AsyncSessionLocal is None:
-        raise RuntimeError("Database is not configured: DATABASE_URL is empty")
+        raise RuntimeError("Database is not configured or failed to initialize")
     async with AsyncSessionLocal() as session:
         yield session

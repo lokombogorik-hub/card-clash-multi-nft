@@ -5,7 +5,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from jose import jwt, JWTError
-from sqlalchemy.exc import SQLAlchemyError
 
 from utils.config import settings
 from database.session import get_session
@@ -34,7 +33,6 @@ async def get_current_user(
 
     tg_id = int(sub)
 
-    # DB-first, but don't hard-fail
     try:
         async for session in get_session():
             u = await session.get(User, tg_id)

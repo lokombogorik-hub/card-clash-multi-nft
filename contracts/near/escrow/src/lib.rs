@@ -1,6 +1,5 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{LookupMap};
-use near_sdk::json_types::U128;
+use near_sdk::collections::LookupMap;
 use near_sdk::{
     env, near_bindgen, AccountId, Promise, PromiseOrValue, PanicOnDefault, Gas, require,
     serde::{Deserialize, Serialize},
@@ -50,7 +49,6 @@ impl Escrow {
     }
 
     /// Winner claims loser NFT.
-    /// You will call it AFTER backend says match finished and you picked token.
     pub fn claim(
         &mut self,
         match_id: String,
@@ -64,14 +62,11 @@ impl Escrow {
         let mut st = self.matches.get(&match_id).expect("Match not found");
         require!(!st.finished, "Already finished");
 
-        // require both deposits present
         let dep_a = st.deposit_a.as_ref().expect("Deposit A missing");
         let dep_b = st.deposit_b.as_ref().expect("Deposit B missing");
 
-        // ensure winner is one of players
         require!(winner == st.player_a || winner == st.player_b, "Winner must be a player");
 
-        // determine loser deposit
         let loser_dep = if winner == st.player_a { dep_b } else { dep_a };
 
         require!(
@@ -82,7 +77,6 @@ impl Escrow {
         st.finished = true;
         self.matches.insert(&match_id, &st);
 
-        // transfer loser NFT to winner
         ext_nft::ext(loser_nft_contract_id)
             .with_attached_deposit(1)
             .with_static_gas(GAS_NFT_TRANSFER)
@@ -103,7 +97,6 @@ impl Escrow {
 
 #[near_bindgen]
 impl near_contract_standards::non_fungible_token::receiver::NonFungibleTokenReceiver for Escrow {
-    /// Called by NFT contract after nft_transfer_call
     fn nft_on_transfer(
         &mut self,
         sender_id: AccountId,
@@ -111,9 +104,6 @@ impl near_contract_standards::non_fungible_token::receiver::NonFungibleTokenRece
         token_id: String,
         msg: String,
     ) -> PromiseOrValue<bool> {
-        // sender_id == user who called nft_transfer_call
-        // previous_owner_id == previous owner of token
-        // predecessor == nft contract
         let nft_contract_id = env::predecessor_account_id();
 
         let parsed: TransferCallMsg =
@@ -130,7 +120,6 @@ impl near_contract_standards::non_fungible_token::receiver::NonFungibleTokenRece
             finished: false,
         });
 
-        // enforce same players for same match_id
         require!(st.player_a == parsed.player_a && st.player_b == parsed.player_b, "Match players mismatch");
         require!(!st.finished, "Match already finished");
 
@@ -151,7 +140,7 @@ impl near_contract_standards::non_fungible_token::receiver::NonFungibleTokenRece
 
         self.matches.insert(&parsed.match_id, &st);
 
-        // return false => keep token in escrow (do not refund)
+        // false => keep token in escrow
         PromiseOrValue::Value(false)
     }
 }

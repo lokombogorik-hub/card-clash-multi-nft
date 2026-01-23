@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy import select, and_
@@ -25,8 +25,7 @@ async def create_match(
     user: User = Depends(get_current_user),
 ):
     """
-    Body:
-      { "opponent_user_id": 123 } optional
+    Создаёт матч и добавляет создателя как Player A.
     """
     opponent_user_id = data.get("opponent_user_id")
 
@@ -35,7 +34,6 @@ async def create_match(
         session.add(m)
         await session.flush()
 
-        # creator is always player A
         p1 = MatchPlayer(
             match_id=m.id,
             user_id=int(user.id),
@@ -45,7 +43,6 @@ async def create_match(
         session.add(p1)
 
         if opponent_user_id:
-            # create second slot
             p2 = MatchPlayer(
                 match_id=m.id,
                 user_id=int(opponent_user_id),
@@ -67,14 +64,13 @@ async def join_match(
         m = await session.get(
             Match,
             match_id,
-            options=[selectinload(Match.players), selectinload(Match.deposits)],
+            options=[selectinload(Match.players)],
         )
         if not m:
             raise HTTPException(status_code=404, detail="Match not found")
 
-        # if already in match
+        # already in match
         if any(p.user_id == int(user.id) for p in m.players):
-            # update snapshot
             for p in m.players:
                 if p.user_id == int(user.id):
                     p.near_account_id_snapshot = user.near_account_id
@@ -104,15 +100,14 @@ async def set_match_deck(
     data: Dict[str, Any] = Body(...),
     user: User = Depends(get_current_user),
 ):
-    """
-    Body:
-      { "cards": ["mock:..."], "nfts": [...] } or any JSON you want.
-    We'll store as JSONB in match_players.deck.
-    """
     async for session in get_session():
-        mp = (await session.execute(
-            select(MatchPlayer).where(and_(MatchPlayer.match_id == match_id, MatchPlayer.user_id == int(user.id)))
-        )).scalar_one_or_none()
+        mp = (
+            await session.execute(
+                select(MatchPlayer).where(
+                    and_(MatchPlayer.match_id == match_id, MatchPlayer.user_id == int(user.id))
+                )
+            )
+        ).scalar_one_or_none()
 
         if not mp:
             raise HTTPException(status_code=404, detail="You are not in this match")
@@ -129,19 +124,6 @@ async def record_deposit(
     data: Dict[str, Any] = Body(...),
     user: User = Depends(get_current_user),
 ):
-    """
-    Body:
-      {
-        "nft_contract_id": "collection.near",
-        "token_id": "123",
-        "tx_hash": "...."   (optional but recommended)
-      }
-
-    IMPORTANT:
-    Frontend must first do on-chain:
-      nft_transfer_call({ receiver_id: ESCROW, token_id, msg: {match_id,...}, 1 yocto })
-    then call this endpoint to record tx hash for settlement tracking.
-    """
     nft_contract_id = (data.get("nft_contract_id") or "").strip()
     token_id = (data.get("token_id") or "").strip()
     tx_hash = (data.get("tx_hash") or "").strip() or None
@@ -236,32 +218,22 @@ async def finish_match(
     data: Dict[str, Any] = Body(...),
     user: User = Depends(get_current_user),
 ):
-    """
-    Body:
-      {
-        "winner_user_id": 111,
-        "loser_user_id": 222,
-        "nft_contract_id": "...",
-        "token_id": "..."
-      }
-
-    In real Stage2: лучше подтверждать это через WS + server-authoritative results,
-    и затем winner отправляет on-chain settle() в escrow контракт.
-    """
     winner_user_id = int(data.get("winner_user_id") or 0)
     loser_user_id = int(data.get("loser_user_id") or 0)
     nft_contract_id = (data.get("nft_contract_id") or "").strip()
     token_id = (data.get("token_id") or "").strip()
 
     if not winner_user_id or not loser_user_id or not nft_contract_id or not token_id:
-        raise HTTPException(status_code=400, detail="winner_user_id, loser_user_id, nft_contract_id, token_id are required")
+        raise HTTPException(
+            status_code=400,
+            detail="winner_user_id, loser_user_id, nft_contract_id, token_id are required",
+        )
 
     async for session in get_session():
-        m = await session.get(Match, match_id, options=[selectinload(Match.players), selectinload(Match.deposits)])
+        m = await session.get(Match, match_id, options=[selectinload(Match.players), selectinload(Match.claim)])
         if not m:
             raise HTTPException(status_code=404, detail="Match not found")
 
-        # only participant can finish
         if not any(p.user_id == int(user.id) for p in m.players):
             raise HTTPException(status_code=403, detail="Not a match participant")
 
@@ -269,16 +241,49 @@ async def finish_match(
         m.finished_at = _now()
         m.winner_user_id = winner_user_id
 
-        # store claim (chosen loser NFT)
-        cl = MatchClaim(
-            match_id=match_id,
-            winner_user_id=winner_user_id,
-            loser_user_id=loser_user_id,
-            nft_contract_id=nft_contract_id,
-            token_id=token_id,
-            tx_hash=None,
-        )
-        session.add(cl)
+        if m.claim is None:
+            cl = MatchClaim(
+                match_id=match_id,
+                winner_user_id=winner_user_id,
+                loser_user_id=loser_user_id,
+                nft_contract_id=nft_contract_id,
+                token_id=token_id,
+                tx_hash=None,
+            )
+            session.add(cl)
 
+        await session.commit()
+        return {"ok": True}
+
+
+@router.post("/{match_id}/claim_tx")
+async def set_claim_tx(
+    match_id: str,
+    data: Dict[str, Any] = Body(...),
+    user: User = Depends(get_current_user),
+):
+    tx_hash = (data.get("tx_hash") or "").strip()
+    if not tx_hash:
+        raise HTTPException(status_code=400, detail="tx_hash is required")
+
+    async for session in get_session():
+        m = await session.get(
+            Match,
+            match_id,
+            options=[selectinload(Match.players), selectinload(Match.claim)],
+        )
+        if not m:
+            raise HTTPException(status_code=404, detail="Match not found")
+
+        if not any(p.user_id == int(user.id) for p in m.players):
+            raise HTTPException(status_code=403, detail="Not a match participant")
+
+        if not m.claim:
+            raise HTTPException(status_code=409, detail="No claim recorded for this match")
+
+        if int(user.id) != int(m.claim.winner_user_id):
+            raise HTTPException(status_code=403, detail="Only winner can set claim tx")
+
+        m.claim.tx_hash = tx_hash
         await session.commit()
         return {"ok": True}

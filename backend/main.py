@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database.session import engine
-from database.models import Base  # важно: импортирует все модели
+from database.models import Base  # important: imports all models
 
 from api.auth import router as auth_router
 from api.users import router as users_router
@@ -34,16 +34,15 @@ async def health():
 app.include_router(auth_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
 app.include_router(websocket_router, prefix="/api")
-app.include_router(mock_nfts_router)  # already has prefix="/api"
-app.include_router(near_router)       # has prefix="/api/near"
-app.include_router(matches_router)    # has prefix="/api/matches"
+app.include_router(mock_nfts_router)  # already prefix="/api"
+app.include_router(near_router)       # prefix="/api/near"
+app.include_router(matches_router)    # prefix="/api/matches"
 
 
 @app.on_event("startup")
 async def on_startup():
-    # create_all but do not hard fail on DB issues
     if engine is None:
-        logger.warning("DB engine is not configured (DATABASE_URL empty)")
+        logger.warning("DB engine is not configured; skipping create_all")
         return
     try:
         async with engine.begin() as conn:

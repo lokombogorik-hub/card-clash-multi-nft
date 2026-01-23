@@ -61,7 +61,6 @@ async def link_near_account(
             await session.commit()
             break
     except Exception:
-        # даже если БД падает — хотя бы отвечаем ok
         pass
 
     return {"ok": True, "accountId": account_id}

@@ -47,7 +47,7 @@ class MatchPlayer(Base):
     side: Mapped[str] = mapped_column(String(16), default="")  # "A"|"B"
     near_account_id_snapshot: Mapped[str | None] = mapped_column(String(128), nullable=True)
 
-    # хранение deck на этапе 1/2: можно keys, можно полные NFT; сейчас JSONB
+    # deck (пока JSONB: keys/полные данные)
     deck: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

@@ -6,6 +6,7 @@ import Inventory from "./pages/Inventory";
 import Profile from "./pages/Profile";
 import Market from "./pages/Market";
 import WalletConnector from "./components/MultiChainWallet/WalletConnector";
++import LockEscrowModal from "./components/Stage2/LockEscrowModal";
 
 function useIsLandscape() {
     const get = () =>
