@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 
 /* =========================
-   Triple Triad (FF-style) + match-to-3
+   Triple Triad (3x3) + Same/Plus/Combo + best-of-3 (to 3 wins)
    ========================= */
 
 const DIRS = [
@@ -62,7 +62,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const randInt = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
 const pick = (arr) => arr[(Math.random() * arr.length) | 0];
 const randomFirstTurn = () => (Math.random() < 0.5 ? "player" : "enemy");
-const showVal = (v) => (v === 10 ? "A" : String(v));
+const showVal = (v) => String(v); // всегда цифры, без "A"
 
 const RANKS = [
     { key: "common", label: "C", weight: 50, min: 1, max: 7, elemChance: 0.6 },
@@ -171,6 +171,7 @@ function resolvePlacementTT(placedIdx, grid, boardElems) {
             const sum = pSP + tSP;
 
             const pBattle = attackerValueForBattle(placed, a, placedIdx, t, boardElems);
+
             return { ni, a, b, target: t, pSP, tSP, sum, pBattle };
         })
         .filter(Boolean);
@@ -179,15 +180,18 @@ function resolvePlacementTT(placedIdx, grid, boardElems) {
     const sameSet = new Set();
     const plusSet = new Set();
 
+    // BASIC
     for (const i of adj) {
         if (i.target.owner !== placed.owner && i.pBattle > i.tSP) basicSet.add(i.ni);
     }
 
+    // SAME
     if (RULES.same) {
         const eq = adj.filter((i) => i.pSP === i.tSP);
         if (eq.length >= 2) eq.forEach((i) => sameSet.add(i.ni));
     }
 
+    // PLUS
     if (RULES.plus) {
         const groups = new Map();
         for (const i of adj) {
@@ -334,12 +338,16 @@ export default function Game({ onExit, me, playerDeck }) {
     const [roundWinner, setRoundWinner] = useState(null);
     const [matchOver, setMatchOver] = useState(false);
 
+    // CLAIM (winner picks 1 from loser)
+    const [claimPickId, setClaimPickId] = useState(null);
+    const [claimDone, setClaimDone] = useState(false);
+
     const [spellMode, setSpellMode] = useState(null);
     const [frozen, setFrozen] = useState(() => Array(9).fill(0));
     const [enemyRevealId, setEnemyRevealId] = useState(null);
     const [playerSpells, setPlayerSpells] = useState({ freeze: 1, reveal: 1 });
 
-    // refs for AI (to avoid “missed” effects)
+    // refs for AI to never "miss" a move
     const boardRef = useRef(board);
     const handsRef = useRef(hands);
     const frozenRef = useRef(frozen);
@@ -412,6 +420,8 @@ export default function Game({ onExit, me, playerDeck }) {
             setSeries({ player: 0, enemy: 0 });
             setRoundNo(1);
             setMatchOver(false);
+            setClaimPickId(null);
+            setClaimDone(false);
         }
     };
 
@@ -420,7 +430,7 @@ export default function Game({ onExit, me, playerDeck }) {
         setTimeout(() => startRound({ keepSeries: false }), 0);
     };
 
-    // one digit score: board only
+    // score on board only (0..9), no draw possible on 9 cells
     const boardScore = useMemo(() => {
         return board.reduce(
             (a, c) => {
@@ -518,7 +528,7 @@ export default function Game({ onExit, me, playerDeck }) {
         setTurn("enemy");
     };
 
-    // ENEMY TURN — гарантированно срабатывает
+    // ENEMY TURN — always happens
     useEffect(() => {
         if (turn !== "enemy" || roundOver || matchOver) return;
 
@@ -552,7 +562,6 @@ export default function Game({ onExit, me, playerDeck }) {
             setTurn("player");
         }, 420);
 
-        // safety: if something goes wrong, return turn
         const safety = setTimeout(() => {
             setTurn((cur) => (cur === "enemy" ? "player" : cur));
         }, 1400);
@@ -563,15 +572,17 @@ export default function Game({ onExit, me, playerDeck }) {
         };
     }, [turn, roundOver, matchOver]);
 
-    // ROUND OVER
+    // ROUND OVER (no draw)
     useEffect(() => {
         if (roundOver || matchOver) return;
         if (board.some((c) => c === null)) return;
 
-        const pOwned = board.filter((c) => c && c.owner === "player").length + hands.player.length;
-        const eOwned = board.filter((c) => c && c.owner === "enemy").length + hands.enemy.length;
+        // winner by board control only (9 cells => no draw)
+        const red = board.filter((c) => c && c.owner === "enemy").length;
+        const blue = board.filter((c) => c && c.owner === "player").length;
 
-        const w = pOwned > eOwned ? "player" : eOwned > pOwned ? "enemy" : "draw";
+        const w = blue > red ? "player" : "enemy";
+
         setRoundWinner(w);
         setRoundOver(true);
 
@@ -581,13 +592,15 @@ export default function Game({ onExit, me, playerDeck }) {
             if (w === "enemy") next.enemy += 1;
             return next;
         });
-    }, [board, roundOver, matchOver, hands.player.length, hands.enemy.length]);
+    }, [board, roundOver, matchOver]);
 
     // MATCH OVER
     useEffect(() => {
         if (matchOver) return;
         if (series.player >= MATCH_WINS_TARGET || series.enemy >= MATCH_WINS_TARGET) {
             setMatchOver(true);
+            setClaimPickId(null);
+            setClaimDone(false);
         }
     }, [series, matchOver]);
 
@@ -608,7 +621,26 @@ export default function Game({ onExit, me, playerDeck }) {
         startRound({ keepSeries: true });
     };
 
-    const winnerText = roundWinner === "player" ? "Победа" : roundWinner === "enemy" ? "Поражение" : "Ничья";
+    const matchWinner =
+        series.player >= MATCH_WINS_TARGET ? "player" : series.enemy >= MATCH_WINS_TARGET ? "enemy" : null;
+
+    const loserSide = matchWinner === "player" ? "enemy" : matchWinner === "enemy" ? "player" : null;
+    const winnerSide = matchWinner;
+
+    // decks for claim UI (5 cards each)
+    const playerDeckCards = useMemo(() => playerDeck.map((n, idx) => nftToCard(n, idx)), [playerDeck]);
+    const loserDeck = loserSide === "enemy" ? enemyDeck : loserSide === "player" ? playerDeckCards : [];
+
+    const onConfirmClaim = () => {
+        if (!matchOver) return;
+        if (winnerSide !== "player") return; // only player can pick in stage1
+        if (!loserSide) return;
+        if (!claimPickId) return;
+
+        // offchain local reward flag (stage1)
+        setClaimDone(true);
+        haptic("medium");
+    };
 
     return (
         <div className="game-root">
@@ -623,7 +655,7 @@ export default function Game({ onExit, me, playerDeck }) {
                 <PlayerBadge side="enemy" name={enemyName} avatarUrl={enemyAvatar} active={turn === "enemy"} />
                 <PlayerBadge side="player" name={myName} avatarUrl={myAvatar} active={turn === "player"} />
 
-                {/* enemy hand */}
+                {/* LEFT enemy hand */}
                 <div className="hand left">
                     <div className="hand-grid">
                         {hands.enemy.map((c, i) => {
@@ -647,7 +679,7 @@ export default function Game({ onExit, me, playerDeck }) {
                     </div>
                 </div>
 
-                {/* board */}
+                {/* CENTER BOARD */}
                 <div className="center-col">
                     <div className="board">
                         {board.map((cell, i) => {
@@ -676,7 +708,7 @@ export default function Game({ onExit, me, playerDeck }) {
                     </div>
                 </div>
 
-                {/* player hand */}
+                {/* RIGHT player hand */}
                 <div className="hand right">
                     <div className="hand-grid">
                         {hands.player.map((c, i) => {
@@ -717,20 +749,77 @@ export default function Game({ onExit, me, playerDeck }) {
                     </div>
                 </div>
 
+                {/* OVERLAY */}
                 {(roundOver || matchOver) && (
                     <div className="game-over">
                         <div className="game-over-box" style={{ minWidth: 320 }}>
                             <h2 style={{ marginBottom: 8 }}>
                                 {matchOver
-                                    ? series.player >= MATCH_WINS_TARGET
+                                    ? matchWinner === "player"
                                         ? "Матч выигран"
                                         : "Матч проигран"
-                                    : winnerText}
+                                    : roundWinner === "player"
+                                        ? "Победа"
+                                        : "Поражение"}
                             </h2>
 
                             <div style={{ opacity: 0.9, fontSize: 12, marginBottom: 10 }}>
                                 Раунд {roundNo} • Серия до {MATCH_WINS_TARGET} • Счёт {series.player}:{series.enemy}
                             </div>
+
+                            {matchOver && matchWinner && loserSide && (
+                                <>
+                                    <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 8 }}>
+                                        {matchWinner === "player" ? "Выбери 1 карту соперника" : "Соперник забирает 1 твою карту"}
+                                    </div>
+
+                                    {matchWinner === "player" ? (
+                                        <>
+                                            <div
+                                                style={{
+                                                    display: "grid",
+                                                    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+                                                    gap: 8,
+                                                    marginBottom: 10,
+                                                }}
+                                            >
+                                                {loserDeck.map((c) => (
+                                                    <div
+                                                        key={c.id}
+                                                        onClick={() => !claimDone && setClaimPickId(c.id)}
+                                                        style={{
+                                                            cursor: claimDone ? "default" : "pointer",
+                                                            outline:
+                                                                claimPickId === c.id
+                                                                    ? "2px solid rgba(120,200,255,0.75)"
+                                                                    : "1px solid rgba(255,255,255,0.12)",
+                                                            borderRadius: 12,
+                                                            padding: 4,
+                                                            opacity: claimDone ? 0.6 : 1,
+                                                        }}
+                                                    >
+                                                        <Card card={c} disabled />
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {!claimDone ? (
+                                                <button disabled={!claimPickId} onClick={onConfirmClaim}>
+                                                    Забрать выбранную карту
+                                                </button>
+                                            ) : (
+                                                <div style={{ marginTop: 6, opacity: 0.9, fontSize: 12 }}>
+                                                    Карта получена (Stage1, оффчейн). Можно начать новый матч или выйти в меню.
+                                                </div>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <div style={{ opacity: 0.85, fontSize: 12, marginBottom: 10 }}>
+                                            (Пока AI не выбирает.)
+                                        </div>
+                                    )}
+                                </>
+                            )}
 
                             <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 10, flexWrap: "wrap" }}>
                                 {!matchOver && <button onClick={onNextRound}>Следующий раунд</button>}
