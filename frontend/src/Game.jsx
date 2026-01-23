@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
+import { apiFetch } from "./api.js";
+import { useWalletStore } from "./store/walletStore";
 
 /* =========================
    Triple Triad (3x3) + Same/Plus/Combo + best-of-3 (to 3 wins)
@@ -62,7 +64,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const randInt = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
 const pick = (arr) => arr[(Math.random() * arr.length) | 0];
 const randomFirstTurn = () => (Math.random() < 0.5 ? "player" : "enemy");
-const showVal = (v) => String(v); // всегда цифры, без "A"
+const showVal = (v) => String(v); // always digits, no "A"
 
 const RANKS = [
     { key: "common", label: "C", weight: 50, min: 1, max: 7, elemChance: 0.6 },
@@ -297,8 +299,46 @@ function nftToCard(nft, idx) {
     };
 }
 
-export default function Game({ onExit, me, playerDeck }) {
+function getStoredToken() {
+    try {
+        return (
+            localStorage.getItem("token") ||
+            localStorage.getItem("accessToken") ||
+            localStorage.getItem("access_token") ||
+            ""
+        );
+    } catch {
+        return "";
+    }
+}
+
+export default function Game({ onExit, me, playerDeck, matchId }) {
     const revealTimerRef = useRef(null);
+
+    const { connected: nearConnected, walletAddress: nearAccountId, escrowClaim } = useWalletStore();
+
+    const [stage2Busy, setStage2Busy] = useState(false);
+    const [stage2Err, setStage2Err] = useState("");
+    const [stage2Match, setStage2Match] = useState(null);
+
+    const myTgId = me?.id ? Number(me.id) : 0;
+
+    const refreshStage2Match = async () => {
+        if (!matchId) return;
+        try {
+            const token = getStoredToken();
+            if (!token) return;
+            const m = await apiFetch(`/api/matches/${matchId}`, { token });
+            setStage2Match(m);
+        } catch {
+            // ignore
+        }
+    };
+
+    useEffect(() => {
+        refreshStage2Match();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [matchId]);
 
     if (!playerDeck || !Array.isArray(playerDeck) || playerDeck.length !== 5) {
         return (
@@ -422,6 +462,8 @@ export default function Game({ onExit, me, playerDeck }) {
             setMatchOver(false);
             setClaimPickId(null);
             setClaimDone(false);
+            setStage2Err("");
+            setStage2Match(null);
         }
     };
 
@@ -577,7 +619,6 @@ export default function Game({ onExit, me, playerDeck }) {
         if (roundOver || matchOver) return;
         if (board.some((c) => c === null)) return;
 
-        // winner by board control only (9 cells => no draw)
         const red = board.filter((c) => c && c.owner === "enemy").length;
         const blue = board.filter((c) => c && c.owner === "player").length;
 
@@ -601,8 +642,10 @@ export default function Game({ onExit, me, playerDeck }) {
             setMatchOver(true);
             setClaimPickId(null);
             setClaimDone(false);
+            if (matchId) refreshStage2Match();
         }
-    }, [series, matchOver]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [series, matchOver, matchId]);
 
     // CONFETTI
     useEffect(() => {
@@ -627,19 +670,88 @@ export default function Game({ onExit, me, playerDeck }) {
     const loserSide = matchWinner === "player" ? "enemy" : matchWinner === "enemy" ? "player" : null;
     const winnerSide = matchWinner;
 
-    // decks for claim UI (5 cards each)
+    // decks for claim UI (Stage1 fallback)
     const playerDeckCards = useMemo(() => playerDeck.map((n, idx) => nftToCard(n, idx)), [playerDeck]);
     const loserDeck = loserSide === "enemy" ? enemyDeck : loserSide === "player" ? playerDeckCards : [];
 
-    const onConfirmClaim = () => {
-        if (!matchOver) return;
-        if (winnerSide !== "player") return; // only player can pick in stage1
-        if (!loserSide) return;
-        if (!claimPickId) return;
+    const stage2OpponentDeposits = useMemo(() => {
+        if (!matchId || !stage2Match) return null;
+        const players = stage2Match?.players || [];
+        const deposits = stage2Match?.deposits || [];
+        const opp = players.find((p) => Number(p.user_id) !== myTgId);
+        if (!opp) return [];
+        return deposits.filter((d) => Number(d.user_id) === Number(opp.user_id));
+    }, [matchId, stage2Match, myTgId]);
 
-        // offchain local reward flag (stage1)
-        setClaimDone(true);
-        haptic("medium");
+    const onConfirmClaim = async () => {
+        if (!matchOver) return;
+        if (winnerSide !== "player") return; // only player can pick in MVP
+        if (!loserSide) return;
+
+        // Stage1 fallback
+        if (!matchId) {
+            if (!claimPickId) return;
+            setClaimDone(true);
+            haptic("medium");
+            return;
+        }
+
+        setStage2Err("");
+        setStage2Busy(true);
+
+        try {
+            const token = getStoredToken();
+            if (!token) throw new Error("No JWT token (auth missing)");
+            if (!nearConnected || !nearAccountId) throw new Error("NEAR wallet not connected");
+            if (!claimPickId) throw new Error("Pick an NFT first");
+
+            const m = await apiFetch(`/api/matches/${matchId}`, { token });
+            setStage2Match(m);
+
+            const players = m?.players || [];
+            const deposits = m?.deposits || [];
+            const opp = players.find((p) => Number(p.user_id) !== myTgId);
+            if (!opp) throw new Error("Opponent not found in match");
+
+            const loserUserId = Number(opp.user_id);
+            const picked = deposits.find((d) => String(d.id) === String(claimPickId) && Number(d.user_id) === loserUserId);
+            if (!picked) throw new Error("Selected deposit not found (or not opponent deposit)");
+
+            // record finish + chosen token in DB
+            await apiFetch(`/api/matches/${matchId}/finish`, {
+                method: "POST",
+                token,
+                body: JSON.stringify({
+                    winner_user_id: myTgId,
+                    loser_user_id: loserUserId,
+                    nft_contract_id: picked.nft_contract_id,
+                    token_id: picked.token_id,
+                }),
+            });
+
+            // on-chain claim
+            const { txHash } = await escrowClaim({
+                matchId,
+                winnerAccountId: nearAccountId,
+                loserNftContractId: picked.nft_contract_id,
+                loserTokenId: picked.token_id,
+            });
+
+            if (txHash) {
+                await apiFetch(`/api/matches/${matchId}/claim_tx`, {
+                    method: "POST",
+                    token,
+                    body: JSON.stringify({ tx_hash: txHash }),
+                });
+            }
+
+            setClaimDone(true);
+            haptic("medium");
+        } catch (e) {
+            setStage2Err(String(e?.message || e));
+        } finally {
+            setStage2Busy(false);
+        }
     };
 
     return (
@@ -700,7 +812,11 @@ export default function Game({ onExit, me, playerDeck }) {
                                     onClick={() => onCellClick(i)}
                                     title={isFrozen ? `Frozen (${frozen[i]})` : elem ? `Element: ${elem}` : undefined}
                                 >
-                                    {elem && <div className="elem-bg" aria-hidden="true">{ELEM_ICON[elem]}</div>}
+                                    {elem && (
+                                        <div className="elem-bg" aria-hidden="true">
+                                            {ELEM_ICON[elem]}
+                                        </div>
+                                    )}
                                     {cell && <Card card={cell} cellElement={elem} />}
                                 </div>
                             );
@@ -767,51 +883,112 @@ export default function Game({ onExit, me, playerDeck }) {
                                 Раунд {roundNo} • Серия до {MATCH_WINS_TARGET} • Счёт {series.player}:{series.enemy}
                             </div>
 
+                            {matchId ? (
+                                <div style={{ fontSize: 11, opacity: 0.85, marginBottom: 10, fontFamily: "monospace" }}>
+                                    Stage2 matchId: {matchId}
+                                </div>
+                            ) : null}
+
                             {matchOver && matchWinner && loserSide && (
                                 <>
                                     <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 8 }}>
-                                        {matchWinner === "player" ? "Выбери 1 карту соперника" : "Соперник забирает 1 твою карту"}
+                                        {matchWinner === "player"
+                                            ? "Выбери 1 карту соперника"
+                                            : "Соперник забирает 1 твою карту"}
                                     </div>
 
                                     {matchWinner === "player" ? (
                                         <>
-                                            <div
-                                                style={{
-                                                    display: "grid",
-                                                    gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
-                                                    gap: 8,
-                                                    marginBottom: 10,
-                                                }}
-                                            >
-                                                {loserDeck.map((c) => (
-                                                    <div
-                                                        key={c.id}
-                                                        onClick={() => !claimDone && setClaimPickId(c.id)}
-                                                        style={{
-                                                            cursor: claimDone ? "default" : "pointer",
-                                                            outline:
-                                                                claimPickId === c.id
-                                                                    ? "2px solid rgba(120,200,255,0.75)"
-                                                                    : "1px solid rgba(255,255,255,0.12)",
-                                                            borderRadius: 12,
-                                                            padding: 4,
-                                                            opacity: claimDone ? 0.6 : 1,
-                                                        }}
-                                                    >
-                                                        <Card card={c} disabled />
-                                                    </div>
-                                                ))}
-                                            </div>
+                                            {matchId && Array.isArray(stage2OpponentDeposits) ? (
+                                                <>
+                                                    {stage2OpponentDeposits.length ? (
+                                                        <div
+                                                            style={{
+                                                                display: "grid",
+                                                                gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+                                                                gap: 8,
+                                                                marginBottom: 10,
+                                                            }}
+                                                        >
+                                                            {stage2OpponentDeposits.map((d) => (
+                                                                <div
+                                                                    key={d.id}
+                                                                    onClick={() => !claimDone && setClaimPickId(String(d.id))}
+                                                                    style={{
+                                                                        cursor: claimDone ? "default" : "pointer",
+                                                                        outline:
+                                                                            claimPickId === String(d.id)
+                                                                                ? "2px solid rgba(120,200,255,0.75)"
+                                                                                : "1px solid rgba(255,255,255,0.12)",
+                                                                        borderRadius: 12,
+                                                                        padding: 10,
+                                                                        background: "rgba(0,0,0,0.35)",
+                                                                        fontSize: 11,
+                                                                        fontFamily: "monospace",
+                                                                        opacity: claimDone ? 0.6 : 1,
+                                                                    }}
+                                                                >
+                                                                    <div style={{ fontWeight: 900, marginBottom: 6 }}>NFT</div>
+                                                                    <div style={{ opacity: 0.9 }}>{d.nft_contract_id}</div>
+                                                                    <div style={{ opacity: 0.9 }}>{d.token_id}</div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ opacity: 0.85, fontSize: 12, marginBottom: 10 }}>
+                                                            Нет депозитов соперника в матче. Stage2 claim невозможен (нужно lock 5 NFT до боя).
+                                                        </div>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <div
+                                                    style={{
+                                                        display: "grid",
+                                                        gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+                                                        gap: 8,
+                                                        marginBottom: 10,
+                                                    }}
+                                                >
+                                                    {loserDeck.map((c) => (
+                                                        <div
+                                                            key={c.id}
+                                                            onClick={() => !claimDone && setClaimPickId(c.id)}
+                                                            style={{
+                                                                cursor: claimDone ? "default" : "pointer",
+                                                                outline:
+                                                                    claimPickId === c.id
+                                                                        ? "2px solid rgba(120,200,255,0.75)"
+                                                                        : "1px solid rgba(255,255,255,0.12)",
+                                                                borderRadius: 12,
+                                                                padding: 4,
+                                                                opacity: claimDone ? 0.6 : 1,
+                                                            }}
+                                                        >
+                                                            <Card card={c} disabled />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
 
                                             {!claimDone ? (
-                                                <button disabled={!claimPickId} onClick={onConfirmClaim}>
-                                                    Забрать выбранную карту
+                                                <button disabled={!claimPickId || stage2Busy} onClick={onConfirmClaim}>
+                                                    {stage2Busy ? "On-chain..." : "Забрать выбранную карту"}
                                                 </button>
                                             ) : (
                                                 <div style={{ marginTop: 6, opacity: 0.9, fontSize: 12 }}>
-                                                    Карта получена (Stage1, оффчейн). Можно начать новый матч или выйти в меню.
+                                                    Карта получена. {matchId ? "Stage2 (on-chain)." : "Stage1 (off-chain)."}
                                                 </div>
                                             )}
+
+                                            {stage2Err ? (
+                                                <div style={{ marginTop: 8, color: "#ffb3b3", fontSize: 12 }}>{stage2Err}</div>
+                                            ) : null}
+
+                                            {matchId && !nearConnected ? (
+                                                <div style={{ marginTop: 8, opacity: 0.85, fontSize: 12 }}>
+                                                    Для Stage2 claim нужен подключённый NEAR кошелёк (HERE).
+                                                </div>
+                                            ) : null}
                                         </>
                                     ) : (
                                         <div style={{ opacity: 0.85, fontSize: 12, marginBottom: 10 }}>
@@ -913,7 +1090,9 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
                     draggable="false"
                     loading="lazy"
                     onError={(e) => {
-                        try { e.currentTarget.src = "/cards/card.jpg"; } catch { }
+                        try {
+                            e.currentTarget.src = "/cards/card.jpg";
+                        } catch { }
                     }}
                 />
 

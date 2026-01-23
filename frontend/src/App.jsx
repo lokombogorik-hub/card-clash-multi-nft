@@ -6,7 +6,7 @@ import Inventory from "./pages/Inventory";
 import Profile from "./pages/Profile";
 import Market from "./pages/Market";
 import WalletConnector from "./components/MultiChainWallet/WalletConnector";
-+import LockEscrowModal from "./components/Stage2/LockEscrowModal";
+import LockEscrowModal from "./components/Stage2/LockEscrowModal";
 
 function useIsLandscape() {
     const get = () =>
@@ -60,11 +60,12 @@ export default function App() {
     const [me, setMe] = useState(null);
     const [playerDeck, setPlayerDeck] = useState(null);
 
+    const [stage2LockOpen, setStage2LockOpen] = useState(false);
+    const [stage2MatchId, setStage2MatchId] = useState("");
+
     const logoRef = useRef(null);
     const [logoOk, setLogoOk] = useState(true);
     const bottomStackRef = useRef(null);
-
-    const showWalletConnector = screen === "home";
 
     const debugEnabled = useMemo(() => {
         const fromSearch = window.location.search || "";
@@ -83,6 +84,8 @@ export default function App() {
     }, []);
 
     const apiBase = import.meta.env.VITE_API_BASE_URL || "";
+    const escrowContractId = (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim();
+    const stage2Enabled = Boolean(escrowContractId);
 
     const [authState, setAuthState] = useState({
         status: "idle",
@@ -274,12 +277,20 @@ export default function App() {
         }
 
         setPlayerDeck(deck);
+
+        // Stage2 flow: lock modal before game
+        if (stage2Enabled) {
+            setStage2LockOpen(true);
+            return;
+        }
+
         setScreen("game");
     };
 
     const onExitGame = () => {
         setScreen("home");
         setPlayerDeck(null);
+        setStage2MatchId("");
     };
 
     const showRotate = screen === "game" && !isLandscape;
@@ -289,15 +300,30 @@ export default function App() {
         []
     );
 
+    const showWalletConnector = screen === "home" || screen === "game";
+
     if (screen === "game") {
         return (
             <div className="shell">
                 <StormBg />
+
                 {showWalletConnector ? <WalletConnector /> : null}
+
+                <LockEscrowModal
+                    open={stage2LockOpen}
+                    onClose={() => setStage2LockOpen(false)}
+                    onReady={({ matchId }) => {
+                        setStage2MatchId(matchId || "");
+                        setStage2LockOpen(false);
+                        setScreen("game");
+                    }}
+                    me={me}
+                    playerDeck={playerDeck}
+                />
 
                 <div className={`game-host ${showRotate ? "is-hidden" : ""}`}>
                     {playerDeck ? (
-                        <Game onExit={onExitGame} me={me} playerDeck={playerDeck} />
+                        <Game onExit={onExitGame} me={me} playerDeck={playerDeck} matchId={stage2MatchId} />
                     ) : (
                         <div style={{ color: "#fff", padding: 20 }}>Loading deck...</div>
                     )}
@@ -323,6 +349,8 @@ export default function App() {
                     >
                         <div style={{ fontWeight: 700, marginBottom: 6 }}>DEBUG (Game)</div>
                         <div>playerDeck: {playerDeck ? `${playerDeck.length} cards` : "null"}</div>
+                        <div>stage2Enabled: {String(stage2Enabled)}</div>
+                        <div>matchId: {stage2MatchId || "(none)"}</div>
                     </div>
                 )}
             </div>
@@ -333,6 +361,18 @@ export default function App() {
         <div className="shell">
             <StormBg />
             {showWalletConnector ? <WalletConnector /> : null}
+
+            <LockEscrowModal
+                open={stage2LockOpen}
+                onClose={() => setStage2LockOpen(false)}
+                onReady={({ matchId }) => {
+                    setStage2MatchId(matchId || "");
+                    setStage2LockOpen(false);
+                    setScreen("game");
+                }}
+                me={me}
+                playerDeck={playerDeck}
+            />
 
             <div className="shell-content">
                 {screen === "home" && (
@@ -369,7 +409,9 @@ export default function App() {
                 )}
 
                 {screen === "market" && <Market />}
-                {screen === "inventory" && <Inventory token={token || getStoredToken()} onDeckReady={() => setScreen("home")} />}
+                {screen === "inventory" && (
+                    <Inventory token={token || getStoredToken()} onDeckReady={() => setScreen("home")} />
+                )}
                 {screen === "profile" && <Profile token={token || getStoredToken()} />}
             </div>
 
@@ -402,6 +444,9 @@ export default function App() {
                     <div style={{ fontWeight: 700, marginBottom: 6 }}>DEBUG</div>
 
                     <div>VITE_API_BASE_URL: {apiBase || "(empty!)"}</div>
+                    <div>stage2Enabled: {String(stage2Enabled)}</div>
+                    <div>escrowContractId: {escrowContractId || "(empty)"}</div>
+
                     <div>
                         token length: {(token || getStoredToken()) ? String((token || getStoredToken()).length) : 0} | auth:{" "}
                         {authState.status}
