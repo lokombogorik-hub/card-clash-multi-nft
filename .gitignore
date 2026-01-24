@@ -18,3 +18,5 @@ frontend/public/ui/photo_*.jpg
 "*.lnk" 
 *.lnk
 frontend/dist/
+contracts/near/escrow/target/
+contracts/near/escrow/Cargo.lock
