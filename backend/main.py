@@ -3,7 +3,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from database.session import engine
-from database.models import Base  # important: imports all models
+from database.models import Base  # imports all models
+
+from database.migrations_bootstrap import ensure_users_columns
 
 from api.auth import router as auth_router
 from api.users import router as users_router
@@ -34,7 +36,7 @@ async def health():
 app.include_router(auth_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
 app.include_router(websocket_router, prefix="/api")
-app.include_router(mock_nfts_router)  # already prefix="/api"
+app.include_router(mock_nfts_router)  # already has prefix="/api"
 app.include_router(near_router)       # prefix="/api/near"
 app.include_router(matches_router)    # prefix="/api/matches"
 
@@ -42,11 +44,17 @@ app.include_router(matches_router)    # prefix="/api/matches"
 @app.on_event("startup")
 async def on_startup():
     if engine is None:
-        logger.warning("DB engine is not configured; skipping create_all")
+        logger.warning("DB engine is not configured; skipping DB init")
         return
+
     try:
+        # Create missing tables (new DB)
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-        logger.info("DB schema ensured (create_all)")
+
+        # Bootstrap-migrate existing DB (old schema)
+        await ensure_users_columns(engine)
+
+        logger.info("DB schema ensured (create_all + bootstrap migrations)")
     except Exception:
         logger.exception("DB init failed (service will still run)")
