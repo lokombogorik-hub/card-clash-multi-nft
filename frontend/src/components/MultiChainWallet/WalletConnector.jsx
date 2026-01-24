@@ -9,15 +9,14 @@ export default function WalletConnector() {
         balance,
         status,
         connectWallet,
+        openMyNearWalletRedirect,
         disconnectWallet,
         restoreSession,
-        setManualAccountId,
         clearStatus,
     } = useWalletStore();
 
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState("");
-    const [manual, setManual] = useState("");
 
     const pollRef = useRef(null);
 
@@ -25,7 +24,6 @@ export default function WalletConnector() {
         restoreSession?.().catch(() => { });
     }, [restoreSession]);
 
-    // Stage2: persist near accountId to backend
     useEffect(() => {
         if (!connected || !walletAddress) return;
 
@@ -56,19 +54,12 @@ export default function WalletConnector() {
         } catch { }
     };
 
-    const formatAddress = (address) => {
-        if (!address) return "";
-        if (address.length <= 18) return address;
-        return `${address.slice(0, 10)}...${address.slice(-6)}`;
-    };
-
     const startAutoRestorePolling = () => {
         if (pollRef.current) clearInterval(pollRef.current);
 
         const startedAt = Date.now();
         pollRef.current = setInterval(async () => {
-            // stop after 10s
-            if (Date.now() - startedAt > 10000) {
+            if (Date.now() - startedAt > 15000) {
                 clearInterval(pollRef.current);
                 pollRef.current = null;
                 return;
@@ -76,7 +67,13 @@ export default function WalletConnector() {
             try {
                 await restoreSession?.();
             } catch { }
-        }, 800);
+        }, 900);
+    };
+
+    const formatAddress = (address) => {
+        if (!address) return "";
+        if (address.length <= 18) return address;
+        return `${address.slice(0, 10)}...${address.slice(-6)}`;
     };
 
     const onConnect = async () => {
@@ -84,12 +81,23 @@ export default function WalletConnector() {
         setErr("");
         setLoading(true);
         try {
-            await connectWallet("near"); // opens modal
+            await connectWallet("near"); // opens HERE modal
             startAutoRestorePolling();
-            setTimeout(() => setLoading(false), 500);
         } catch (e) {
             setErr(String(e?.message || e));
-            setLoading(false);
+        } finally {
+            setTimeout(() => setLoading(false), 400);
+        }
+    };
+
+    const onMyNearRedirect = async () => {
+        haptic();
+        setErr("");
+        try {
+            await openMyNearWalletRedirect?.();
+            startAutoRestorePolling();
+        } catch (e) {
+            setErr(String(e?.message || e));
         }
     };
 
@@ -104,17 +112,6 @@ export default function WalletConnector() {
             setErr(String(e?.message || e));
         } finally {
             setLoading(false);
-        }
-    };
-
-    const onManualSet = () => {
-        haptic();
-        try {
-            setManualAccountId(manual);
-            setManual("");
-            clearStatus?.();
-        } catch (e) {
-            setErr(String(e?.message || e));
         }
     };
 
@@ -139,7 +136,23 @@ export default function WalletConnector() {
                             opacity: loading ? 0.8 : 1,
                         }}
                     >
-                        {loading ? "Открываю выбор кошелька..." : "Подключить кошелёк"}
+                        {loading ? "Открываю..." : "Подключить кошелёк"}
+                    </button>
+
+                    <button
+                        onClick={onMyNearRedirect}
+                        disabled={loading}
+                        style={{
+                            padding: "10px 14px",
+                            borderRadius: 999,
+                            border: "1px solid rgba(255,255,255,0.15)",
+                            background: "rgba(255,255,255,0.08)",
+                            color: "#fff",
+                            fontWeight: 800,
+                        }}
+                        title="Без popups, работает в Telegram"
+                    >
+                        MyNearWallet (redirect)
                     </button>
 
                     {status ? (
@@ -157,52 +170,6 @@ export default function WalletConnector() {
                             {status}
                         </div>
                     ) : null}
-
-                    {/* emergency fallback only */}
-                    <div
-                        style={{
-                            padding: "8px 10px",
-                            borderRadius: 12,
-                            background: "rgba(0,0,0,0.35)",
-                            border: "1px solid rgba(255,255,255,0.10)",
-                            color: "#fff",
-                            fontSize: 12,
-                            lineHeight: 1.25,
-                            opacity: 0.9,
-                        }}
-                    >
-                        Если кошелёк не вернул accountId автоматически, можно ввести вручную (fallback):
-                        <div style={{ marginTop: 6, display: "flex", gap: 8 }}>
-                            <input
-                                value={manual}
-                                onChange={(e) => setManual(e.target.value)}
-                                placeholder="например: yourname.near"
-                                style={{
-                                    flex: 1,
-                                    padding: "10px 10px",
-                                    borderRadius: 10,
-                                    border: "1px solid rgba(255,255,255,0.14)",
-                                    background: "rgba(0,0,0,0.35)",
-                                    color: "#fff",
-                                    outline: "none",
-                                }}
-                            />
-                            <button
-                                onClick={onManualSet}
-                                disabled={!manual.trim()}
-                                style={{
-                                    padding: "10px 12px",
-                                    borderRadius: 10,
-                                    background: "#0b0b0b",
-                                    border: "1px solid rgba(255,255,255,0.14)",
-                                    color: "#fff",
-                                    fontWeight: 900,
-                                }}
-                            >
-                                OK
-                            </button>
-                        </div>
-                    </div>
 
                     {err ? (
                         <div
