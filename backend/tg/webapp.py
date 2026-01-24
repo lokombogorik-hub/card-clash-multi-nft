@@ -1,65 +1,81 @@
-import hmac
+from __future__ import annotations
+
 import hashlib
-import json
+import hmac
+import os
 import time
-from urllib.parse import parse_qsl
-from dataclasses import dataclass
-from typing import Any, Dict
-
-from utils.config import settings
+import urllib.parse
+import json
+from typing import Any, Dict, Optional
 
 
-@dataclass
-class TgWebAppUser:
-    id: int
-    username: str | None
-    first_name: str | None
-    last_name: str | None
-    language_code: str | None
-
-
-def _secret_key(bot_token: str) -> bytes:
-    # Telegram WebApp secret key:
-    return hmac.new(b"WebAppData", bot_token.encode("utf-8"), hashlib.sha256).digest()
-
-
-def verify_init_data(init_data: str) -> Dict[str, Any]:
-    bot_token = settings.effective_bot_token
-    if not bot_token:
-        raise ValueError("Bot token missing (set TELEGRAM_BOT_TOKEN or BOT_TOKEN)")
-
-    data = dict(parse_qsl(init_data, strict_parsing=True))
-    received_hash = data.pop("hash", None)
-    if not received_hash:
-        raise ValueError("initData hash missing")
-
-    data_check_string = "\n".join([f"{k}={v}" for k, v in sorted(data.items())])
-
-    sk = _secret_key(bot_token)
-    calculated = hmac.new(sk, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
-
-    if not hmac.compare_digest(calculated, received_hash):
-        raise ValueError("initData hash invalid")
-
-    auth_date = int(data.get("auth_date", "0"))
-    if auth_date <= 0:
-        raise ValueError("auth_date missing")
-
-    if int(time.time()) - auth_date > settings.TG_INITDATA_MAX_AGE_SEC:
-        raise ValueError("initData expired")
-
+def _parse_init_data(init_data: str) -> Dict[str, str]:
+    """
+    Parse Telegram WebApp initData querystring into dict[str,str].
+    """
+    data = {}
+    for k, v in urllib.parse.parse_qsl(init_data, keep_blank_values=True):
+        data[k] = v
     return data
 
 
-def extract_user(init_data_verified: Dict[str, Any]) -> TgWebAppUser:
-    user_raw = init_data_verified.get("user")
-    if not user_raw:
-        raise ValueError("user missing in initData")
-    obj = json.loads(user_raw)
-    return TgWebAppUser(
-        id=int(obj["id"]),
-        username=obj.get("username"),
-        first_name=obj.get("first_name"),
-        last_name=obj.get("last_name"),
-        language_code=obj.get("language_code"),
-    )
+def verify_init_data(init_data: str, bot_token: Optional[str] = None, max_age_sec: int = 60 * 60) -> bool:
+    """
+    Telegram WebApp initData verification:
+    https://core.telegram.org/bots/webapps#validating-data-received-via-the-web-app
+
+    Raises ValueError on invalid.
+    """
+    token = bot_token or os.getenv("TELEGRAM_BOT_TOKEN", "")
+    if not token:
+        raise ValueError("TELEGRAM_BOT_TOKEN is not set")
+
+    data = _parse_init_data(init_data)
+
+    received_hash = data.get("hash")
+    if not received_hash:
+        raise ValueError("hash missing in initData")
+
+    # Optional freshness check
+    auth_date = data.get("auth_date")
+    if auth_date and auth_date.isdigit():
+        age = int(time.time()) - int(auth_date)
+        if age > max_age_sec:
+            raise ValueError("initData expired")
+
+    # Build data_check_string excluding hash
+    pairs = []
+    for k in sorted(data.keys()):
+        if k == "hash":
+            continue
+        pairs.append(f"{k}={data[k]}")
+    data_check_string = "\n".join(pairs)
+
+    secret_key = hmac.new(b"WebAppData", token.encode("utf-8"), hashlib.sha256).digest()
+    calculated_hash = hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+
+    if not hmac.compare_digest(calculated_hash, received_hash):
+        raise ValueError("hash mismatch")
+
+    return True
+
+
+def extract_user(init_data: str) -> Dict[str, Any]:
+    """
+    Returns Telegram user dict from initData.
+    Always returns dict, never string.
+    """
+    data = _parse_init_data(init_data)
+    raw_user = data.get("user")
+    if not raw_user:
+        return {}
+
+    # `user` is JSON string
+    try:
+        u = json.loads(raw_user)
+        if isinstance(u, dict):
+            return u
+    except Exception:
+        pass
+
+    return {}
