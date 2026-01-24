@@ -2,7 +2,6 @@ import { useSyncExternalStore } from "react";
 
 import * as WalletSelectorCore from "@near-wallet-selector/core";
 import * as HereWalletPkg from "@near-wallet-selector/here-wallet";
-import { setupModal } from "@near-wallet-selector/modal-ui";
 
 const setupWalletSelector =
     WalletSelectorCore.setupWalletSelector ||
@@ -86,10 +85,11 @@ let state = {
     status: "",
 
     connectWallet: async () => { },
+    connectHere: async () => { },
+    openMyNearWalletRedirect: async () => { },
+
     disconnectWallet: async () => { },
     restoreSession: async () => { },
-    openMyNearWalletRedirect: async () => { },
-    setManualAccountId: (_id) => { },
     clearStatus: () => { },
 
     signAndSendTransaction: async (_tx) => { },
@@ -161,7 +161,6 @@ function syncFromUrlIfPresent() {
 
 let selectorPromise = null;
 let selector = null;
-let modal = null;
 let subscription = null;
 
 async function ensureSelector() {
@@ -174,15 +173,7 @@ async function ensureSelector() {
 
         selector = await setupWalletSelector({
             network: nearNetworkId,
-            modules: [
-                // Only HERE in wallet-selector. MyNearWallet handled by redirect below (no popup)
-                setupHereWallet(),
-            ],
-        });
-
-        modal = setupModal(selector, {
-            contractId: loginContractId,
-            theme: "dark",
+            modules: [setupHereWallet()],
         });
 
         if (!subscription) {
@@ -221,27 +212,56 @@ function myNearWalletBase() {
         : "https://app.mynearwallet.com";
 }
 
-async function openMyNearWalletRedirect() {
-    // This avoids popups completely.
-    const backUrl = window.location.href;
+async function connectHere() {
+    setState({ status: `Открываю HERE (${nearNetworkId})...` });
+    const sel = await ensureSelector();
 
-    const url = new URL(myNearWalletBase() + "/login/");
-    url.searchParams.set("referrer", "CardClash");
+    const wallet = await sel.wallet("here-wallet");
 
-    // Not all wallet pages support custom return, but many do via "success_url".
-    // Even if it doesn't, user can return manually to Telegram and we can restore from URL if present.
-    url.searchParams.set("success_url", backUrl);
-    url.searchParams.set("failure_url", backUrl);
+    const tg = window.Telegram?.WebApp;
+    const originalOpen = window.open;
 
-    setState({ status: "Открываю MyNearWallet (redirect)..." });
-    openLink(url.toString());
+    window.open = (url) => {
+        try {
+            tg?.openLink?.(url);
+        } catch { }
+        try {
+            if (!tg?.openLink) window.location.assign(url);
+        } catch { }
+        return { focus() { }, closed: false };
+    };
+
+    try {
+        const backUrl = window.location.href;
+        const p = wallet.signIn?.({
+            contractId: loginContractId,
+            methodNames: [],
+            successUrl: backUrl,
+            failureUrl: backUrl,
+        });
+        Promise.resolve(p).catch((e) => {
+            setState({ status: `HERE signIn error: ${String(e?.message || e)}` });
+        });
+
+        setState({ status: "Подтверди в HERE и вернись в игру." });
+    } finally {
+        window.open = originalOpen;
+    }
 }
 
-async function connectWallet(_provider = "near") {
-    setState({ status: `Выбор кошелька (${nearNetworkId})…` });
-    await ensureSelector();
-    modal?.show?.();
-    setState({ status: "" });
+async function openMyNearWalletRedirect() {
+    const backUrl = window.location.href;
+    const u = new URL(myNearWalletBase() + "/login/");
+    u.searchParams.set("referrer", "CardClash");
+    u.searchParams.set("success_url", backUrl);
+    u.searchParams.set("failure_url", backUrl);
+    setState({ status: "Открываю MyNearWallet..." });
+    openLink(u.toString());
+}
+
+async function connectWallet() {
+    // default
+    return connectHere();
 }
 
 async function disconnectWallet() {
@@ -265,10 +285,6 @@ async function restoreSession() {
     if (okUrl || okLs) setState({ status: "" });
 }
 
-function setManualAccountId(accountId) {
-    applyAccount(accountId);
-}
-
 function clearStatus() {
     setState({ status: "" });
 }
@@ -287,7 +303,7 @@ async function signAndSendTransaction({ receiverId, actions }) {
     if (!actions || !actions.length) throw new Error("actions are required");
 
     await ensureSelector();
-    const w = await selector.wallet(); // active wallet
+    const w = await selector.wallet();
     if (!w?.signAndSendTransaction) throw new Error("Wallet does not support signAndSendTransaction");
 
     return await w.signAndSendTransaction({ receiverId, actions });
@@ -349,10 +365,10 @@ async function escrowClaim({ matchId, winnerAccountId, loserNftContractId, loser
 state = {
     ...state,
     connectWallet,
+    connectHere,
+    openMyNearWalletRedirect,
     disconnectWallet,
     restoreSession,
-    openMyNearWalletRedirect,
-    setManualAccountId,
     clearStatus,
     signAndSendTransaction,
     nftTransferCall,

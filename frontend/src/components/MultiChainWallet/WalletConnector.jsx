@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useWalletStore } from "../../store/walletStore";
 import { apiFetch } from "../../api.js";
+import WalletPicker from "./WalletPicker";
 
 export default function WalletConnector() {
     const {
@@ -8,8 +9,6 @@ export default function WalletConnector() {
         walletAddress,
         balance,
         status,
-        connectWallet,
-        openMyNearWalletRedirect,
         disconnectWallet,
         restoreSession,
         clearStatus,
@@ -17,6 +16,7 @@ export default function WalletConnector() {
 
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState("");
+    const [pickerOpen, setPickerOpen] = useState(false);
 
     const pollRef = useRef(null);
 
@@ -48,12 +48,6 @@ export default function WalletConnector() {
         };
     }, []);
 
-    const haptic = () => {
-        try {
-            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
-        } catch { }
-    };
-
     const startAutoRestorePolling = () => {
         if (pollRef.current) clearInterval(pollRef.current);
 
@@ -70,35 +64,23 @@ export default function WalletConnector() {
         }, 900);
     };
 
+    const haptic = () => {
+        try {
+            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
+        } catch { }
+    };
+
     const formatAddress = (address) => {
         if (!address) return "";
         if (address.length <= 18) return address;
         return `${address.slice(0, 10)}...${address.slice(-6)}`;
     };
 
-    const onConnect = async () => {
+    const onOpenPicker = () => {
         haptic();
         setErr("");
-        setLoading(true);
-        try {
-            await connectWallet("near"); // opens HERE modal
-            startAutoRestorePolling();
-        } catch (e) {
-            setErr(String(e?.message || e));
-        } finally {
-            setTimeout(() => setLoading(false), 400);
-        }
-    };
-
-    const onMyNearRedirect = async () => {
-        haptic();
-        setErr("");
-        try {
-            await openMyNearWalletRedirect?.();
-            startAutoRestorePolling();
-        } catch (e) {
-            setErr(String(e?.message || e));
-        }
+        setPickerOpen(true);
+        startAutoRestorePolling();
     };
 
     const onDisconnect = async () => {
@@ -120,10 +102,12 @@ export default function WalletConnector() {
 
     return (
         <div style={{ position: "fixed", top: topOffset, right: 16, zIndex: 9999 }}>
+            <WalletPicker open={pickerOpen} onClose={() => setPickerOpen(false)} />
+
             {!connected ? (
                 <div style={{ display: "grid", gap: 8, justifyItems: "end", maxWidth: 360 }}>
                     <button
-                        onClick={onConnect}
+                        onClick={onOpenPicker}
                         disabled={loading}
                         style={{
                             padding: "10px 14px",
@@ -131,28 +115,12 @@ export default function WalletConnector() {
                             border: "1px solid rgba(255,255,255,0.15)",
                             background: "linear-gradient(90deg,#2563eb,#7c3aed)",
                             color: "#fff",
-                            fontWeight: 700,
+                            fontWeight: 800,
                             cursor: loading ? "not-allowed" : "pointer",
                             opacity: loading ? 0.8 : 1,
                         }}
                     >
-                        {loading ? "Открываю..." : "Подключить кошелёк"}
-                    </button>
-
-                    <button
-                        onClick={onMyNearRedirect}
-                        disabled={loading}
-                        style={{
-                            padding: "10px 14px",
-                            borderRadius: 999,
-                            border: "1px solid rgba(255,255,255,0.15)",
-                            background: "rgba(255,255,255,0.08)",
-                            color: "#fff",
-                            fontWeight: 800,
-                        }}
-                        title="Без popups, работает в Telegram"
-                    >
-                        MyNearWallet (redirect)
+                        Подключить кошелёк
                     </button>
 
                     {status ? (
