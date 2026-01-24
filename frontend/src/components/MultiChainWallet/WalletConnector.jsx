@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useWalletStore } from "../../store/walletStore";
 import { apiFetch } from "../../api.js";
 
@@ -18,6 +18,8 @@ export default function WalletConnector() {
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState("");
     const [manual, setManual] = useState("");
+
+    const pollRef = useRef(null);
 
     useEffect(() => {
         restoreSession?.().catch(() => { });
@@ -42,6 +44,12 @@ export default function WalletConnector() {
         }).catch(() => { });
     }, [connected, walletAddress]);
 
+    useEffect(() => {
+        return () => {
+            if (pollRef.current) clearInterval(pollRef.current);
+        };
+    }, []);
+
     const haptic = () => {
         try {
             window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
@@ -54,13 +62,31 @@ export default function WalletConnector() {
         return `${address.slice(0, 10)}...${address.slice(-6)}`;
     };
 
+    const startAutoRestorePolling = () => {
+        if (pollRef.current) clearInterval(pollRef.current);
+
+        const startedAt = Date.now();
+        pollRef.current = setInterval(async () => {
+            // stop after 10s
+            if (Date.now() - startedAt > 10000) {
+                clearInterval(pollRef.current);
+                pollRef.current = null;
+                return;
+            }
+            try {
+                await restoreSession?.();
+            } catch { }
+        }, 800);
+    };
+
     const onConnect = async () => {
         haptic();
         setErr("");
         setLoading(true);
         try {
-            await connectWallet("near");
-            setTimeout(() => setLoading(false), 700);
+            await connectWallet("near"); // opens modal
+            startAutoRestorePolling();
+            setTimeout(() => setLoading(false), 500);
         } catch (e) {
             setErr(String(e?.message || e));
             setLoading(false);
@@ -73,20 +99,6 @@ export default function WalletConnector() {
         setLoading(true);
         try {
             await disconnectWallet();
-            clearStatus?.();
-        } catch (e) {
-            setErr(String(e?.message || e));
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const onIConnected = async () => {
-        haptic();
-        setErr("");
-        setLoading(true);
-        try {
-            await restoreSession?.();
             clearStatus?.();
         } catch (e) {
             setErr(String(e?.message || e));
@@ -127,7 +139,7 @@ export default function WalletConnector() {
                             opacity: loading ? 0.8 : 1,
                         }}
                     >
-                        {loading ? "Открываю кошелёк..." : "Подключить кошелёк"}
+                        {loading ? "Открываю выбор кошелька..." : "Подключить кошелёк"}
                     </button>
 
                     {status ? (
@@ -142,62 +154,55 @@ export default function WalletConnector() {
                                 lineHeight: 1.25,
                             }}
                         >
-                            <div style={{ marginBottom: 8 }}>{status}</div>
-
-                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                                <button
-                                    onClick={onIConnected}
-                                    disabled={loading}
-                                    style={{
-                                        padding: "8px 10px",
-                                        borderRadius: 10,
-                                        background: "rgba(255,255,255,0.08)",
-                                        border: "1px solid rgba(255,255,255,0.14)",
-                                        color: "#fff",
-                                        fontSize: 12,
-                                        fontWeight: 800,
-                                    }}
-                                >
-                                    Я уже подключил
-                                </button>
-                            </div>
-
-                            <div style={{ marginTop: 10, opacity: 0.9 }}>
-                                Если возврата в WebApp нет, введи свой accountId вручную:
-                            </div>
-
-                            <div style={{ marginTop: 6, display: "flex", gap: 8 }}>
-                                <input
-                                    value={manual}
-                                    onChange={(e) => setManual(e.target.value)}
-                                    placeholder="например: yourname.near"
-                                    style={{
-                                        flex: 1,
-                                        padding: "10px 10px",
-                                        borderRadius: 10,
-                                        border: "1px solid rgba(255,255,255,0.14)",
-                                        background: "rgba(0,0,0,0.35)",
-                                        color: "#fff",
-                                        outline: "none",
-                                    }}
-                                />
-                                <button
-                                    onClick={onManualSet}
-                                    disabled={!manual.trim()}
-                                    style={{
-                                        padding: "10px 12px",
-                                        borderRadius: 10,
-                                        background: "#0b0b0b",
-                                        border: "1px solid rgba(255,255,255,0.14)",
-                                        color: "#fff",
-                                        fontWeight: 900,
-                                    }}
-                                >
-                                    OK
-                                </button>
-                            </div>
+                            {status}
                         </div>
                     ) : null}
+
+                    {/* emergency fallback only */}
+                    <div
+                        style={{
+                            padding: "8px 10px",
+                            borderRadius: 12,
+                            background: "rgba(0,0,0,0.35)",
+                            border: "1px solid rgba(255,255,255,0.10)",
+                            color: "#fff",
+                            fontSize: 12,
+                            lineHeight: 1.25,
+                            opacity: 0.9,
+                        }}
+                    >
+                        Если кошелёк не вернул accountId автоматически, можно ввести вручную (fallback):
+                        <div style={{ marginTop: 6, display: "flex", gap: 8 }}>
+                            <input
+                                value={manual}
+                                onChange={(e) => setManual(e.target.value)}
+                                placeholder="например: yourname.near"
+                                style={{
+                                    flex: 1,
+                                    padding: "10px 10px",
+                                    borderRadius: 10,
+                                    border: "1px solid rgba(255,255,255,0.14)",
+                                    background: "rgba(0,0,0,0.35)",
+                                    color: "#fff",
+                                    outline: "none",
+                                }}
+                            />
+                            <button
+                                onClick={onManualSet}
+                                disabled={!manual.trim()}
+                                style={{
+                                    padding: "10px 12px",
+                                    borderRadius: 10,
+                                    background: "#0b0b0b",
+                                    border: "1px solid rgba(255,255,255,0.14)",
+                                    color: "#fff",
+                                    fontWeight: 900,
+                                }}
+                            >
+                                OK
+                            </button>
+                        </div>
+                    </div>
 
                     {err ? (
                         <div

@@ -1,9 +1,9 @@
 import { useSyncExternalStore } from "react";
 
-// Namespace imports to avoid "named export not found" in Rollup builds
 import * as WalletSelectorCore from "@near-wallet-selector/core";
 import * as MyNearWalletPkg from "@near-wallet-selector/my-near-wallet";
 import * as HereWalletPkg from "@near-wallet-selector/here-wallet";
+import { setupModal } from "@near-wallet-selector/modal-ui";
 
 const setupWalletSelector =
     WalletSelectorCore.setupWalletSelector ||
@@ -27,20 +27,16 @@ const nearNetworkId = envNetworkId === "testnet" ? "testnet" : "mainnet";
 const envRpcUrl = import.meta.env.VITE_NEAR_RPC_URL || "";
 const rpcUrl =
     envRpcUrl ||
-    (nearNetworkId === "testnet"
-        ? "https://rpc.testnet.near.org"
-        : "https://rpc.mainnet.near.org");
+    (nearNetworkId === "testnet" ? "https://rpc.testnet.near.org" : "https://rpc.mainnet.near.org");
 
-// Контракт должен существовать (для sign-in context)
 const envLoginContractId = import.meta.env.VITE_NEAR_LOGIN_CONTRACT_ID || "";
 const loginContractId =
     envLoginContractId || (nearNetworkId === "testnet" ? "guest-book.testnet" : "wrap.near");
 
-// Stage2 escrow contract id (must be deployed)
 const escrowContractId = (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim();
 
-const GAS_100_TGAS = "100000000000000"; // 100 Tgas
-const GAS_150_TGAS = "150000000000000"; // 150 Tgas
+const GAS_100_TGAS = "100000000000000";
+const GAS_150_TGAS = "150000000000000";
 const ONE_YOCTO = "1";
 
 function yoctoToNearFloat(yoctoStr) {
@@ -101,7 +97,6 @@ let state = {
     setManualAccountId: (_id) => { },
     clearStatus: () => { },
 
-    // Stage2 helpers
     signAndSendTransaction: async (_tx) => { },
     nftTransferCall: async (_p) => { },
     escrowClaim: async (_p) => { },
@@ -140,6 +135,7 @@ function applyFromStorage() {
 }
 
 function syncFromUrlIfPresent() {
+    // wallet возвращает account_id в url (иногда)
     try {
         const url = new URL(window.location.href);
         const p = url.searchParams;
@@ -171,6 +167,7 @@ function syncFromUrlIfPresent() {
 
 let selectorPromise = null;
 let selector = null;
+let modal = null;
 let subscription = null;
 
 async function ensureSelector() {
@@ -185,9 +182,15 @@ async function ensureSelector() {
         selector = await setupWalletSelector({
             network: nearNetworkId,
             modules: [
+                // show both in modal (like CapsGameBot)
                 setupHereWallet(),
                 setupMyNearWallet(),
             ],
+        });
+
+        modal = setupModal(selector, {
+            contractId: loginContractId,
+            theme: "dark",
         });
 
         if (!subscription) {
@@ -197,6 +200,7 @@ async function ensureSelector() {
             });
         }
 
+        // initial sync
         const s0 = selector.store.getState();
         const active0 = s0.accounts?.find((a) => a.active) || s0.accounts?.[0] || null;
         if (active0?.accountId) applyAccount(active0.accountId);
@@ -207,62 +211,19 @@ async function ensureSelector() {
     return selectorPromise;
 }
 
-async function withTelegramOpenLink(fn) {
-    const tg = window.Telegram?.WebApp;
-    const originalOpen = window.open;
-
-    window.open = (url) => {
-        try {
-            tg?.openLink?.(url);
-        } catch { }
-        try {
-            if (!tg?.openLink) window.location.assign(url);
-        } catch { }
-        return { focus() { }, closed: false };
-    };
-
-    try {
-        return await fn();
-    } finally {
-        window.open = originalOpen;
-    }
-}
-
-async function getActiveWallet(sel) {
-    try {
-        const w0 = await sel.wallet?.();
-        if (w0) return w0;
-    } catch { }
-    return await sel.wallet("here-wallet");
-}
-
-// keep compatibility with WalletConnector: connectWallet("near")
 async function connectWallet(_provider = "near") {
-    setState({
-        status: `Открываю HERE Wallet (${nearNetworkId})…`,
-        balanceError: "",
-    });
+    try {
+        setState({ status: `Выбор кошелька (${nearNetworkId})…`, balanceError: "" });
 
-    const sel = await ensureSelector();
-    const wallet = await sel.wallet("here-wallet");
+        await ensureSelector();
 
-    await withTelegramOpenLink(async () => {
-        const backUrl = window.location.href;
+        // open modal picker
+        modal?.show?.();
 
-        wallet
-            .signIn?.({
-                contractId: loginContractId,
-                methodNames: [],
-                successUrl: backUrl,
-                failureUrl: backUrl,
-            })
-            ?.catch(() => { });
-
-        setState({
-            status:
-                "Если HERE открылся в Telegram и ты подтвердил — вернись в игру. Если не подтянулось автоматически, нажми «Я уже подключил».",
-        });
-    });
+        setState({ status: "" });
+    } catch (e) {
+        setState({ status: `Wallet modal error: ${String(e?.message || e)}` });
+    }
 }
 
 async function disconnectWallet() {
@@ -271,8 +232,8 @@ async function disconnectWallet() {
     } catch { }
 
     try {
-        const sel = await ensureSelector();
-        const w = await getActiveWallet(sel);
+        await ensureSelector();
+        const w = await selector.wallet();
         await w.signOut?.();
     } catch { }
 
@@ -303,36 +264,19 @@ function extractTxHash(outcome) {
     );
 }
 
-/**
- * Wallet-selector compatible actions format (NO near-api-js dependency)
- * action:
- *  { type: "FunctionCall", params: { methodName, args, gas, deposit } }
- */
+// wallet-selector actions format
 async function signAndSendTransaction({ receiverId, actions }) {
     if (!receiverId) throw new Error("receiverId is required");
     if (!actions || !actions.length) throw new Error("actions are required");
 
-    const sel = await ensureSelector();
-    const w = await getActiveWallet(sel);
+    await ensureSelector();
+    const w = await selector.wallet(); // active wallet
+    if (!w?.signAndSendTransaction) throw new Error("Wallet does not support signAndSendTransaction");
 
-    if (!w?.signAndSendTransaction) {
-        throw new Error("Wallet does not support signAndSendTransaction");
-    }
-
-    return await withTelegramOpenLink(async () => {
-        return await w.signAndSendTransaction({ receiverId, actions });
-    });
+    return await w.signAndSendTransaction({ receiverId, actions });
 }
 
-async function nftTransferCall({
-    nftContractId,
-    tokenId,
-    matchId,
-    side, // "A"|"B"
-    playerA,
-    playerB,
-    receiverId, // optional override
-}) {
+async function nftTransferCall({ nftContractId, tokenId, matchId, side, playerA, playerB, receiverId }) {
     const escrowId = (receiverId || escrowContractId || "").trim();
     if (!escrowId) throw new Error("Escrow contract id missing (VITE_NEAR_ESCROW_CONTRACT_ID)");
     if (!nftContractId) throw new Error("nftContractId is required");
@@ -341,48 +285,31 @@ async function nftTransferCall({
     if (side !== "A" && side !== "B") throw new Error('side must be "A" or "B"');
     if (!playerA || !playerB) throw new Error("playerA/playerB are required");
 
-    const msg = JSON.stringify({
-        match_id: matchId,
-        side,
-        player_a: playerA,
-        player_b: playerB,
-    });
-
-    const args = {
-        receiver_id: escrowId,
-        token_id: tokenId,
-        approval_id: null,
-        memo: null,
-        msg,
-    };
+    const msg = JSON.stringify({ match_id: matchId, side, player_a: playerA, player_b: playerB });
 
     const actions = [
         {
             type: "FunctionCall",
             params: {
                 methodName: "nft_transfer_call",
-                args,
+                args: {
+                    receiver_id: escrowId,
+                    token_id: tokenId,
+                    approval_id: null,
+                    memo: null,
+                    msg,
+                },
                 gas: GAS_150_TGAS,
                 deposit: ONE_YOCTO,
             },
         },
     ];
 
-    const outcome = await signAndSendTransaction({
-        receiverId: nftContractId,
-        actions,
-    });
-
+    const outcome = await signAndSendTransaction({ receiverId: nftContractId, actions });
     return { outcome, txHash: extractTxHash(outcome) };
 }
 
-async function escrowClaim({
-    matchId,
-    winnerAccountId,
-    loserNftContractId,
-    loserTokenId,
-    receiverId, // optional override
-}) {
+async function escrowClaim({ matchId, winnerAccountId, loserNftContractId, loserTokenId, receiverId }) {
     const escrowId = (receiverId || escrowContractId || "").trim();
     if (!escrowId) throw new Error("Escrow contract id missing (VITE_NEAR_ESCROW_CONTRACT_ID)");
     if (!matchId) throw new Error("matchId is required");
@@ -390,30 +317,24 @@ async function escrowClaim({
     if (!loserNftContractId) throw new Error("loserNftContractId is required");
     if (!loserTokenId) throw new Error("loserTokenId is required");
 
-    const args = {
-        match_id: matchId,
-        winner: winnerAccountId,
-        loser_nft_contract_id: loserNftContractId,
-        loser_token_id: loserTokenId,
-    };
-
     const actions = [
         {
             type: "FunctionCall",
             params: {
                 methodName: "claim",
-                args,
+                args: {
+                    match_id: matchId,
+                    winner: winnerAccountId,
+                    loser_nft_contract_id: loserNftContractId,
+                    loser_token_id: loserTokenId,
+                },
                 gas: GAS_100_TGAS,
                 deposit: "0",
             },
         },
     ];
 
-    const outcome = await signAndSendTransaction({
-        receiverId: escrowId,
-        actions,
-    });
-
+    const outcome = await signAndSendTransaction({ receiverId: escrowId, actions });
     return { outcome, txHash: extractTxHash(outcome) };
 }
 
