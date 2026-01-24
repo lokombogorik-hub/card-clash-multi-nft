@@ -1,11 +1,8 @@
 import os
 import logging
-import hashlib
 from typing import AsyncGenerator, Optional
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from sqlalchemy.engine.url import make_url
-from sqlalchemy.exc import ArgumentError
 
 logger = logging.getLogger(__name__)
 
@@ -25,59 +22,38 @@ def _strip_wrapping_quotes(s: str) -> str:
     return s
 
 
-def _fp_secret(secret: str) -> str:
-    if secret is None:
-        return "none"
-    sec = str(secret)
-    h = hashlib.sha256(sec.encode("utf-8", errors="ignore")).hexdigest()[:10]
-    return f"len={len(sec)} sha256[:10]={h}"
-
-
-def _normalize_database_url(raw: str) -> str:
+def _inject_driver(url: str, driver: str) -> str:
     """
-    - Fix postgres:// -> postgresql://
-    - Force async driver:
-        psycopg if installed else asyncpg
-    - Keep query params (sslmode=require etc.)
+    Convert:
+      postgresql://... -> postgresql+<driver>://...
+      postgres://...   -> postgresql+<driver>://...   (also fixes dialect)
+
+    This does NOT parse URL and does NOT touch password encoding.
     """
-    url = _strip_wrapping_quotes(raw)
-    if not url:
+    u = (url or "").strip()
+    if not u:
         return ""
 
-    if url.startswith("postgres://"):
-        url = "postgresql://" + url[len("postgres://"):]
+    u = _strip_wrapping_quotes(u)
 
-    try:
-        u = make_url(url)
-    except ArgumentError:
-        logger.exception("Invalid DATABASE_URL (parse failed)")
-        return ""
+    # fix heroku-style scheme
+    if u.startswith("postgres://"):
+        u = "postgresql://" + u[len("postgres://") :]
 
-    driver = "postgresql+psycopg" if _has_module("psycopg") else "postgresql+asyncpg"
+    # already has explicit driver
+    if u.startswith("postgresql+"):
+        return u
 
-    if u.drivername in ("postgres", "postgresql", "postgresql+psycopg", "postgresql+asyncpg"):
-        u = u.set(drivername=driver)
+    if u.startswith("postgresql://"):
+        return "postgresql+" + driver + "://" + u[len("postgresql://") :]
 
-    # Log safe fingerprint (NO password)
-    try:
-        logger.info(
-            "DB URL parsed: driver=%s user=%s host=%s port=%s db=%s password_fp={%s} query=%s",
-            u.drivername,
-            u.username,
-            u.host,
-            u.port,
-            u.database,
-            _fp_secret(u.password or ""),
-            dict(u.query or {}),
-        )
-    except Exception:
-        logger.exception("DB URL fingerprint log failed")
-
-    return str(u)
+    # unknown / unsupported scheme
+    return u
 
 
-DATABASE_URL = os.getenv("DATABASE_URL", "")
-ASYNC_DATABASE_URL = _normalize_database_url(DATABASE_URL)
+DATABASE_URL_RAW = os.getenv("DATABASE_URL", "")
+driver = "psycopg" if _has_module("psycopg") else "asyncpg"
+ASYNC_DATABASE_URL = _inject_driver(DATABASE_URL_RAW, driver)
 
 engine = None
 AsyncSessionLocal: Optional[async_sessionmaker[AsyncSession]] = None
@@ -94,13 +70,13 @@ if ASYNC_DATABASE_URL:
             expire_on_commit=False,
             class_=AsyncSession,
         )
-        logger.info("DB engine created")
+        logger.info("DB engine created (driver=%s)", driver)
     except Exception:
         logger.exception("DB engine init failed; service will still run with DB disabled")
         engine = None
         AsyncSessionLocal = None
 else:
-    logger.warning("DATABASE_URL empty/invalid; DB disabled")
+    logger.warning("DATABASE_URL empty; DB disabled")
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
