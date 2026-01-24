@@ -1,7 +1,8 @@
-use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use borsh::{BorshDeserialize, BorshSerialize};
+use near_contract_standards::non_fungible_token::core::NonFungibleTokenReceiver;
 use near_sdk::collections::LookupMap;
 use near_sdk::{
-    env, near_bindgen, AccountId, Promise, PromiseOrValue, PanicOnDefault, Gas, require,
+    env, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise, PromiseOrValue,
     serde::{Deserialize, Serialize},
 };
 
@@ -33,13 +34,13 @@ pub struct TransferCallMsg {
     pub player_b: AccountId,
 }
 
-#[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
+#[derive(PanicOnDefault)]
+#[near(contract_state)]
 pub struct Escrow {
     matches: LookupMap<String, MatchState>,
 }
 
-#[near_bindgen]
+#[near]
 impl Escrow {
     #[init]
     pub fn new() -> Self {
@@ -48,7 +49,6 @@ impl Escrow {
         }
     }
 
-    /// Winner claims loser NFT.
     pub fn claim(
         &mut self,
         match_id: String,
@@ -78,7 +78,7 @@ impl Escrow {
         self.matches.insert(&match_id, &st);
 
         ext_nft::ext(loser_nft_contract_id)
-            .with_attached_deposit(1)
+            .with_attached_deposit(NearToken::from_yoctonear(1))
             .with_static_gas(GAS_NFT_TRANSFER)
             .nft_transfer(winner, loser_token_id, None, None)
     }
@@ -95,8 +95,8 @@ impl Escrow {
     }
 }
 
-#[near_bindgen]
-impl near_contract_standards::non_fungible_token::receiver::NonFungibleTokenReceiver for Escrow {
+#[near]
+impl NonFungibleTokenReceiver for Escrow {
     fn nft_on_transfer(
         &mut self,
         sender_id: AccountId,
@@ -106,8 +106,7 @@ impl near_contract_standards::non_fungible_token::receiver::NonFungibleTokenRece
     ) -> PromiseOrValue<bool> {
         let nft_contract_id = env::predecessor_account_id();
 
-        let parsed: TransferCallMsg =
-            near_sdk::serde_json::from_str(&msg).expect("Invalid msg JSON");
+        let parsed: TransferCallMsg = near_sdk::serde_json::from_str(&msg).expect("Invalid msg JSON");
 
         require!(parsed.side == "A" || parsed.side == "B", "side must be A or B");
         require!(parsed.player_a != parsed.player_b, "players must differ");
@@ -120,7 +119,10 @@ impl near_contract_standards::non_fungible_token::receiver::NonFungibleTokenRece
             finished: false,
         });
 
-        require!(st.player_a == parsed.player_a && st.player_b == parsed.player_b, "Match players mismatch");
+        require!(
+            st.player_a == parsed.player_a && st.player_b == parsed.player_b,
+            "Match players mismatch"
+        );
         require!(!st.finished, "Match already finished");
 
         let dep = Deposit {
@@ -140,7 +142,6 @@ impl near_contract_standards::non_fungible_token::receiver::NonFungibleTokenRece
 
         self.matches.insert(&parsed.match_id, &st);
 
-        // false => keep token in escrow
         PromiseOrValue::Value(false)
     }
 }
