@@ -9,22 +9,21 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@near-wallet-selector/core": "^10.1.4",
-    "@near-wallet-selector/here-wallet": "^10.1.4",
+    "@near-wallet-selector/core": "10.1.4",
+    "@near-wallet-selector/here-wallet": "10.1.4",
     "@near-wallet-selector/modal-ui": "^10.1.4",
-    "@near-wallet-selector/my-near-wallet": "^10.1.4",
-    "buffer": "^6.0.3",
-    "canvas-confetti": "^1.9.3",
-    "framer-motion": "^12.28.1",
-    "lucide-react": "^0.562.0",
-    "near-api-js": "^7.0.1",
+    "@near-wallet-selector/my-near-wallet": "10.1.4",
+    "buffer": "6.0.3",
+    "canvas-confetti": "1.9.3",
+    "framer-motion": "12.28.1",
+    "lucide-react": "0.562.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "react-hot-toast": "^2.6.0",
-    "zustand": "^5.0.10"
+    "react-hot-toast": "2.6.0",
+    "zustand": "5.0.10"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.2.1",
-    "vite": "^5.4.0"
+    "@vitejs/plugin-react": "4.2.1",
+    "vite": "5.4.0"
   }
 }

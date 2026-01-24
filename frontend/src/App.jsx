@@ -7,6 +7,7 @@ import Profile from "./pages/Profile";
 import Market from "./pages/Market";
 import WalletConnector from "./components/MultiChainWallet/WalletConnector";
 import LockEscrowModal from "./components/Stage2/LockEscrowModal";
+import Matchmaking from "./components/Stage2/Matchmaking";
 
 function useIsLandscape() {
     const get = () =>
@@ -92,55 +93,6 @@ export default function App() {
         error: "",
     });
 
-    const [dbg, setDbg] = useState(() => ({
-        href: typeof window !== "undefined" ? window.location.href : "",
-        hasTelegram: false,
-        hasWebApp: false,
-        initData: "",
-        initDataLen: 0,
-        initDataUnsafeUser: null,
-        tgWebAppData: "",
-    }));
-
-    useEffect(() => {
-        if (!debugEnabled) return;
-
-        const tick = () => {
-            const tg = window.Telegram?.WebApp;
-            const initData = tg?.initData || "";
-
-            const fromSearch = window.location.search || "";
-            const fromHash = window.location.hash || "";
-            const combined =
-                (fromSearch.startsWith("?") ? fromSearch.slice(1) : fromSearch) +
-                "&" +
-                (fromHash.startsWith("#") ? fromHash.slice(1) : fromHash);
-
-            const p = new URLSearchParams(combined);
-            const raw = p.get("tgWebAppData") || "";
-            let decoded = "";
-            try {
-                decoded = raw ? decodeURIComponent(raw) : "";
-            } catch {
-                decoded = raw;
-            }
-
-            setDbg({
-                href: window.location.href,
-                hasTelegram: !!window.Telegram,
-                hasWebApp: !!tg,
-                initData,
-                initDataLen: initData.length,
-                initDataUnsafeUser: tg?.initDataUnsafe?.user || null,
-                tgWebAppData: decoded,
-            });
-        };
-
-        tick();
-        const id = setInterval(tick, 500);
-        return () => clearInterval(id);
-    }, [debugEnabled]);
-
     useEffect(() => {
         const tg = window.Telegram?.WebApp;
         if (!tg) return;
@@ -157,11 +109,6 @@ export default function App() {
         tg.BackButton?.hide();
 
         setMe(readTelegramUser());
-
-        const sync = () => setMe(readTelegramUser());
-        try {
-            tg.onEvent?.("viewportChanged", sync);
-        } catch { }
 
         const initAuth = async () => {
             try {
@@ -189,26 +136,16 @@ export default function App() {
                     }
                 } catch { }
 
-                if (accessToken) {
-                    setAuthState({ status: "ok", error: "" });
-                } else {
-                    setAuthState({ status: "err", error: "No accessToken in response" });
-                }
+                if (accessToken) setAuthState({ status: "ok", error: "" });
+                else setAuthState({ status: "err", error: "No accessToken in response" });
             } catch (e) {
                 setAuthState({ status: "err", error: String(e?.message || e) });
-                console.error("Auth failed:", e);
             }
         };
 
         initAuth();
-
         tg.disableVerticalSwipes?.();
-        return () => {
-            try {
-                tg.offEvent?.("viewportChanged", sync);
-            } catch { }
-            tg.enableVerticalSwipes?.();
-        };
+        return () => tg.enableVerticalSwipes?.();
     }, []);
 
     useLayoutEffect(() => {
@@ -256,12 +193,14 @@ export default function App() {
             const cards = Array.isArray(r) ? r : Array.isArray(r?.cards) ? r.cards : null;
             if (Array.isArray(cards) && cards.length === 5) return cards;
             return null;
-        } catch (e) {
-            console.error("loadActiveDeck failed:", e);
+        } catch {
             return null;
         }
     };
 
+    // NEW FLOW:
+    // 1) ensure deck
+    // 2) go matchmaking
     const onPlay = async () => {
         requestFullscreen();
 
@@ -277,14 +216,7 @@ export default function App() {
         }
 
         setPlayerDeck(deck);
-
-        // Stage2 flow: lock modal before game
-        if (stage2Enabled) {
-            setStage2LockOpen(true);
-            return;
-        }
-
-        setScreen("game");
+        setScreen("matchmaking");
     };
 
     const onExitGame = () => {
@@ -294,32 +226,18 @@ export default function App() {
     };
 
     const showRotate = screen === "game" && !isLandscape;
+    const showWalletConnector = screen === "home" || screen === "game" || screen === "matchmaking";
 
     const seasonInfo = useMemo(
         () => ({ title: "Digitall Bunny Турнир", subtitle: "Ends in 3d 12h", progress: 0.62 }),
         []
     );
 
-    const showWalletConnector = screen === "home" || screen === "game";
-
     if (screen === "game") {
         return (
             <div className="shell">
                 <StormBg />
-
                 {showWalletConnector ? <WalletConnector /> : null}
-
-                <LockEscrowModal
-                    open={stage2LockOpen}
-                    onClose={() => setStage2LockOpen(false)}
-                    onReady={({ matchId }) => {
-                        setStage2MatchId(matchId || "");
-                        setStage2LockOpen(false);
-                        setScreen("game");
-                    }}
-                    me={me}
-                    playerDeck={playerDeck}
-                />
 
                 <div className={`game-host ${showRotate ? "is-hidden" : ""}`}>
                     {playerDeck ? (
@@ -330,29 +248,6 @@ export default function App() {
                 </div>
 
                 {showRotate && <RotateGate onBack={onExitGame} />}
-
-                {debugEnabled && (
-                    <div
-                        style={{
-                            position: "fixed",
-                            left: 10,
-                            bottom: 10,
-                            zIndex: 999999,
-                            background: "rgba(0,0,0,0.85)",
-                            color: "#fff",
-                            padding: 10,
-                            borderRadius: 8,
-                            width: 460,
-                            maxWidth: "95vw",
-                            fontSize: 12,
-                        }}
-                    >
-                        <div style={{ fontWeight: 700, marginBottom: 6 }}>DEBUG (Game)</div>
-                        <div>playerDeck: {playerDeck ? `${playerDeck.length} cards` : "null"}</div>
-                        <div>stage2Enabled: {String(stage2Enabled)}</div>
-                        <div>matchId: {stage2MatchId || "(none)"}</div>
-                    </div>
-                )}
             </div>
         );
     }
@@ -377,12 +272,7 @@ export default function App() {
             <div className="shell-content">
                 {screen === "home" && (
                     <div className="home-center">
-                        <button
-                            className="play-logo"
-                            aria-label="Play"
-                            onPointerDown={() => logoRef.current?.play?.().catch(() => { })}
-                            onClick={onPlay}
-                        >
+                        <button className="play-logo" aria-label="Play" onClick={onPlay}>
                             <div className="logo-wrap">
                                 {logoOk ? (
                                     <video
@@ -408,10 +298,25 @@ export default function App() {
                     </div>
                 )}
 
-                {screen === "market" && <Market />}
-                {screen === "inventory" && (
-                    <Inventory token={token || getStoredToken()} onDeckReady={() => setScreen("home")} />
+                {screen === "matchmaking" && (
+                    <Matchmaking
+                        me={me}
+                        onBack={() => setScreen("home")}
+                        onMatched={({ matchId }) => {
+                            if (!stage2Enabled) {
+                                // stage2 disabled => allow play without lock
+                                setStage2MatchId(matchId || "");
+                                setScreen("game");
+                                return;
+                            }
+                            setStage2MatchId(matchId || "");
+                            setStage2LockOpen(true);
+                        }}
+                    />
                 )}
+
+                {screen === "market" && <Market />}
+                {screen === "inventory" && <Inventory token={token || getStoredToken()} onDeckReady={() => setScreen("home")} />}
                 {screen === "profile" && <Profile token={token || getStoredToken()} />}
             </div>
 
@@ -420,7 +325,7 @@ export default function App() {
                     title={seasonInfo.title}
                     subtitle={seasonInfo.subtitle}
                     progress={seasonInfo.progress}
-                    onRefresh={() => console.log("refresh")}
+                    onRefresh={() => { }}
                 />
                 <BottomNav active={screen} onChange={setScreen} />
             </div>
@@ -442,34 +347,14 @@ export default function App() {
                     }}
                 >
                     <div style={{ fontWeight: 700, marginBottom: 6 }}>DEBUG</div>
-
                     <div>VITE_API_BASE_URL: {apiBase || "(empty!)"}</div>
                     <div>stage2Enabled: {String(stage2Enabled)}</div>
                     <div>escrowContractId: {escrowContractId || "(empty)"}</div>
-
                     <div>
                         token length: {(token || getStoredToken()) ? String((token || getStoredToken()).length) : 0} | auth:{" "}
                         {authState.status}
                     </div>
                     {authState.error ? <div style={{ color: "#ffb3b3" }}>auth error: {authState.error}</div> : null}
-
-                    <div style={{ marginTop: 6 }}>window.Telegram: {String(dbg.hasTelegram)}</div>
-                    <div>Telegram.WebApp: {String(dbg.hasWebApp)}</div>
-                    <div>initData length: {dbg.initDataLen}</div>
-
-                    <div style={{ marginTop: 6, opacity: 0.9 }}>location.href:</div>
-                    <textarea readOnly value={dbg.href} style={{ width: "100%", height: 70, fontSize: 10 }} />
-
-                    <div style={{ marginTop: 6, opacity: 0.9 }}>initData:</div>
-                    <textarea readOnly value={dbg.initData} style={{ width: "100%", height: 80, fontSize: 10 }} />
-
-                    <div style={{ marginTop: 6, opacity: 0.9 }}>tgWebAppData (decoded):</div>
-                    <textarea readOnly value={dbg.tgWebAppData} style={{ width: "100%", height: 60, fontSize: 10 }} />
-
-                    <div style={{ marginTop: 6, opacity: 0.9 }}>initDataUnsafe.user:</div>
-                    <pre style={{ fontSize: 10, whiteSpace: "pre-wrap" }}>
-                        {JSON.stringify(dbg.initDataUnsafeUser, null, 2)}
-                    </pre>
                 </div>
             )}
         </div>
