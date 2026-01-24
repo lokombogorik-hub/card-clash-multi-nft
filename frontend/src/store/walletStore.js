@@ -64,7 +64,7 @@ async function fetchNearBalance(accountId) {
         const msg =
             json?.error?.data?.message ||
             json?.error?.message ||
-            "NEAR RPC error (account/network mismatch?)";
+            "NEAR RPC error";
         throw new Error(msg);
     }
     const amount = json?.result?.amount;
@@ -84,7 +84,6 @@ let state = {
     balanceError: "",
     status: "",
 
-    connectWallet: async () => { },
     connectHere: async () => { },
     openMyNearWalletRedirect: async () => { },
 
@@ -195,6 +194,11 @@ async function ensureSelector() {
 
 function openLink(url) {
     const tg = window.Telegram?.WebApp;
+    // IMPORTANT: disable instant view to avoid weird redirects
+    try {
+        tg?.openLink?.(url, { try_instant_view: false });
+        return true;
+    } catch { }
     try {
         tg?.openLink?.(url);
         return true;
@@ -215,19 +219,13 @@ function myNearWalletBase() {
 async function connectHere() {
     setState({ status: `Открываю HERE (${nearNetworkId})...` });
     const sel = await ensureSelector();
-
     const wallet = await sel.wallet("here-wallet");
 
     const tg = window.Telegram?.WebApp;
     const originalOpen = window.open;
 
     window.open = (url) => {
-        try {
-            tg?.openLink?.(url);
-        } catch { }
-        try {
-            if (!tg?.openLink) window.location.assign(url);
-        } catch { }
+        openLink(url);
         return { focus() { }, closed: false };
     };
 
@@ -243,7 +241,7 @@ async function connectHere() {
             setState({ status: `HERE signIn error: ${String(e?.message || e)}` });
         });
 
-        setState({ status: "Подтверди в HERE и вернись в игру." });
+        setState({ status: "Подтверди в HERE/HotWallet и вернись в игру." });
     } finally {
         window.open = originalOpen;
     }
@@ -251,17 +249,14 @@ async function connectHere() {
 
 async function openMyNearWalletRedirect() {
     const backUrl = window.location.href;
+
     const u = new URL(myNearWalletBase() + "/login/");
     u.searchParams.set("referrer", "CardClash");
     u.searchParams.set("success_url", backUrl);
     u.searchParams.set("failure_url", backUrl);
+
     setState({ status: "Открываю MyNearWallet..." });
     openLink(u.toString());
-}
-
-async function connectWallet() {
-    // default
-    return connectHere();
 }
 
 async function disconnectWallet() {
@@ -364,7 +359,6 @@ async function escrowClaim({ matchId, winnerAccountId, loserNftContractId, loser
 
 state = {
     ...state,
-    connectWallet,
     connectHere,
     openMyNearWalletRedirect,
     disconnectWallet,
