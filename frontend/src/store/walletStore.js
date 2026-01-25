@@ -236,33 +236,38 @@ async function connectHere() {
         const tg = window.Telegram?.WebApp;
         const originalOpen = window.open;
 
+        // force all opens through Telegram
         window.open = (url) => {
-            openLink(url);
+            try {
+                tg?.openLink?.(url, { try_instant_view: false });
+            } catch { }
+            try {
+                tg?.openLink?.(url);
+            } catch { }
+            try {
+                if (!tg?.openLink) window.location.assign(url);
+            } catch { }
             return { focus() { }, closed: false };
         };
 
         try {
-            const backUrl = window.location.href;
+            // IMPORTANT: keep signIn minimal for HERE (Telegram-friendly)
             const p = wallet.signIn?.({
                 contractId: loginContractId,
-                methodNames: [],
-                successUrl: backUrl,
-                failureUrl: backUrl,
+                methodNames: [], // empty ok
             });
 
-            // if signIn rejects
+            // If it rejects (HERE internal error), show it
             Promise.resolve(p).catch((e) => {
-                setState({ status: `HERE failed: ${String(e?.message || e)} → fallback MyNearWallet` });
-                openMyNearWalletRedirect();
+                setState({ status: `HERE signIn failed: ${String(e?.message || e)}` });
             });
 
-            setState({ status: "Confirm in HERE and return to Telegram…" });
+            setState({ status: "Confirm in HotWallet/HERE and return to Telegram…" });
         } finally {
             window.open = originalOpen;
         }
     } catch (e) {
-        setState({ status: `HERE failed: ${String(e?.message || e)} → fallback MyNearWallet` });
-        await openMyNearWalletRedirect();
+        setState({ status: `HERE init failed: ${String(e?.message || e)}` });
     }
 }
 
