@@ -1,15 +1,7 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useWalletStore } from "../../store/walletStore";
 
-function Tile({
-    title,
-    subtitle,
-    iconSrc,
-    accent,
-    onClick,
-    disabled,
-    badge,
-}) {
+function Tile({ title, subtitle, iconSrc, accent, badge, onClick, disabled }) {
     return (
         <button
             onClick={onClick}
@@ -27,16 +19,15 @@ function Tile({
                     `rgba(0,0,0,0.52)`,
                 color: "#fff",
                 display: "grid",
-                gridTemplateColumns: "68px 1fr",
+                gridTemplateColumns: "70px 1fr",
                 gap: 12,
                 alignItems: "center",
                 cursor: disabled ? "not-allowed" : "pointer",
                 opacity: disabled ? 0.55 : 1,
-                boxShadow:
-                    "0 18px 70px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.03) inset",
+                boxShadow: "0 18px 70px rgba(0,0,0,0.55)",
                 backdropFilter: "blur(14px)",
                 WebkitBackdropFilter: "blur(14px)",
-                transition: "transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease",
+                transition: "transform 140ms ease",
             }}
             onMouseDown={(e) => {
                 if (disabled) return;
@@ -47,15 +38,14 @@ function Tile({
         >
             <div
                 style={{
-                    width: 68,
-                    height: 68,
+                    width: 70,
+                    height: 70,
                     borderRadius: 18,
                     display: "grid",
                     placeItems: "center",
                     background: "rgba(255,255,255,0.05)",
                     border: "1px solid rgba(255,255,255,0.12)",
-                    boxShadow:
-                        `0 0 0 1px rgba(255,255,255,0.04) inset, 0 0 22px ${accent}`,
+                    boxShadow: `0 0 22px ${accent}`,
                     overflow: "hidden",
                 }}
             >
@@ -63,7 +53,13 @@ function Tile({
                     src={iconSrc}
                     alt=""
                     draggable="false"
-                    style={{ width: 46, height: 46, display: "block" }}
+                    style={{ width: 52, height: 52, display: "block" }}
+                    onError={(e) => {
+                        // fallback: hide broken icon to avoid ugly "broken image"
+                        try {
+                            e.currentTarget.style.display = "none";
+                        } catch { }
+                    }}
                 />
             </div>
 
@@ -90,6 +86,7 @@ function Tile({
                 <div style={{ fontWeight: 950, fontSize: 14, letterSpacing: 0.2 }}>
                     {title}
                 </div>
+
                 <div style={{ opacity: 0.85, fontSize: 12, marginTop: 6, lineHeight: 1.25 }}>
                     {subtitle}
                 </div>
@@ -99,13 +96,17 @@ function Tile({
 }
 
 export default function WalletPicker({ open, onClose }) {
-    const { nearNetworkId, status, connectHere, openMyNearWalletRedirect } = useWalletStore();
+    const { nearNetworkId, status, connectHot } = useWalletStore();
+    const [busy, setBusy] = useState(false);
+    const subtitle = useMemo(() => {
+        return nearNetworkId === "testnet"
+            ? "Testnet • быстрые проверки"
+            : "Mainnet • реальные NFT/NEAR";
+    }, [nearNetworkId]);
 
     useEffect(() => {
         if (!open) return;
-        const onKey = (e) => {
-            if (e.key === "Escape") onClose?.();
-        };
+        const onKey = (e) => e.key === "Escape" && onClose?.();
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
     }, [open, onClose]);
@@ -115,12 +116,6 @@ export default function WalletPicker({ open, onClose }) {
             window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(kind);
         } catch { }
     };
-
-    const subtitle = useMemo(() => {
-        return nearNetworkId === "testnet"
-            ? "Testnet • fast & cheap dev flow"
-            : "Mainnet • real NEAR & real NFTs";
-    }, [nearNetworkId]);
 
     if (!open) return null;
 
@@ -182,29 +177,32 @@ export default function WalletPicker({ open, onClose }) {
 
                 <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
                     <Tile
-                        title="HERE / Hot Wallet"
-                        subtitle="Best in Telegram. Connect inside app and return to the game."
-                        iconSrc="/ui/wallets/here.svg"
-                        accent="rgba(120,200,255,0.28)"
-                        badge="Telegram"
+                        title="HOT Wallet (Telegram) — NEAR"
+                        subtitle="Подключение аккаунта key_k1.tg через HERE core authenticate() без AddKey."
+                        iconSrc="/ui/wallets/hotwallet.svg?v=4"
+                        accent="rgba(255, 61, 0, 0.22)"
+                        badge="HOT"
+                        disabled={busy}
                         onClick={async () => {
                             haptic("light");
-                            await connectHere();
-                            onClose?.();
+                            setBusy(true);
+                            try {
+                                await connectHot();
+                                onClose?.();
+                            } finally {
+                                setBusy(false);
+                            }
                         }}
                     />
 
                     <Tile
-                        title="MyNearWallet"
-                        subtitle="Stable fallback. Redirect via Telegram openLink (no popups)."
-                        iconSrc="/ui/wallets/mynearwallet.svg"
-                        accent="rgba(255,215,0,0.22)"
-                        badge="No popups"
-                        onClick={async () => {
-                            haptic("light");
-                            await openMyNearWalletRedirect();
-                            onClose?.();
-                        }}
+                        title="HERE Wallet"
+                        subtitle="Тот же провайдер. Если HOT установлен — открывается внутри Telegram."
+                        iconSrc="/ui/wallets/here.svg?v=4"
+                        accent="rgba(120,200,255,0.24)"
+                        badge="HERE"
+                        disabled={true}
+                        onClick={() => { }}
                     />
 
                     {status ? (
@@ -217,6 +215,7 @@ export default function WalletPicker({ open, onClose }) {
                                 fontSize: 12,
                                 opacity: 0.92,
                                 lineHeight: 1.35,
+                                wordBreak: "break-word",
                             }}
                         >
                             {status}
@@ -224,7 +223,7 @@ export default function WalletPicker({ open, onClose }) {
                     ) : null}
 
                     <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.35 }}>
-                        Tip: after confirming in wallet, return to Telegram — the game will auto-detect your account.
+                        После подтверждения кошелька просто вернись в Telegram — аккаунт подтянется автоматически.
                     </div>
                 </div>
             </div>
