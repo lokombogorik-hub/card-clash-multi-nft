@@ -5,24 +5,26 @@ const networkId =
         ? "testnet"
         : "mainnet";
 
-// HOT Telegram Wallet интеграция (как в README)
-const BOT_ID = (import.meta.env.VITE_TG_BOT_ID || "").trim(); // например "YourBot/app"
-const WALLET_ID = (import.meta.env.VITE_HOT_WALLET_ID || "herewalletbot/app").trim();
+// IMPORTANT: for Telegram HOT wallet
+// bot username WITHOUT @, plus "/app"
+const botId = (import.meta.env.VITE_TG_BOT_ID || "").trim(); // e.g. "Cardclashbot/app"
+const walletId = (import.meta.env.VITE_HOT_WALLET_ID || "herewalletbot/app").trim();
 
 let herePromise = null;
 
 export async function getHere() {
     if (herePromise) return herePromise;
 
-    // If botId not set, fallback to default connect()
     herePromise = (async () => {
-        if (BOT_ID) {
+        // Telegram HOT connect if botId provided
+        if (botId) {
             return await HereWallet.connect({
                 networkId,
-                botId: BOT_ID,
-                walletId: WALLET_ID,
+                botId,
+                walletId,
             });
         }
+        // fallback (non-telegram)
         return await HereWallet.connect({ networkId });
     })();
 
@@ -30,12 +32,12 @@ export async function getHere() {
 }
 
 /**
- * Login WITHOUT AddKey.
- * Uses authenticate() which internally uses signMessage (NEP-413) and returns accountId.
+ * NO AddKey flow:
+ * authenticate() uses signMessage (NEP-413) and returns { accountId }
  */
 export async function hereAuthenticate() {
     const here = await getHere();
-    return await here.authenticate(); // { accountId }
+    return await here.authenticate();
 }
 
 export async function hereSignAndSendTransaction({ receiverId, actions }) {

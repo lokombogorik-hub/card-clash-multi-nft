@@ -60,13 +60,11 @@ let state = {
     balanceError: "",
     status: "",
 
-    // HOT/HERE connect
     connectHot: async () => { },
     disconnectWallet: async () => { },
     restoreSession: async () => { },
     clearStatus: () => { },
 
-    // tx
     signAndSendTransaction: async (_tx) => { },
     nftTransferCall: async (_p) => { },
     escrowClaim: async (_p) => { },
@@ -105,13 +103,13 @@ function applyFromStorage() {
 }
 
 async function connectHot() {
-    setState({ status: "Opening HOT Wallet (HERE)..." });
+    setState({ status: "Opening HOT Wallet…" });
 
     try {
-        // authenticate() => no AddKey bug, returns accountId (key_k1.tg)
+        // This should open HOT wallet inside Telegram and return accountId (key_k1.tg)
         const { accountId } = await hereAuthenticate();
         if (!accountId) {
-            setState({ status: "HOT connected, but no accountId returned" });
+            setState({ status: "HOT connected, but accountId missing" });
             return;
         }
         applyAccount(accountId);
@@ -129,7 +127,7 @@ async function disconnectWallet() {
 }
 
 async function restoreSession() {
-    // for MVP just restore from storage
+    // MVP: restore from local storage
     applyFromStorage();
 }
 
@@ -149,17 +147,12 @@ function extractTxHash(outcome) {
 async function signAndSendTransaction({ receiverId, actions }) {
     if (!receiverId) throw new Error("receiverId is required");
     if (!actions || !actions.length) throw new Error("actions are required");
-
     return await hereSignAndSendTransaction({ receiverId, actions });
 }
 
 async function nftTransferCall({ nftContractId, tokenId, matchId, side, playerA, playerB, receiverId }) {
     const escrowId = (receiverId || escrowContractId || "").trim();
     if (!escrowId) throw new Error("Escrow contract id missing (VITE_NEAR_ESCROW_CONTRACT_ID)");
-    if (!nftContractId) throw new Error("nftContractId is required");
-    if (!tokenId) throw new Error("tokenId is required");
-    if (!matchId) throw new Error("matchId is required");
-    if (side !== "A" && side !== "B") throw new Error('side must be "A" or "B"');
 
     const msg = JSON.stringify({ match_id: matchId, side, player_a: playerA, player_b: playerB });
 
