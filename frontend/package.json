@@ -9,10 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@near-wallet-selector/core": "10.1.4",
-    "@near-wallet-selector/here-wallet": "10.1.4",
-    "@near-wallet-selector/modal-ui": "^10.1.4",
-    "@near-wallet-selector/my-near-wallet": "10.1.4",
+    "@near-wallet-selector/core": "10.0.0",
+    "@near-wallet-selector/here-wallet": "10.0.0",
+    "@near-wallet-selector/modal-ui": "10.0.0",
+    "@near-wallet-selector/my-near-wallet": "10.0.0",
     "buffer": "6.0.3",
     "canvas-confetti": "1.9.3",
     "framer-motion": "12.28.1",
