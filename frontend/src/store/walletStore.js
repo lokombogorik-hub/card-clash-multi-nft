@@ -1,16 +1,5 @@
 import { useSyncExternalStore } from "react";
-
-import * as WalletSelectorCore from "@near-wallet-selector/core";
-import * as HereWalletPkg from "@near-wallet-selector/here-wallet";
-
-const setupWalletSelector =
-    WalletSelectorCore.setupWalletSelector ||
-    WalletSelectorCore.default?.setupWalletSelector;
-
-const setupHereWallet =
-    HereWalletPkg.setupHereWallet ||
-    HereWalletPkg.default?.setupHereWallet ||
-    HereWalletPkg.default;
+import { hereAuthenticate, hereSignAndSendTransaction } from "../libs/here";
 
 const LS_NEAR_ACCOUNT_ID = "cc_near_account_id";
 
@@ -21,10 +10,6 @@ const envRpcUrl = import.meta.env.VITE_NEAR_RPC_URL || "";
 const rpcUrl =
     envRpcUrl ||
     (nearNetworkId === "testnet" ? "https://rpc.testnet.near.org" : "https://rpc.mainnet.near.org");
-
-const envLoginContractId = import.meta.env.VITE_NEAR_LOGIN_CONTRACT_ID || "";
-const loginContractId =
-    envLoginContractId || (nearNetworkId === "testnet" ? "guest-book.testnet" : "wrap.near");
 
 const escrowContractId = (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim();
 
@@ -60,22 +45,13 @@ async function fetchNearBalance(accountId) {
     const json = await res.json().catch(() => null);
     if (!res.ok) throw new Error(`RPC HTTP ${res.status}`);
     if (!json) throw new Error("RPC invalid JSON");
-    if (json.error) {
-        const msg =
-            json?.error?.data?.message ||
-            json?.error?.message ||
-            "NEAR RPC error";
-        throw new Error(msg);
-    }
-    const amount = json?.result?.amount;
-    if (!amount) throw new Error("No amount in RPC response");
-    return yoctoToNearFloat(amount);
+    if (json.error) throw new Error(json?.error?.message || "NEAR RPC error");
+    return yoctoToNearFloat(json?.result?.amount || "0");
 }
 
 let state = {
     connected: false,
     walletAddress: "",
-    network: "near",
     nearNetworkId,
     rpcUrl,
     escrowContractId,
@@ -84,13 +60,13 @@ let state = {
     balanceError: "",
     status: "",
 
-    connectHere: async () => { },
-    openMyNearWalletRedirect: async () => { },
-
+    // HOT/HERE connect
+    connectHot: async () => { },
     disconnectWallet: async () => { },
     restoreSession: async () => { },
     clearStatus: () => { },
 
+    // tx
     signAndSendTransaction: async (_tx) => { },
     nftTransferCall: async (_p) => { },
     escrowClaim: async (_p) => { },
@@ -128,146 +104,20 @@ function applyFromStorage() {
     }
 }
 
-function syncFromUrlIfPresent() {
+async function connectHot() {
+    setState({ status: "Opening HOT Wallet (HERE)..." });
+
     try {
-        const url = new URL(window.location.href);
-        const p = url.searchParams;
-
-        const accountId = p.get("account_id") || p.get("accountId") || "";
-        if (!accountId) return false;
-
+        // authenticate() => no AddKey bug, returns accountId (key_k1.tg)
+        const { accountId } = await hereAuthenticate();
+        if (!accountId) {
+            setState({ status: "HOT connected, but no accountId returned" });
+            return;
+        }
         applyAccount(accountId);
-
-        const keysToRemove = [
-            "account_id",
-            "accountId",
-            "all_keys",
-            "public_key",
-            "meta",
-            "errorCode",
-            "errorMessage",
-            "transactionHashes",
-            "signInErrorType",
-        ];
-        for (const k of keysToRemove) p.delete(k);
-
-        window.history.replaceState({}, "", url.pathname + (p.toString() ? `?${p.toString()}` : "") + url.hash);
-        return true;
-    } catch {
-        return false;
-    }
-}
-
-let selectorPromise = null;
-let selector = null;
-let subscription = null;
-
-async function ensureSelector() {
-    if (selector) return selector;
-    if (selectorPromise) return selectorPromise;
-
-    selectorPromise = (async () => {
-        if (!setupWalletSelector) throw new Error("setupWalletSelector export not found");
-        if (!setupHereWallet) throw new Error("setupHereWallet export not found");
-
-        selector = await setupWalletSelector({
-            network: nearNetworkId,
-            modules: [setupHereWallet()],
-        });
-
-        if (!subscription) {
-            subscription = selector.store.observable.subscribe((s) => {
-                const active = s.accounts?.find((a) => a.active) || s.accounts?.[0] || null;
-                if (active?.accountId) applyAccount(active.accountId);
-            });
-        }
-
-        const s0 = selector.store.getState();
-        const active0 = s0.accounts?.find((a) => a.active) || s0.accounts?.[0] || null;
-        if (active0?.accountId) applyAccount(active0.accountId);
-
-        return selector;
-    })();
-
-    return selectorPromise;
-}
-
-function openLink(url) {
-    const tg = window.Telegram?.WebApp;
-    try {
-        tg?.openLink?.(url, { try_instant_view: false });
-        return true;
-    } catch { }
-    try {
-        tg?.openLink?.(url);
-        return true;
-    } catch { }
-    try {
-        window.location.assign(url);
-        return true;
-    } catch { }
-    return false;
-}
-
-function myNearWalletBase() {
-    return nearNetworkId === "testnet"
-        ? "https://testnet.mynearwallet.com"
-        : "https://app.mynearwallet.com";
-}
-
-async function openMyNearWalletRedirect() {
-    const backUrl = window.location.href;
-    const u = new URL(myNearWalletBase() + "/login/");
-    u.searchParams.set("referrer", "CardClash");
-    u.searchParams.set("success_url", backUrl);
-    u.searchParams.set("failure_url", backUrl);
-
-    setState({ status: "Opening MyNearWallet…" });
-    openLink(u.toString());
-}
-
-async function connectHere() {
-    setState({ status: `Opening HERE (${nearNetworkId})…` });
-
-    try {
-        const sel = await ensureSelector();
-        const wallet = await sel.wallet("here-wallet");
-
-        const tg = window.Telegram?.WebApp;
-        const originalOpen = window.open;
-
-        // force all opens through Telegram
-        window.open = (url) => {
-            try {
-                tg?.openLink?.(url, { try_instant_view: false });
-            } catch { }
-            try {
-                tg?.openLink?.(url);
-            } catch { }
-            try {
-                if (!tg?.openLink) window.location.assign(url);
-            } catch { }
-            return { focus() { }, closed: false };
-        };
-
-        try {
-            // IMPORTANT: keep signIn minimal for HERE (Telegram-friendly)
-            const p = wallet.signIn?.({
-                contractId: loginContractId,
-                methodNames: [], // empty ok
-            });
-
-            // If it rejects (HERE internal error), show it
-            Promise.resolve(p).catch((e) => {
-                setState({ status: `HERE signIn failed: ${String(e?.message || e)}` });
-            });
-
-            setState({ status: "Confirm in HotWallet/HERE and return to Telegram…" });
-        } finally {
-            window.open = originalOpen;
-        }
+        setState({ status: "" });
     } catch (e) {
-        setState({ status: `HERE init failed: ${String(e?.message || e)}` });
+        setState({ status: `HOT connect failed: ${String(e?.message || e)}` });
     }
 }
 
@@ -275,21 +125,12 @@ async function disconnectWallet() {
     try {
         localStorage.removeItem(LS_NEAR_ACCOUNT_ID);
     } catch { }
-
-    try {
-        await ensureSelector();
-        const w = await selector.wallet();
-        await w.signOut?.();
-    } catch { }
-
     setState({ connected: false, walletAddress: "", balance: 0, balanceError: "", status: "" });
 }
 
 async function restoreSession() {
-    await ensureSelector();
-    const okUrl = syncFromUrlIfPresent();
-    const okLs = applyFromStorage();
-    if (okUrl || okLs) setState({ status: "" });
+    // for MVP just restore from storage
+    applyFromStorage();
 }
 
 function clearStatus() {
@@ -309,16 +150,16 @@ async function signAndSendTransaction({ receiverId, actions }) {
     if (!receiverId) throw new Error("receiverId is required");
     if (!actions || !actions.length) throw new Error("actions are required");
 
-    await ensureSelector();
-    const w = await selector.wallet();
-    if (!w?.signAndSendTransaction) throw new Error("Wallet does not support signAndSendTransaction");
-
-    return await w.signAndSendTransaction({ receiverId, actions });
+    return await hereSignAndSendTransaction({ receiverId, actions });
 }
 
 async function nftTransferCall({ nftContractId, tokenId, matchId, side, playerA, playerB, receiverId }) {
     const escrowId = (receiverId || escrowContractId || "").trim();
     if (!escrowId) throw new Error("Escrow contract id missing (VITE_NEAR_ESCROW_CONTRACT_ID)");
+    if (!nftContractId) throw new Error("nftContractId is required");
+    if (!tokenId) throw new Error("tokenId is required");
+    if (!matchId) throw new Error("matchId is required");
+    if (side !== "A" && side !== "B") throw new Error('side must be "A" or "B"');
 
     const msg = JSON.stringify({ match_id: matchId, side, player_a: playerA, player_b: playerB });
 
@@ -371,8 +212,7 @@ async function escrowClaim({ matchId, winnerAccountId, loserNftContractId, loser
 
 state = {
     ...state,
-    connectHere,
-    openMyNearWalletRedirect,
+    connectHot,
     disconnectWallet,
     restoreSession,
     clearStatus,
