@@ -194,7 +194,6 @@ async function ensureSelector() {
 
 function openLink(url) {
     const tg = window.Telegram?.WebApp;
-    // IMPORTANT: disable instant view to avoid weird redirects
     try {
         tg?.openLink?.(url, { try_instant_view: false });
         return true;
@@ -216,47 +215,55 @@ function myNearWalletBase() {
         : "https://app.mynearwallet.com";
 }
 
-async function connectHere() {
-    setState({ status: `Открываю HERE (${nearNetworkId})...` });
-    const sel = await ensureSelector();
-    const wallet = await sel.wallet("here-wallet");
-
-    const tg = window.Telegram?.WebApp;
-    const originalOpen = window.open;
-
-    window.open = (url) => {
-        openLink(url);
-        return { focus() { }, closed: false };
-    };
-
-    try {
-        const backUrl = window.location.href;
-        const p = wallet.signIn?.({
-            contractId: loginContractId,
-            methodNames: [],
-            successUrl: backUrl,
-            failureUrl: backUrl,
-        });
-        Promise.resolve(p).catch((e) => {
-            setState({ status: `HERE signIn error: ${String(e?.message || e)}` });
-        });
-
-        setState({ status: "Подтверди в HERE/HotWallet и вернись в игру." });
-    } finally {
-        window.open = originalOpen;
-    }
-}
-
 async function openMyNearWalletRedirect() {
     const backUrl = window.location.href;
-
     const u = new URL(myNearWalletBase() + "/login/");
     u.searchParams.set("referrer", "CardClash");
     u.searchParams.set("success_url", backUrl);
     u.searchParams.set("failure_url", backUrl);
 
-    setState({ status: "Открываю MyNearWallet..." });
+    setState({ status: "Opening MyNearWallet…" });
     openLink(u.toString());
+}
+
+async function connectHere() {
+    setState({ status: `Opening HERE (${nearNetworkId})…` });
+
+    try {
+        const sel = await ensureSelector();
+        const wallet = await sel.wallet("here-wallet");
+
+        const tg = window.Telegram?.WebApp;
+        const originalOpen = window.open;
+
+        window.open = (url) => {
+            openLink(url);
+            return { focus() { }, closed: false };
+        };
+
+        try {
+            const backUrl = window.location.href;
+            const p = wallet.signIn?.({
+                contractId: loginContractId,
+                methodNames: [],
+                successUrl: backUrl,
+                failureUrl: backUrl,
+            });
+
+            // if signIn rejects
+            Promise.resolve(p).catch((e) => {
+                setState({ status: `HERE failed: ${String(e?.message || e)} → fallback MyNearWallet` });
+                openMyNearWalletRedirect();
+            });
+
+            setState({ status: "Confirm in HERE and return to Telegram…" });
+        } finally {
+            window.open = originalOpen;
+        }
+    } catch (e) {
+        setState({ status: `HERE failed: ${String(e?.message || e)} → fallback MyNearWallet` });
+        await openMyNearWalletRedirect();
+    }
 }
 
 async function disconnectWallet() {
