@@ -6,33 +6,45 @@ const envNetworkId = (import.meta.env.VITE_NEAR_NETWORK_ID || "").toLowerCase();
 const networkId = envNetworkId === "testnet" ? "testnet" : "mainnet";
 
 const botId = (import.meta.env.VITE_TG_BOT_ID || "").trim(); // Cardclashbot/app (без @)
-const walletId = (import.meta.env.VITE_HOT_WALLET_ID || "").trim(); // herewalletbot/app
+const walletId = (import.meta.env.VITE_HOT_WALLET_ID || "").trim(); // IMPORTANT: hot_wallet/app OR herewalletbot/app
 
 let herePromise = null;
 let patched = false;
 
 function walletDomainFromId(id) {
-    // "herewalletbot/app" -> "herewalletbot"
+    // "hot_wallet/app" -> "hot_wallet"
     const s = String(id || "").trim();
-    if (!s) return "";
-    return s.split("/")[0].trim();
+    return s ? s.split("/")[0].trim() : "";
 }
 
-function normalizeTelegramMiniAppUrl(url) {
+/**
+ * Превращает ЛЮБОЙ URL, ведущий к HOT/HERE, в Telegram Mini App link:
+ *   https://t.me/<walletDomain>/app?startapp=...
+ * чтобы Telegram открыл его "поверх" (как CapsGame), а не в браузере.
+ */
+function toTelegramMiniAppLink(url) {
     if (!url || typeof url !== "string") return null;
 
-    const walletDomain = walletDomainFromId(walletId);
+    const preferredDomain = walletDomainFromId(walletId); // что выбрано в env
+    const knownWalletDomains = new Set(
+        [preferredDomain, "hot_wallet", "herewalletbot"].filter(Boolean)
+    );
 
-    // tg://resolve?domain=herewalletbot&startapp=...
+    // tg://resolve?domain=...&startapp=...
     if (url.startsWith("tg://resolve?")) {
         try {
             const qs = url.split("?")[1] || "";
             const params = new URLSearchParams(qs);
-            const domain = params.get("domain");
-            const startapp = params.get("startapp") || params.get("start") || "";
+            const domain = (params.get("domain") || "").trim();
+            const startapp =
+                params.get("startapp") ||
+                params.get("start") ||
+                params.get("start_param") ||
+                params.get("startParam") ||
+                "";
+
             if (!domain) return null;
 
-            // ВАЖНО: мини-апп всегда через /app
             const base = `https://t.me/${domain}/app`;
             if (startapp) return `${base}?startapp=${encodeURIComponent(startapp)}`;
             return base;
@@ -41,72 +53,127 @@ function normalizeTelegramMiniAppUrl(url) {
         }
     }
 
-    // https://t.me/...
-    if (url.includes("t.me/") || url.includes("telegram.me/")) {
-        const u = url.replace("telegram.me", "t.me");
+    // try parse as URL (https://...)
+    let parsed = null;
+    try {
+        parsed = new URL(url);
+    } catch {
+        parsed = null;
+    }
 
-        // если ссылка вида https://t.me/herewalletbot?startapp=... -> перепишем на /app
-        // чтобы Telegram открыл именно Mini App, а не чат
-        try {
-            const parsed = new URL(u);
-            const path = (parsed.pathname || "").replace(/^\/+/, ""); // "herewalletbot/app" or "herewalletbot"
-            const startapp = parsed.searchParams.get("startapp") || parsed.searchParams.get("start") || "";
+    // https://t.me/<domain>/app?... or https://t.me/<domain>?startapp=...
+    if (parsed && (parsed.hostname === "t.me" || parsed.hostname === "telegram.me")) {
+        const path = (parsed.pathname || "").replace(/^\/+/, ""); // "hot_wallet/app" or "hot_wallet"
+        const [domain, maybeApp] = path.split("/");
 
-            // если это наш кошелек и нет /app — принудительно добавим /app
-            if (walletDomain && (path === walletDomain || path === `${walletDomain}`)) {
-                const base = `https://t.me/${walletDomain}/app`;
+        const startapp =
+            parsed.searchParams.get("startapp") ||
+            parsed.searchParams.get("start") ||
+            parsed.searchParams.get("start_param") ||
+            parsed.searchParams.get("startParam") ||
+            "";
+
+        if (!domain) return null;
+
+        const base = `https://t.me/${domain}/app`;
+        if (startapp) return `${base}?startapp=${encodeURIComponent(startapp)}`;
+        return base;
+    }
+
+    // Любой другой домен (например tgapp.herewallet..., near... и т.п.)
+    // Пытаемся вытащить domain/startapp из query.
+    if (parsed) {
+        const q = parsed.searchParams;
+
+        const domainFromQuery = (q.get("domain") || "").trim();
+        const startapp =
+            q.get("startapp") ||
+            q.get("start") ||
+            q.get("start_param") ||
+            q.get("startParam") ||
+            "";
+
+        // если домен кошелька лежит в query
+        if (domainFromQuery && knownWalletDomains.has(domainFromQuery)) {
+            const base = `https://t.me/${domainFromQuery}/app`;
+            if (startapp) return `${base}?startapp=${encodeURIComponent(startapp)}`;
+            return base;
+        }
+
+        // если в URL где-то встречается hot_wallet / herewalletbot
+        for (const d of knownWalletDomains) {
+            if (!d) continue;
+            if (url.includes(d)) {
+                const base = `https://t.me/${d}/app`;
                 if (startapp) return `${base}?startapp=${encodeURIComponent(startapp)}`;
                 return base;
             }
-
-            // если уже /app — оставляем как есть
-            return u;
-        } catch {
-            return u;
         }
     }
 
     return null;
 }
 
-function openTelegramMiniApp(url) {
+function openAsTelegramOverlay(url) {
     const tg = window.Telegram?.WebApp;
     if (!tg) return false;
 
-    const tgUrl = normalizeTelegramMiniAppUrl(url);
-    if (!tgUrl) return false;
+    const tgMiniAppLink = toTelegramMiniAppLink(url);
+    if (!tgMiniAppLink) return false;
 
-    // "как CapsGame": открывает внутри Telegram поверх, с возможностью вернуться назад
+    // ВАЖНО: openTelegramLink = открывает внутри Telegram "поверх" (как @CapsGame)
     if (typeof tg.openTelegramLink === "function") {
-        tg.openTelegramLink(tgUrl);
+        tg.openTelegramLink(tgMiniAppLink);
         return true;
     }
 
-    // fallback (хуже): может открыть in-app browser
+    // fallback: может открыть in-app browser (хуже, но лучше чем window.open)
     if (typeof tg.openLink === "function") {
-        tg.openLink(tgUrl);
+        tg.openLink(tgMiniAppLink);
         return true;
     }
 
     return false;
 }
 
-function patchTelegramOpen() {
+function patchAllOpens() {
     if (patched) return;
     patched = true;
 
-    // 1) window.open
-    const origOpen = window.open?.bind(window);
-    window.open = (url, target, features) => {
-        try {
-            if (openTelegramMiniApp(url)) return null;
-        } catch {
-            // ignore
+    // 0) Патчим Telegram.WebApp.openLink => чтобы все t.me/hot_wallet/herewalletbot открывалось как overlay
+    try {
+        const tg = window.Telegram?.WebApp;
+        if (tg && typeof tg.openLink === "function") {
+            const origOpenLink = tg.openLink.bind(tg);
+            tg.openLink = (url, opts) => {
+                try {
+                    if (openAsTelegramOverlay(url)) return;
+                } catch {
+                    // ignore
+                }
+                return origOpenLink(url, opts);
+            };
         }
-        return origOpen ? origOpen(url, target, features) : null;
-    };
+    } catch {
+        // ignore
+    }
 
-    // 2) location.assign / replace
+    // 1) window.open
+    try {
+        const origOpen = window.open?.bind(window);
+        window.open = (url, target, features) => {
+            try {
+                if (openAsTelegramOverlay(url)) return null;
+            } catch {
+                // ignore
+            }
+            return origOpen ? origOpen(url, target, features) : null;
+        };
+    } catch {
+        // ignore
+    }
+
+    // 2) location.assign/replace
     try {
         const loc = window.location;
         const origAssign = loc.assign?.bind(loc);
@@ -114,14 +181,14 @@ function patchTelegramOpen() {
 
         if (origAssign) {
             loc.assign = (url) => {
-                if (openTelegramMiniApp(url)) return;
+                if (openAsTelegramOverlay(url)) return;
                 return origAssign(url);
             };
         }
 
         if (origReplace) {
             loc.replace = (url) => {
-                if (openTelegramMiniApp(url)) return;
+                if (openAsTelegramOverlay(url)) return;
                 return origReplace(url);
             };
         }
@@ -129,7 +196,7 @@ function patchTelegramOpen() {
         // ignore
     }
 
-    // 3) клики по <a href="..."> (частый кейс — иначе Telegram открывает "браузер")
+    // 3) клики по <a href>
     try {
         document.addEventListener(
             "click",
@@ -138,7 +205,7 @@ function patchTelegramOpen() {
                 const href = a?.getAttribute?.("href");
                 if (!href) return;
 
-                if (openTelegramMiniApp(href)) {
+                if (openAsTelegramOverlay(href)) {
                     e.preventDefault();
                     e.stopPropagation();
                 }
@@ -151,10 +218,10 @@ function patchTelegramOpen() {
 }
 
 async function getHere() {
-    patchTelegramOpen();
+    patchAllOpens();
 
     if (!botId) throw new Error("VITE_TG_BOT_ID is missing (expected Cardclashbot/app)");
-    if (!walletId) throw new Error("VITE_HOT_WALLET_ID is missing (expected herewalletbot/app)");
+    if (!walletId) throw new Error("VITE_HOT_WALLET_ID is missing (expected hot_wallet/app or herewalletbot/app)");
 
     if (!herePromise) {
         herePromise = HereWallet.connect({
