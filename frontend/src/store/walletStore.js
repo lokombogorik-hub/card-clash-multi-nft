@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import React from "react";
 import { hereAuthenticate, hereSignAndSendTransaction } from "../libs/here";
 
 const LS_NEAR_ACCOUNT_ID = "cc_near_account_id";
@@ -215,7 +215,7 @@ state = {
 };
 
 export function useWalletStore() {
-    return useSyncExternalStore(
+    return React.useSyncExternalStore(
         (cb) => {
             listeners.add(cb);
             return () => listeners.delete(cb);
