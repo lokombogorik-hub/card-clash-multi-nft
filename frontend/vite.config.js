@@ -1,8 +1,16 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import inject from "@rollup/plugin-inject";
 
 export default defineConfig({
-    plugins: [react()],
+    plugins: [
+        react(),
+        // Ensure globals exist inside every module (Telegram WebView safe)
+        inject({
+            process: "process",
+            Buffer: ["buffer", "Buffer"],
+        }),
+    ],
     resolve: {
         alias: {
             process: "process/browser",
