@@ -5,17 +5,13 @@ const networkId = envNetworkId === "testnet" ? "testnet" : "mainnet";
 
 const botId = (import.meta.env.VITE_TG_BOT_ID || "").trim(); // Cardclashbot/app (без @)
 
-// ВАЖНО: по твоему требованию используем HOT Wallet mini app.
-// Если env задан криво/пусто — форсим hot_wallet/app.
-const walletIdEnv = (import.meta.env.VITE_HOT_WALLET_ID || "").trim();
-const walletId = walletIdEnv || "hot_wallet/app";
+// строго форсим HOT Wallet
+const walletId = "hot_wallet/app";
 
 let herePromise = null;
 
 async function getHere() {
     if (!botId) throw new Error("VITE_TG_BOT_ID is missing (expected Cardclashbot/app)");
-    if (!walletId) throw new Error("VITE_HOT_WALLET_ID is missing (expected hot_wallet/app)");
-
     if (!herePromise) {
         herePromise = HereWallet.connect({
             networkId,
