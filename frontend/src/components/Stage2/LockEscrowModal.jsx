@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../api.js";
-import { useWalletStore } from "../../store/walletStore";
+import { useWalletStore } from "../../store/useWalletStore";
 
 function getStoredToken() {
     try {
