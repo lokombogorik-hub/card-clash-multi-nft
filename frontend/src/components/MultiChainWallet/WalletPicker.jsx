@@ -179,7 +179,7 @@ export default function WalletPicker({ open, onClose }) {
                     <Tile
                         title="HOT Wallet (Telegram) — NEAR"
                         subtitle="Подключение аккаунта key_k1.tg через HERE core authenticate() без AddKey."
-                        iconSrc="/ui/wallets/hotwallet.svg?v=4"
+                        iconSrc="/ui/wallets/hotwallet.svg?v=10"
                         accent="rgba(255, 61, 0, 0.22)"
                         badge="HOT"
                         disabled={busy}

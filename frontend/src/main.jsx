@@ -8,7 +8,8 @@ import "@near-wallet-selector/modal-ui/styles.css";
 // Buffer polyfill for wallet libs (Telegram WebView / Vite)
 import { Buffer } from "buffer";
 if (!globalThis.Buffer) globalThis.Buffer = Buffer;
-
+import process from "process";
+if (!globalThis.process) globalThis.process = process;
 const getAppHeight = () => {
   const tg = window.Telegram?.WebApp;
   return tg?.viewportStableHeight || tg?.viewportHeight || window.innerHeight;
