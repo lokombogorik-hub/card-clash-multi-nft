@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useWalletStore } from "../../store/walletStore";
+import { useWalletStore } from "../../store/useWalletStore";
 
 function Tile({ title, subtitle, iconSrc, accent, badge, onClick, disabled }) {
     return (
