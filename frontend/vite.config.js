@@ -5,17 +5,17 @@ export default defineConfig({
     plugins: [react()],
     resolve: {
         alias: {
+            process: "process/browser",
             crypto: "crypto-browserify",
             stream: "stream-browserify",
-            process: "process/browser",
             util: "util",
         },
     },
     define: {
-        "process.env": {},
         global: "globalThis",
+        "process.env": {},
     },
     optimizeDeps: {
-        include: ["crypto-browserify", "stream-browserify", "process", "util"],
+        include: ["process", "crypto-browserify", "stream-browserify", "util"],
     },
 });
