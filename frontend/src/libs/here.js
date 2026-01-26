@@ -9,29 +9,26 @@ const botId = (import.meta.env.VITE_TG_BOT_ID || "").trim(); // Cardclashbot/app
 const walletId = (import.meta.env.VITE_HOT_WALLET_ID || "").trim(); // herewalletbot/app
 
 let herePromise = null;
-let windowOpenPatched = false;
+let navPatched = false;
 
-function buildHttpsTelegramLink(url) {
+function normalizeTelegramUrl(url) {
     if (!url || typeof url !== "string") return null;
 
-    // already https t.me
+    // https://t.me/...
     if (url.includes("t.me/") || url.includes("telegram.me/")) {
         return url.replace("telegram.me", "t.me");
     }
 
-    // tg://resolve?domain=herewalletbot&startapp=...
+    // tg://resolve?domain=...&startapp=...
     if (url.startsWith("tg://resolve?")) {
         try {
             const qs = url.split("?")[1] || "";
             const params = new URLSearchParams(qs);
             const domain = params.get("domain");
             const startapp = params.get("startapp") || params.get("start") || "";
-
             if (!domain) return null;
 
-            if (startapp) {
-                return `https://t.me/${domain}?startapp=${encodeURIComponent(startapp)}`;
-            }
+            if (startapp) return `https://t.me/${domain}?startapp=${encodeURIComponent(startapp)}`;
             return `https://t.me/${domain}`;
         } catch {
             return null;
@@ -41,52 +38,72 @@ function buildHttpsTelegramLink(url) {
     return null;
 }
 
-function patchWindowOpenForTelegram() {
-    if (windowOpenPatched) return;
-    windowOpenPatched = true;
+function openInTelegram(url) {
+    const tg = window.Telegram?.WebApp;
+    if (!tg) return false;
 
+    const tgUrl = normalizeTelegramUrl(url);
+    if (!tgUrl) return false;
+
+    // ВАЖНО: openTelegramLink открывает поверх и позволяет вернуться "назад" как в @CapsGame
+    if (typeof tg.openTelegramLink === "function") {
+        tg.openTelegramLink(tgUrl);
+        return true;
+    }
+
+    // fallback (хуже): openLink может открыть in-app browser
+    if (typeof tg.openLink === "function") {
+        tg.openLink(tgUrl);
+        return true;
+    }
+
+    return false;
+}
+
+function patchTelegramNavigation() {
+    if (navPatched) return;
+    navPatched = true;
+
+    // patch window.open
     const origOpen = window.open?.bind(window);
-
     window.open = (url, target, features) => {
         try {
-            const tg = window.Telegram?.WebApp;
-
-            // In Telegram WebApp лучше открывать через openTelegramLink/openLink
-            if (tg && typeof url === "string" && url) {
-                const httpsTg = buildHttpsTelegramLink(url);
-
-                if (httpsTg) {
-                    if (typeof tg.openTelegramLink === "function") {
-                        tg.openTelegramLink(httpsTg);
-                        return null;
-                    }
-                    if (typeof tg.openLink === "function") {
-                        tg.openLink(httpsTg);
-                        return null;
-                    }
-                }
-
-                // fallback: external link
-                if (typeof tg.openLink === "function" && /^https?:\/\//i.test(url)) {
-                    tg.openLink(url);
-                    return null;
-                }
-            }
+            if (openInTelegram(url)) return null;
         } catch {
             // ignore
         }
-
-        // default
-        if (origOpen) return origOpen(url, target, features);
-        return null;
+        return origOpen ? origOpen(url, target, features) : null;
     };
+
+    // patch location.assign / replace (кошельки часто используют это)
+    try {
+        const loc = window.location;
+        const origAssign = loc.assign?.bind(loc);
+        const origReplace = loc.replace?.bind(loc);
+
+        if (origAssign) {
+            loc.assign = (url) => {
+                if (openInTelegram(url)) return;
+                return origAssign(url);
+            };
+        }
+
+        if (origReplace) {
+            loc.replace = (url) => {
+                if (openInTelegram(url)) return;
+                return origReplace(url);
+            };
+        }
+    } catch {
+        // ignore
+    }
 }
 
 async function getHere() {
-    patchWindowOpenForTelegram();
+    patchTelegramNavigation();
 
-    if (!botId) throw new Error("VITE_TG_BOT_ID is missing (expected like Cardclashbot/app)");
-    if (!walletId) throw new Error("VITE_HOT_WALLET_ID is missing (expected like herewalletbot/app)");
+    if (!botId) throw new Error("VITE_TG_BOT_ID is missing (expected Cardclashbot/app)");
+    if (!walletId) throw new Error("VITE_HOT_WALLET_ID is missing (expected herewalletbot/app)");
 
     if (!herePromise) {
         herePromise = HereWallet.connect({
@@ -107,24 +124,30 @@ function getStoredAccountId() {
 }
 
 export async function hereAuthenticate() {
-    const here = await getHere();
+    // expand перед открытием кошелька (чтобы выглядело как "поверх" без обрезаний)
+    try {
+        window.Telegram?.WebApp?.expand?.();
+    } catch {
+        // ignore
+    }
 
-    // HERE core делает authenticate через NEP-413 (без AddKey)
-    // Возвращает { accountId, publicKey, signature, message, ... } (зависит от версии)
+    const here = await getHere();
     const res = await here.authenticate();
     const accountId = String(res?.accountId || "").trim();
-
     return { ...res, accountId };
 }
 
 export async function hereSignAndSendTransaction({ receiverId, actions }) {
+    try {
+        window.Telegram?.WebApp?.expand?.();
+    } catch {
+        // ignore
+    }
+
     const here = await getHere();
 
     const signerId = getStoredAccountId() || undefined;
 
-    // IMPORTANT:
-    // some versions accept signerId, some don't — но передать безопасно
-    // если библиотека не использует signerId, она просто проигнорит
     return await here.signAndSendTransaction({
         signerId,
         receiverId,
