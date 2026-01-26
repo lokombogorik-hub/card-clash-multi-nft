@@ -1,4 +1,3 @@
-import { useSyncExternalStore } from "use-sync-external-store/shim";
 import { hereAuthenticate, hereSignAndSendTransaction } from "../libs/here";
 
 const LS_NEAR_ACCOUNT_ID = "cc_near_account_id";
@@ -59,21 +58,16 @@ let state = {
     balance: 0,
     balanceError: "",
     status: "",
-
-    connectHot: async () => { },
-    disconnectWallet: async () => { },
-    restoreSession: async () => { },
-    clearStatus: () => { },
-
-    signAndSendTransaction: async (_tx) => { },
-    nftTransferCall: async (_p) => { },
-    escrowClaim: async (_p) => { },
 };
 
 const listeners = new Set();
+function emit() {
+    for (const l of listeners) l();
+}
+
 function setState(patch) {
     state = { ...state, ...patch };
-    for (const l of listeners) l();
+    emit();
 }
 
 function applyAccount(accountId) {
@@ -91,7 +85,7 @@ function applyAccount(accountId) {
         .catch((e) => setState({ balance: 0, balanceError: String(e?.message || e) }));
 }
 
-function applyFromStorage() {
+function restoreFromStorage() {
     try {
         const id = localStorage.getItem(LS_NEAR_ACCOUNT_ID) || "";
         if (!id) return false;
@@ -106,7 +100,6 @@ async function connectHot() {
     setState({ status: "Opening HOT Wallet…" });
 
     try {
-        // This should open HOT wallet inside Telegram and return accountId (key_k1.tg)
         const { accountId } = await hereAuthenticate();
         if (!accountId) {
             setState({ status: "HOT connected, but accountId missing" });
@@ -127,8 +120,7 @@ async function disconnectWallet() {
 }
 
 async function restoreSession() {
-    // MVP: restore from local storage
-    applyFromStorage();
+    restoreFromStorage();
 }
 
 function clearStatus() {
@@ -161,13 +153,7 @@ async function nftTransferCall({ nftContractId, tokenId, matchId, side, playerA,
             type: "FunctionCall",
             params: {
                 methodName: "nft_transfer_call",
-                args: {
-                    receiver_id: escrowId,
-                    token_id: tokenId,
-                    approval_id: null,
-                    memo: null,
-                    msg,
-                },
+                args: { receiver_id: escrowId, token_id: tokenId, approval_id: null, memo: null, msg },
                 gas: GAS_150_TGAS,
                 deposit: ONE_YOCTO,
             },
@@ -203,24 +189,20 @@ async function escrowClaim({ matchId, winnerAccountId, loserNftContractId, loser
     return { outcome, txHash: extractTxHash(outcome) };
 }
 
-state = {
-    ...state,
+// public API
+export const walletStore = {
+    getState: () => state,
+    subscribe: (fn) => {
+        listeners.add(fn);
+        return () => listeners.delete(fn);
+    },
+
     connectHot,
     disconnectWallet,
     restoreSession,
     clearStatus,
+
     signAndSendTransaction,
     nftTransferCall,
     escrowClaim,
 };
-
-export function useWalletStore() {
-    return useSyncExternalStore(
-        (cb) => {
-            listeners.add(cb);
-            return () => listeners.delete(cb);
-        },
-        () => state,
-        () => state
-    );
-}

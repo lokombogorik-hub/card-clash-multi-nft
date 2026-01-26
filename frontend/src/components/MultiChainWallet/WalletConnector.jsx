@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useWalletStore } from "../../store/walletStore";
+import { useWalletStore } from "../../store/useWalletStore";
 import { apiFetch } from "../../api.js";
 import WalletPicker from "./WalletPicker";
 
