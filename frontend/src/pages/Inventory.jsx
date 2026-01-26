@@ -8,11 +8,23 @@ function nftKey(n) {
     return `${n.chain || "mock"}:${n.contractId || "x"}:${n.tokenId || "0"}`;
 }
 
+function parseAllowedContracts() {
+    const raw = String(import.meta.env.VITE_NEAR_ALLOWED_NFT_CONTRACTS || "").trim();
+    if (!raw) return [];
+    return raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+}
+
 export default function Inventory({ token, onDeckReady }) {
     const [loading, setLoading] = useState(false);
     const [nfts, setNfts] = useState([]);
     const [selected, setSelected] = useState(() => new Set());
     const [error, setError] = useState("");
+
+    const allowedContracts = useMemo(() => parseAllowedContracts(), []);
+    const allowedSet = useMemo(() => new Set(allowedContracts), [allowedContracts]);
 
     const selectedArr = useMemo(() => Array.from(selected), [selected]);
 
@@ -31,7 +43,30 @@ export default function Inventory({ token, onDeckReady }) {
                 ]);
 
                 if (!alive) return;
-                setNfts(inv.items || []);
+
+                const items = Array.isArray(inv.items) ? inv.items : [];
+
+                // Фильтр: если allowlist задан — показываем только NFT из разрешённых контрактов.
+                // Моки/без contractId оставляем, чтобы Stage1 не ломался.
+                const filtered = !allowedContracts.length
+                    ? items
+                    : items.filter((n) => {
+                        const chain = String(n.chain || "").toLowerCase();
+                        const cid = String(n.contractId || n.contract_id || "").trim();
+
+                        // mock cards / stage1 cards
+                        if (!cid) return true;
+
+                        // if near NFTs exist in inventory payload
+                        if (!chain || chain === "near") {
+                            return allowedSet.has(cid);
+                        }
+
+                        // other chains: пока скрываем если allowlist включен
+                        return false;
+                    });
+
+                setNfts(filtered);
                 setSelected(new Set((deck.cards || []).slice(0, 5)));
             } catch (e) {
                 if (!alive) return;
@@ -45,7 +80,7 @@ export default function Inventory({ token, onDeckReady }) {
         return () => {
             alive = false;
         };
-    }, [token]);
+    }, [token, allowedContracts.length, allowedSet]);
 
     const toggle = (k) => {
         setSelected((prev) => {
@@ -78,6 +113,13 @@ export default function Inventory({ token, onDeckReady }) {
     return (
         <div className="page">
             <h2>Инвентарь</h2>
+
+            {allowedContracts.length ? (
+                <div style={{ opacity: 0.85, fontSize: 12, marginBottom: 10, lineHeight: 1.35 }}>
+                    Разрешённые коллекции для игры (paid placement):{" "}
+                    <span style={{ fontFamily: "monospace" }}>{allowedContracts.join(", ")}</span>
+                </div>
+            ) : null}
 
             <div style={{ opacity: 0.85, fontSize: 13, marginBottom: 10 }}>
                 Выбери 5 NFT-карт для колоды ({selected.size}/5)
