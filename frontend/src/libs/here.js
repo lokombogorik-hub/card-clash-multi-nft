@@ -5,7 +5,7 @@ const networkId = envNetworkId === "testnet" ? "testnet" : "mainnet";
 
 const botId = (import.meta.env.VITE_TG_BOT_ID || "").trim(); // Cardclashbot/app (без @)
 
-// строго форсим HOT Wallet
+// строго HOT Wallet miniapp
 const walletId = "hot_wallet/app";
 
 let herePromise = null;

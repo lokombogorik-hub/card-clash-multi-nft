@@ -10,29 +10,11 @@ globalThis.process = process
 globalThis.Buffer = Buffer
 if (!globalThis.process.env) globalThis.process.env = {}
 
-// === Telegram WebView cache busting (чтобы изменения реально применялись) ===
-function ensureTelegramCacheBustOnce() {
-  try {
-    const tg = window.Telegram?.WebApp
-    if (!tg) return
+// hard requirement from you: open exactly @hot_wallet mini app
+const HOT_WALLET_DOMAIN = 'hot_wallet'
 
-    const u = new URL(window.location.href)
-    if (u.searchParams.has('v')) return
-
-    const key = 'cc_cache_bust_v'
-    const v = sessionStorage.getItem(key) || Date.now().toString(36)
-    sessionStorage.setItem(key, v)
-
-    u.searchParams.set('v', v)
-    window.location.replace(u.toString())
-  } catch {
-    // ignore
-  }
-}
-ensureTelegramCacheBustOnce()
-
-// === HERE request -> HOT Wallet mini app mapping ===
-const HOT_WALLET_DOMAIN = 'hot_wallet' // строго как ты просишь: @hot_wallet
+// debug marker to verify that THIS build is loaded
+window.__CC_HOT_PATCH_VERSION__ = 'hotwallet-intercept-v4'
 
 function extractHereRequestId(url) {
   try {
@@ -46,71 +28,91 @@ function extractHereRequestId(url) {
   }
 }
 
-function toHotWalletMiniAppLinkFromHereRequest(url) {
-  const requestId = extractHereRequestId(url)
-  if (!requestId) return null
-  return `https://t.me/${HOT_WALLET_DOMAIN}/app?startapp=${encodeURIComponent(requestId)}`
+function mapHereRequestToHotWallet(url) {
+  const id = extractHereRequestId(url)
+  if (!id) return null
+  return `https://t.me/${HOT_WALLET_DOMAIN}/app?startapp=${encodeURIComponent(id)}`
 }
 
-function tgOpenOverlay(url) {
-  const tg = window.Telegram?.WebApp
-  if (!tg) return false
-
-  try {
-    tg.expand?.()
-  } catch {
-    // ignore
-  }
-
-  if (typeof tg.openTelegramLink === 'function') {
-    tg.openTelegramLink(url)
-    return true
-  }
-  if (typeof tg.openLink === 'function') {
-    tg.openLink(url)
-    return true
-  }
-  return false
-}
-
-// Перехватываем ВСЕ стандартные способы открыть ссылку
-function patchOpensEarly() {
-  // 1) Telegram.WebApp.openLink
+function openHotWalletOverlay(mappedUrl) {
   try {
     const tg = window.Telegram?.WebApp
-    if (tg && typeof tg.openLink === 'function') {
-      const orig = tg.openLink.bind(tg)
-      tg.openLink = (url, opts) => {
-        const mapped = toHotWalletMiniAppLinkFromHereRequest(url)
-        if (mapped) {
-          window.__CC_LAST_HERE_REQUEST__ = { url: String(url), mapped }
-          tgOpenOverlay(mapped)
-          return
-        }
-        return orig(url, opts)
+    if (tg) {
+      try {
+        tg.expand?.()
+      } catch {
+        // ignore
+      }
+      if (typeof tg.openTelegramLink === 'function') {
+        tg.openTelegramLink(mappedUrl)
+        return true
+      }
+      if (typeof tg.openLink === 'function') {
+        tg.openLink(mappedUrl)
+        return true
       }
     }
   } catch {
     // ignore
   }
 
-  // 2) window.open
+  // fallback for non-Telegram environments (PC browser etc.)
+  try {
+    window.open(mappedUrl, '_blank', 'noopener,noreferrer')
+    return true
+  } catch {
+    return false
+  }
+}
+
+function handlePossibleHereUrl(url, source = 'unknown') {
+  const mapped = mapHereRequestToHotWallet(url)
+  if (!mapped) return false
+
+  window.__CC_LAST_HERE_REQUEST__ = { url: String(url), mapped, source, ts: Date.now() }
+  return openHotWalletOverlay(mapped)
+}
+
+function patchTelegramOpenLinkWhenAvailable() {
+  const tg = window.Telegram?.WebApp
+  if (!tg) return false
+
+  // patch WebApp.openLink (some libs call this directly)
+  if (typeof tg.openLink === 'function' && !tg.__cc_patched_openLink) {
+    const orig = tg.openLink.bind(tg)
+    tg.openLink = (url, opts) => {
+      if (handlePossibleHereUrl(url, 'Telegram.WebApp.openLink')) return
+      return orig(url, opts)
+    }
+    tg.__cc_patched_openLink = true
+  }
+
+  // patch WebApp.openTelegramLink too (just in case something passes herewallet url into it)
+  if (typeof tg.openTelegramLink === 'function' && !tg.__cc_patched_openTelegramLink) {
+    const orig = tg.openTelegramLink.bind(tg)
+    tg.openTelegramLink = (url) => {
+      if (handlePossibleHereUrl(url, 'Telegram.WebApp.openTelegramLink')) return
+      return orig(url)
+    }
+    tg.__cc_patched_openTelegramLink = true
+  }
+
+  return true
+}
+
+function patchBrowserNav() {
+  // window.open
   try {
     const origOpen = window.open?.bind(window)
     window.open = (url, target, features) => {
-      const mapped = toHotWalletMiniAppLinkFromHereRequest(url)
-      if (mapped) {
-        window.__CC_LAST_HERE_REQUEST__ = { url: String(url), mapped }
-        tgOpenOverlay(mapped)
-        return null
-      }
+      if (handlePossibleHereUrl(url, 'window.open')) return null
       return origOpen ? origOpen(url, target, features) : null
     }
   } catch {
     // ignore
   }
 
-  // 3) location.assign/replace
+  // location.assign/replace
   try {
     const loc = window.location
     const origAssign = loc.assign?.bind(loc)
@@ -118,24 +120,13 @@ function patchOpensEarly() {
 
     if (origAssign) {
       loc.assign = (url) => {
-        const mapped = toHotWalletMiniAppLinkFromHereRequest(url)
-        if (mapped) {
-          window.__CC_LAST_HERE_REQUEST__ = { url: String(url), mapped }
-          tgOpenOverlay(mapped)
-          return
-        }
+        if (handlePossibleHereUrl(url, 'location.assign')) return
         return origAssign(url)
       }
     }
-
     if (origReplace) {
       loc.replace = (url) => {
-        const mapped = toHotWalletMiniAppLinkFromHereRequest(url)
-        if (mapped) {
-          window.__CC_LAST_HERE_REQUEST__ = { url: String(url), mapped }
-          tgOpenOverlay(mapped)
-          return
-        }
+        if (handlePossibleHereUrl(url, 'location.replace')) return
         return origReplace(url)
       }
     }
@@ -143,7 +134,7 @@ function patchOpensEarly() {
     // ignore
   }
 
-  // 4) клики по <a href="...">
+  // clicks on <a href>
   try {
     document.addEventListener(
       'click',
@@ -151,15 +142,11 @@ function patchOpensEarly() {
         const a = e.target?.closest?.('a')
         const href = a?.getAttribute?.('href')
         if (!href) return
-
-        const mapped = toHotWalletMiniAppLinkFromHereRequest(href)
-        if (!mapped) return
+        if (!href.includes('herewallet.app/request/')) return
 
         e.preventDefault()
         e.stopPropagation()
-
-        window.__CC_LAST_HERE_REQUEST__ = { url: String(href), mapped }
-        tgOpenOverlay(mapped)
+        handlePossibleHereUrl(href, 'a[href] click')
       },
       true
     )
@@ -168,119 +155,137 @@ function patchOpensEarly() {
   }
 }
 
-// Ловим появление HERE request URL в DOM даже если это iframe/src (клик внутри iframe не перехватывается!)
-function autoOpenHotWalletWhenHereRequestAppears() {
-  const openedIds = new Set()
-
-  const tryHandleUrl = (url) => {
-    const requestId = extractHereRequestId(url)
-    if (!requestId) return false
-    if (openedIds.has(requestId)) return true
-
-    openedIds.add(requestId)
-    const mapped = `https://t.me/${HOT_WALLET_DOMAIN}/app?startapp=${encodeURIComponent(requestId)}`
-    window.__CC_LAST_HERE_REQUEST__ = { url: String(url), mapped }
-
-    tgOpenOverlay(mapped)
-    return true
-  }
-
-  const tryHandleNode = (node) => {
-    if (!node) return
-
-    // direct element
-    if (node.nodeType === 1) {
-      const el = node
-
-      // href/src on the element itself
-      const href = el.getAttribute?.('href')
-      const src = el.getAttribute?.('src')
-      if (href && tryHandleUrl(href)) {
-        try {
-          el.style.display = 'none'
-          el.style.visibility = 'hidden'
-          el.style.pointerEvents = 'none'
-        } catch {
-          // ignore
-        }
-      }
-      if (src && tryHandleUrl(src)) {
-        try {
-          el.style.display = 'none'
-          el.style.visibility = 'hidden'
-          el.style.pointerEvents = 'none'
-        } catch {
-          // ignore
-        }
-      }
-
-      // scan descendants for any href/src that contains herewallet request
-      const q = el.querySelectorAll?.(
-        'a[href*="herewallet.app/request/"], iframe[src*="herewallet.app/request/"], img[src*="herewallet.app/request/"], source[src*="herewallet.app/request/"]'
-      )
-      if (q && q.length) {
-        q.forEach((x) => {
-          const h = x.getAttribute?.('href')
-          const s = x.getAttribute?.('src')
-          if (h && tryHandleUrl(h)) {
-            try {
-              x.style.display = 'none'
-              x.style.visibility = 'hidden'
-              x.style.pointerEvents = 'none'
-            } catch { }
-          }
-          if (s && tryHandleUrl(s)) {
-            try {
-              x.style.display = 'none'
-              x.style.visibility = 'hidden'
-              x.style.pointerEvents = 'none'
-            } catch { }
-          }
-        })
-      }
-    }
-  }
-
-  // супер-важно: перехватываем setAttribute('src'/'href', ...) когда HERE вставляет iframe динамически
+function patchElementSrcHrefSetters() {
+  // intercept element.setAttribute('src'/'href', ...)
   try {
     const origSetAttr = Element.prototype.setAttribute
-    Element.prototype.setAttribute = function (name, value) {
-      try {
-        const n = String(name || '').toLowerCase()
-        if ((n === 'href' || n === 'src') && typeof value === 'string') {
-          if (tryHandleUrl(value)) {
-            // не даём реально установить src/href на herewallet request (чтобы iframe не загрузился)
-            return
+    if (!Element.prototype.__cc_patched_setAttribute) {
+      Element.prototype.setAttribute = function (name, value) {
+        try {
+          const n = String(name || '').toLowerCase()
+          if ((n === 'src' || n === 'href') && typeof value === 'string') {
+            if (handlePossibleHereUrl(value, `setAttribute(${n})`)) {
+              // block setting real herewallet url
+              return
+            }
           }
+        } catch {
+          // ignore
         }
-      } catch {
-        // ignore
+        return origSetAttr.call(this, name, value)
       }
-      return origSetAttr.call(this, name, value)
+      Element.prototype.__cc_patched_setAttribute = true
     }
   } catch {
     // ignore
   }
 
+  // intercept iframe.src property assignment (iframe.src = "https://my.herewallet.app/request/...")
   try {
-    const obs = new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        if (m.addedNodes && m.addedNodes.length) {
-          m.addedNodes.forEach((n) => tryHandleNode(n))
-        }
-      }
-    })
-    obs.observe(document.documentElement || document.body, { childList: true, subtree: true })
+    const desc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'src')
+    if (desc && desc.set && !HTMLIFrameElement.prototype.__cc_patched_iframe_src) {
+      Object.defineProperty(HTMLIFrameElement.prototype, 'src', {
+        get: desc.get,
+        set: function (value) {
+          if (typeof value === 'string' && handlePossibleHereUrl(value, 'iframe.src setter')) {
+            // block
+            return
+          }
+          return desc.set.call(this, value)
+        },
+        configurable: true,
+        enumerable: desc.enumerable,
+      })
+      HTMLIFrameElement.prototype.__cc_patched_iframe_src = true
+    }
+  } catch {
+    // ignore
+  }
 
-    // initial scan
-    tryHandleNode(document.documentElement)
+  // intercept anchor.href assignment (a.href = ...)
+  try {
+    const desc = Object.getOwnPropertyDescriptor(HTMLAnchorElement.prototype, 'href')
+    if (desc && desc.set && !HTMLAnchorElement.prototype.__cc_patched_anchor_href) {
+      Object.defineProperty(HTMLAnchorElement.prototype, 'href', {
+        get: desc.get,
+        set: function (value) {
+          if (typeof value === 'string' && handlePossibleHereUrl(value, 'a.href setter')) {
+            return
+          }
+          return desc.set.call(this, value)
+        },
+        configurable: true,
+        enumerable: desc.enumerable,
+      })
+      HTMLAnchorElement.prototype.__cc_patched_anchor_href = true
+    }
   } catch {
     // ignore
   }
 }
 
-patchOpensEarly()
-autoOpenHotWalletWhenHereRequestAppears()
+function watchDomForHereRequestUrls() {
+  const scanEl = (el) => {
+    if (!el || el.nodeType !== 1) return
+
+    const href = el.getAttribute?.('href')
+    const src = el.getAttribute?.('src')
+    if (href) handlePossibleHereUrl(href, 'DOM scan href')
+    if (src) handlePossibleHereUrl(src, 'DOM scan src')
+
+    const q = el.querySelectorAll?.('[href*="herewallet.app/request/"], [src*="herewallet.app/request/"]')
+    if (q && q.length) {
+      q.forEach((x) => {
+        const h = x.getAttribute?.('href')
+        const s = x.getAttribute?.('src')
+        if (h) handlePossibleHereUrl(h, 'DOM query href')
+        if (s) handlePossibleHereUrl(s, 'DOM query src')
+      })
+    }
+  }
+
+  try {
+    const obs = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        if (m.type === 'childList') {
+          m.addedNodes?.forEach((n) => scanEl(n))
+        } else if (m.type === 'attributes') {
+          const t = m.target
+          if (!t || t.nodeType !== 1) continue
+          const v = t.getAttribute?.(m.attributeName)
+          if (v) handlePossibleHereUrl(v, `attr:${m.attributeName}`)
+        }
+      }
+    })
+
+    obs.observe(document.documentElement || document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['src', 'href'],
+    })
+
+    // initial scan
+    scanEl(document.documentElement)
+  } catch {
+    // ignore
+  }
+}
+
+// install patches ASAP
+patchBrowserNav()
+patchElementSrcHrefSetters()
+watchDomForHereRequestUrls()
+
+// Telegram object may appear after start; poll a bit to patch openLink
+{
+  let tries = 0
+  const t = setInterval(() => {
+    tries += 1
+    patchTelegramOpenLinkWhenAvailable()
+    if (tries >= 40) clearInterval(t) // ~10s
+  }, 250)
+}
 
 function renderFatal(err) {
   try {
