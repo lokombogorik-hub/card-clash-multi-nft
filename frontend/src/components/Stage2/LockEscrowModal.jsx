@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../api.js";
 import { useWalletStore } from "../../store/useWalletStore";
+import { nearNftTokensForOwner } from "../../libs/nearNft.js";
 
 function getStoredToken() {
     try {
@@ -22,6 +23,7 @@ function short(s) {
 }
 
 const LS_MAP_PREFIX = "cc_stage2_deposit_map_v1:";
+const LS_NFT_CONTRACTS_V1 = "cc_stage2_nft_contracts_v1";
 
 function loadRowFromLS(cardKey) {
     try {
@@ -38,6 +40,32 @@ function saveRowToLS(cardKey, row) {
     try {
         localStorage.setItem(LS_MAP_PREFIX + cardKey, JSON.stringify(row));
     } catch { }
+}
+
+function loadSavedContracts() {
+    try {
+        const raw = localStorage.getItem(LS_NFT_CONTRACTS_V1);
+        if (!raw) return [];
+        const arr = JSON.parse(raw);
+        if (!Array.isArray(arr)) return [];
+        return arr.map((x) => String(x || "").trim()).filter(Boolean).slice(0, 12);
+    } catch {
+        return [];
+    }
+}
+
+function saveContracts(list) {
+    try {
+        localStorage.setItem(LS_NFT_CONTRACTS_V1, JSON.stringify(list));
+    } catch { }
+}
+
+function normalizeMediaUrl(media) {
+    const m = String(media || "").trim();
+    if (!m) return "";
+    if (m.startsWith("ipfs://")) return `https://ipfs.io/ipfs/${m.slice("ipfs://".length)}`;
+    if (m.startsWith("ar://")) return `https://arweave.net/${m.slice("ar://".length)}`;
+    return m;
 }
 
 export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck }) {
@@ -60,10 +88,26 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
 
     const [rows, setRows] = useState(() => deckKeys.map((k) => loadRowFromLS(k)));
 
+    // NFT picker state
+    const [savedContracts, setSavedContracts] = useState(() => loadSavedContracts());
+    const [nftContractId, setNftContractId] = useState(savedContracts?.[0] || "");
+    const [nftBusy, setNftBusy] = useState(false);
+    const [nftErr, setNftErr] = useState("");
+    const [nfts, setNfts] = useState([]);
+    const [activeSlot, setActiveSlot] = useState(0);
+
     useEffect(() => {
         setRows(deckKeys.map((k) => loadRowFromLS(k)));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [deckKeys.join("|")]);
+
+    useEffect(() => {
+        // keep activeSlot in [0..4]
+        if (!Array.isArray(deckKeys) || deckKeys.length === 0) return;
+        if (activeSlot < 0) setActiveSlot(0);
+        if (activeSlot > deckKeys.length - 1) setActiveSlot(deckKeys.length - 1);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [deckKeys.length]);
 
     const refreshMatch = async (id) => {
         const mid = (id || matchId || "").trim();
@@ -136,6 +180,92 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
         }
     };
 
+    const updateRow = (idx, patch) => {
+        setRows((prev) => {
+            const next = prev.slice();
+            next[idx] = { ...(next[idx] || { contractId: "", tokenId: "" }), ...(patch || {}) };
+            const key = deckKeys[idx];
+            if (key) saveRowToLS(key, next[idx]);
+            return next;
+        });
+    };
+
+    const pickNextSlot = () => {
+        // prefer first empty slot
+        for (let i = 0; i < rows.length; i++) {
+            const r = rows[i] || {};
+            if (!String(r.contractId || "").trim() || !String(r.tokenId || "").trim()) return i;
+        }
+        return activeSlot;
+    };
+
+    const onLoadNfts = async (contractIdParam) => {
+        const cid = String(contractIdParam || nftContractId || "").trim();
+        setNftErr("");
+        setNfts([]);
+
+        if (!connected || !walletAddress) {
+            setNftErr("Сначала подключи HOT Wallet (нужен accountId).");
+            return;
+        }
+        if (!cid) {
+            setNftErr("Укажи NFT contractId (коллекцию).");
+            return;
+        }
+
+        setNftBusy(true);
+        try {
+            const list = await nearNftTokensForOwner({
+                nftContractId: cid,
+                accountId: walletAddress,
+                fromIndex: "0",
+                limit: 60,
+            });
+
+            setNfts(
+                list.map((t) => ({
+                    contractId: cid,
+                    tokenId: t.token_id,
+                    metadata: t.metadata || null,
+                }))
+            );
+
+            // save to recent list
+            setSavedContracts((prev) => {
+                const next = [cid, ...(prev || [])].map((x) => String(x).trim()).filter(Boolean);
+                const uniq = [];
+                for (const x of next) if (!uniq.includes(x)) uniq.push(x);
+                const sliced = uniq.slice(0, 12);
+                saveContracts(sliced);
+                return sliced;
+            });
+        } catch (e) {
+            setNftErr(String(e?.message || e));
+        } finally {
+            setNftBusy(false);
+        }
+    };
+
+    const onSelectNft = (item) => {
+        const slot = pickNextSlot();
+        // avoid duplicates in 5 slots: if already selected elsewhere, replace there
+        const dupIdx = rows.findIndex(
+            (r) =>
+                String(r?.contractId || "").trim() === String(item.contractId || "").trim() &&
+                String(r?.tokenId || "").trim() === String(item.tokenId || "").trim()
+        );
+
+        if (dupIdx !== -1 && dupIdx !== slot) {
+            updateRow(dupIdx, { contractId: "", tokenId: "" });
+        }
+
+        updateRow(slot, { contractId: item.contractId, tokenId: item.tokenId });
+        setActiveSlot(slot);
+        try {
+            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
+        } catch { }
+    };
+
     const onLock = async () => {
         if (!canLock) return;
         setErr("");
@@ -174,6 +304,16 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
         }
     };
 
+    const selectedSet = useMemo(() => {
+        const s = new Set();
+        for (const r of rows || []) {
+            const c = String(r?.contractId || "").trim();
+            const t = String(r?.tokenId || "").trim();
+            if (c && t) s.add(`${c}::${t}`);
+        }
+        return s;
+    }, [rows]);
+
     if (!open) return null;
 
     return (
@@ -191,8 +331,8 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
         >
             <div
                 style={{
-                    width: "min(820px, 96vw)",
-                    maxHeight: "min(86vh, 820px)",
+                    width: "min(920px, 96vw)",
+                    maxHeight: "min(88vh, 920px)",
                     overflow: "auto",
                     borderRadius: 16,
                     border: "1px solid rgba(255,255,255,0.14)",
@@ -207,6 +347,12 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                         <div style={{ fontWeight: 900, fontSize: 16 }}>Stage2 • Lock 5 NFTs to Escrow</div>
                         <div style={{ opacity: 0.85, fontSize: 12, marginTop: 4 }}>
                             Escrow: <span style={{ fontFamily: "monospace" }}>{escrowContractId || "(not set)"}</span>
+                        </div>
+                        <div style={{ opacity: 0.85, fontSize: 12, marginTop: 4 }}>
+                            Wallet:{" "}
+                            <span style={{ fontFamily: "monospace" }}>
+                                {connected && walletAddress ? walletAddress : "(not connected)"}
+                            </span>
                         </div>
                     </div>
 
@@ -226,7 +372,7 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                     </button>
                 </div>
 
-                <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+                <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
                         <div
                             style={{
@@ -308,58 +454,240 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                         </button>
                     </div>
 
-                    <div style={{ display: "grid", gap: 8 }}>
-                        <div style={{ fontWeight: 900, fontSize: 13 }}>Lock 5 NFTs (contractId + tokenId)</div>
-                        <div style={{ fontSize: 12, opacity: 0.85 }}>
-                            Пока deck моковый — contractId/tokenId вводим вручную (свои реальные NFT на NEAR). Сохраняется локально.
-                        </div>
+                    {/* NFT picker */}
+                    <div style={{ display: "grid", gap: 10 }}>
+                        <div style={{ fontWeight: 900, fontSize: 13 }}>Pick your NFTs (from NEAR) → fill 5 slots</div>
 
                         <div style={{ display: "grid", gap: 8 }}>
-                            {deckKeys.map((k, idx) => (
-                                <div key={k} style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, alignItems: "center" }}>
-                                    <input
-                                        value={rows[idx]?.contractId || ""}
-                                        onChange={(e) => {
-                                            const next = rows.slice();
-                                            next[idx] = { ...(next[idx] || {}), contractId: e.target.value };
-                                            setRows(next);
-                                            saveRowToLS(k, next[idx]);
-                                        }}
-                                        placeholder="nft contract (e.g. coolcats.near)"
-                                        style={{
-                                            padding: "10px 10px",
-                                            borderRadius: 12,
-                                            border: "1px solid rgba(255,255,255,0.14)",
-                                            background: "rgba(0,0,0,0.35)",
-                                            color: "#fff",
-                                            outline: "none",
-                                            fontFamily: "monospace",
-                                        }}
-                                    />
-                                    <input
-                                        value={rows[idx]?.tokenId || ""}
-                                        onChange={(e) => {
-                                            const next = rows.slice();
-                                            next[idx] = { ...(next[idx] || {}), tokenId: e.target.value };
-                                            setRows(next);
-                                            saveRowToLS(k, next[idx]);
-                                        }}
-                                        placeholder="token_id"
-                                        style={{
-                                            padding: "10px 10px",
-                                            borderRadius: 12,
-                                            border: "1px solid rgba(255,255,255,0.14)",
-                                            background: "rgba(0,0,0,0.35)",
-                                            color: "#fff",
-                                            outline: "none",
-                                            fontFamily: "monospace",
-                                        }}
-                                    />
-                                    <div style={{ opacity: 0.8, fontSize: 12, fontFamily: "monospace" }}>#{idx + 1}</div>
-                                </div>
-                            ))}
-                        </div>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                                <input
+                                    value={nftContractId}
+                                    onChange={(e) => setNftContractId(e.target.value)}
+                                    placeholder="NFT contractId (collection) e.g. coolcats.near"
+                                    style={{
+                                        flex: "1 1 320px",
+                                        padding: "10px 10px",
+                                        borderRadius: 12,
+                                        border: "1px solid rgba(255,255,255,0.14)",
+                                        background: "rgba(0,0,0,0.35)",
+                                        color: "#fff",
+                                        outline: "none",
+                                        fontFamily: "monospace",
+                                    }}
+                                />
+                                <button
+                                    onClick={() => onLoadNfts()}
+                                    disabled={nftBusy || !String(nftContractId || "").trim()}
+                                    style={{
+                                        padding: "10px 12px",
+                                        borderRadius: 12,
+                                        background: "rgba(255,255,255,0.08)",
+                                        border: "1px solid rgba(255,255,255,0.12)",
+                                        color: "#fff",
+                                        fontWeight: 900,
+                                        opacity: nftBusy ? 0.8 : 1,
+                                    }}
+                                >
+                                    {nftBusy ? "Loading..." : "Load NFTs"}
+                                </button>
+                            </div>
 
+                            {savedContracts?.length ? (
+                                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                    {savedContracts.map((cid) => (
+                                        <button
+                                            key={cid}
+                                            onClick={() => {
+                                                setNftContractId(cid);
+                                                onLoadNfts(cid);
+                                            }}
+                                            disabled={nftBusy}
+                                            style={{
+                                                padding: "6px 10px",
+                                                borderRadius: 999,
+                                                background: "rgba(255,255,255,0.06)",
+                                                border: "1px solid rgba(255,255,255,0.12)",
+                                                color: "#fff",
+                                                fontFamily: "monospace",
+                                                fontSize: 12,
+                                                cursor: "pointer",
+                                                opacity: nftBusy ? 0.7 : 1,
+                                            }}
+                                            title="Load from recent"
+                                        >
+                                            {short(cid)}
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : null}
+
+                            {nftErr ? (
+                                <div style={{ padding: 10, borderRadius: 12, background: "rgba(120,20,20,0.75)", border: "1px solid rgba(255,255,255,0.12)", fontSize: 12 }}>
+                                    {nftErr}
+                                </div>
+                            ) : null}
+
+                            {/* slots */}
+                            <div style={{ display: "grid", gap: 8 }}>
+                                <div style={{ fontWeight: 900, fontSize: 13 }}>Slots (click to choose active)</div>
+                                <div style={{ display: "grid", gap: 8 }}>
+                                    {deckKeys.map((k, idx) => {
+                                        const r = rows[idx] || { contractId: "", tokenId: "" };
+                                        const isActive = idx === activeSlot;
+                                        return (
+                                            <div
+                                                key={k}
+                                                onClick={() => setActiveSlot(idx)}
+                                                style={{
+                                                    display: "grid",
+                                                    gridTemplateColumns: "auto 1fr auto",
+                                                    gap: 10,
+                                                    alignItems: "center",
+                                                    padding: 10,
+                                                    borderRadius: 12,
+                                                    border: isActive ? "1px solid rgba(124,58,237,0.75)" : "1px solid rgba(255,255,255,0.12)",
+                                                    background: isActive ? "rgba(124,58,237,0.14)" : "rgba(0,0,0,0.25)",
+                                                    cursor: "pointer",
+                                                }}
+                                            >
+                                                <div style={{ fontFamily: "monospace", opacity: 0.9 }}>#{idx + 1}</div>
+                                                <div style={{ minWidth: 0 }}>
+                                                    <div style={{ fontFamily: "monospace", fontSize: 12, opacity: 0.95, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                        {r.contractId ? r.contractId : "(empty)"} {r.tokenId ? ` • ${r.tokenId}` : ""}
+                                                    </div>
+                                                    <div style={{ fontSize: 11, opacity: 0.7 }}>
+                                                        Active slot: {isActive ? "yes" : "no"}
+                                                    </div>
+                                                </div>
+
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        updateRow(idx, { contractId: "", tokenId: "" });
+                                                    }}
+                                                    disabled={busy || nftBusy}
+                                                    style={{
+                                                        padding: "8px 10px",
+                                                        borderRadius: 10,
+                                                        background: "rgba(255,255,255,0.06)",
+                                                        border: "1px solid rgba(255,255,255,0.12)",
+                                                        color: "#fff",
+                                                        fontWeight: 900,
+                                                        cursor: "pointer",
+                                                        opacity: busy || nftBusy ? 0.7 : 1,
+                                                    }}
+                                                    title="Clear slot"
+                                                >
+                                                    Clear
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* NFT grid */}
+                            <div style={{ display: "grid", gap: 8 }}>
+                                <div style={{ fontWeight: 900, fontSize: 13 }}>
+                                    NFTs in collection:{" "}
+                                    <span style={{ fontFamily: "monospace" }}>
+                                        {String(nftContractId || "").trim() ? short(String(nftContractId).trim()) : "(not set)"}
+                                    </span>{" "}
+                                    • found:{" "}
+                                    <span style={{ fontFamily: "monospace" }}>{nfts.length}</span>
+                                </div>
+
+                                {nfts.length ? (
+                                    <div
+                                        style={{
+                                            display: "grid",
+                                            gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+                                            gap: 10,
+                                        }}
+                                    >
+                                        {nfts.map((it) => {
+                                            const media = normalizeMediaUrl(it?.metadata?.media);
+                                            const title = String(it?.metadata?.title || it?.tokenId || "");
+                                            const key = `${it.contractId}::${it.tokenId}`;
+                                            const selected = selectedSet.has(key);
+
+                                            return (
+                                                <button
+                                                    key={key}
+                                                    onClick={() => onSelectNft(it)}
+                                                    disabled={busy}
+                                                    style={{
+                                                        textAlign: "left",
+                                                        padding: 10,
+                                                        borderRadius: 14,
+                                                        border: selected ? "1px solid rgba(34,197,94,0.75)" : "1px solid rgba(255,255,255,0.12)",
+                                                        background: selected ? "rgba(34,197,94,0.12)" : "rgba(0,0,0,0.32)",
+                                                        color: "#fff",
+                                                        cursor: "pointer",
+                                                        opacity: busy ? 0.7 : 1,
+                                                        display: "grid",
+                                                        gap: 8,
+                                                    }}
+                                                    title={`Select ${it.contractId} #${it.tokenId}`}
+                                                >
+                                                    <div
+                                                        style={{
+                                                            width: "100%",
+                                                            aspectRatio: "1 / 1",
+                                                            borderRadius: 12,
+                                                            overflow: "hidden",
+                                                            background: "rgba(255,255,255,0.06)",
+                                                            border: "1px solid rgba(255,255,255,0.10)",
+                                                            display: "grid",
+                                                            placeItems: "center",
+                                                        }}
+                                                    >
+                                                        {media ? (
+                                                            <img
+                                                                src={media}
+                                                                alt=""
+                                                                draggable="false"
+                                                                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                                                                onError={(e) => {
+                                                                    try {
+                                                                        e.currentTarget.style.display = "none";
+                                                                    } catch { }
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <div style={{ fontFamily: "monospace", opacity: 0.65, fontSize: 12 }}>
+                                                                no media
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div style={{ minWidth: 0 }}>
+                                                        <div style={{ fontWeight: 900, fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                            {title || `Token ${it.tokenId}`}
+                                                        </div>
+                                                        <div style={{ fontFamily: "monospace", fontSize: 11, opacity: 0.75 }}>
+                                                            {it.tokenId}
+                                                        </div>
+                                                        <div style={{ fontSize: 11, opacity: 0.7 }}>
+                                                            fills slot #{(pickNextSlot() || 0) + 1}
+                                                        </div>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div style={{ fontSize: 12, opacity: 0.8 }}>
+                                        Нажми <b>Load NFTs</b> (контракт должен поддерживать <span style={{ fontFamily: "monospace" }}>nft_tokens_for_owner</span>).
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Lock */}
+                    <div style={{ display: "grid", gap: 8 }}>
                         <button
                             onClick={onLock}
                             disabled={!canLock || busy}
