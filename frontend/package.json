@@ -9,7 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@here-wallet/core": "^3.4.0",
     "@near-wallet-selector/core": "10.0.0",
     "@near-wallet-selector/here-wallet": "10.0.0",
     "@near-wallet-selector/modal-ui": "10.0.0",
