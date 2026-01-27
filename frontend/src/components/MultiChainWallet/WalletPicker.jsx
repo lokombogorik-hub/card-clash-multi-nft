@@ -1,61 +1,52 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useWalletStore } from "../../store/useWalletStore";
 
-function Tile({ title, subtitle, iconSrc, accent, badge, onClick, disabled }) {
+const ICON_V = 21;
+
+function WalletTile({ title, subtitle, icon, tag, disabled, onClick }) {
     return (
         <button
             onClick={onClick}
             disabled={disabled}
             style={{
                 width: "100%",
-                textAlign: "left",
-                padding: 14,
                 borderRadius: 18,
                 border: "1px solid rgba(255,255,255,0.12)",
                 background:
-                    `radial-gradient(110% 140% at 15% 20%, ${accent} 0%, rgba(0,0,0,0) 58%),` +
-                    `radial-gradient(110% 140% at 85% 85%, rgba(255,255,255,0.06) 0%, rgba(0,0,0,0) 60%),` +
-                    `linear-gradient(180deg, rgba(255,255,255,0.06), rgba(0,0,0,0.26)),` +
-                    `rgba(0,0,0,0.52)`,
+                    "radial-gradient(120% 120% at 12% 10%, rgba(120,200,255,0.12) 0%, rgba(0,0,0,0) 55%)," +
+                    "radial-gradient(120% 120% at 85% 85%, rgba(255,61,242,0.10) 0%, rgba(0,0,0,0) 60%)," +
+                    "rgba(10,10,14,0.86)",
                 color: "#fff",
+                padding: 14,
                 display: "grid",
-                gridTemplateColumns: "70px 1fr",
+                gridTemplateColumns: "60px 1fr auto",
                 gap: 12,
                 alignItems: "center",
                 cursor: disabled ? "not-allowed" : "pointer",
                 opacity: disabled ? 0.55 : 1,
-                boxShadow: "0 18px 70px rgba(0,0,0,0.55)",
-                backdropFilter: "blur(14px)",
-                WebkitBackdropFilter: "blur(14px)",
-                transition: "transform 140ms ease",
+                textAlign: "left",
+                boxShadow: "0 22px 90px rgba(0,0,0,0.55)",
             }}
-            onMouseDown={(e) => {
-                if (disabled) return;
-                e.currentTarget.style.transform = "translateY(1px) scale(0.995)";
-            }}
-            onMouseUp={(e) => (e.currentTarget.style.transform = "")}
-            onMouseLeave={(e) => (e.currentTarget.style.transform = "")}
         >
             <div
                 style={{
-                    width: 70,
-                    height: 70,
-                    borderRadius: 18,
+                    width: 60,
+                    height: 60,
+                    borderRadius: 16,
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    background: "rgba(255,255,255,0.06)",
                     display: "grid",
                     placeItems: "center",
-                    background: "rgba(255,255,255,0.05)",
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    boxShadow: `0 0 22px ${accent}`,
                     overflow: "hidden",
                 }}
             >
                 <img
-                    src={iconSrc}
+                    src={icon}
                     alt=""
                     draggable="false"
-                    style={{ width: 52, height: 52, display: "block" }}
+                    style={{ width: 44, height: 44, display: "block" }}
                     onError={(e) => {
-                        // fallback: hide broken icon to avoid ugly "broken image"
                         try {
                             e.currentTarget.style.display = "none";
                         } catch { }
@@ -63,33 +54,48 @@ function Tile({ title, subtitle, iconSrc, accent, badge, onClick, disabled }) {
                 />
             </div>
 
-            <div style={{ minWidth: 0, position: "relative" }}>
-                {badge ? (
-                    <div
-                        style={{
-                            position: "absolute",
-                            right: 0,
-                            top: 0,
-                            padding: "4px 8px",
-                            borderRadius: 999,
-                            fontSize: 11,
-                            fontWeight: 900,
-                            background: "rgba(0,0,0,0.45)",
-                            border: "1px solid rgba(255,255,255,0.14)",
-                            opacity: 0.9,
-                        }}
-                    >
-                        {badge}
+            <div style={{ minWidth: 0 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", minWidth: 0 }}>
+                    <div style={{ fontWeight: 950, fontSize: 14, letterSpacing: 0.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {title}
                     </div>
-                ) : null}
-
-                <div style={{ fontWeight: 950, fontSize: 14, letterSpacing: 0.2 }}>
-                    {title}
+                    {tag ? (
+                        <div
+                            style={{
+                                padding: "3px 8px",
+                                borderRadius: 999,
+                                fontSize: 11,
+                                fontWeight: 950,
+                                background: "rgba(0,0,0,0.45)",
+                                border: "1px solid rgba(255,255,255,0.14)",
+                                opacity: 0.92,
+                                whiteSpace: "nowrap",
+                            }}
+                        >
+                            {tag}
+                        </div>
+                    ) : null}
                 </div>
 
-                <div style={{ opacity: 0.85, fontSize: 12, marginTop: 6, lineHeight: 1.25 }}>
+                <div style={{ marginTop: 6, fontSize: 12, opacity: 0.82, lineHeight: 1.25 }}>
                     {subtitle}
                 </div>
+            </div>
+
+            <div
+                style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 12,
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    background: "rgba(255,255,255,0.06)",
+                    display: "grid",
+                    placeItems: "center",
+                    fontWeight: 900,
+                    opacity: 0.9,
+                }}
+            >
+                →
             </div>
         </button>
     );
@@ -98,9 +104,10 @@ function Tile({ title, subtitle, iconSrc, accent, badge, onClick, disabled }) {
 export default function WalletPicker({ open, onClose }) {
     const { nearNetworkId, status, connectHot } = useWalletStore();
     const [busy, setBusy] = useState(false);
+
     const subtitle = useMemo(() => {
         return nearNetworkId === "testnet"
-            ? "Testnet • быстрые проверки"
+            ? "Testnet • подключение и тестовые NFT"
             : "Mainnet • реальные NFT/NEAR";
     }, [nearNetworkId]);
 
@@ -117,116 +124,167 @@ export default function WalletPicker({ open, onClose }) {
         } catch { }
     };
 
-    if (!open) return null;
+    const onConnectHot = async () => {
+        haptic("light");
+        setBusy(true);
+        try {
+            await connectHot();
+            onClose?.();
+        } finally {
+            setBusy(false);
+        }
+    };
 
     return (
-        <div
-            style={{
-                position: "fixed",
-                inset: 0,
-                zIndex: 26000,
-                background:
-                    "radial-gradient(120% 120% at 25% 18%, rgba(120,200,255,0.16) 0%, rgba(0,0,0,0) 62%)," +
-                    "radial-gradient(120% 120% at 78% 86%, rgba(255,61,242,0.12) 0%, rgba(0,0,0,0) 62%)," +
-                    "rgba(0,0,0,0.74)",
-                display: "flex",
-                alignItems: "flex-end",
-                justifyContent: "center",
-                padding: 12,
-            }}
-            onClick={onClose}
-        >
-            <div
-                onClick={(e) => e.stopPropagation()}
-                style={{
-                    width: "min(620px, 96vw)",
-                    borderRadius: 24,
-                    border: "1px solid rgba(255,255,255,0.14)",
-                    background:
-                        "radial-gradient(140% 140% at 10% 0%, rgba(255,255,255,0.06) 0%, rgba(0,0,0,0) 55%)," +
-                        "rgba(10,10,14,0.94)",
-                    color: "#fff",
-                    padding: 14,
-                    boxShadow: "0 30px 120px rgba(0,0,0,0.78)",
-                    backdropFilter: "blur(18px)",
-                    WebkitBackdropFilter: "blur(18px)",
-                }}
-            >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                    <div>
-                        <div style={{ fontWeight: 950, fontSize: 16, letterSpacing: 0.2 }}>Connect wallet</div>
-                        <div style={{ fontSize: 12, opacity: 0.85, marginTop: 4 }}>
-                            {subtitle} • network: <span style={{ fontFamily: "monospace" }}>{nearNetworkId}</span>
-                        </div>
-                    </div>
-
-                    <button
-                        onClick={onClose}
+        <AnimatePresence>
+            {open ? (
+                <motion.div
+                    key="overlay"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    style={{
+                        position: "fixed",
+                        inset: 0,
+                        zIndex: 26000,
+                        background:
+                            "radial-gradient(120% 120% at 25% 18%, rgba(120,200,255,0.16) 0%, rgba(0,0,0,0) 62%)," +
+                            "radial-gradient(120% 120% at 78% 86%, rgba(255,61,242,0.12) 0%, rgba(0,0,0,0) 62%)," +
+                            "rgba(0,0,0,0.78)",
+                        display: "flex",
+                        alignItems: "flex-end",
+                        justifyContent: "center",
+                        padding: 12,
+                    }}
+                    onClick={() => {
+                        haptic("light");
+                        onClose?.();
+                    }}
+                >
+                    <motion.div
+                        key="sheet"
+                        initial={{ y: 26, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: 26, opacity: 0 }}
+                        transition={{ type: "spring", damping: 22, stiffness: 260 }}
+                        onClick={(e) => e.stopPropagation()}
                         style={{
-                            padding: "10px 12px",
-                            borderRadius: 14,
-                            background: "rgba(255,255,255,0.08)",
-                            border: "1px solid rgba(255,255,255,0.12)",
+                            width: "min(720px, 96vw)",
+                            borderRadius: 26,
+                            border: "1px solid rgba(255,255,255,0.14)",
+                            background:
+                                "radial-gradient(140% 140% at 10% 0%, rgba(255,255,255,0.06) 0%, rgba(0,0,0,0) 55%)," +
+                                "rgba(10,10,14,0.95)",
                             color: "#fff",
-                            fontWeight: 900,
+                            padding: 14,
+                            boxShadow: "0 30px 120px rgba(0,0,0,0.78)",
+                            backdropFilter: "blur(18px)",
+                            WebkitBackdropFilter: "blur(18px)",
                         }}
                     >
-                        ✕
-                    </button>
-                </div>
-
-                <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
-                    <Tile
-                        title="HOT Wallet (Telegram) — NEAR"
-                        subtitle="Подключение аккаунта key_k1.tg через HERE core authenticate() без AddKey."
-                        iconSrc="/ui/wallets/hotwallet.svg?v=10"
-                        accent="rgba(255, 61, 0, 0.22)"
-                        badge="HOT"
-                        disabled={busy}
-                        onClick={async () => {
-                            haptic("light");
-                            setBusy(true);
-                            try {
-                                await connectHot();
-                                onClose?.();
-                            } finally {
-                                setBusy(false);
-                            }
-                        }}
-                    />
-
-                    <Tile
-                        title="HERE Wallet"
-                        subtitle="Тот же провайдер. Если HOT установлен — открывается внутри Telegram."
-                        iconSrc="/ui/wallets/here.svg?v=4"
-                        accent="rgba(120,200,255,0.24)"
-                        badge="HERE"
-                        disabled={true}
-                        onClick={() => { }}
-                    />
-
-                    {status ? (
-                        <div
-                            style={{
-                                padding: 12,
-                                borderRadius: 16,
-                                background: "rgba(0,0,0,0.42)",
-                                border: "1px solid rgba(255,255,255,0.12)",
-                                fontSize: 12,
-                                opacity: 0.92,
-                                lineHeight: 1.35,
-                                wordBreak: "break-word",
-                            }}
-                        >
-                            {status}
+                        {/* handle */}
+                        <div style={{ display: "flex", justifyContent: "center", paddingTop: 2, paddingBottom: 10 }}>
+                            <div
+                                style={{
+                                    width: 56,
+                                    height: 5,
+                                    borderRadius: 999,
+                                    background: "rgba(255,255,255,0.18)",
+                                }}
+                            />
                         </div>
-                    ) : null}
 
-                    <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.35 }}>
-                        После подтверждения кошелька просто вернись в Telegram — аккаунт подтянется автоматически.
-                    </div>
-                </div>
-            </div>
-        </div>
+                        {/* header */}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                            <div style={{ minWidth: 0 }}>
+                                <div style={{ fontWeight: 950, fontSize: 16, letterSpacing: 0.2 }}>
+                                    Подключить кошелёк
+                                </div>
+                                <div style={{ fontSize: 12, opacity: 0.85, marginTop: 4 }}>
+                                    {subtitle} • network:{" "}
+                                    <span style={{ fontFamily: "monospace" }}>{nearNetworkId}</span>
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={() => {
+                                    haptic("light");
+                                    onClose?.();
+                                }}
+                                style={{
+                                    padding: "10px 12px",
+                                    borderRadius: 14,
+                                    background: "rgba(255,255,255,0.08)",
+                                    border: "1px solid rgba(255,255,255,0.12)",
+                                    color: "#fff",
+                                    fontWeight: 950,
+                                    cursor: "pointer",
+                                }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* wallets */}
+                        <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+                            <WalletTile
+                                title="HOT Wallet (Telegram)"
+                                subtitle="Откроет mini app @hot_wallet поверх игры. Подпись транзакций и доступ к NFT."
+                                icon={`/ui/wallets/hotwallet.svg?v=${ICON_V}`}
+                                tag="RECOMMENDED"
+                                disabled={busy}
+                                onClick={onConnectHot}
+                            />
+
+                            <div
+                                style={{
+                                    display: "grid",
+                                    gridTemplateColumns: "1fr 1fr",
+                                    gap: 10,
+                                }}
+                            >
+                                <WalletTile
+                                    title="HERE Wallet"
+                                    subtitle="Отключено в этой сборке (чтобы не уводило в браузер/QR)."
+                                    icon={`/ui/wallets/here.svg?v=${ICON_V}`}
+                                    tag="DISABLED"
+                                    disabled={true}
+                                    onClick={() => { }}
+                                />
+                                <WalletTile
+                                    title="Other wallets"
+                                    subtitle="Будет позже (кошельки вне Telegram)."
+                                    icon={`/ui/wallets/near.svg?v=${ICON_V}`}
+                                    tag="SOON"
+                                    disabled={true}
+                                    onClick={() => { }}
+                                />
+                            </div>
+
+                            {status ? (
+                                <div
+                                    style={{
+                                        padding: 12,
+                                        borderRadius: 16,
+                                        background: "rgba(0,0,0,0.42)",
+                                        border: "1px solid rgba(255,255,255,0.12)",
+                                        fontSize: 12,
+                                        opacity: 0.92,
+                                        lineHeight: 1.35,
+                                        wordBreak: "break-word",
+                                    }}
+                                >
+                                    {status}
+                                </div>
+                            ) : null}
+
+                            <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.35 }}>
+                                После подтверждения в HOT Wallet просто вернись в игру — аккаунт и баланс подтянутся автоматически.
+                            </div>
+                        </div>
+                    </motion.div>
+                </motion.div>
+            ) : null}
+        </AnimatePresence>
     );
 }

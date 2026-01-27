@@ -64,9 +64,9 @@ export default function WalletConnector() {
         }, 900);
     };
 
-    const haptic = () => {
+    const haptic = (kind = "light") => {
         try {
-            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
+            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(kind);
         } catch { }
     };
 
@@ -77,14 +77,14 @@ export default function WalletConnector() {
     };
 
     const onOpenPicker = () => {
-        haptic();
+        haptic("light");
         setErr("");
         setPickerOpen(true);
         startAutoRestorePolling();
     };
 
     const onDisconnect = async () => {
-        haptic();
+        haptic("light");
         setErr("");
         setLoading(true);
         try {
@@ -115,7 +115,7 @@ export default function WalletConnector() {
                             border: "1px solid rgba(255,255,255,0.15)",
                             background: "linear-gradient(90deg,#2563eb,#7c3aed)",
                             color: "#fff",
-                            fontWeight: 800,
+                            fontWeight: 900,
                             cursor: loading ? "not-allowed" : "pointer",
                             opacity: loading ? 0.8 : 1,
                         }}
@@ -157,7 +157,11 @@ export default function WalletConnector() {
                 </div>
             ) : (
                 <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
-                    <div
+                    <button
+                        onClick={() => {
+                            haptic("light");
+                            onOpenPicker();
+                        }}
                         style={{
                             display: "flex",
                             gap: 8,
@@ -168,7 +172,9 @@ export default function WalletConnector() {
                             border: "1px solid rgba(255,255,255,0.12)",
                             color: "#fff",
                             backdropFilter: "blur(8px)",
+                            cursor: "pointer",
                         }}
+                        title="Wallet"
                     >
                         <div
                             style={{
@@ -176,7 +182,7 @@ export default function WalletConnector() {
                                 borderRadius: 10,
                                 background: "#0b0b0b",
                                 border: "1px solid rgba(255,255,255,0.12)",
-                                fontWeight: 700,
+                                fontWeight: 800,
                                 whiteSpace: "nowrap",
                             }}
                             title="Баланс"
@@ -199,7 +205,11 @@ export default function WalletConnector() {
                         </div>
 
                         <button
-                            onClick={onDisconnect}
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                onDisconnect();
+                            }}
                             disabled={loading}
                             style={{
                                 padding: "8px 10px",
@@ -209,12 +219,13 @@ export default function WalletConnector() {
                                 color: "#fff",
                                 cursor: loading ? "not-allowed" : "pointer",
                                 opacity: loading ? 0.8 : 1,
+                                fontWeight: 900,
                             }}
                             title="Отключить"
                         >
                             {loading ? "..." : "⎋"}
                         </button>
-                    </div>
+                    </button>
                 </div>
             )}
         </div>
