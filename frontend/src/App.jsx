@@ -54,18 +54,6 @@ function getStoredToken() {
 }
 
 export default function App() {
-    // DEBUG overlay (показываем env переменные и ошибки)
-    const [debugVisible, setDebugVisible] = useState(true);
-
-    const debugInfo = {
-        botId: import.meta.env.VITE_TG_BOT_ID || '(ПУСТО!)',
-        network: import.meta.env.VITE_NEAR_NETWORK_ID || '(ПУСТО!)',
-        escrow: import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || '(ПУСТО!)',
-        apiBase: import.meta.env.VITE_API_BASE_URL || '(ПУСТО!)',
-        isTelegram: !!window.Telegram?.WebApp,
-        telegramVersion: window.Telegram?.WebApp?.version || 'N/A',
-    };
-
     const [screen, setScreen] = useState("home");
     const isLandscape = useIsLandscape();
 
@@ -241,87 +229,6 @@ export default function App() {
         () => ({ title: "Digitall Bunny Турнир", subtitle: "Ends in 3d 12h", progress: 0.62 }),
         []
     );
-
-    // DEBUG overlay
-    if (debugVisible) {
-        return (
-            <div style={{
-                position: 'fixed',
-                inset: 0,
-                zIndex: 999999,
-                background: 'rgba(139, 0, 0, 0.95)',
-                color: '#fff',
-                padding: 20,
-                overflow: 'auto',
-                fontFamily: 'monospace',
-                fontSize: 12,
-                lineHeight: 1.5,
-            }}>
-                <div style={{ fontWeight: 900, fontSize: 16, marginBottom: 10 }}>
-                    DEBUG MODE (Card Clash)
-                </div>
-
-                <div style={{ marginBottom: 10 }}>
-                    <strong>ENV переменные:</strong>
-                </div>
-
-                {Object.entries(debugInfo).map(([key, val]) => (
-                    <div key={key} style={{ marginBottom: 6 }}>
-                        <span style={{ opacity: 0.7 }}>{key}:</span>{' '}
-                        <span style={{
-                            color: String(val).includes('ПУСТО') ? '#ff6b6b' : '#51cf66',
-                            fontWeight: 900,
-                        }}>
-                            {String(val)}
-                        </span>
-                    </div>
-                ))}
-
-                <div style={{ marginTop: 20, marginBottom: 10 }}>
-                    <strong>Инструкция:</strong>
-                </div>
-                <ol style={{ paddingLeft: 20, lineHeight: 1.6 }}>
-                    <li>Проверь, что <code>botId</code> НЕ пустой</li>
-                    <li>Если пустой — добавь в Vercel Environment Variables:
-                        <pre style={{
-                            background: 'rgba(0,0,0,0.4)',
-                            padding: 8,
-                            borderRadius: 6,
-                            marginTop: 6,
-                            fontSize: 11,
-                        }}>
-                            {'VITE_TG_BOT_ID=Cardclashbot/app\n'}
-                            {'VITE_NEAR_NETWORK_ID=testnet\n'}
-                            {'VITE_NEAR_ESCROW_CONTRACT_ID=cardclash-test.testnet'}
-                        </pre>
-                    </li>
-                    <li>Redeploy в Vercel</li>
-                    <li>Закрой бота полностью (свайп вверх на iOS / свайп вправо на Android)</li>
-                    <li>Открой заново</li>
-                </ol>
-
-                <button
-                    onClick={() => setDebugVisible(false)}
-                    style={{
-                        marginTop: 20,
-                        padding: '12px 16px',
-                        borderRadius: 12,
-                        background: '#fff',
-                        color: '#000',
-                        border: 'none',
-                        fontWeight: 900,
-                        cursor: 'pointer',
-                    }}
-                >
-                    Закрыть DEBUG (продолжить игру)
-                </button>
-
-                <div style={{ marginTop: 20, fontSize: 10, opacity: 0.7 }}>
-                    Если после Redeploy всё равно (ПУСТО!) — значит Vercel не подхватил env. Тогда удали этот DEBUG код и добавь хардкод botId прямо в код (я дам инструкцию).
-                </div>
-            </div>
-        );
-    }
 
     if (screen === "game") {
         return (
