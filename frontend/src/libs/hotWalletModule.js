@@ -2,8 +2,9 @@ const HOT_WALLET_ID = "hot-wallet";
 const HOT_WALLET_URL = "https://t.me/hot_wallet/app";
 
 export function setupHotWallet() {
-    return async ({ options, store, emitter }) => {
-        let accountId = "";
+    return async () => {
+        let _emitter;
+        let _accountId = "";
 
         const getStoredAccountId = () => {
             try {
@@ -19,7 +20,12 @@ export function setupHotWallet() {
             } catch { }
         };
 
-        return {
+        const getAccounts = async () => {
+            const acc = _accountId || getStoredAccountId();
+            return acc ? [{ accountId: acc }] : [];
+        };
+
+        const wallet = {
             id: HOT_WALLET_ID,
             type: "instant-link",
             metadata: {
@@ -30,20 +36,20 @@ export function setupHotWallet() {
                 available: true,
             },
 
-            // ВАЖНО: метод init обязателен для wallet-selector
-            async init() {
-                // При инициализации подтягиваем accountId из LS
-                accountId = getStoredAccountId();
+            init: async (config) => {
+                _emitter = config.emitter;
+                _accountId = getStoredAccountId();
 
-                // Если есть сохранённый аккаунт — уведомляем selector
-                if (accountId) {
-                    emitter.emit("accountsChanged", {
-                        accounts: [{ accountId }],
+                if (_accountId) {
+                    _emitter.emit("accountsChanged", {
+                        accounts: [{ accountId: _accountId }],
                     });
                 }
+
+                return wallet;
             },
 
-            async connect() {
+            connect: async () => {
                 const tg = window.Telegram?.WebApp;
                 if (!tg) {
                     throw new Error("Открой игру через @Cardclashbot в Telegram");
@@ -78,11 +84,13 @@ export function setupHotWallet() {
                         if (acc) {
                             resolved = true;
                             cleanup();
-                            accountId = acc;
+                            _accountId = acc;
 
-                            emitter.emit("accountsChanged", {
-                                accounts: [{ accountId: acc }],
-                            });
+                            if (_emitter) {
+                                _emitter.emit("accountsChanged", {
+                                    accounts: [{ accountId: acc }],
+                                });
+                            }
 
                             resolve([{ accountId: acc }]);
                             return;
@@ -91,7 +99,7 @@ export function setupHotWallet() {
                         if (Date.now() - startTime > 30000) {
                             resolved = true;
                             cleanup();
-                            reject(new Error("HOT Wallet не вернул accountId за 30 сек. Попробуй ещё раз."));
+                            reject(new Error("HOT Wallet не вернул accountId за 30 сек."));
                         }
                     };
 
@@ -110,28 +118,36 @@ export function setupHotWallet() {
                 });
             },
 
-            async disconnect() {
-                accountId = "";
+            disconnect: async () => {
+                _accountId = "";
                 setStoredAccountId("");
-                emitter.emit("accountsChanged", { accounts: [] });
+
+                if (_emitter) {
+                    _emitter.emit("accountsChanged", { accounts: [] });
+                }
             },
 
-            async getAccounts() {
-                const acc = accountId || getStoredAccountId();
-                return acc ? [{ accountId: acc }] : [];
+            getAccounts,
+
+            isSignedIn: async () => {
+                const accounts = await getAccounts();
+                return accounts.length > 0;
             },
 
-            async isSignedIn() {
-                const acc = accountId || getStoredAccountId();
-                return !!acc;
+            signIn: async () => {
+                return await wallet.connect();
             },
 
-            async signAndSendTransaction({ receiverId, actions }) {
+            signOut: async () => {
+                return await wallet.disconnect();
+            },
+
+            signAndSendTransaction: async ({ receiverId, actions }) => {
                 const tg = window.Telegram?.WebApp;
                 if (!tg) throw new Error("Открой игру через Telegram");
 
-                const acc = accountId || getStoredAccountId();
-                if (!acc) throw new Error("Не подключен аккаунт. Подключи HOT Wallet.");
+                const acc = _accountId || getStoredAccountId();
+                if (!acc) throw new Error("Не подключен аккаунт.");
 
                 try {
                     tg.expand?.();
@@ -180,7 +196,7 @@ export function setupHotWallet() {
                         if (Date.now() - startTime > 30000) {
                             resolved = true;
                             cleanup();
-                            reject(new Error("HOT Wallet sign timeout (30s)"));
+                            reject(new Error("HOT Wallet sign timeout"));
                         }
                     };
 
@@ -199,14 +215,16 @@ export function setupHotWallet() {
                 });
             },
 
-            async signAndSendTransactions({ transactions }) {
+            signAndSendTransactions: async ({ transactions }) => {
                 const results = [];
                 for (const tx of transactions) {
-                    const result = await this.signAndSendTransaction(tx);
+                    const result = await wallet.signAndSendTransaction(tx);
                     results.push(result);
                 }
                 return results;
             },
         };
+
+        return wallet;
     };
 }
