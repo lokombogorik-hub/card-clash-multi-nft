@@ -1,6 +1,28 @@
 const HOT_WALLET_ID = "hot-wallet";
 const HOT_WALLET_URL = "https://t.me/hot_wallet/app";
 
+// Глобальный стек ошибок (для UI дебага)
+window.__HOT_WALLET_ERRORS__ = [];
+
+function logError(step, error) {
+    const msg = {
+        step,
+        message: error?.message || String(error),
+        stack: error?.stack || "",
+        time: new Date().toISOString(),
+    };
+
+    console.error(`[HOT ERROR] ${step}:`, error);
+
+    if (!window.__HOT_WALLET_ERRORS__) window.__HOT_WALLET_ERRORS__ = [];
+    window.__HOT_WALLET_ERRORS__.push(msg);
+
+    // Keep only last 5 errors
+    if (window.__HOT_WALLET_ERRORS__.length > 5) {
+        window.__HOT_WALLET_ERRORS__.shift();
+    }
+}
+
 export function setupHotWallet() {
     return async () => {
         let _emitter;
@@ -27,7 +49,7 @@ export function setupHotWallet() {
 
         const wallet = {
             id: HOT_WALLET_ID,
-            type: "injected", // ВАЖНО: меняем с "instant-link" на "injected"
+            type: "injected",
             metadata: {
                 name: "HOT Wallet",
                 description: "Telegram NEAR Wallet",
@@ -37,85 +59,113 @@ export function setupHotWallet() {
             },
 
             init: async (config) => {
-                _emitter = config.emitter;
-                _accountId = getStoredAccountId();
+                try {
+                    _emitter = config.emitter;
+                    _accountId = getStoredAccountId();
 
-                if (_accountId) {
-                    _emitter.emit("accountsChanged", {
-                        accounts: [{ accountId: _accountId }],
-                    });
+                    if (_accountId) {
+                        _emitter.emit("accountsChanged", {
+                            accounts: [{ accountId: _accountId }],
+                        });
+                    }
+
+                    console.log("[HOT] Init OK, accountId:", _accountId || "(empty)");
+                    return wallet;
+                } catch (err) {
+                    logError("init", err);
+                    throw err;
                 }
-
-                return wallet;
             },
 
             connect: async () => {
-                const tg = window.Telegram?.WebApp;
-                if (!tg) {
-                    throw new Error("Открой игру через @Cardclashbot в Telegram");
-                }
-
-                const botId = import.meta.env.VITE_TG_BOT_ID || "";
-                const networkId = (import.meta.env.VITE_NEAR_NETWORK_ID || "testnet").toLowerCase();
-
-                const payload = `auth_${encodeURIComponent(botId)}_${networkId}`;
-                const url = `${HOT_WALLET_URL}?startapp=${payload}`;
-
                 try {
-                    tg.expand?.();
-                } catch { }
+                    const tg = window.Telegram?.WebApp;
+                    if (!tg) {
+                        throw new Error("Открой игру через @Cardclashbot в Telegram (не в браузере)");
+                    }
 
-                if (typeof tg.openTelegramLink === "function") {
-                    tg.openTelegramLink(url);
-                } else if (typeof tg.openLink === "function") {
-                    tg.openLink(url);
-                } else {
-                    throw new Error("Telegram WebApp API недоступен");
-                }
+                    const botId = (import.meta.env.VITE_TG_BOT_ID || "").trim();
+                    const networkId = (import.meta.env.VITE_NEAR_NETWORK_ID || "testnet").toLowerCase();
 
-                return new Promise((resolve, reject) => {
-                    let resolved = false;
-                    const startTime = Date.now();
+                    console.log("[HOT] connect() called");
+                    console.log("[HOT] botId:", botId);
+                    console.log("[HOT] networkId:", networkId);
 
-                    const checkAccount = () => {
-                        if (resolved) return;
+                    if (!botId) {
+                        throw new Error("VITE_TG_BOT_ID пустой! Проверь Vercel env variables.");
+                    }
 
-                        const acc = getStoredAccountId();
-                        if (acc) {
-                            resolved = true;
-                            cleanup();
-                            _accountId = acc;
+                    const payload = `auth_${encodeURIComponent(botId)}_${networkId}`;
+                    const url = `${HOT_WALLET_URL}?startapp=${payload}`;
 
-                            if (_emitter) {
-                                _emitter.emit("accountsChanged", {
-                                    accounts: [{ accountId: acc }],
-                                });
+                    console.log("[HOT] Opening URL:", url);
+
+                    try {
+                        tg.expand?.();
+                    } catch { }
+
+                    if (typeof tg.openTelegramLink === "function") {
+                        tg.openTelegramLink(url);
+                    } else if (typeof tg.openLink === "function") {
+                        tg.openLink(url);
+                    } else {
+                        throw new Error("Telegram WebApp API недоступен (нет openTelegramLink/openLink)");
+                    }
+
+                    return new Promise((resolve, reject) => {
+                        let resolved = false;
+                        const startTime = Date.now();
+
+                        const checkAccount = () => {
+                            if (resolved) return;
+
+                            const acc = getStoredAccountId();
+                            if (acc) {
+                                resolved = true;
+                                cleanup();
+                                _accountId = acc;
+
+                                console.log("[HOT] Account connected:", acc);
+
+                                if (_emitter) {
+                                    _emitter.emit("accountsChanged", {
+                                        accounts: [{ accountId: acc }],
+                                    });
+                                }
+
+                                resolve([{ accountId: acc }]);
+                                return;
                             }
 
-                            resolve([{ accountId: acc }]);
-                            return;
-                        }
+                            if (Date.now() - startTime > 30000) {
+                                resolved = true;
+                                cleanup();
+                                const err = new Error("HOT Wallet не вернул accountId за 30 сек.");
+                                logError("connect timeout", err);
+                                reject(err);
+                            }
+                        };
 
-                        if (Date.now() - startTime > 30000) {
-                            resolved = true;
-                            cleanup();
-                            reject(new Error("HOT Wallet не вернул accountId за 30 сек."));
-                        }
-                    };
+                        const interval = setInterval(checkAccount, 500);
 
-                    const interval = setInterval(checkAccount, 500);
+                        const onVisibilityChange = () => {
+                            if (!document.hidden) {
+                                console.log("[HOT] App returned to foreground, checking account...");
+                                setTimeout(checkAccount, 300);
+                            }
+                        };
 
-                    const onVisibilityChange = () => {
-                        if (!document.hidden) setTimeout(checkAccount, 300);
-                    };
+                        const cleanup = () => {
+                            clearInterval(interval);
+                            document.removeEventListener("visibilitychange", onVisibilityChange);
+                        };
 
-                    const cleanup = () => {
-                        clearInterval(interval);
-                        document.removeEventListener("visibilitychange", onVisibilityChange);
-                    };
-
-                    document.addEventListener("visibilitychange", onVisibilityChange);
-                });
+                        document.addEventListener("visibilitychange", onVisibilityChange);
+                    });
+                } catch (err) {
+                    logError("connect", err);
+                    throw err;
+                }
             },
 
             disconnect: async () => {
@@ -143,76 +193,92 @@ export function setupHotWallet() {
             },
 
             signAndSendTransaction: async ({ receiverId, actions }) => {
-                const tg = window.Telegram?.WebApp;
-                if (!tg) throw new Error("Открой игру через Telegram");
-
-                const acc = _accountId || getStoredAccountId();
-                if (!acc) throw new Error("Не подключен аккаунт.");
-
                 try {
-                    tg.expand?.();
-                } catch { }
+                    const tg = window.Telegram?.WebApp;
+                    if (!tg) throw new Error("Открой игру через Telegram");
 
-                const botId = import.meta.env.VITE_TG_BOT_ID || "";
-                const txData = { receiverId, actions, signerId: acc };
-                const txPayload = encodeURIComponent(btoa(JSON.stringify(txData)));
-                const payload = `sign_${encodeURIComponent(botId)}_${txPayload}`;
-                const url = `${HOT_WALLET_URL}?startapp=${payload}`;
+                    const acc = _accountId || getStoredAccountId();
+                    if (!acc) throw new Error("Не подключен аккаунт.");
 
-                if (typeof tg.openTelegramLink === "function") {
-                    tg.openTelegramLink(url);
-                } else if (typeof tg.openLink === "function") {
-                    tg.openLink(url);
-                } else {
-                    throw new Error("Telegram WebApp API недоступен");
-                }
+                    try {
+                        tg.expand?.();
+                    } catch { }
 
-                return new Promise((resolve, reject) => {
-                    let resolved = false;
-                    const startTime = Date.now();
+                    const botId = (import.meta.env.VITE_TG_BOT_ID || "").trim();
+                    if (!botId) throw new Error("VITE_TG_BOT_ID не задан");
 
-                    const checkTxHash = () => {
-                        if (resolved) return;
+                    const txData = { receiverId, actions, signerId: acc };
+                    const txPayload = encodeURIComponent(btoa(JSON.stringify(txData)));
+                    const payload = `sign_${encodeURIComponent(botId)}_${txPayload}`;
+                    const url = `${HOT_WALLET_URL}?startapp=${payload}`;
 
-                        try {
-                            const u = new URL(window.location.href);
-                            const txHash = u.searchParams.get("tx_hash") || u.searchParams.get("txHash") || "";
-                            if (txHash) {
+                    console.log("[HOT] Signing tx, URL:", url);
+
+                    if (typeof tg.openTelegramLink === "function") {
+                        tg.openTelegramLink(url);
+                    } else if (typeof tg.openLink === "function") {
+                        tg.openLink(url);
+                    } else {
+                        throw new Error("Telegram WebApp API недоступен");
+                    }
+
+                    return new Promise((resolve, reject) => {
+                        let resolved = false;
+                        const startTime = Date.now();
+
+                        const checkTxHash = () => {
+                            if (resolved) return;
+
+                            try {
+                                const u = new URL(window.location.href);
+                                const txHash = u.searchParams.get("tx_hash") || u.searchParams.get("txHash") || "";
+                                if (txHash) {
+                                    resolved = true;
+                                    cleanup();
+
+                                    u.searchParams.delete("tx_hash");
+                                    u.searchParams.delete("txHash");
+                                    window.history.replaceState({}, "", u.toString());
+
+                                    console.log("[HOT] Transaction signed, txHash:", txHash);
+
+                                    resolve({
+                                        transaction: { hash: txHash },
+                                        transaction_outcome: { id: txHash },
+                                    });
+                                    return;
+                                }
+                            } catch { }
+
+                            if (Date.now() - startTime > 30000) {
                                 resolved = true;
                                 cleanup();
-
-                                u.searchParams.delete("tx_hash");
-                                u.searchParams.delete("txHash");
-                                window.history.replaceState({}, "", u.toString());
-
-                                resolve({
-                                    transaction: { hash: txHash },
-                                    transaction_outcome: { id: txHash },
-                                });
-                                return;
+                                const err = new Error("HOT Wallet sign timeout");
+                                logError("sign timeout", err);
+                                reject(err);
                             }
-                        } catch { }
+                        };
 
-                        if (Date.now() - startTime > 30000) {
-                            resolved = true;
-                            cleanup();
-                            reject(new Error("HOT Wallet sign timeout"));
-                        }
-                    };
+                        const interval = setInterval(checkTxHash, 500);
 
-                    const interval = setInterval(checkTxHash, 500);
+                        const onVisibilityChange = () => {
+                            if (!document.hidden) {
+                                console.log("[HOT] App returned, checking tx...");
+                                setTimeout(checkTxHash, 300);
+                            }
+                        };
 
-                    const onVisibilityChange = () => {
-                        if (!document.hidden) setTimeout(checkTxHash, 300);
-                    };
+                        const cleanup = () => {
+                            clearInterval(interval);
+                            document.removeEventListener("visibilitychange", onVisibilityChange);
+                        };
 
-                    const cleanup = () => {
-                        clearInterval(interval);
-                        document.removeEventListener("visibilitychange", onVisibilityChange);
-                    };
-
-                    document.addEventListener("visibilitychange", onVisibilityChange);
-                });
+                        document.addEventListener("visibilitychange", onVisibilityChange);
+                    });
+                } catch (err) {
+                    logError("signAndSendTransaction", err);
+                    throw err;
+                }
             },
 
             signAndSendTransactions: async ({ transactions }) => {
