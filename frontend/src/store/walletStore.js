@@ -1,4 +1,4 @@
-import { hereAuthenticate, hereSignAndSendTransaction } from "../libs/here";
+import { hotWalletConnect, hotWalletSignAndSendTransaction } from "../libs/hotWallet";
 
 const LS_NEAR_ACCOUNT_ID = "cc_near_account_id";
 
@@ -97,10 +97,10 @@ function restoreFromStorage() {
 }
 
 async function connectHot() {
-    setState({ status: "Opening HOT Wallet…" });
+    setState({ status: "Opening HOT Wallet mini app…" });
 
     try {
-        const { accountId } = await hereAuthenticate();
+        const { accountId } = await hotWalletConnect();
         if (!accountId) {
             setState({ status: "HOT connected, but accountId missing" });
             return;
@@ -139,7 +139,7 @@ function extractTxHash(outcome) {
 async function signAndSendTransaction({ receiverId, actions }) {
     if (!receiverId) throw new Error("receiverId is required");
     if (!actions || !actions.length) throw new Error("actions are required");
-    return await hereSignAndSendTransaction({ receiverId, actions });
+    return await hotWalletSignAndSendTransaction({ receiverId, actions });
 }
 
 async function nftTransferCall({ nftContractId, tokenId, matchId, side, playerA, playerB, receiverId }) {
