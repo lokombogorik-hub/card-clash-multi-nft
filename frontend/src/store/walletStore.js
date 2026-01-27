@@ -97,18 +97,30 @@ function restoreFromStorage() {
 }
 
 async function connectHot() {
-    setState({ status: "Opening HOT Wallet mini app…" });
+    setState({ status: "Opening HOT Wallet…" });
 
     try {
+        console.log("[walletStore] connectHot: calling hotWalletConnect()");
         const { accountId } = await hotWalletConnect();
+
+        console.log("[walletStore] connectHot: received accountId:", accountId);
+
         if (!accountId) {
-            setState({ status: "HOT connected, but accountId missing" });
+            setState({ status: "HOT Wallet вернул пустой accountId. Попробуй ещё раз." });
             return;
         }
+
         applyAccount(accountId);
         setState({ status: "" });
     } catch (e) {
-        setState({ status: `HOT connect failed: ${String(e?.message || e)}` });
+        console.error("[walletStore] connectHot failed:", e);
+
+        const errMsg = e?.message || String(e);
+        const stack = e?.stack || "";
+
+        setState({
+            status: `HOT connect failed: ${errMsg}${stack ? `\n\nStack:\n${stack.slice(0, 300)}` : ""}`
+        });
     }
 }
 
