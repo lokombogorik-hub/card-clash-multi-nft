@@ -32,17 +32,63 @@ async function waitForTelegram(maxWaitMs = 5000) {
 }
 
 /**
- * Подключение HOT Wallet через Telegram Mini App deep link.
- * HOT вернёт accountId через WebApp callback.
+ * Проверяем URL на наличие accountId (HOT возвращает через query params)
+ */
+function extractAccountIdFromUrl() {
+    try {
+        const u = new URL(window.location.href);
+
+        // HOT может вернуть: ?accountId=xxx или ?account_id=xxx или ?near_account_id=xxx
+        const accountId =
+            u.searchParams.get("accountId") ||
+            u.searchParams.get("account_id") ||
+            u.searchParams.get("near_account_id") ||
+            u.searchParams.get("nearAccountId") ||
+            "";
+
+        if (accountId) {
+            // очищаем URL от query params (чтобы не мешали при следующем коннекте)
+            u.searchParams.delete("accountId");
+            u.searchParams.delete("account_id");
+            u.searchParams.delete("near_account_id");
+            u.searchParams.delete("nearAccountId");
+            window.history.replaceState({}, "", u.toString());
+        }
+
+        return accountId.trim();
+    } catch {
+        return "";
+    }
+}
+
+/**
+ * Подключение HOT Wallet через Telegram Mini App.
+ * После возврата из HOT читаем accountId из URL или LS.
  */
 export async function hotWalletConnect() {
     if (!botId) throw new Error("VITE_TG_BOT_ID is missing (expected Cardclashbot/app)");
 
     const tg = await waitForTelegram();
 
+    // Сначала проверяем, может уже вернулись из HOT (accountId в URL)
+    const urlAccountId = extractAccountIdFromUrl();
+    if (urlAccountId) {
+        setStoredAccountId(urlAccountId);
+        return { accountId: urlAccountId };
+    }
+
+    // Проверяем LS (может HOT записал напрямую)
+    const lsAccountId = getStoredAccountId();
+    if (lsAccountId) {
+        return { accountId: lsAccountId };
+    }
+
     // Формируем payload для HOT: connect_<yourBotId>_<network>
     const payload = `connect_${encodeURIComponent(botId)}_${networkId}`;
-    const url = `https://t.me/${hotWalletBot}/app?startapp=${payload}`;
+
+    // ВАЖНО: добавляем return_url чтобы HOT вернул пользователя обратно в игру с accountId
+    const returnUrl = encodeURIComponent(window.location.href);
+    const url = `https://t.me/${hotWalletBot}/app?startapp=${payload}&return_url=${returnUrl}`;
 
     try {
         tg.expand?.();
@@ -54,70 +100,71 @@ export async function hotWalletConnect() {
             if (resolved) return;
             resolved = true;
             cleanup();
-            reject(new Error("HOT Wallet connect timeout (15s). Пользователь отменил или HOT не вернул данные."));
-        }, 15000);
 
-        // Слушаем возврат данных от HOT через Telegram WebApp API
-        const onDataReceived = (event) => {
-            if (resolved) return;
-
-            try {
-                const data = event?.data || event?.detail?.data || "";
-                if (!data) return;
-
-                // HOT может вернуть JSON вида { "near_account_id": "user.near" }
-                let parsed = null;
-                try {
-                    parsed = JSON.parse(data);
-                } catch {
-                    // если не JSON, пробуем parse как query string
-                    const params = new URLSearchParams(data);
-                    parsed = {
-                        near_account_id: params.get("near_account_id") || params.get("accountId") || "",
-                    };
-                }
-
-                const accountId = String(parsed?.near_account_id || parsed?.accountId || "").trim();
-                if (!accountId) return;
-
-                resolved = true;
-                cleanup();
-                setStoredAccountId(accountId);
-                resolve({ accountId });
-            } catch (err) {
-                console.error("[HOT] Failed to parse data from HOT Wallet:", err);
+            // Перед reject проверяем ещё раз URL и LS (может пользователь уже вернулся)
+            const finalUrlAccountId = extractAccountIdFromUrl();
+            if (finalUrlAccountId) {
+                setStoredAccountId(finalUrlAccountId);
+                resolve({ accountId: finalUrlAccountId });
+                return;
             }
-        };
 
-        // Слушаем событие возврата в игру
-        const onViewportChanged = () => {
-            // Когда пользователь вернулся из HOT, проверяем LS (HOT может записать напрямую)
+            const finalLsAccountId = getStoredAccountId();
+            if (finalLsAccountId) {
+                resolve({ accountId: finalLsAccountId });
+                return;
+            }
+
+            reject(new Error(
+                "HOT Wallet не вернул accountId за 20 секунд.\n\n" +
+                "Возможные причины:\n" +
+                "1. Ты не подключил аккаунт в HOT (нажми Connect в HOT wallet)\n" +
+                "2. HOT не поддерживает return_url callback\n" +
+                "3. Блокировка сети (нужен VPN)\n\n" +
+                "Попробуй ещё раз или введи accountId вручную (будет позже)."
+            ));
+        }, 20000); // 20s
+
+        // Следим за возвратом фокуса в игру (когда HOT закрывается)
+        const onVisibilityChange = () => {
+            if (document.hidden) return; // игра свернулась
+
+            // игра вернулась на передний план — проверяем URL/LS
             setTimeout(() => {
                 if (resolved) return;
-                const accountId = getStoredAccountId();
-                if (accountId) {
+
+                const acc = extractAccountIdFromUrl() || getStoredAccountId();
+                if (acc) {
                     resolved = true;
                     cleanup();
-                    resolve({ accountId });
+                    setStoredAccountId(acc);
+                    resolve({ accountId: acc });
+                }
+            }, 300);
+        };
+
+        const onFocus = () => {
+            setTimeout(() => {
+                if (resolved) return;
+
+                const acc = extractAccountIdFromUrl() || getStoredAccountId();
+                if (acc) {
+                    resolved = true;
+                    cleanup();
+                    setStoredAccountId(acc);
+                    resolve({ accountId: acc });
                 }
             }, 300);
         };
 
         const cleanup = () => {
             clearTimeout(timeout);
-            try {
-                tg.offEvent?.("web_app_data_received", onDataReceived);
-                tg.offEvent?.("viewportChanged", onViewportChanged);
-            } catch { }
+            document.removeEventListener("visibilitychange", onVisibilityChange);
+            window.removeEventListener("focus", onFocus);
         };
 
-        // Подписываемся на события
-        try {
-            tg.onEvent?.("web_app_data_received", onDataReceived);
-            tg.onEvent?.("viewportChanged", onViewportChanged);
-        } catch (err) {
-            console.warn("[HOT] Failed to subscribe to Telegram events:", err);
-        }
+        document.addEventListener("visibilitychange", onVisibilityChange);
+        window.addEventListener("focus", onFocus);
 
         // Открываем HOT
         try {
@@ -151,7 +198,6 @@ export async function hotWalletSignAndSendTransaction({ receiverId, actions }) {
         tg.expand?.();
     } catch { }
 
-    // Формируем payload для подписи транзакции
     const txData = {
         receiverId,
         actions,
@@ -160,7 +206,9 @@ export async function hotWalletSignAndSendTransaction({ receiverId, actions }) {
 
     const txPayloadEncoded = encodeURIComponent(btoa(JSON.stringify(txData)));
     const payload = `sign_${encodeURIComponent(botId)}_${txPayloadEncoded}`;
-    const url = `https://t.me/${hotWalletBot}/app?startapp=${payload}`;
+
+    const returnUrl = encodeURIComponent(window.location.href);
+    const url = `https://t.me/${hotWalletBot}/app?startapp=${payload}&return_url=${returnUrl}`;
 
     return new Promise((resolve, reject) => {
         let resolved = false;
@@ -168,47 +216,50 @@ export async function hotWalletSignAndSendTransaction({ receiverId, actions }) {
             if (resolved) return;
             resolved = true;
             cleanup();
-            reject(new Error("HOT Wallet sign timeout (15s)"));
-        }, 15000);
 
-        const onDataReceived = (event) => {
-            if (resolved) return;
-
+            // проверяем URL на наличие txHash
             try {
-                const data = event?.data || event?.detail?.data || "";
-                if (!data) return;
-
-                let parsed = null;
-                try {
-                    parsed = JSON.parse(data);
-                } catch {
-                    const params = new URLSearchParams(data);
-                    parsed = {
-                        txHash: params.get("tx_hash") || params.get("txHash") || "",
-                    };
+                const u = new URL(window.location.href);
+                const txHash = u.searchParams.get("tx_hash") || u.searchParams.get("txHash") || "";
+                if (txHash) {
+                    resolve({ txHash, outcome: null });
+                    return;
                 }
+            } catch { }
 
-                const txHash = String(parsed?.txHash || parsed?.tx_hash || "").trim();
-                if (!txHash) return;
+            reject(new Error("HOT Wallet sign timeout (20s)"));
+        }, 20000);
 
-                resolved = true;
-                cleanup();
-                resolve({ txHash, outcome: parsed });
-            } catch (err) {
-                console.error("[HOT] Failed to parse tx result:", err);
-            }
+        const onVisibilityChange = () => {
+            if (document.hidden) return;
+
+            setTimeout(() => {
+                if (resolved) return;
+
+                try {
+                    const u = new URL(window.location.href);
+                    const txHash = u.searchParams.get("tx_hash") || u.searchParams.get("txHash") || "";
+                    if (txHash) {
+                        resolved = true;
+                        cleanup();
+
+                        // очищаем URL
+                        u.searchParams.delete("tx_hash");
+                        u.searchParams.delete("txHash");
+                        window.history.replaceState({}, "", u.toString());
+
+                        resolve({ txHash, outcome: null });
+                    }
+                } catch { }
+            }, 300);
         };
 
         const cleanup = () => {
             clearTimeout(timeout);
-            try {
-                tg.offEvent?.("web_app_data_received", onDataReceived);
-            } catch { }
+            document.removeEventListener("visibilitychange", onVisibilityChange);
         };
 
-        try {
-            tg.onEvent?.("web_app_data_received", onDataReceived);
-        } catch { }
+        document.addEventListener("visibilitychange", onVisibilityChange);
 
         try {
             if (typeof tg.openTelegramLink === "function") {
