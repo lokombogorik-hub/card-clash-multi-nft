@@ -6,8 +6,6 @@ const envNetworkId = (import.meta.env.VITE_NEAR_NETWORK_ID || "").toLowerCase();
 const networkId = envNetworkId === "testnet" ? "testnet" : "mainnet";
 
 const botId = (import.meta.env.VITE_TG_BOT_ID || "").trim(); // Cardclashbot/app
-
-// ВАЖНО: строго HOT Wallet (не herewalletbot)
 const walletId = "hot_wallet/app";
 
 let hereInstance = null;
@@ -26,47 +24,66 @@ function setStoredAccountId(accountId) {
     } catch { }
 }
 
-/**
- * Ждём появления Telegram WebApp
- */
 async function waitForTelegram(maxWaitMs = 5000) {
     const start = Date.now();
-
     while (!window.Telegram?.WebApp) {
         if (Date.now() - start > maxWaitMs) {
-            throw new Error(
-                "Telegram WebApp не загрузился. Открой приложение через @Cardclashbot в Telegram."
-            );
+            throw new Error("Telegram WebApp не загрузился. Открой через @Cardclashbot в Telegram.");
         }
         await new Promise((r) => setTimeout(r, 100));
     }
-
     return window.Telegram.WebApp;
 }
 
 /**
- * Инициализируем HERE core с HOT Wallet ID
+ * Блокируем внешние загрузки HERE (иконки/стили могут быть заблокированы в РФ)
  */
+function blockExternalFetches() {
+    if (window.__CC_BLOCKED_EXTERNAL_FETCHES__) return;
+    window.__CC_BLOCKED_EXTERNAL_FETCHES__ = true;
+
+    const origFetch = window.fetch?.bind(window);
+    if (!origFetch) return;
+
+    window.fetch = (input, init) => {
+        try {
+            const url = typeof input === 'string' ? input : (input?.url || '');
+
+            // блокируем загрузку HERE wallet UI assets (они могут быть на blocked CDN)
+            if (
+                url.includes('herewallet.app') ||
+                url.includes('hotwallet.app') ||
+                url.includes('tgapp.') ||
+                url.includes('unpkg.com') ||
+                url.includes('jsdelivr.net')
+            ) {
+                console.warn('[HOT] Blocked external fetch (may be censored in Russia):', url);
+                // возвращаем пустой успешный ответ, чтобы не ломать HERE core
+                return Promise.resolve(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+            }
+        } catch { }
+
+        return origFetch(input, init);
+    };
+}
+
 async function getHereInstance() {
     if (!botId) throw new Error("VITE_TG_BOT_ID is missing (expected Cardclashbot/app)");
 
     await waitForTelegram();
+    blockExternalFetches();
 
     if (!hereInstance) {
         hereInstance = await HereWallet.connect({
             networkId,
             botId,
-            walletId, // HOT Wallet
+            walletId,
         });
     }
 
     return hereInstance;
 }
 
-/**
- * Подключение HOT Wallet через HERE core (правильный способ без QR).
- * HERE core сам открывает @hot_wallet mini app и возвращает accountId.
- */
 export async function hotWalletConnect() {
     const here = await getHereInstance();
 
@@ -74,7 +91,7 @@ export async function hotWalletConnect() {
         window.Telegram?.WebApp?.expand?.();
     } catch { }
 
-    // authenticate() откроет @hot_wallet и вернёт { accountId, publicKey, signature }
+    // authenticate() откроет @hot_wallet и вернёт accountId
     const result = await here.authenticate();
 
     const accountId = String(result?.accountId || "").trim();
@@ -86,9 +103,6 @@ export async function hotWalletConnect() {
     return { accountId };
 }
 
-/**
- * Подписание транзакции через HERE core (HOT Wallet)
- */
 export async function hotWalletSignAndSendTransaction({ receiverId, actions }) {
     const here = await getHereInstance();
 
@@ -99,7 +113,6 @@ export async function hotWalletSignAndSendTransaction({ receiverId, actions }) {
         window.Telegram?.WebApp?.expand?.();
     } catch { }
 
-    // signAndSendTransaction откроет HOT для подписи и вернёт outcome
     const outcome = await here.signAndSendTransaction({
         signerId: accountId,
         receiverId,
