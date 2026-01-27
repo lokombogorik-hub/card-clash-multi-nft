@@ -105,11 +105,13 @@ export default function WalletPicker({ open, onClose }) {
     const { nearNetworkId, status, connectHot } = useWalletStore();
     const [busy, setBusy] = useState(false);
 
+    const isTestnet = nearNetworkId === 'testnet';
+
     const subtitle = useMemo(() => {
-        return nearNetworkId === "testnet"
+        return isTestnet
             ? "Testnet • подключение и тестовые NFT"
             : "Mainnet • реальные NFT/NEAR";
-    }, [nearNetworkId]);
+    }, [isTestnet]);
 
     useEffect(() => {
         if (!open) return;
@@ -124,7 +126,7 @@ export default function WalletPicker({ open, onClose }) {
         } catch { }
     };
 
-    const onConnectHot = async () => {
+    const onConnect = async () => {
         haptic("light");
         setBusy(true);
         try {
@@ -227,39 +229,25 @@ export default function WalletPicker({ open, onClose }) {
 
                         {/* wallets */}
                         <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-                            <WalletTile
-                                title="HOT Wallet (Telegram)"
-                                subtitle="Откроет mini app @hot_wallet поверх игры. Подпись транзакций и доступ к NFT."
-                                icon={`/ui/wallets/hotwallet.svg?v=${ICON_V}`}
-                                tag="RECOMMENDED"
-                                disabled={busy}
-                                onClick={onConnectHot}
-                            />
-
-                            <div
-                                style={{
-                                    display: "grid",
-                                    gridTemplateColumns: "1fr 1fr",
-                                    gap: 10,
-                                }}
-                            >
+                            {isTestnet ? (
                                 <WalletTile
-                                    title="HERE Wallet"
-                                    subtitle="Отключено в этой сборке (чтобы не уводило в браузер/QR)."
-                                    icon={`/ui/wallets/here.svg?v=${ICON_V}`}
-                                    tag="DISABLED"
-                                    disabled={true}
-                                    onClick={() => { }}
+                                    title="MyNearWallet"
+                                    subtitle="Testnet кошелёк. Откроется в новой вкладке для подключения."
+                                    icon={`/ui/wallets/mynear.svg?v=${ICON_V}`}
+                                    tag="TESTNET"
+                                    disabled={busy}
+                                    onClick={onConnect}
                                 />
+                            ) : (
                                 <WalletTile
-                                    title="Other wallets"
-                                    subtitle="Будет позже (кошельки вне Telegram)."
-                                    icon={`/ui/wallets/near.svg?v=${ICON_V}`}
-                                    tag="SOON"
-                                    disabled={true}
-                                    onClick={() => { }}
+                                    title="HOT Wallet (Telegram)"
+                                    subtitle="Откроет mini app @herewalletbot поверх игры. Подпись транзакций и доступ к NFT."
+                                    icon={`/ui/wallets/hotwallet.svg?v=${ICON_V}`}
+                                    tag="RECOMMENDED"
+                                    disabled={busy}
+                                    onClick={onConnect}
                                 />
-                            </div>
+                            )}
 
                             {status ? (
                                 <div
@@ -278,9 +266,15 @@ export default function WalletPicker({ open, onClose }) {
                                 </div>
                             ) : null}
 
-                            <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.35 }}>
-                                После подтверждения в HOT Wallet просто вернись в игру — аккаунт и баланс подтянутся автоматически.
-                            </div>
+                            {isTestnet ? (
+                                <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.35 }}>
+                                    После подключения в MyNearWallet вернитесь в эту вкладку — аккаунт подтянется автоматически.
+                                </div>
+                            ) : (
+                                <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.35 }}>
+                                    После подтверждения в HOT Wallet просто вернись в игру — аккаунт и баланс подтянутся автоматически.
+                                </div>
+                            )}
                         </div>
                     </motion.div>
                 </motion.div>

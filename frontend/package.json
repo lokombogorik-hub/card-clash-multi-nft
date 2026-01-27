@@ -10,10 +10,10 @@
   },
   "dependencies": {
     "@here-wallet/core": "^3.4.0",
-    "@near-wallet-selector/core": "^8.9.13",
+    "@near-wallet-selector/core": "^8.10.2",
     "@near-wallet-selector/here-wallet": "^8.9.13",
-    "@near-wallet-selector/modal-ui": "^8.9.13",
-    "@near-wallet-selector/my-near-wallet": "^8.9.13",
+    "@near-wallet-selector/modal-ui": "^8.10.2",
+    "@near-wallet-selector/my-near-wallet": "^8.10.2",
     "@near-wallet-selector/near-mobile-wallet": "^10.1.4",
     "buffer": "^6.0.3",
     "canvas-confetti": "1.9.3",
