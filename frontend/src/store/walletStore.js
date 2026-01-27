@@ -1,4 +1,4 @@
-import { hotWalletConnect, hotWalletSignAndSendTransaction } from "../libs/hotWallet";
+import { connectWallet, disconnectWallet as disconnect, signAndSendTransaction as signTx } from "../libs/nearWallet";
 
 const LS_NEAR_ACCOUNT_ID = "cc_near_account_id";
 
@@ -97,36 +97,27 @@ function restoreFromStorage() {
 }
 
 async function connectHot() {
-    setState({ status: "Opening HOT Wallet…" });
+    setState({ status: "Opening wallet selector…" });
 
     try {
-        console.log("[walletStore] connectHot: calling hotWalletConnect()");
-        const { accountId } = await hotWalletConnect();
-
-        console.log("[walletStore] connectHot: received accountId:", accountId);
+        const { accountId } = await connectWallet();
 
         if (!accountId) {
-            setState({ status: "HOT Wallet вернул пустой accountId. Попробуй ещё раз." });
+            setState({ status: "Кошелёк не вернул accountId. Попробуй ещё раз." });
             return;
         }
 
         applyAccount(accountId);
         setState({ status: "" });
     } catch (e) {
-        console.error("[walletStore] connectHot failed:", e);
-
-        const errMsg = e?.message || String(e);
-        const stack = e?.stack || "";
-
-        setState({
-            status: `HOT connect failed: ${errMsg}${stack ? `\n\nStack:\n${stack.slice(0, 300)}` : ""}`
-        });
+        console.error("[walletStore] connect failed:", e);
+        setState({ status: `Connect failed: ${e?.message || e}` });
     }
 }
 
 async function disconnectWallet() {
     try {
-        localStorage.removeItem(LS_NEAR_ACCOUNT_ID);
+        await disconnect();
     } catch { }
     setState({ connected: false, walletAddress: "", balance: 0, balanceError: "", status: "" });
 }
@@ -151,7 +142,7 @@ function extractTxHash(outcome) {
 async function signAndSendTransaction({ receiverId, actions }) {
     if (!receiverId) throw new Error("receiverId is required");
     if (!actions || !actions.length) throw new Error("actions are required");
-    return await hotWalletSignAndSendTransaction({ receiverId, actions });
+    return await signTx({ receiverId, actions });
 }
 
 async function nftTransferCall({ nftContractId, tokenId, matchId, side, playerA, playerB, receiverId }) {
@@ -201,7 +192,6 @@ async function escrowClaim({ matchId, winnerAccountId, loserNftContractId, loser
     return { outcome, txHash: extractTxHash(outcome) };
 }
 
-// public API
 export const walletStore = {
     getState: () => state,
     subscribe: (fn) => {
