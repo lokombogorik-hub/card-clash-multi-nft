@@ -1,15 +1,18 @@
-import { useEffect, useState } from "react";
-import { walletStore } from "./walletStore";
+import { useEffect, useState } from 'react'
+import { walletStore } from './walletStore'
 
 export function useWalletStore() {
-    const [snap, setSnap] = useState(walletStore.getState());
+    const [state, setState] = useState(walletStore.getState())
 
     useEffect(() => {
-        return walletStore.subscribe(() => setSnap(walletStore.getState()));
-    }, []);
+        const unsub = walletStore.subscribe(() => {
+            setState(walletStore.getState())
+        })
+        return unsub
+    }, [])
 
     return {
-        ...snap,
+        ...state,
         connectHot: walletStore.connectHot,
         disconnectWallet: walletStore.disconnectWallet,
         restoreSession: walletStore.restoreSession,
@@ -17,5 +20,5 @@ export function useWalletStore() {
         signAndSendTransaction: walletStore.signAndSendTransaction,
         nftTransferCall: walletStore.nftTransferCall,
         escrowClaim: walletStore.escrowClaim,
-    };
+    }
 }

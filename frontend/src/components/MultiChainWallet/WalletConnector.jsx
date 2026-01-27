@@ -192,6 +192,31 @@ export default function WalletConnector() {
                         </div>
                     ) : null}
 
+                    {/* HOT WALLET ERRORS DEBUG */}
+                    {window.__HOT_WALLET_ERRORS__?.length > 0 ? (
+                        <div
+                            style={{
+                                maxWidth: 360,
+                                padding: "10px 12px",
+                                borderRadius: 12,
+                                background: "rgba(139, 0, 0, 0.85)",
+                                border: "1px solid rgba(255,255,255,0.12)",
+                                color: "#fff",
+                                fontSize: 11,
+                                lineHeight: 1.4,
+                            }}
+                        >
+                            <div style={{ fontWeight: 900, marginBottom: 8 }}>HOT Wallet Errors:</div>
+                            {window.__HOT_WALLET_ERRORS__.map((err, idx) => (
+                                <div key={idx} style={{ marginBottom: 8, opacity: 0.95 }}>
+                                    <div style={{ fontWeight: 800 }}>{err.step}</div>
+                                    <div>{err.message}</div>
+                                    <div style={{ fontSize: 10, opacity: 0.7 }}>{err.time}</div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : null}
+
                     {err ? (
                         <div
                             style={{

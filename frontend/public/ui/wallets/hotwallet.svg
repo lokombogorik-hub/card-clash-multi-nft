@@ -1,22 +1,10 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <circle cx="32" cy="32" r="30" fill="url(#gradHot)" stroke="#0cf" stroke-width="2"/>
   <defs>
-    <linearGradient id="hw_bg" x1="36" y1="36" x2="220" y2="220" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FF3D00"/>
-      <stop offset="1" stop-color="#FF3DDB"/>
+    <linearGradient id="gradHot" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff3d61;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ff8800;stop-opacity:1" />
     </linearGradient>
-    <radialGradient id="hw_glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(92 78) rotate(45) scale(170)">
-      <stop stop-color="#FFFFFF" stop-opacity="0.35"/>
-      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
-    </radialGradient>
   </defs>
-
-  <rect x="18" y="18" width="220" height="220" rx="56" fill="url(#hw_bg)"/>
-  <rect x="18" y="18" width="220" height="220" rx="56" fill="url(#hw_glow)"/>
-
-  <!-- flame -->
-  <path d="M128 54c12 22 6 34-6 46-10 10-18 18-10 34 7 14 26 18 26 42 0 24-18 44-44 44-26 0-46-20-46-46 0-44 34-58 52-90 8-14 10-22 28-30Z"
-        fill="white" fill-opacity="0.95"/>
-  <path d="M144 118c4 10-2 16-8 22-6 6-10 10-6 18 4 8 16 10 16 24 0 14-10 26-26 26-16 0-28-12-28-28 0-26 18-34 28-52 5-9 6-14 24-10Z"
-        fill="white" fill-opacity="0.35"/>
+  <text x="32" y="42" font-size="28" fill="#fff" text-anchor="middle" font-weight="bold">🔥</text>
 </svg>
