@@ -32,5 +32,11 @@ export default defineConfig({
             'process',
             'buffer',
         ],
+        esbuildOptions: {
+            // Node.js global to browser globalThis
+            define: {
+                global: 'globalThis',
+            },
+        },
     },
 })
