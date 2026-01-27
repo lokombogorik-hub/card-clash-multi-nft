@@ -2,9 +2,13 @@ import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useWalletStore } from "../../store/useWalletStore";
 
-const ICON_V = 22;
+const ICON_V = 23;
 
-function WalletTile({ title, subtitle, icon, tag, disabled, onClick }) {
+function isTelegramWebApp() {
+    return !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData)
+}
+
+function WalletTile({ title, subtitle, icon, tag, disabled, onClick, warning }) {
     return (
         <button
             onClick={onClick}
@@ -12,9 +16,10 @@ function WalletTile({ title, subtitle, icon, tag, disabled, onClick }) {
             style={{
                 width: "100%",
                 borderRadius: 18,
-                border: "1px solid rgba(255,255,255,0.12)",
-                background:
-                    "radial-gradient(120% 120% at 12% 10%, rgba(120,200,255,0.12) 0%, rgba(0,0,0,0) 55%)," +
+                border: warning ? "1px solid rgba(255,100,100,0.3)" : "1px solid rgba(255,255,255,0.12)",
+                background: warning
+                    ? "radial-gradient(120% 120% at 12% 10%, rgba(255,100,100,0.12) 0%, rgba(0,0,0,0) 55%), rgba(20,10,10,0.86)"
+                    : "radial-gradient(120% 120% at 12% 10%, rgba(120,200,255,0.12) 0%, rgba(0,0,0,0) 55%)," +
                     "radial-gradient(120% 120% at 85% 85%, rgba(255,61,242,0.10) 0%, rgba(0,0,0,0) 60%)," +
                     "rgba(10,10,14,0.86)",
                 color: "#fff",
@@ -66,7 +71,7 @@ function WalletTile({ title, subtitle, icon, tag, disabled, onClick }) {
                                 borderRadius: 999,
                                 fontSize: 11,
                                 fontWeight: 950,
-                                background: tag === 'TESTNET' ? "rgba(99, 102, 241, 0.25)" : "rgba(0,0,0,0.45)",
+                                background: tag === 'TESTNET OK' ? "rgba(99, 102, 241, 0.25)" : "rgba(0,0,0,0.45)",
                                 border: "1px solid rgba(255,255,255,0.14)",
                                 opacity: 0.92,
                                 whiteSpace: "nowrap",
@@ -106,6 +111,7 @@ export default function WalletPicker({ open, onClose }) {
     const [busy, setBusy] = useState(false);
 
     const isTestnet = nearNetworkId === 'testnet';
+    const isTg = isTelegramWebApp();
 
     const subtitle = useMemo(() => {
         return isTestnet
@@ -132,6 +138,8 @@ export default function WalletPicker({ open, onClose }) {
         try {
             await connectHot();
             onClose?.();
+        } catch (err) {
+            // Error handled in store
         } finally {
             setBusy(false);
         }
@@ -142,7 +150,9 @@ export default function WalletPicker({ open, onClose }) {
         setBusy(true);
         try {
             await connectMyNear();
-            onClose?.();
+            // Don't close — user returns from MyNearWallet tab
+        } catch (err) {
+            // Error handled in store
         } finally {
             setBusy(false);
         }
@@ -216,6 +226,7 @@ export default function WalletPicker({ open, onClose }) {
                                 <div style={{ fontSize: 12, opacity: 0.85, marginTop: 4 }}>
                                     {subtitle} • network:{" "}
                                     <span style={{ fontFamily: "monospace" }}>{nearNetworkId}</span>
+                                    {!isTg && <span style={{ color: "#f88" }}> • (не Telegram)</span>}
                                 </div>
                             </div>
 
@@ -244,13 +255,16 @@ export default function WalletPicker({ open, onClose }) {
                             <WalletTile
                                 title="HOT Wallet (Telegram)"
                                 subtitle={
-                                    isTestnet
-                                        ? "⚠️ Создаст mainnet аккаунт (HOT не поддерживает testnet). Для testnet используйте MyNearWallet."
-                                        : "Откроет mini app @herewalletbot поверх игры. Лучший вариант для Telegram."
+                                    !isTg
+                                        ? "⚠️ Работает только в Telegram WebApp. Откройте игру через бота или используйте MyNearWallet."
+                                        : isTestnet
+                                            ? "⚠️ Создаст mainnet аккаунт (HOT не поддерживает testnet). Для testnet используйте MyNearWallet."
+                                            : "Откроет mini app @herewalletbot поверх игры. Лучший вариант для Telegram."
                                 }
                                 icon={`/ui/wallets/hotwallet.svg?v=${ICON_V}`}
-                                tag={isTestnet ? "MAINNET ONLY" : "RECOMMENDED"}
-                                disabled={busy}
+                                tag={!isTg ? "TG ONLY" : isTestnet ? "MAINNET ONLY" : "RECOMMENDED"}
+                                disabled={busy || !isTg}
+                                warning={!isTg || isTestnet}
                                 onClick={onConnectHot}
                             />
 
@@ -259,8 +273,8 @@ export default function WalletPicker({ open, onClose }) {
                                 title="MyNearWallet"
                                 subtitle={
                                     isTestnet
-                                        ? "Откроется в новой вкладке. Поддерживает testnet."
-                                        : "Откроется в новой вкладке. Для mainnet рекомендуем HOT Wallet."
+                                        ? "Откроется в новой вкладке. Поддерживает testnet. Рекомендуется для тестирования."
+                                        : "Откроется в новой вкладке. Для mainnet в Telegram рекомендуем HOT Wallet."
                                 }
                                 icon={`/ui/wallets/mynear.svg?v=${ICON_V}`}
                                 tag={isTestnet ? "TESTNET OK" : null}
@@ -286,7 +300,9 @@ export default function WalletPicker({ open, onClose }) {
                             ) : null}
 
                             <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.35 }}>
-                                После подключения вернитесь в эту вкладку — аккаунт и баланс подтянутся автоматически.
+                                {isTg
+                                    ? "После подключения вернитесь в эту вкладку — аккаунт и баланс подтянутся автоматически."
+                                    : "HOT Wallet недоступен в браузере. Используйте MyNearWallet или откройте игру в Telegram."}
                             </div>
                         </div>
                     </motion.div>

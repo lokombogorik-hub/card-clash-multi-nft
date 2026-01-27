@@ -37,12 +37,22 @@ function logError(step, error) {
 
 const networkId = import.meta.env.VITE_NEAR_NETWORK_ID || 'testnet'
 
+// Check if running in Telegram WebApp
+function isTelegramWebApp() {
+    return !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData)
+}
+
 // ============ HOT WALLET ============
 
 export async function connectHotWallet() {
     let step = 'init'
 
     try {
+        // Check Telegram
+        if (!isTelegramWebApp()) {
+            throw new Error('HOT Wallet работает только в Telegram WebApp. Откройте игру через бота в Telegram или используйте MyNearWallet.')
+        }
+
         step = 'read_env'
         const botId = import.meta.env.VITE_TG_BOT_ID || 'Cardclashbot'
         const walletId = import.meta.env.VITE_HOT_WALLET_ID || 'herewalletbot'
@@ -94,7 +104,7 @@ export async function connectHotWallet() {
 async function initWalletSelector() {
     if (walletSelector) {
         console.log('[nearWallet] walletSelector already initialized')
-        return
+        return walletSelector
     }
 
     try {
@@ -108,6 +118,8 @@ async function initWalletSelector() {
 
         console.log('[nearWallet] walletSelector initialized:', walletSelector)
         logError('mynear:init_success', new Error('WalletSelector initialized'))
+
+        return walletSelector
     } catch (err) {
         console.error('[nearWallet] walletSelector init error:', err)
         logError('mynear:init_error', err)
@@ -119,24 +131,30 @@ export async function connectMyNearWallet() {
     try {
         logError('mynear:start', new Error('Starting MyNearWallet connection...'))
 
-        await initWalletSelector()
+        const selector = await initWalletSelector()
 
-        logError('mynear:show_modal', new Error('Opening wallet modal...'))
-
-        // Show modal
+        // Create modal if not exists
         if (!modal) {
-            modal = setupModal(walletSelector, {
+            console.log('[nearWallet] Creating modal...')
+            modal = setupModal(selector, {
                 contractId: import.meta.env.VITE_NEAR_LOGIN_CONTRACT_ID || 'guest-book.testnet',
             })
+            logError('mynear:modal_created', new Error('Modal created'))
         }
 
+        logError('mynear:show_modal', new Error('Showing wallet modal...'))
+
+        // Show modal
         modal.show()
+
+        console.log('[nearWallet] Modal shown, waiting for wallet selection...')
 
         // Wait for wallet selection
         return new Promise((resolve, reject) => {
             let resolved = false
 
-            const unsubscribe = walletSelector.store.observable.subscribe((state) => {
+            // Subscribe to state changes
+            const unsubscribe = selector.store.observable.subscribe((state) => {
                 console.log('[nearWallet] walletSelector state change:', state)
 
                 if (resolved) return
@@ -151,7 +169,12 @@ export async function connectMyNearWallet() {
                     connectedAccountId = accountId
                     currentWalletType = 'mynear'
 
-                    modal.hide()
+                    // Hide modal
+                    try {
+                        modal.hide()
+                    } catch (e) {
+                        console.warn('[nearWallet] modal.hide() error:', e)
+                    }
 
                     console.log('[nearWallet] MyNearWallet connected:', accountId)
                     logError('mynear:success', new Error(`Connected: ${accountId}`))
@@ -160,17 +183,47 @@ export async function connectMyNearWallet() {
                 }
             })
 
-            // Timeout after 2 minutes
+            // Also check immediately (in case already connected)
+            setTimeout(() => {
+                const state = selector.store.getState()
+                if (state.accounts && state.accounts.length > 0 && !resolved) {
+                    resolved = true
+                    unsubscribe()
+
+                    const accountId = state.accounts[0].accountId
+                    connectedAccountId = accountId
+                    currentWalletType = 'mynear'
+
+                    try {
+                        modal.hide()
+                    } catch (e) {
+                        console.warn('[nearWallet] modal.hide() error:', e)
+                    }
+
+                    console.log('[nearWallet] MyNearWallet already connected:', accountId)
+                    logError('mynear:already_connected', new Error(`Already connected: ${accountId}`))
+
+                    resolve({ accountId, wallet: 'mynear' })
+                }
+            }, 500)
+
+            // Timeout after 3 minutes
             setTimeout(() => {
                 if (!resolved) {
                     resolved = true
                     unsubscribe()
-                    modal.hide()
-                    const err = new Error('MyNearWallet connection timeout (120s)')
+
+                    try {
+                        modal.hide()
+                    } catch (e) {
+                        console.warn('[nearWallet] modal.hide() error:', e)
+                    }
+
+                    const err = new Error('MyNearWallet connection timeout (180s)')
                     logError('mynear:timeout', err)
                     reject(err)
                 }
-            }, 120000)
+            }, 180000)
         })
     } catch (err) {
         console.error('[nearWallet] MyNearWallet error:', err)
@@ -279,4 +332,8 @@ export function getConnectedAccountId() {
 
 export function getWalletType() {
     return currentWalletType
+}
+
+export function isTelegram() {
+    return isTelegramWebApp()
 }
