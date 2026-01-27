@@ -1,5 +1,5 @@
 const HOT_WALLET_ID = "hot-wallet";
-const HOT_WALLET_URL = "https://t.me/hot_wallet/app";
+const HOT_WALLET_BOT = "hot_wallet"; // username бота (без @)
 
 window.__HOT_WALLET_ERRORS__ = [];
 
@@ -19,24 +19,6 @@ function logError(step, error) {
     if (window.__HOT_WALLET_ERRORS__.length > 5) {
         window.__HOT_WALLET_ERRORS__.shift();
     }
-}
-
-function showDiagnosticAlert(url, tg) {
-    const info = `
-🔍 ДИАГНОСТИКА HOT WALLET
-
-URL для открытия:
-${url}
-
-Telegram.WebApp доступен: ${!!tg}
-openTelegramLink доступен: ${typeof tg?.openTelegramLink === 'function'}
-openLink доступен: ${typeof tg?.openLink === 'function'}
-version: ${tg?.version || 'N/A'}
-
-Сейчас попробую открыть HOT через альтернативный метод...
-  `.trim();
-
-    alert(info);
 }
 
 function showManualInputModal() {
@@ -69,19 +51,19 @@ function showManualInputModal() {
         Введи NEAR Account ID
       </div>
       <div style="font-size: 13px; opacity: 0.85; line-height: 1.4; margin-bottom: 14px;">
-        HOT Wallet не открылся автоматически.<br><br>
+        Если HOT Wallet не открылся:<br><br>
         
         <strong>Открой вручную:</strong><br>
         1. Открой @hot_wallet в Telegram<br>
         2. Скопируй свой Account ID (вверху экрана)<br>
         3. Вернись сюда и вставь ниже<br><br>
         
-        Пример: <span style="font-family: monospace;">user.near</span> или <span style="font-family: monospace;">abc123.testnet</span>
+        Пример: <span style="font-family: monospace;">digitalbunny.testnet</span>
       </div>
       <input 
         id="cc-account-input" 
         type="text" 
-        placeholder="your_account.near" 
+        placeholder="your_account.testnet" 
         style="
           width: 100%;
           padding: 12px;
@@ -240,22 +222,19 @@ export function setupHotWallet() {
                         throw new Error("VITE_TG_BOT_ID пустой!");
                     }
 
-                    const payload = `auth_${encodeURIComponent(botId)}_${networkId}`;
-                    const url = `${HOT_WALLET_URL}?startapp=${payload}`;
+                    // ВАЖНО: HOT — это обычный бот, а не mini app, поэтому:
+                    // НЕ /app, а ?start= (вместо ?startapp=)
+                    const payload = `auth_${botId}_${networkId}`;
+                    const url = `https://t.me/${HOT_WALLET_BOT}?start=${encodeURIComponent(payload)}`;
 
                     console.log("[HOT] Opening URL:", url);
                     console.log("[HOT] Telegram.WebApp.version:", tg.version);
-                    console.log("[HOT] openTelegramLink available:", typeof tg.openTelegramLink);
-                    console.log("[HOT] openLink available:", typeof tg.openLink);
-
-                    // ДИАГНОСТИКА: показываем alert с информацией
-                    showDiagnosticAlert(url, tg);
 
                     try {
                         tg.expand?.();
                     } catch { }
 
-                    // Пробуем все методы открытия
+                    // Открываем HOT через openTelegramLink (как обычную тг-ссылку)
                     let opened = false;
 
                     if (typeof tg.openTelegramLink === "function") {
@@ -271,26 +250,15 @@ export function setupHotWallet() {
                     if (!opened && typeof tg.openLink === "function") {
                         console.log("[HOT] Trying openLink...");
                         try {
-                            tg.openLink(url);
+                            tg.openLink(url, { try_instant_view: false });
                             opened = true;
                         } catch (e) {
                             console.error("[HOT] openLink failed:", e);
                         }
                     }
 
-                    // Fallback: пробуем через внешний link (крайний случай)
                     if (!opened) {
-                        console.log("[HOT] Trying window.open fallback...");
-                        try {
-                            window.open(url, '_blank');
-                            opened = true;
-                        } catch (e) {
-                            console.error("[HOT] window.open failed:", e);
-                        }
-                    }
-
-                    if (!opened) {
-                        throw new Error("Не удалось открыть HOT Wallet ни одним методом (openTelegramLink/openLink/window.open)");
+                        throw new Error("Не удалось открыть HOT Wallet");
                     }
 
                     return new Promise(async (resolve, reject) => {
@@ -318,9 +286,9 @@ export function setupHotWallet() {
                                 return;
                             }
 
-                            // Показываем manual input через 3 сек (быстрее, чем раньше)
-                            if (Date.now() - startTime > 3000 && Date.now() - startTime < 3500) {
-                                console.log("[HOT] No auto accountId after 3s, showing manual input...");
+                            // Показываем manual input через 5 сек
+                            if (Date.now() - startTime > 5000 && Date.now() - startTime < 5500) {
+                                console.log("[HOT] No auto accountId after 5s, showing manual input...");
 
                                 setTimeout(async () => {
                                     if (resolved) return;
@@ -420,15 +388,15 @@ export function setupHotWallet() {
 
                     const txData = { receiverId, actions, signerId: acc };
                     const txPayload = encodeURIComponent(btoa(JSON.stringify(txData)));
-                    const payload = `sign_${encodeURIComponent(botId)}_${txPayload}`;
-                    const url = `${HOT_WALLET_URL}?startapp=${payload}`;
+                    const payload = `sign_${botId}_${txPayload}`;
+                    const url = `https://t.me/${HOT_WALLET_BOT}?start=${encodeURIComponent(payload)}`;
 
                     console.log("[HOT] Signing tx, URL:", url);
 
                     if (typeof tg.openTelegramLink === "function") {
                         tg.openTelegramLink(url);
                     } else if (typeof tg.openLink === "function") {
-                        tg.openLink(url);
+                        tg.openLink(url, { try_instant_view: false });
                     } else {
                         throw new Error("Telegram WebApp API недоступен");
                     }
