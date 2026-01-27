@@ -1,7 +1,6 @@
 const HOT_WALLET_ID = "hot-wallet";
 const HOT_WALLET_URL = "https://t.me/hot_wallet/app";
 
-// Глобальный стек ошибок (для UI дебага)
 window.__HOT_WALLET_ERRORS__ = [];
 
 function logError(step, error) {
@@ -17,10 +16,156 @@ function logError(step, error) {
     if (!window.__HOT_WALLET_ERRORS__) window.__HOT_WALLET_ERRORS__ = [];
     window.__HOT_WALLET_ERRORS__.push(msg);
 
-    // Keep only last 5 errors
     if (window.__HOT_WALLET_ERRORS__.length > 5) {
         window.__HOT_WALLET_ERRORS__.shift();
     }
+}
+
+function showDiagnosticAlert(url, tg) {
+    const info = `
+🔍 ДИАГНОСТИКА HOT WALLET
+
+URL для открытия:
+${url}
+
+Telegram.WebApp доступен: ${!!tg}
+openTelegramLink доступен: ${typeof tg?.openTelegramLink === 'function'}
+openLink доступен: ${typeof tg?.openLink === 'function'}
+version: ${tg?.version || 'N/A'}
+
+Сейчас попробую открыть HOT через альтернативный метод...
+  `.trim();
+
+    alert(info);
+}
+
+function showManualInputModal() {
+    return new Promise((resolve, reject) => {
+        const overlay = document.createElement("div");
+        overlay.style.cssText = `
+      position: fixed;
+      inset: 0;
+      z-index: 9999999;
+      background: rgba(0,0,0,0.88);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    `;
+
+        const modal = document.createElement("div");
+        modal.style.cssText = `
+      width: min(420px, 96vw);
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(10,10,14,0.96);
+      color: #fff;
+      padding: 18px;
+      box-shadow: 0 30px 120px rgba(0,0,0,0.88);
+    `;
+
+        modal.innerHTML = `
+      <div style="font-weight: 900; font-size: 16px; margin-bottom: 12px;">
+        Введи NEAR Account ID
+      </div>
+      <div style="font-size: 13px; opacity: 0.85; line-height: 1.4; margin-bottom: 14px;">
+        HOT Wallet не открылся автоматически.<br><br>
+        
+        <strong>Открой вручную:</strong><br>
+        1. Открой @hot_wallet в Telegram<br>
+        2. Скопируй свой Account ID (вверху экрана)<br>
+        3. Вернись сюда и вставь ниже<br><br>
+        
+        Пример: <span style="font-family: monospace;">user.near</span> или <span style="font-family: monospace;">abc123.testnet</span>
+      </div>
+      <input 
+        id="cc-account-input" 
+        type="text" 
+        placeholder="your_account.near" 
+        style="
+          width: 100%;
+          padding: 12px;
+          border-radius: 12px;
+          border: 1px solid rgba(255,255,255,0.18);
+          background: rgba(0,0,0,0.4);
+          color: #fff;
+          font-family: monospace;
+          font-size: 14px;
+          outline: none;
+          margin-bottom: 14px;
+        "
+      />
+      <div style="display: flex; gap: 10px; justify-content: flex-end;">
+        <button 
+          id="cc-account-cancel" 
+          style="
+            padding: 10px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.14);
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+            font-weight: 800;
+            cursor: pointer;
+          "
+        >
+          Отмена
+        </button>
+        <button 
+          id="cc-account-submit" 
+          style="
+            padding: 10px 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.14);
+            background: linear-gradient(90deg,#2563eb,#7c3aed);
+            color: #fff;
+            font-weight: 900;
+            cursor: pointer;
+          "
+        >
+          Подключить
+        </button>
+      </div>
+    `;
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        const input = document.getElementById("cc-account-input");
+        const submitBtn = document.getElementById("cc-account-submit");
+        const cancelBtn = document.getElementById("cc-account-cancel");
+
+        const cleanup = () => {
+            try {
+                document.body.removeChild(overlay);
+            } catch { }
+        };
+
+        submitBtn.onclick = () => {
+            const accountId = (input.value || "").trim();
+            if (!accountId) {
+                input.style.borderColor = "rgba(239, 68, 68, 0.75)";
+                return;
+            }
+            cleanup();
+            resolve(accountId);
+        };
+
+        cancelBtn.onclick = () => {
+            cleanup();
+            reject(new Error("Пользователь отменил ввод accountId"));
+        };
+
+        input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") submitBtn.click();
+            if (e.key === "Escape") cancelBtn.click();
+        });
+
+        setTimeout(() => {
+            try {
+                input.focus();
+            } catch { }
+        }, 100);
+    });
 }
 
 export function setupHotWallet() {
@@ -81,7 +226,7 @@ export function setupHotWallet() {
                 try {
                     const tg = window.Telegram?.WebApp;
                     if (!tg) {
-                        throw new Error("Открой игру через @Cardclashbot в Telegram (не в браузере)");
+                        throw new Error("Открой игру через @Cardclashbot в Telegram");
                     }
 
                     const botId = (import.meta.env.VITE_TG_BOT_ID || "").trim();
@@ -92,27 +237,63 @@ export function setupHotWallet() {
                     console.log("[HOT] networkId:", networkId);
 
                     if (!botId) {
-                        throw new Error("VITE_TG_BOT_ID пустой! Проверь Vercel env variables.");
+                        throw new Error("VITE_TG_BOT_ID пустой!");
                     }
 
                     const payload = `auth_${encodeURIComponent(botId)}_${networkId}`;
                     const url = `${HOT_WALLET_URL}?startapp=${payload}`;
 
                     console.log("[HOT] Opening URL:", url);
+                    console.log("[HOT] Telegram.WebApp.version:", tg.version);
+                    console.log("[HOT] openTelegramLink available:", typeof tg.openTelegramLink);
+                    console.log("[HOT] openLink available:", typeof tg.openLink);
+
+                    // ДИАГНОСТИКА: показываем alert с информацией
+                    showDiagnosticAlert(url, tg);
 
                     try {
                         tg.expand?.();
                     } catch { }
 
+                    // Пробуем все методы открытия
+                    let opened = false;
+
                     if (typeof tg.openTelegramLink === "function") {
-                        tg.openTelegramLink(url);
-                    } else if (typeof tg.openLink === "function") {
-                        tg.openLink(url);
-                    } else {
-                        throw new Error("Telegram WebApp API недоступен (нет openTelegramLink/openLink)");
+                        console.log("[HOT] Trying openTelegramLink...");
+                        try {
+                            tg.openTelegramLink(url);
+                            opened = true;
+                        } catch (e) {
+                            console.error("[HOT] openTelegramLink failed:", e);
+                        }
                     }
 
-                    return new Promise((resolve, reject) => {
+                    if (!opened && typeof tg.openLink === "function") {
+                        console.log("[HOT] Trying openLink...");
+                        try {
+                            tg.openLink(url);
+                            opened = true;
+                        } catch (e) {
+                            console.error("[HOT] openLink failed:", e);
+                        }
+                    }
+
+                    // Fallback: пробуем через внешний link (крайний случай)
+                    if (!opened) {
+                        console.log("[HOT] Trying window.open fallback...");
+                        try {
+                            window.open(url, '_blank');
+                            opened = true;
+                        } catch (e) {
+                            console.error("[HOT] window.open failed:", e);
+                        }
+                    }
+
+                    if (!opened) {
+                        throw new Error("Не удалось открыть HOT Wallet ни одним методом (openTelegramLink/openLink/window.open)");
+                    }
+
+                    return new Promise(async (resolve, reject) => {
                         let resolved = false;
                         const startTime = Date.now();
 
@@ -137,10 +318,43 @@ export function setupHotWallet() {
                                 return;
                             }
 
-                            if (Date.now() - startTime > 30000) {
+                            // Показываем manual input через 3 сек (быстрее, чем раньше)
+                            if (Date.now() - startTime > 3000 && Date.now() - startTime < 3500) {
+                                console.log("[HOT] No auto accountId after 3s, showing manual input...");
+
+                                setTimeout(async () => {
+                                    if (resolved) return;
+
+                                    try {
+                                        const manualAccountId = await showManualInputModal();
+                                        if (!resolved && manualAccountId) {
+                                            resolved = true;
+                                            cleanup();
+                                            _accountId = manualAccountId;
+                                            setStoredAccountId(manualAccountId);
+
+                                            if (_emitter) {
+                                                _emitter.emit("accountsChanged", {
+                                                    accounts: [{ accountId: manualAccountId }],
+                                                });
+                                            }
+
+                                            resolve([{ accountId: manualAccountId }]);
+                                        }
+                                    } catch (err) {
+                                        if (!resolved) {
+                                            resolved = true;
+                                            cleanup();
+                                            reject(err);
+                                        }
+                                    }
+                                }, 100);
+                            }
+
+                            if (Date.now() - startTime > 60000) {
                                 resolved = true;
                                 cleanup();
-                                const err = new Error("HOT Wallet не вернул accountId за 30 сек.");
+                                const err = new Error("HOT Wallet timeout");
                                 logError("connect timeout", err);
                                 reject(err);
                             }
@@ -150,7 +364,7 @@ export function setupHotWallet() {
 
                         const onVisibilityChange = () => {
                             if (!document.hidden) {
-                                console.log("[HOT] App returned to foreground, checking account...");
+                                console.log("[HOT] App returned, checking...");
                                 setTimeout(checkAccount, 300);
                             }
                         };
@@ -178,16 +392,13 @@ export function setupHotWallet() {
             },
 
             getAccounts,
-
             isSignedIn: async () => {
                 const accounts = await getAccounts();
                 return accounts.length > 0;
             },
-
             signIn: async () => {
                 return await wallet.connect();
             },
-
             signOut: async () => {
                 return await wallet.disconnect();
             },
