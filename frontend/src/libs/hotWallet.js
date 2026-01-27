@@ -21,13 +21,30 @@ function setStoredAccountId(accountId) {
 }
 
 /**
+ * Ждём появления Telegram WebApp (если загружается async)
+ */
+async function waitForTelegram(maxWaitMs = 5000) {
+    const start = Date.now();
+
+    while (!window.Telegram?.WebApp) {
+        if (Date.now() - start > maxWaitMs) {
+            throw new Error(
+                "Telegram WebApp не загрузился. Убедись, что открыл приложение через бота в Telegram (не напрямую по URL)."
+            );
+        }
+        await new Promise((r) => setTimeout(r, 100));
+    }
+
+    return window.Telegram.WebApp;
+}
+
+/**
  * Открываем HOT Wallet mini app напрямую (без HERE core / QR).
  */
 export async function hotWalletConnect() {
     if (!botId) throw new Error("VITE_TG_BOT_ID is missing (expected Cardclashbot/app)");
 
-    const tg = window.Telegram?.WebApp;
-    if (!tg) throw new Error("Not running inside Telegram WebApp");
+    const tg = await waitForTelegram();
 
     try {
         tg.expand?.();
@@ -87,8 +104,7 @@ export async function hotWalletConnect() {
 export async function hotWalletSignAndSendTransaction({ receiverId, actions }) {
     if (!botId) throw new Error("VITE_TG_BOT_ID is missing");
 
-    const tg = window.Telegram?.WebApp;
-    if (!tg) throw new Error("Not running inside Telegram WebApp");
+    const tg = await waitForTelegram();
 
     const accountId = getStoredAccountId();
     if (!accountId) throw new Error("Not connected (no accountId in LS)");
