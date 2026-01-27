@@ -1,10 +1,16 @@
+import { HereWallet } from "@here-wallet/core";
+
 const LS_NEAR_ACCOUNT_ID = "cc_near_account_id";
 
 const envNetworkId = (import.meta.env.VITE_NEAR_NETWORK_ID || "").toLowerCase();
 const networkId = envNetworkId === "testnet" ? "testnet" : "mainnet";
 
 const botId = (import.meta.env.VITE_TG_BOT_ID || "").trim(); // Cardclashbot/app
-const hotDomain = "hot_wallet"; // строго @hot_wallet
+
+// ВАЖНО: строго HOT Wallet (не herewalletbot)
+const walletId = "hot_wallet/app";
+
+let hereInstance = null;
 
 function getStoredAccountId() {
     try {
@@ -21,7 +27,7 @@ function setStoredAccountId(accountId) {
 }
 
 /**
- * Ждём появления Telegram WebApp (если загружается async)
+ * Ждём появления Telegram WebApp
  */
 async function waitForTelegram(maxWaitMs = 5000) {
     const start = Date.now();
@@ -29,7 +35,7 @@ async function waitForTelegram(maxWaitMs = 5000) {
     while (!window.Telegram?.WebApp) {
         if (Date.now() - start > maxWaitMs) {
             throw new Error(
-                "Telegram WebApp не загрузился. Убедись, что открыл приложение через бота в Telegram (не напрямую по URL)."
+                "Telegram WebApp не загрузился. Открой приложение через @Cardclashbot в Telegram."
             );
         }
         await new Promise((r) => setTimeout(r, 100));
@@ -39,120 +45,72 @@ async function waitForTelegram(maxWaitMs = 5000) {
 }
 
 /**
- * Открываем HOT Wallet mini app напрямую (без HERE core / QR).
+ * Инициализируем HERE core с HOT Wallet ID
  */
-export async function hotWalletConnect() {
+async function getHereInstance() {
     if (!botId) throw new Error("VITE_TG_BOT_ID is missing (expected Cardclashbot/app)");
 
-    const tg = await waitForTelegram();
+    await waitForTelegram();
 
-    try {
-        tg.expand?.();
-    } catch { }
-
-    const payload = `auth_${encodeURIComponent(botId)}_${networkId}`;
-    const url = `https://t.me/${hotDomain}/app?startapp=${payload}`;
-
-    if (typeof tg.openTelegramLink === "function") {
-        tg.openTelegramLink(url);
-    } else if (typeof tg.openLink === "function") {
-        tg.openLink(url);
-    } else {
-        throw new Error("Telegram WebApp does not support openTelegramLink/openLink");
+    if (!hereInstance) {
+        hereInstance = await HereWallet.connect({
+            networkId,
+            botId,
+            walletId, // HOT Wallet
+        });
     }
 
-    return new Promise((resolve, reject) => {
-        let tries = 0;
-        const maxTries = 60; // ~15s
-
-        const poll = setInterval(() => {
-            tries += 1;
-
-            const accountId = getStoredAccountId();
-            if (accountId) {
-                clearInterval(poll);
-                resolve({ accountId });
-                return;
-            }
-
-            try {
-                const u = new URL(window.location.href);
-                const acc =
-                    u.searchParams.get("near_account_id") ||
-                    u.searchParams.get("accountId") ||
-                    u.searchParams.get("account_id") ||
-                    "";
-                if (acc) {
-                    clearInterval(poll);
-                    setStoredAccountId(acc);
-                    resolve({ accountId: acc });
-                    return;
-                }
-            } catch { }
-
-            if (tries >= maxTries) {
-                clearInterval(poll);
-                reject(new Error("HOT Wallet connect timeout (user did not return or cancelled)"));
-            }
-        }, 250);
-    });
+    return hereInstance;
 }
 
 /**
- * Подписание транзакции через HOT.
+ * Подключение HOT Wallet через HERE core (правильный способ без QR).
+ * HERE core сам открывает @hot_wallet mini app и возвращает accountId.
+ */
+export async function hotWalletConnect() {
+    const here = await getHereInstance();
+
+    try {
+        window.Telegram?.WebApp?.expand?.();
+    } catch { }
+
+    // authenticate() откроет @hot_wallet и вернёт { accountId, publicKey, signature }
+    const result = await here.authenticate();
+
+    const accountId = String(result?.accountId || "").trim();
+    if (!accountId) {
+        throw new Error("HOT Wallet returned no accountId");
+    }
+
+    setStoredAccountId(accountId);
+    return { accountId };
+}
+
+/**
+ * Подписание транзакции через HERE core (HOT Wallet)
  */
 export async function hotWalletSignAndSendTransaction({ receiverId, actions }) {
-    if (!botId) throw new Error("VITE_TG_BOT_ID is missing");
-
-    const tg = await waitForTelegram();
+    const here = await getHereInstance();
 
     const accountId = getStoredAccountId();
     if (!accountId) throw new Error("Not connected (no accountId in LS)");
 
     try {
-        tg.expand?.();
+        window.Telegram?.WebApp?.expand?.();
     } catch { }
 
-    const txPayload = btoa(
-        JSON.stringify({
-            receiverId,
-            actions,
-            signerId: accountId,
-        })
-    );
-
-    const payload = `sign_${encodeURIComponent(botId)}_${encodeURIComponent(txPayload)}`;
-    const url = `https://t.me/${hotDomain}/app?startapp=${payload}`;
-
-    if (typeof tg.openTelegramLink === "function") {
-        tg.openTelegramLink(url);
-    } else if (typeof tg.openLink === "function") {
-        tg.openLink(url);
-    } else {
-        throw new Error("Telegram WebApp does not support openTelegramLink/openLink");
-    }
-
-    return new Promise((resolve, reject) => {
-        let tries = 0;
-        const maxTries = 60;
-
-        const poll = setInterval(() => {
-            tries += 1;
-
-            try {
-                const u = new URL(window.location.href);
-                const txHash = u.searchParams.get("tx_hash") || u.searchParams.get("txHash") || "";
-                if (txHash) {
-                    clearInterval(poll);
-                    resolve({ txHash });
-                    return;
-                }
-            } catch { }
-
-            if (tries >= maxTries) {
-                clearInterval(poll);
-                reject(new Error("HOT Wallet sign timeout"));
-            }
-        }, 250);
+    // signAndSendTransaction откроет HOT для подписи и вернёт outcome
+    const outcome = await here.signAndSendTransaction({
+        signerId: accountId,
+        receiverId,
+        actions,
     });
+
+    const txHash =
+        outcome?.transaction?.hash ||
+        outcome?.transaction_outcome?.id ||
+        outcome?.final_execution_outcome?.transaction?.hash ||
+        null;
+
+    return { outcome, txHash };
 }
