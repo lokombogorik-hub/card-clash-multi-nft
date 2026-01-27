@@ -14,6 +14,7 @@ export function useWalletStore() {
     return {
         ...state,
         connectHot: walletStore.connectHot,
+        connectMyNear: walletStore.connectMyNear,
         disconnectWallet: walletStore.disconnectWallet,
         restoreSession: walletStore.restoreSession,
         clearStatus: walletStore.clearStatus,

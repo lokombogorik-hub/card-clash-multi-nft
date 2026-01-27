@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useWalletStore } from "../../store/useWalletStore";
 
-const ICON_V = 21;
+const ICON_V = 22;
 
 function WalletTile({ title, subtitle, icon, tag, disabled, onClick }) {
     return (
@@ -66,7 +66,7 @@ function WalletTile({ title, subtitle, icon, tag, disabled, onClick }) {
                                 borderRadius: 999,
                                 fontSize: 11,
                                 fontWeight: 950,
-                                background: "rgba(0,0,0,0.45)",
+                                background: tag === 'TESTNET' ? "rgba(99, 102, 241, 0.25)" : "rgba(0,0,0,0.45)",
                                 border: "1px solid rgba(255,255,255,0.14)",
                                 opacity: 0.92,
                                 whiteSpace: "nowrap",
@@ -102,7 +102,7 @@ function WalletTile({ title, subtitle, icon, tag, disabled, onClick }) {
 }
 
 export default function WalletPicker({ open, onClose }) {
-    const { nearNetworkId, status, connectHot } = useWalletStore();
+    const { nearNetworkId, status, connectHot, connectMyNear } = useWalletStore();
     const [busy, setBusy] = useState(false);
 
     const isTestnet = nearNetworkId === 'testnet';
@@ -126,11 +126,22 @@ export default function WalletPicker({ open, onClose }) {
         } catch { }
     };
 
-    const onConnect = async () => {
+    const onConnectHot = async () => {
         haptic("light");
         setBusy(true);
         try {
             await connectHot();
+            onClose?.();
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const onConnectMyNear = async () => {
+        haptic("light");
+        setBusy(true);
+        try {
+            await connectMyNear();
             onClose?.();
         } finally {
             setBusy(false);
@@ -229,25 +240,33 @@ export default function WalletPicker({ open, onClose }) {
 
                         {/* wallets */}
                         <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-                            {isTestnet ? (
-                                <WalletTile
-                                    title="MyNearWallet"
-                                    subtitle="Testnet кошелёк. Откроется в новой вкладке для подключения."
-                                    icon={`/ui/wallets/mynear.svg?v=${ICON_V}`}
-                                    tag="TESTNET"
-                                    disabled={busy}
-                                    onClick={onConnect}
-                                />
-                            ) : (
-                                <WalletTile
-                                    title="HOT Wallet (Telegram)"
-                                    subtitle="Откроет mini app @herewalletbot поверх игры. Подпись транзакций и доступ к NFT."
-                                    icon={`/ui/wallets/hotwallet.svg?v=${ICON_V}`}
-                                    tag="RECOMMENDED"
-                                    disabled={busy}
-                                    onClick={onConnect}
-                                />
-                            )}
+                            {/* HOT Wallet */}
+                            <WalletTile
+                                title="HOT Wallet (Telegram)"
+                                subtitle={
+                                    isTestnet
+                                        ? "⚠️ Создаст mainnet аккаунт (HOT не поддерживает testnet). Для testnet используйте MyNearWallet."
+                                        : "Откроет mini app @herewalletbot поверх игры. Лучший вариант для Telegram."
+                                }
+                                icon={`/ui/wallets/hotwallet.svg?v=${ICON_V}`}
+                                tag={isTestnet ? "MAINNET ONLY" : "RECOMMENDED"}
+                                disabled={busy}
+                                onClick={onConnectHot}
+                            />
+
+                            {/* MyNearWallet */}
+                            <WalletTile
+                                title="MyNearWallet"
+                                subtitle={
+                                    isTestnet
+                                        ? "Откроется в новой вкладке. Поддерживает testnet."
+                                        : "Откроется в новой вкладке. Для mainnet рекомендуем HOT Wallet."
+                                }
+                                icon={`/ui/wallets/mynear.svg?v=${ICON_V}`}
+                                tag={isTestnet ? "TESTNET OK" : null}
+                                disabled={busy}
+                                onClick={onConnectMyNear}
+                            />
 
                             {status ? (
                                 <div
@@ -266,15 +285,9 @@ export default function WalletPicker({ open, onClose }) {
                                 </div>
                             ) : null}
 
-                            {isTestnet ? (
-                                <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.35 }}>
-                                    После подключения в MyNearWallet вернитесь в эту вкладку — аккаунт подтянется автоматически.
-                                </div>
-                            ) : (
-                                <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.35 }}>
-                                    После подтверждения в HOT Wallet просто вернись в игру — аккаунт и баланс подтянутся автоматически.
-                                </div>
-                            )}
+                            <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.35 }}>
+                                После подключения вернитесь в эту вкладку — аккаунт и баланс подтянутся автоматически.
+                            </div>
                         </div>
                     </motion.div>
                 </motion.div>

@@ -1,4 +1,4 @@
-import { connectWallet, disconnectWallet as disconnect, signAndSendTransaction as signTx } from "../libs/nearWallet";
+import { connectWallet, connectHotWallet, connectMyNearWallet, disconnectWallet as disconnect, signAndSendTransaction as signTx } from "../libs/nearWallet";
 
 const LS_NEAR_ACCOUNT_ID = "cc_near_account_id";
 
@@ -100,13 +100,13 @@ function restoreFromStorage() {
 }
 
 async function connectHot() {
-    setState({ status: "Opening wallet selector…", lastError: null });
+    setState({ status: "Opening HOT Wallet…", lastError: null });
 
     try {
-        const { accountId } = await connectWallet();
+        const { accountId } = await connectHotWallet();
 
         if (!accountId) {
-            const err = new Error("Кошелёк не вернул accountId");
+            const err = new Error("HOT Wallet не вернул accountId");
             setState({ status: `Connect failed: ${err.message}`, lastError: err });
             return;
         }
@@ -114,15 +114,47 @@ async function connectHot() {
         applyAccount(accountId);
         setState({ status: "", lastError: null });
     } catch (e) {
-        console.error("[walletStore] connect failed:", e);
+        console.error("[walletStore] HOT connect failed:", e);
 
-        // Показываем полную ошибку в UI (включая stack)
         const errMsg = e?.message || String(e);
         const errStack = e?.stack || "";
         const errName = e?.name || "Error";
 
         setState({
-            status: `Connect failed: ${errMsg}`,
+            status: `HOT Connect failed: ${errMsg}`,
+            lastError: {
+                name: errName,
+                message: errMsg,
+                stack: errStack,
+                raw: e,
+            }
+        });
+    }
+}
+
+async function connectMyNear() {
+    setState({ status: "Opening MyNearWallet…", lastError: null });
+
+    try {
+        const { accountId } = await connectMyNearWallet();
+
+        if (!accountId) {
+            const err = new Error("MyNearWallet не вернул accountId");
+            setState({ status: `Connect failed: ${err.message}`, lastError: err });
+            return;
+        }
+
+        applyAccount(accountId);
+        setState({ status: "", lastError: null });
+    } catch (e) {
+        console.error("[walletStore] MyNear connect failed:", e);
+
+        const errMsg = e?.message || String(e);
+        const errStack = e?.stack || "";
+        const errName = e?.name || "Error";
+
+        setState({
+            status: `MyNear Connect failed: ${errMsg}`,
             lastError: {
                 name: errName,
                 message: errMsg,
@@ -218,6 +250,7 @@ export const walletStore = {
     },
 
     connectHot,
+    connectMyNear,
     disconnectWallet,
     restoreSession,
     clearStatus,

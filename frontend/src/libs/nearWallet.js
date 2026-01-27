@@ -8,6 +8,7 @@ let hereInstance = null
 let connectedAccountId = null
 let walletSelector = null
 let modal = null
+let currentWalletType = null // 'hot' | 'mynear'
 
 // DEBUG: собираем все ошибки HOT Wallet
 if (!window.__HOT_WALLET_ERRORS__) {
@@ -35,15 +36,10 @@ function logError(step, error) {
 }
 
 const networkId = import.meta.env.VITE_NEAR_NETWORK_ID || 'testnet'
-const isTestnet = networkId === 'testnet'
 
-// ============ HOT WALLET (mainnet only) ============
+// ============ HOT WALLET ============
 
 export async function connectHotWallet() {
-    if (isTestnet) {
-        throw new Error('HOT Wallet не поддерживает testnet. Используйте MyNearWallet.')
-    }
-
     let step = 'init'
 
     try {
@@ -52,7 +48,7 @@ export async function connectHotWallet() {
         const walletId = import.meta.env.VITE_HOT_WALLET_ID || 'herewalletbot'
 
         console.log('[nearWallet] connectHotWallet start', { networkId, botId, walletId })
-        logError('connect:env', new Error(`ENV: botId=${botId}, walletId=${walletId}, network=${networkId}`))
+        logError('hot:env', new Error(`ENV: botId=${botId}, walletId=${walletId}, network=${networkId}`))
 
         step = 'HereWallet.connect'
         console.log('[nearWallet] calling HereWallet.connect...')
@@ -64,7 +60,7 @@ export async function connectHotWallet() {
         })
 
         console.log('[nearWallet] HereWallet.connect OK:', hereInstance)
-        logError('connect:instance', new Error(`Instance created: ${typeof hereInstance}`))
+        logError('hot:instance', new Error(`Instance created: ${typeof hereInstance}`))
 
         step = 'authenticate'
         console.log('[nearWallet] calling authenticate...')
@@ -72,7 +68,7 @@ export async function connectHotWallet() {
         const authResult = await hereInstance.authenticate()
 
         console.log('[nearWallet] authenticate result:', authResult)
-        logError('authenticate:result', new Error(`Auth result: ${JSON.stringify(authResult)}`))
+        logError('hot:auth_result', new Error(`Auth result: ${JSON.stringify(authResult)}`))
 
         step = 'extract_accountId'
         connectedAccountId = authResult.accountId || authResult.account_id
@@ -81,76 +77,112 @@ export async function connectHotWallet() {
             throw new Error('No accountId in authenticate result: ' + JSON.stringify(authResult))
         }
 
-        console.log('[nearWallet] connected:', connectedAccountId)
-        logError('connect:success', new Error(`Connected: ${connectedAccountId}`))
+        currentWalletType = 'hot'
+        console.log('[nearWallet] HOT wallet connected:', connectedAccountId)
+        logError('hot:success', new Error(`Connected: ${connectedAccountId}`))
 
         return { accountId: connectedAccountId, wallet: 'hot' }
     } catch (err) {
-        console.error(`[nearWallet] ERROR at step "${step}":`, err)
-        logError(`connect:error:${step}`, err)
+        console.error(`[nearWallet] HOT ERROR at step "${step}":`, err)
+        logError(`hot:error:${step}`, err)
         throw err
     }
 }
 
-// ============ WALLET SELECTOR (testnet) ============
+// ============ WALLET SELECTOR (MyNearWallet) ============
 
 async function initWalletSelector() {
-    if (walletSelector) return
-
-    const contractId = import.meta.env.VITE_NEAR_LOGIN_CONTRACT_ID || 'guest-book.testnet'
-
-    walletSelector = await setupWalletSelector({
-        network: networkId,
-        modules: [setupMyNearWallet()],
-    })
-
-    modal = setupModal(walletSelector, {
-        contractId,
-    })
-}
-
-export async function connectMyNearWallet() {
-    if (!isTestnet) {
-        throw new Error('MyNearWallet работает только на testnet. Для mainnet используйте HOT Wallet.')
+    if (walletSelector) {
+        console.log('[nearWallet] walletSelector already initialized')
+        return
     }
 
     try {
-        logError('mynear:init', new Error('Initializing wallet-selector...'))
+        console.log('[nearWallet] Initializing wallet-selector...')
+        logError('mynear:init_start', new Error(`Initializing for network: ${networkId}`))
+
+        walletSelector = await setupWalletSelector({
+            network: networkId,
+            modules: [setupMyNearWallet()],
+        })
+
+        console.log('[nearWallet] walletSelector initialized:', walletSelector)
+        logError('mynear:init_success', new Error('WalletSelector initialized'))
+    } catch (err) {
+        console.error('[nearWallet] walletSelector init error:', err)
+        logError('mynear:init_error', err)
+        throw err
+    }
+}
+
+export async function connectMyNearWallet() {
+    try {
+        logError('mynear:start', new Error('Starting MyNearWallet connection...'))
+
         await initWalletSelector()
 
         logError('mynear:show_modal', new Error('Opening wallet modal...'))
+
+        // Show modal
+        if (!modal) {
+            modal = setupModal(walletSelector, {
+                contractId: import.meta.env.VITE_NEAR_LOGIN_CONTRACT_ID || 'guest-book.testnet',
+            })
+        }
+
         modal.show()
 
         // Wait for wallet selection
         return new Promise((resolve, reject) => {
-            const checkInterval = setInterval(async () => {
-                const state = walletSelector.store.getState()
+            let resolved = false
+
+            const unsubscribe = walletSelector.store.observable.subscribe((state) => {
+                console.log('[nearWallet] walletSelector state change:', state)
+
+                if (resolved) return
+
                 const accounts = state.accounts
 
                 if (accounts && accounts.length > 0) {
-                    clearInterval(checkInterval)
+                    resolved = true
+                    unsubscribe()
+
                     const accountId = accounts[0].accountId
                     connectedAccountId = accountId
+                    currentWalletType = 'mynear'
+
                     modal.hide()
-                    logError('mynear:connected', new Error(`Connected: ${accountId}`))
+
+                    console.log('[nearWallet] MyNearWallet connected:', accountId)
+                    logError('mynear:success', new Error(`Connected: ${accountId}`))
+
                     resolve({ accountId, wallet: 'mynear' })
                 }
-            }, 500)
+            })
 
-            // Timeout after 60s
+            // Timeout after 2 minutes
             setTimeout(() => {
-                clearInterval(checkInterval)
-                reject(new Error('Wallet connection timeout'))
-            }, 60000)
+                if (!resolved) {
+                    resolved = true
+                    unsubscribe()
+                    modal.hide()
+                    const err = new Error('MyNearWallet connection timeout (120s)')
+                    logError('mynear:timeout', err)
+                    reject(err)
+                }
+            }, 120000)
         })
     } catch (err) {
+        console.error('[nearWallet] MyNearWallet error:', err)
         logError('mynear:error', err)
         throw err
     }
 }
 
+// ============ GENERIC CONNECT (default to HOT if mainnet, MyNear if testnet) ============
+
 export async function connectWallet() {
-    if (isTestnet) {
+    if (networkId === 'testnet') {
         return await connectMyNearWallet()
     } else {
         return await connectHotWallet()
@@ -160,19 +192,26 @@ export async function connectWallet() {
 // ============ DISCONNECT ============
 
 export async function disconnectWallet() {
-    if (hereInstance) {
-        hereInstance = null
-    }
-
-    if (walletSelector) {
-        const wallet = await walletSelector.wallet()
-        if (wallet) {
-            await wallet.signOut()
+    try {
+        if (hereInstance) {
+            hereInstance = null
+            console.log('[nearWallet] HOT wallet disconnected')
         }
-    }
 
-    connectedAccountId = null
-    console.log('[nearWallet] disconnected')
+        if (walletSelector) {
+            const wallet = await walletSelector.wallet()
+            if (wallet) {
+                await wallet.signOut()
+                console.log('[nearWallet] MyNearWallet disconnected')
+            }
+        }
+
+        connectedAccountId = null
+        currentWalletType = null
+        console.log('[nearWallet] all wallets disconnected')
+    } catch (err) {
+        console.error('[nearWallet] disconnect error:', err)
+    }
 }
 
 // ============ SIGN & SEND TX ============
@@ -197,20 +236,22 @@ export async function signAndSendTransaction({ receiverId, actions }) {
     }
 
     try {
-        console.log('[nearWallet] signAndSendTransaction', { receiverId, actions })
-        logError('tx:start', new Error(`TX to ${receiverId}, actions: ${actions.length}`))
+        console.log('[nearWallet] signAndSendTransaction', { receiverId, actions, walletType: currentWalletType })
+        logError('tx:start', new Error(`TX to ${receiverId}, actions: ${actions.length}, wallet: ${currentWalletType}`))
 
         let result
 
         // HOT Wallet
-        if (hereInstance) {
+        if (currentWalletType === 'hot' && hereInstance) {
+            console.log('[nearWallet] Using HOT wallet for tx...')
             result = await hereInstance.signAndSendTransaction({
                 receiverId,
                 actions,
             })
         }
-        // Wallet Selector
-        else if (walletSelector) {
+        // MyNearWallet
+        else if (currentWalletType === 'mynear' && walletSelector) {
+            console.log('[nearWallet] Using MyNearWallet for tx...')
             const wallet = await walletSelector.wallet()
             result = await wallet.signAndSendTransaction({
                 receiverId,
@@ -218,7 +259,7 @@ export async function signAndSendTransaction({ receiverId, actions }) {
             })
         }
         else {
-            throw new Error('No wallet instance available')
+            throw new Error(`No wallet instance available (type: ${currentWalletType})`)
         }
 
         console.log('[nearWallet] tx result:', result)
@@ -226,6 +267,7 @@ export async function signAndSendTransaction({ receiverId, actions }) {
 
         return result
     } catch (err) {
+        console.error('[nearWallet] tx error:', err)
         logError('tx:error', err)
         throw err
     }
@@ -233,4 +275,8 @@ export async function signAndSendTransaction({ receiverId, actions }) {
 
 export function getConnectedAccountId() {
     return connectedAccountId
+}
+
+export function getWalletType() {
+    return currentWalletType
 }
