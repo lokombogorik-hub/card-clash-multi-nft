@@ -1,5 +1,4 @@
 const HOT_WALLET_ID = "hot-wallet";
-const HOT_WALLET_BOT = "hot_wallet"; // username бота (без @)
 
 window.__HOT_WALLET_ERRORS__ = [];
 
@@ -21,7 +20,7 @@ function logError(step, error) {
     }
 }
 
-function showManualInputModal() {
+function showHotWalletConnectModal() {
     return new Promise((resolve, reject) => {
         const overlay = document.createElement("div");
         overlay.style.cssText = `
@@ -37,51 +36,94 @@ function showManualInputModal() {
 
         const modal = document.createElement("div");
         modal.style.cssText = `
-      width: min(420px, 96vw);
+      width: min(480px, 96vw);
+      max-height: 90vh;
+      overflow-y: auto;
       border-radius: 18px;
       border: 1px solid rgba(255,255,255,0.14);
       background: rgba(10,10,14,0.96);
       color: #fff;
-      padding: 18px;
+      padding: 20px;
       box-shadow: 0 30px 120px rgba(0,0,0,0.88);
     `;
 
+        const networkId = (import.meta.env.VITE_NEAR_NETWORK_ID || "testnet").toLowerCase();
+
         modal.innerHTML = `
-      <div style="font-weight: 900; font-size: 16px; margin-bottom: 12px;">
-        Введи NEAR Account ID
+      <div style="font-weight: 900; font-size: 18px; margin-bottom: 14px; text-align: center;">
+        🔥 Подключение HOT Wallet
       </div>
-      <div style="font-size: 13px; opacity: 0.85; line-height: 1.4; margin-bottom: 14px;">
-        Если HOT Wallet не открылся:<br><br>
-        
-        <strong>Открой вручную:</strong><br>
-        1. Открой @hot_wallet в Telegram<br>
-        2. Скопируй свой Account ID (вверху экрана)<br>
-        3. Вернись сюда и вставь ниже<br><br>
-        
-        Пример: <span style="font-family: monospace;">digitalbunny.testnet</span>
+      
+      <div style="font-size: 13px; opacity: 0.88; line-height: 1.5; margin-bottom: 16px;">
+        <strong>Как подключить HOT Wallet к игре:</strong>
       </div>
+
+      <ol style="font-size: 13px; line-height: 1.6; padding-left: 20px; margin-bottom: 16px; opacity: 0.9;">
+        <li style="margin-bottom: 10px;">
+          Открой <strong>@hot_wallet</strong> в Telegram (нажми на ссылку ниже ↓)
+        </li>
+        <li style="margin-bottom: 10px;">
+          В HOT Wallet нажми на свой аккаунт <strong>вверху экрана</strong>
+        </li>
+        <li style="margin-bottom: 10px;">
+          Скопируй свой <strong>Account ID</strong> (например: <span style="font-family: monospace; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">digitalbunny.testnet</span>)
+        </li>
+        <li style="margin-bottom: 10px;">
+          Вернись сюда и <strong>вставь Account ID</strong> в поле ниже
+        </li>
+        <li>
+          Нажми <strong>"Подключить"</strong> → баланс и NFT подтянутся автоматически
+        </li>
+      </ol>
+
+      <div style="margin-bottom: 12px;">
+        <a 
+          href="https://t.me/hot_wallet" 
+          target="_blank"
+          style="
+            display: block;
+            text-align: center;
+            padding: 12px 16px;
+            border-radius: 12px;
+            background: linear-gradient(90deg, #FF3D00, #FF6E40);
+            color: #fff;
+            font-weight: 900;
+            text-decoration: none;
+            box-shadow: 0 8px 24px rgba(255,61,0,0.35);
+          "
+        >
+          Открыть @hot_wallet →
+        </a>
+      </div>
+
+      <div style="font-size: 12px; opacity: 0.75; margin-bottom: 12px; text-align: center;">
+        Network: <span style="font-family: monospace;">${networkId}</span>
+      </div>
+
       <input 
-        id="cc-account-input" 
+        id="cc-hot-account-input" 
         type="text" 
-        placeholder="your_account.testnet" 
+        placeholder="digitalbunny.testnet" 
         style="
           width: 100%;
-          padding: 12px;
+          padding: 14px;
           border-radius: 12px;
           border: 1px solid rgba(255,255,255,0.18);
           background: rgba(0,0,0,0.4);
           color: #fff;
           font-family: monospace;
-          font-size: 14px;
+          font-size: 15px;
           outline: none;
-          margin-bottom: 14px;
+          margin-bottom: 16px;
+          text-align: center;
         "
       />
+      
       <div style="display: flex; gap: 10px; justify-content: flex-end;">
         <button 
-          id="cc-account-cancel" 
+          id="cc-hot-cancel" 
           style="
-            padding: 10px 16px;
+            padding: 12px 18px;
             border-radius: 12px;
             border: 1px solid rgba(255,255,255,0.14);
             background: rgba(255,255,255,0.08);
@@ -93,15 +135,16 @@ function showManualInputModal() {
           Отмена
         </button>
         <button 
-          id="cc-account-submit" 
+          id="cc-hot-submit" 
           style="
-            padding: 10px 16px;
+            padding: 12px 20px;
             border-radius: 12px;
             border: 1px solid rgba(255,255,255,0.14);
             background: linear-gradient(90deg,#2563eb,#7c3aed);
             color: #fff;
             font-weight: 900;
             cursor: pointer;
+            box-shadow: 0 6px 20px rgba(37,99,235,0.3);
           "
         >
           Подключить
@@ -112,9 +155,9 @@ function showManualInputModal() {
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
 
-        const input = document.getElementById("cc-account-input");
-        const submitBtn = document.getElementById("cc-account-submit");
-        const cancelBtn = document.getElementById("cc-account-cancel");
+        const input = document.getElementById("cc-hot-account-input");
+        const submitBtn = document.getElementById("cc-hot-submit");
+        const cancelBtn = document.getElementById("cc-hot-cancel");
 
         const cleanup = () => {
             try {
@@ -125,16 +168,26 @@ function showManualInputModal() {
         submitBtn.onclick = () => {
             const accountId = (input.value || "").trim();
             if (!accountId) {
-                input.style.borderColor = "rgba(239, 68, 68, 0.75)";
+                input.style.borderColor = "rgba(239, 68, 68, 0.85)";
+                input.placeholder = "Введи Account ID!";
                 return;
             }
+
+            // basic validation (должен содержать . или быть implicit)
+            if (!accountId.includes('.') && accountId.length < 64) {
+                input.style.borderColor = "rgba(239, 68, 68, 0.85)";
+                input.value = "";
+                input.placeholder = "Неверный формат (нужен .testnet или .near)";
+                return;
+            }
+
             cleanup();
             resolve(accountId);
         };
 
         cancelBtn.onclick = () => {
             cleanup();
-            reject(new Error("Пользователь отменил ввод accountId"));
+            reject(new Error("Отменено пользователем"));
         };
 
         input.addEventListener("keydown", (e) => {
@@ -179,7 +232,7 @@ export function setupHotWallet() {
             type: "injected",
             metadata: {
                 name: "HOT Wallet",
-                description: "Telegram NEAR Wallet",
+                description: "Telegram NEAR Wallet (manual connect)",
                 iconUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Crect fill='%23FF3D00' width='128' height='128' rx='24'/%3E%3Ctext x='64' y='80' font-size='60' text-anchor='middle' fill='white' font-weight='bold'%3EHOT%3C/text%3E%3C/svg%3E",
                 deprecated: false,
                 available: true,
@@ -206,144 +259,27 @@ export function setupHotWallet() {
 
             connect: async () => {
                 try {
-                    const tg = window.Telegram?.WebApp;
-                    if (!tg) {
-                        throw new Error("Открой игру через @Cardclashbot в Telegram");
+                    console.log("[HOT] connect() — showing manual input modal");
+
+                    // Показываем modal сразу (т.к. автоподключение не работает)
+                    const accountId = await showHotWalletConnectModal();
+
+                    if (!accountId) {
+                        throw new Error("Account ID не введён");
                     }
 
-                    const botId = (import.meta.env.VITE_TG_BOT_ID || "").trim();
-                    const networkId = (import.meta.env.VITE_NEAR_NETWORK_ID || "testnet").toLowerCase();
+                    _accountId = accountId;
+                    setStoredAccountId(accountId);
 
-                    console.log("[HOT] connect() called");
-                    console.log("[HOT] botId:", botId);
-                    console.log("[HOT] networkId:", networkId);
+                    console.log("[HOT] Manual account ID entered:", accountId);
 
-                    if (!botId) {
-                        throw new Error("VITE_TG_BOT_ID пустой!");
+                    if (_emitter) {
+                        _emitter.emit("accountsChanged", {
+                            accounts: [{ accountId }],
+                        });
                     }
 
-                    // ВАЖНО: HOT — это обычный бот, а не mini app, поэтому:
-                    // НЕ /app, а ?start= (вместо ?startapp=)
-                    const payload = `auth_${botId}_${networkId}`;
-                    const url = `https://t.me/${HOT_WALLET_BOT}?start=${encodeURIComponent(payload)}`;
-
-                    console.log("[HOT] Opening URL:", url);
-                    console.log("[HOT] Telegram.WebApp.version:", tg.version);
-
-                    try {
-                        tg.expand?.();
-                    } catch { }
-
-                    // Открываем HOT через openTelegramLink (как обычную тг-ссылку)
-                    let opened = false;
-
-                    if (typeof tg.openTelegramLink === "function") {
-                        console.log("[HOT] Trying openTelegramLink...");
-                        try {
-                            tg.openTelegramLink(url);
-                            opened = true;
-                        } catch (e) {
-                            console.error("[HOT] openTelegramLink failed:", e);
-                        }
-                    }
-
-                    if (!opened && typeof tg.openLink === "function") {
-                        console.log("[HOT] Trying openLink...");
-                        try {
-                            tg.openLink(url, { try_instant_view: false });
-                            opened = true;
-                        } catch (e) {
-                            console.error("[HOT] openLink failed:", e);
-                        }
-                    }
-
-                    if (!opened) {
-                        throw new Error("Не удалось открыть HOT Wallet");
-                    }
-
-                    return new Promise(async (resolve, reject) => {
-                        let resolved = false;
-                        const startTime = Date.now();
-
-                        const checkAccount = () => {
-                            if (resolved) return;
-
-                            const acc = getStoredAccountId();
-                            if (acc) {
-                                resolved = true;
-                                cleanup();
-                                _accountId = acc;
-
-                                console.log("[HOT] Account connected:", acc);
-
-                                if (_emitter) {
-                                    _emitter.emit("accountsChanged", {
-                                        accounts: [{ accountId: acc }],
-                                    });
-                                }
-
-                                resolve([{ accountId: acc }]);
-                                return;
-                            }
-
-                            // Показываем manual input через 5 сек
-                            if (Date.now() - startTime > 5000 && Date.now() - startTime < 5500) {
-                                console.log("[HOT] No auto accountId after 5s, showing manual input...");
-
-                                setTimeout(async () => {
-                                    if (resolved) return;
-
-                                    try {
-                                        const manualAccountId = await showManualInputModal();
-                                        if (!resolved && manualAccountId) {
-                                            resolved = true;
-                                            cleanup();
-                                            _accountId = manualAccountId;
-                                            setStoredAccountId(manualAccountId);
-
-                                            if (_emitter) {
-                                                _emitter.emit("accountsChanged", {
-                                                    accounts: [{ accountId: manualAccountId }],
-                                                });
-                                            }
-
-                                            resolve([{ accountId: manualAccountId }]);
-                                        }
-                                    } catch (err) {
-                                        if (!resolved) {
-                                            resolved = true;
-                                            cleanup();
-                                            reject(err);
-                                        }
-                                    }
-                                }, 100);
-                            }
-
-                            if (Date.now() - startTime > 60000) {
-                                resolved = true;
-                                cleanup();
-                                const err = new Error("HOT Wallet timeout");
-                                logError("connect timeout", err);
-                                reject(err);
-                            }
-                        };
-
-                        const interval = setInterval(checkAccount, 500);
-
-                        const onVisibilityChange = () => {
-                            if (!document.hidden) {
-                                console.log("[HOT] App returned, checking...");
-                                setTimeout(checkAccount, 300);
-                            }
-                        };
-
-                        const cleanup = () => {
-                            clearInterval(interval);
-                            document.removeEventListener("visibilitychange", onVisibilityChange);
-                        };
-
-                        document.addEventListener("visibilitychange", onVisibilityChange);
-                    });
+                    return [{ accountId }];
                 } catch (err) {
                     logError("connect", err);
                     throw err;
@@ -372,101 +308,16 @@ export function setupHotWallet() {
             },
 
             signAndSendTransaction: async ({ receiverId, actions }) => {
-                try {
-                    const tg = window.Telegram?.WebApp;
-                    if (!tg) throw new Error("Открой игру через Telegram");
-
-                    const acc = _accountId || getStoredAccountId();
-                    if (!acc) throw new Error("Не подключен аккаунт.");
-
-                    try {
-                        tg.expand?.();
-                    } catch { }
-
-                    const botId = (import.meta.env.VITE_TG_BOT_ID || "").trim();
-                    if (!botId) throw new Error("VITE_TG_BOT_ID не задан");
-
-                    const txData = { receiverId, actions, signerId: acc };
-                    const txPayload = encodeURIComponent(btoa(JSON.stringify(txData)));
-                    const payload = `sign_${botId}_${txPayload}`;
-                    const url = `https://t.me/${HOT_WALLET_BOT}?start=${encodeURIComponent(payload)}`;
-
-                    console.log("[HOT] Signing tx, URL:", url);
-
-                    if (typeof tg.openTelegramLink === "function") {
-                        tg.openTelegramLink(url);
-                    } else if (typeof tg.openLink === "function") {
-                        tg.openLink(url, { try_instant_view: false });
-                    } else {
-                        throw new Error("Telegram WebApp API недоступен");
-                    }
-
-                    return new Promise((resolve, reject) => {
-                        let resolved = false;
-                        const startTime = Date.now();
-
-                        const checkTxHash = () => {
-                            if (resolved) return;
-
-                            try {
-                                const u = new URL(window.location.href);
-                                const txHash = u.searchParams.get("tx_hash") || u.searchParams.get("txHash") || "";
-                                if (txHash) {
-                                    resolved = true;
-                                    cleanup();
-
-                                    u.searchParams.delete("tx_hash");
-                                    u.searchParams.delete("txHash");
-                                    window.history.replaceState({}, "", u.toString());
-
-                                    console.log("[HOT] Transaction signed, txHash:", txHash);
-
-                                    resolve({
-                                        transaction: { hash: txHash },
-                                        transaction_outcome: { id: txHash },
-                                    });
-                                    return;
-                                }
-                            } catch { }
-
-                            if (Date.now() - startTime > 30000) {
-                                resolved = true;
-                                cleanup();
-                                const err = new Error("HOT Wallet sign timeout");
-                                logError("sign timeout", err);
-                                reject(err);
-                            }
-                        };
-
-                        const interval = setInterval(checkTxHash, 500);
-
-                        const onVisibilityChange = () => {
-                            if (!document.hidden) {
-                                console.log("[HOT] App returned, checking tx...");
-                                setTimeout(checkTxHash, 300);
-                            }
-                        };
-
-                        const cleanup = () => {
-                            clearInterval(interval);
-                            document.removeEventListener("visibilitychange", onVisibilityChange);
-                        };
-
-                        document.addEventListener("visibilitychange", onVisibilityChange);
-                    });
-                } catch (err) {
-                    logError("signAndSendTransaction", err);
-                    throw err;
-                }
+                // Транзакции пока делаем заглушкой (HOT не поддерживает tx deep links для сторонних приложений)
+                // В будущем можно добавить @here-wallet/core для подписи или near-api-js с ключами
+                throw new Error(
+                    "Подписание транзакций через HOT в WebApp пока не поддерживается.\n\n" +
+                    "Для Stage2 (lock/claim NFT) используй MyNearWallet или подожди интеграцию HERE SDK."
+                );
             },
 
             signAndSendTransactions: async ({ transactions }) => {
-                const results = [];
-                for (const tx of transactions) {
-                    const result = await wallet.signAndSendTransaction(tx);
-                    results.push(result);
-                }
-                return results;
+                throw new Error("Batch tx not supported in HOT manual mode");
             },
         };
 
