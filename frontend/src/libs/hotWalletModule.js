@@ -2,7 +2,6 @@ const HOT_WALLET_ID = "hot-wallet";
 const HOT_WALLET_URL = "https://t.me/hot_wallet/app";
 
 export function setupHotWallet() {
-    // ВАЖНО: возвращаем async функцию (фабрику), а не объект напрямую
     return async ({ options, store, emitter }) => {
         let accountId = "";
 
@@ -20,9 +19,6 @@ export function setupHotWallet() {
             } catch { }
         };
 
-        // При инициализации проверяем LS
-        accountId = getStoredAccountId();
-
         return {
             id: HOT_WALLET_ID,
             type: "instant-link",
@@ -32,6 +28,19 @@ export function setupHotWallet() {
                 iconUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Crect fill='%23FF3D00' width='128' height='128' rx='24'/%3E%3Ctext x='64' y='80' font-size='60' text-anchor='middle' fill='white' font-weight='bold'%3EHOT%3C/text%3E%3C/svg%3E",
                 deprecated: false,
                 available: true,
+            },
+
+            // ВАЖНО: метод init обязателен для wallet-selector
+            async init() {
+                // При инициализации подтягиваем accountId из LS
+                accountId = getStoredAccountId();
+
+                // Если есть сохранённый аккаунт — уведомляем selector
+                if (accountId) {
+                    emitter.emit("accountsChanged", {
+                        accounts: [{ accountId }],
+                    });
+                }
             },
 
             async connect() {
@@ -71,7 +80,6 @@ export function setupHotWallet() {
                             cleanup();
                             accountId = acc;
 
-                            // Уведомляем wallet-selector
                             emitter.emit("accountsChanged", {
                                 accounts: [{ accountId: acc }],
                             });
