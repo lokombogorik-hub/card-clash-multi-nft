@@ -58,6 +58,9 @@ let state = {
     balance: 0,
     balanceError: "",
     status: "",
+
+    // DEBUG: полная ошибка (показываем в UI)
+    lastError: null,
 };
 
 const listeners = new Set();
@@ -74,7 +77,7 @@ function applyAccount(accountId) {
     const id = String(accountId || "").trim();
     if (!id) return;
 
-    setState({ connected: true, walletAddress: id, status: "", balanceError: "" });
+    setState({ connected: true, walletAddress: id, status: "", balanceError: "", lastError: null });
 
     try {
         localStorage.setItem(LS_NEAR_ACCOUNT_ID, id);
@@ -97,21 +100,36 @@ function restoreFromStorage() {
 }
 
 async function connectHot() {
-    setState({ status: "Opening wallet selector…" });
+    setState({ status: "Opening wallet selector…", lastError: null });
 
     try {
         const { accountId } = await connectWallet();
 
         if (!accountId) {
-            setState({ status: "Кошелёк не вернул accountId. Попробуй ещё раз." });
+            const err = new Error("Кошелёк не вернул accountId");
+            setState({ status: `Connect failed: ${err.message}`, lastError: err });
             return;
         }
 
         applyAccount(accountId);
-        setState({ status: "" });
+        setState({ status: "", lastError: null });
     } catch (e) {
         console.error("[walletStore] connect failed:", e);
-        setState({ status: `Connect failed: ${e?.message || e}` });
+
+        // Показываем полную ошибку в UI (включая stack)
+        const errMsg = e?.message || String(e);
+        const errStack = e?.stack || "";
+        const errName = e?.name || "Error";
+
+        setState({
+            status: `Connect failed: ${errMsg}`,
+            lastError: {
+                name: errName,
+                message: errMsg,
+                stack: errStack,
+                raw: e,
+            }
+        });
     }
 }
 
@@ -119,7 +137,7 @@ async function disconnectWallet() {
     try {
         await disconnect();
     } catch { }
-    setState({ connected: false, walletAddress: "", balance: 0, balanceError: "", status: "" });
+    setState({ connected: false, walletAddress: "", balance: 0, balanceError: "", status: "", lastError: null });
 }
 
 async function restoreSession() {
@@ -127,7 +145,7 @@ async function restoreSession() {
 }
 
 function clearStatus() {
-    setState({ status: "" });
+    setState({ status: "", lastError: null });
 }
 
 function extractTxHash(outcome) {

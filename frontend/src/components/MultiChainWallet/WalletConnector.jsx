@@ -9,6 +9,7 @@ export default function WalletConnector() {
         walletAddress,
         balance,
         status,
+        lastError,
         disconnectWallet,
         restoreSession,
         clearStatus,
@@ -17,6 +18,7 @@ export default function WalletConnector() {
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState("");
     const [pickerOpen, setPickerOpen] = useState(false);
+    const [showErrorDetail, setShowErrorDetail] = useState(false);
 
     const pollRef = useRef(null);
 
@@ -139,6 +141,57 @@ export default function WalletConnector() {
                         </div>
                     ) : null}
 
+                    {/* ПОЛНАЯ ОШИБКА (с stack) */}
+                    {lastError ? (
+                        <div
+                            style={{
+                                padding: "10px 12px",
+                                borderRadius: 12,
+                                background: "rgba(120, 20, 20, 0.85)",
+                                border: "1px solid rgba(255,255,255,0.12)",
+                                color: "#fff",
+                                fontSize: 11,
+                                lineHeight: 1.35,
+                                maxWidth: 360,
+                                wordBreak: "break-word",
+                            }}
+                        >
+                            <div style={{ fontWeight: 900, marginBottom: 6 }}>
+                                {lastError.name}: {lastError.message}
+                            </div>
+                            <button
+                                onClick={() => setShowErrorDetail(!showErrorDetail)}
+                                style={{
+                                    padding: "4px 8px",
+                                    borderRadius: 8,
+                                    background: "rgba(255,255,255,0.12)",
+                                    border: "1px solid rgba(255,255,255,0.18)",
+                                    color: "#fff",
+                                    fontSize: 10,
+                                    fontWeight: 800,
+                                    cursor: "pointer",
+                                    marginBottom: 6,
+                                }}
+                            >
+                                {showErrorDetail ? "Скрыть stack" : "Показать stack"}
+                            </button>
+                            {showErrorDetail && lastError.stack ? (
+                                <pre
+                                    style={{
+                                        fontSize: 10,
+                                        lineHeight: 1.3,
+                                        margin: 0,
+                                        whiteSpace: "pre-wrap",
+                                        wordBreak: "break-word",
+                                        opacity: 0.9,
+                                    }}
+                                >
+                                    {lastError.stack}
+                                </pre>
+                            ) : null}
+                        </div>
+                    ) : null}
+
                     {err ? (
                         <div
                             style={{
@@ -157,11 +210,7 @@ export default function WalletConnector() {
                 </div>
             ) : (
                 <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
-                    <button
-                        onClick={() => {
-                            haptic("light");
-                            onOpenPicker();
-                        }}
+                    <div
                         style={{
                             display: "flex",
                             gap: 8,
@@ -172,9 +221,7 @@ export default function WalletConnector() {
                             border: "1px solid rgba(255,255,255,0.12)",
                             color: "#fff",
                             backdropFilter: "blur(8px)",
-                            cursor: "pointer",
                         }}
-                        title="Wallet"
                     >
                         <div
                             style={{
@@ -205,11 +252,7 @@ export default function WalletConnector() {
                         </div>
 
                         <button
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                onDisconnect();
-                            }}
+                            onClick={onDisconnect}
                             disabled={loading}
                             style={{
                                 padding: "8px 10px",
@@ -219,13 +262,12 @@ export default function WalletConnector() {
                                 color: "#fff",
                                 cursor: loading ? "not-allowed" : "pointer",
                                 opacity: loading ? 0.8 : 1,
-                                fontWeight: 900,
                             }}
                             title="Отключить"
                         >
                             {loading ? "..." : "⎋"}
                         </button>
-                    </button>
+                    </div>
                 </div>
             )}
         </div>
