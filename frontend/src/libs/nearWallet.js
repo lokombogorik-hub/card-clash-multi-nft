@@ -13,12 +13,19 @@ let modal = null;
 async function initWalletSelector() {
     if (selector) return selector;
 
+    console.log("[nearWallet] Initializing wallet selector...");
+    console.log("[nearWallet] Network:", networkId);
+
+    const hotWalletModule = setupHotWallet();
+    console.log("[nearWallet] HOT Wallet module created:", hotWalletModule);
+
     selector = await setupWalletSelector({
         network: networkId,
-        modules: [
-            setupHotWallet(), // кастомный HOT Wallet модуль
-        ],
+        modules: [hotWalletModule],
     });
+
+    console.log("[nearWallet] Wallet selector initialized:", selector);
+    console.log("[nearWallet] Available wallets:", selector.store.getState().modules);
 
     return selector;
 }
@@ -28,11 +35,15 @@ async function initModal() {
 
     const sel = await initWalletSelector();
 
+    console.log("[nearWallet] Creating modal...");
+
     modal = setupModal(sel, {
         contractId: "",
         theme: "dark",
         description: "Подключи HOT Wallet для игры в Card Clash",
     });
+
+    console.log("[nearWallet] Modal created:", modal);
 
     return modal;
 }
@@ -40,6 +51,7 @@ async function initModal() {
 export async function connectWallet() {
     const m = await initModal();
 
+    console.log("[nearWallet] Showing modal...");
     m.show();
 
     return new Promise((resolve, reject) => {
@@ -53,6 +65,8 @@ export async function connectWallet() {
 
         const handleAccountsChanged = async (state) => {
             if (resolved) return;
+
+            console.log("[nearWallet] Accounts changed:", state?.accounts);
 
             const accounts = state?.accounts || [];
             if (accounts.length === 0) return;
@@ -74,6 +88,7 @@ export async function connectWallet() {
         try {
             selector.store.observable.subscribe(handleAccountsChanged);
         } catch (err) {
+            console.error("[nearWallet] Failed to subscribe:", err);
             reject(err);
         }
 
