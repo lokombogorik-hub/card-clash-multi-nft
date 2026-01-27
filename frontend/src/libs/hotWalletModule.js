@@ -27,7 +27,7 @@ export function setupHotWallet() {
 
         const wallet = {
             id: HOT_WALLET_ID,
-            type: "instant-link",
+            type: "injected", // ВАЖНО: меняем с "instant-link" на "injected"
             metadata: {
                 name: "HOT Wallet",
                 description: "Telegram NEAR Wallet",
