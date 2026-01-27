@@ -1,13 +1,11 @@
 import { setupWalletSelector } from "@near-wallet-selector/core";
 import { setupModal } from "@near-wallet-selector/modal-ui";
-import { setupNearMobileWallet } from "@near-wallet-selector/near-mobile-wallet";
+import { setupHotWallet } from "./hotWalletModule";
 
 const LS_NEAR_ACCOUNT_ID = "cc_near_account_id";
 
 const envNetworkId = (import.meta.env.VITE_NEAR_NETWORK_ID || "").toLowerCase();
 const networkId = envNetworkId === "testnet" ? "testnet" : "mainnet";
-
-const botId = (import.meta.env.VITE_TG_BOT_ID || "").trim(); // Cardclashbot/app
 
 let selector = null;
 let modal = null;
@@ -18,16 +16,7 @@ async function initWalletSelector() {
     selector = await setupWalletSelector({
         network: networkId,
         modules: [
-            // HOT Wallet для Telegram
-            setupNearMobileWallet({
-                // Указываем точный URL для HOT Wallet
-                dAppMetadata: {
-                    name: "Card Clash",
-                    description: "NFT Card Battle Game",
-                    iconUrl: "https://card-clash-multi-nft.vercel.app/logo.png", // твой лого
-                },
-                walletUrl: "https://t.me/hot_wallet/app",
-            }),
+            setupHotWallet(), // кастомный HOT Wallet модуль
         ],
     });
 
@@ -40,9 +29,9 @@ async function initModal() {
     const sel = await initWalletSelector();
 
     modal = setupModal(sel, {
-        contractId: "", // не требуется для простого коннекта
+        contractId: "",
         theme: "dark",
-        description: "Подключи HOT Wallet из Telegram для игры",
+        description: "Подключи HOT Wallet для игры в Card Clash",
     });
 
     return modal;
