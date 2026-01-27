@@ -3,14 +3,21 @@ const HOT_WALLET_URL = "https://t.me/hot_wallet/app";
 
 export function setupHotWallet() {
     return async () => {
-        const getAccounts = async () => {
+        let emitter = null;
+        let accountId = "";
+
+        const getStoredAccountId = () => {
             try {
-                const accountId = localStorage.getItem("cc_near_account_id") || "";
-                if (!accountId) return [];
-                return [{ accountId, publicKey: "" }];
+                return (localStorage.getItem("cc_near_account_id") || "").trim();
             } catch {
-                return [];
+                return "";
             }
+        };
+
+        const setStoredAccountId = (id) => {
+            try {
+                localStorage.setItem("cc_near_account_id", String(id || "").trim());
+            } catch { }
         };
 
         return {
@@ -18,27 +25,27 @@ export function setupHotWallet() {
             type: "instant-link",
             metadata: {
                 name: "HOT Wallet",
-                description: "Telegram Wallet для NEAR (key_k1.tg аккаунты)",
-                iconUrl: "/ui/wallets/hotwallet.svg?v=21",
+                description: "Telegram NEAR Wallet (key_k1.tg)",
+                iconUrl: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Crect fill='%23FF3D00' width='128' height='128' rx='24'/%3E%3Ctext x='64' y='80' font-size='60' text-anchor='middle' fill='white' font-weight='bold'%3EHOT%3C/text%3E%3C/svg%3E",
                 deprecated: false,
                 available: true,
-                downloadUrl: HOT_WALLET_URL,
             },
 
-            async init() {
+            async init({ emitter: e }) {
+                emitter = e;
+                accountId = getStoredAccountId();
                 return;
             },
 
             async connect() {
                 const tg = window.Telegram?.WebApp;
                 if (!tg) {
-                    throw new Error("Открой игру через Telegram (@Cardclashbot)");
+                    throw new Error("Открой игру через @Cardclashbot в Telegram");
                 }
 
                 const botId = import.meta.env.VITE_TG_BOT_ID || "";
                 const networkId = (import.meta.env.VITE_NEAR_NETWORK_ID || "testnet").toLowerCase();
 
-                // Формируем deep link для HOT
                 const payload = `auth_${encodeURIComponent(botId)}_${networkId}`;
                 const url = `${HOT_WALLET_URL}?startapp=${payload}`;
 
@@ -46,7 +53,6 @@ export function setupHotWallet() {
                     tg.expand?.();
                 } catch { }
 
-                // Открываем HOT через openTelegramLink (mini app поверх игры)
                 if (typeof tg.openTelegramLink === "function") {
                     tg.openTelegramLink(url);
                 } else if (typeof tg.openLink === "function") {
@@ -55,103 +61,84 @@ export function setupHotWallet() {
                     throw new Error("Telegram WebApp API недоступен");
                 }
 
-                // Ждём возврата из HOT (пользователь вернётся в игру через 5-15 сек)
                 return new Promise((resolve, reject) => {
                     let resolved = false;
                     const startTime = Date.now();
 
-                    const checkAccount = async () => {
+                    const checkAccount = () => {
                         if (resolved) return;
 
-                        // Проверяем LS (HOT может записать accountId напрямую)
-                        const accounts = await getAccounts();
-                        if (accounts.length > 0) {
+                        const acc = getStoredAccountId();
+                        if (acc) {
                             resolved = true;
                             cleanup();
-                            resolve(accounts);
+                            accountId = acc;
+
+                            // Уведомляем wallet-selector об успешном подключении
+                            if (emitter) {
+                                emitter.emit("accountsChanged", {
+                                    accounts: [{ accountId: acc }],
+                                });
+                            }
+
+                            resolve([{ accountId: acc }]);
                             return;
                         }
 
-                        // Timeout 30s
                         if (Date.now() - startTime > 30000) {
                             resolved = true;
                             cleanup();
-                            reject(new Error(
-                                "HOT Wallet не вернул accountId.\n\n" +
-                                "Что делать:\n" +
-                                "1. Открой @hot_wallet в Telegram\n" +
-                                "2. Создай/подключи NEAR аккаунт\n" +
-                                "3. Скопируй свой Account ID (например user.near)\n" +
-                                "4. Введи его вручную в следующем окне"
-                            ));
+                            reject(new Error("HOT Wallet не вернул accountId за 30 сек. Попробуй ещё раз."));
                         }
                     };
 
-                    // Polling каждые 500ms
                     const interval = setInterval(checkAccount, 500);
 
-                    // Слушаем возврат фокуса в игру
                     const onVisibilityChange = () => {
-                        if (!document.hidden) {
-                            setTimeout(checkAccount, 300);
-                        }
-                    };
-
-                    const onFocus = () => {
-                        setTimeout(checkAccount, 300);
+                        if (!document.hidden) setTimeout(checkAccount, 300);
                     };
 
                     const cleanup = () => {
                         clearInterval(interval);
                         document.removeEventListener("visibilitychange", onVisibilityChange);
-                        window.removeEventListener("focus", onFocus);
                     };
 
                     document.addEventListener("visibilitychange", onVisibilityChange);
-                    window.addEventListener("focus", onFocus);
                 });
             },
 
             async disconnect() {
-                try {
-                    localStorage.removeItem("cc_near_account_id");
-                } catch { }
+                accountId = "";
+                setStoredAccountId("");
+
+                if (emitter) {
+                    emitter.emit("accountsChanged", { accounts: [] });
+                }
             },
 
             async getAccounts() {
-                return await getAccounts();
-            },
-
-            async signIn() {
-                return await this.connect();
-            },
-
-            async signOut() {
-                return await this.disconnect();
+                const acc = accountId || getStoredAccountId();
+                return acc ? [{ accountId: acc }] : [];
             },
 
             async isSignedIn() {
-                const accounts = await getAccounts();
-                return accounts.length > 0;
+                const acc = accountId || getStoredAccountId();
+                return !!acc;
             },
 
-            async signAndSendTransaction({ receiverId, actions, signerId }) {
+            async signAndSendTransaction({ receiverId, actions }) {
                 const tg = window.Telegram?.WebApp;
-                if (!tg) {
-                    throw new Error("Открой игру через Telegram");
-                }
+                if (!tg) throw new Error("Открой игру через Telegram");
 
-                const accountId = signerId || localStorage.getItem("cc_near_account_id") || "";
-                if (!accountId) {
-                    throw new Error("Не подключен аккаунт. Сначала подключи HOT Wallet.");
-                }
+                const acc = accountId || getStoredAccountId();
+                if (!acc) throw new Error("Не подключен аккаунт. Подключи HOT Wallet.");
 
                 try {
                     tg.expand?.();
                 } catch { }
 
                 const botId = import.meta.env.VITE_TG_BOT_ID || "";
-                const txData = { receiverId, actions, signerId: accountId };
+                const txData = { receiverId, actions, signerId: acc };
                 const txPayload = encodeURIComponent(btoa(JSON.stringify(txData)));
                 const payload = `sign_${encodeURIComponent(botId)}_${txPayload}`;
                 const url = `${HOT_WALLET_URL}?startapp=${payload}`;
@@ -171,7 +158,6 @@ export function setupHotWallet() {
                     const checkTxHash = () => {
                         if (resolved) return;
 
-                        // Проверяем URL на txHash (HOT может вернуть через query)
                         try {
                             const u = new URL(window.location.href);
                             const txHash = u.searchParams.get("tx_hash") || u.searchParams.get("txHash") || "";
@@ -179,7 +165,6 @@ export function setupHotWallet() {
                                 resolved = true;
                                 cleanup();
 
-                                // Очищаем URL
                                 u.searchParams.delete("tx_hash");
                                 u.searchParams.delete("txHash");
                                 window.history.replaceState({}, "", u.toString());
@@ -202,9 +187,7 @@ export function setupHotWallet() {
                     const interval = setInterval(checkTxHash, 500);
 
                     const onVisibilityChange = () => {
-                        if (!document.hidden) {
-                            setTimeout(checkTxHash, 300);
-                        }
+                        if (!document.hidden) setTimeout(checkTxHash, 300);
                     };
 
                     const cleanup = () => {
@@ -217,7 +200,6 @@ export function setupHotWallet() {
             },
 
             async signAndSendTransactions({ transactions }) {
-                // HOT не поддерживает batch transactions — подписываем по одной
                 const results = [];
                 for (const tx of transactions) {
                     const result = await this.signAndSendTransaction(tx);
