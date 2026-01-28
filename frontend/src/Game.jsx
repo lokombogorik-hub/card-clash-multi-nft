@@ -64,7 +64,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const randInt = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
 const pick = (arr) => arr[(Math.random() * arr.length) | 0];
 const randomFirstTurn = () => (Math.random() < 0.5 ? "player" : "enemy");
-const showVal = (v) => String(v); // always digits, no "A"
+const showVal = (v) => String(v);
 
 const RANKS = [
     { key: "common", label: "C", weight: 50, min: 1, max: 7, elemChance: 0.6 },
@@ -312,6 +312,21 @@ function getStoredToken() {
     }
 }
 
+function LoadingScreen({ onExit, text }) {
+    return (
+        <div className="game-root">
+            <div className="game-ui tt-layout">
+                <button className="exit" onClick={onExit}>
+                    ← Меню
+                </button>
+                <div style={{ color: "#fff", padding: 20, textAlign: "center", gridColumn: "1 / -1", fontSize: 14 }}>
+                    {text}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function Game({ onExit, me, playerDeck, matchId }) {
     const revealTimerRef = useRef(null);
 
@@ -357,37 +372,56 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
         );
     }
 
-    const [enemyDeck, setEnemyDeck] = useState([]);
+    // ===== Enemy deck (AI) =====
+    const [enemyDeck, setEnemyDeck] = useState(null); // array of cards
     const [loadingEnemyDeck, setLoadingEnemyDeck] = useState(true);
 
-    // Load AI deck from backend
     useEffect(() => {
+        let alive = true;
+
         (async () => {
             try {
                 const token = getStoredToken();
                 const aiDeck = await apiFetch("/api/decks/ai_opponent", { token });
                 const cards = Array.isArray(aiDeck) ? aiDeck.map((n, idx) => nftToCard(n, idx)) : [];
-                setEnemyDeck(cards.length === 5 ? cards : Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`)));
+                if (!alive) return;
+
+                if (cards.length === 5) {
+                    setEnemyDeck(cards);
+                } else {
+                    setEnemyDeck(Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`)));
+                }
             } catch {
+                if (!alive) return;
                 setEnemyDeck(Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`)));
             } finally {
+                if (!alive) return;
                 setLoadingEnemyDeck(false);
             }
         })();
+
+        return () => {
+            alive = false;
+        };
     }, []);
 
+    if (loadingEnemyDeck || !enemyDeck) {
+        return <LoadingScreen onExit={onExit} text="Загрузка соперника..." />;
+    }
+
+    // ===== Core game state =====
     const [hands, setHands] = useState(() => ({
-        player: cloneDeckToHand(playerDeck.map((n, idx) => nftToCard(n, idx)), "player"),
-        enemy: cloneDeckToHand(enemyDeck, "enemy"),
+        player: [],
+        enemy: [],
     }));
 
     const [boardElems, setBoardElems] = useState(() => makeBoardElements());
-    const [board, setBoard] = useState(Array(9).fill(null));
+    const [board, setBoard] = useState(() => Array(9).fill(null));
     const [selected, setSelected] = useState(null);
 
     const [turn, setTurn] = useState(() => randomFirstTurn());
-    const [series, setSeries] = useState({ player: 0, enemy: 0 });
-    const [roundNo, setRoundNo] = useState(1);
+    const [series, setSeries] = useState(() => ({ player: 0, enemy: 0 }));
+    const [roundNo, setRoundNo] = useState(() => 1);
 
     const [roundOver, setRoundOver] = useState(false);
     const [roundWinner, setRoundWinner] = useState(null);
@@ -400,7 +434,7 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
     const [spellMode, setSpellMode] = useState(null);
     const [frozen, setFrozen] = useState(() => Array(9).fill(0));
     const [enemyRevealId, setEnemyRevealId] = useState(null);
-    const [playerSpells, setPlayerSpells] = useState({ freeze: 1, reveal: 1 });
+    const [playerSpells, setPlayerSpells] = useState(() => ({ freeze: 1, reveal: 1 }));
 
     // refs for AI to never "miss" a move
     const boardRef = useRef(board);
@@ -413,17 +447,14 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
     useEffect(() => void (frozenRef.current = frozen), [frozen]);
     useEffect(() => void (boardElemsRef.current = boardElems), [boardElems]);
 
+    // init hands once we have both decks
     useEffect(() => {
-        setHands((h) => ({
-            ...h,
+        setHands({
             player: cloneDeckToHand(playerDeck.map((n, idx) => nftToCard(n, idx)), "player"),
-        }));
+            enemy: cloneDeckToHand(enemyDeck, "enemy"),
+        });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [playerDeck]);
-
-    useEffect(() => {
-        setHands((h) => ({ ...h, enemy: cloneDeckToHand(enemyDeck, "enemy") }));
-    }, [enemyDeck]);
+    }, [enemyDeck, playerDeck]);
 
     const haptic = (kind = "light") => {
         try {
@@ -459,9 +490,7 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
         });
 
         setSelected(null);
-
-        const first = randomFirstTurn();
-        setTurn(first);
+        setTurn(randomFirstTurn());
 
         setRoundOver(false);
         setRoundWinner(null);
@@ -483,11 +512,13 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
     };
 
     const resetMatch = () => {
-        setEnemyDeck(Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${Date.now()}_${i}`)));
+        // new random AI deck (offline fallback style)
+        const newEnemy = Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${Date.now()}_${i}`));
+        setEnemyDeck(newEnemy);
         setTimeout(() => startRound({ keepSeries: false }), 0);
     };
 
-    // score on board only (0..9), no draw possible on 9 cells
+    // score on board only (0..9)
     const boardScore = useMemo(() => {
         return board.reduce(
             (a, c) => {
@@ -685,7 +716,7 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
     const loserSide = matchWinner === "player" ? "enemy" : matchWinner === "enemy" ? "player" : null;
     const winnerSide = matchWinner;
 
-    // decks for claim UI (Stage1 fallback)
+    // Stage1 claim UI fallback
     const playerDeckCards = useMemo(() => playerDeck.map((n, idx) => nftToCard(n, idx)), [playerDeck]);
     const loserDeck = loserSide === "enemy" ? enemyDeck : loserSide === "player" ? playerDeckCards : [];
 
@@ -700,7 +731,7 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
 
     const onConfirmClaim = async () => {
         if (!matchOver) return;
-        if (winnerSide !== "player") return; // only player can pick in MVP
+        if (winnerSide !== "player") return; // MVP: only player picks
         if (!loserSide) return;
 
         // Stage1 fallback
@@ -777,7 +808,9 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
                 </button>
 
                 <div className="hud-corner hud-score red hud-near-left">🟥 {boardScore.red}</div>
-                <div className="hud-corner hud-score blue hud-near-right">{boardScore.blue} 🟦</div>
+                <div className="hud-corner hud-score blue hud-near-right">
+                    {boardScore.blue} 🟦
+                </div>
 
                 <PlayerBadge side="enemy" name={enemyName} avatarUrl={enemyAvatar} active={turn === "enemy"} />
                 <PlayerBadge side="player" name={myName} avatarUrl={myAvatar} active={turn === "player"} />
@@ -907,9 +940,7 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
                             {matchOver && matchWinner && loserSide && (
                                 <>
                                     <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 8 }}>
-                                        {matchWinner === "player"
-                                            ? "Выбери 1 карту соперника"
-                                            : "Соперник забирает 1 твою карту"}
+                                        {matchWinner === "player" ? "Выбери 1 карту соперника" : "Соперник забирает 1 твою карту"}
                                     </div>
 
                                     {matchWinner === "player" ? (
@@ -995,9 +1026,7 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
                                                 </div>
                                             )}
 
-                                            {stage2Err ? (
-                                                <div style={{ marginTop: 8, color: "#ffb3b3", fontSize: 12 }}>{stage2Err}</div>
-                                            ) : null}
+                                            {stage2Err ? <div style={{ marginTop: 8, color: "#ffb3b3", fontSize: 12 }}>{stage2Err}</div> : null}
 
                                             {matchId && !nearConnected ? (
                                                 <div style={{ marginTop: 8, opacity: 0.85, fontSize: 12 }}>
@@ -1006,9 +1035,7 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
                                             ) : null}
                                         </>
                                     ) : (
-                                        <div style={{ opacity: 0.85, fontSize: 12, marginBottom: 10 }}>
-                                            (Пока AI не выбирает.)
-                                        </div>
+                                        <div style={{ opacity: 0.85, fontSize: 12, marginBottom: 10 }}>(Пока AI не выбирает.)</div>
                                     )}
                                 </>
                             )}
@@ -1071,13 +1098,7 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
         return (
             <div className="card back" aria-hidden="true">
                 <div className="card-back-inner">
-                    <img
-                        className="card-back-logo-img"
-                        src="/ui/cardclash-logo.png?v=3"
-                        alt="CardClash"
-                        draggable="false"
-                        loading="lazy"
-                    />
+                    <img className="card-back-logo-img" src="/ui/cardclash-logo.png?v=3" alt="CardClash" draggable="false" loading="lazy" />
                 </div>
             </div>
         );
