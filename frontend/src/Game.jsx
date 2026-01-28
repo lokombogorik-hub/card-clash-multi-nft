@@ -185,18 +185,15 @@ function resolvePlacementTT(placedIdx, grid, boardElems) {
     const sameSet = new Set();
     const plusSet = new Set();
 
-    // BASIC
     for (const i of adj) {
         if (i.target.owner !== placed.owner && i.pBattle > i.tSP) basicSet.add(i.ni);
     }
 
-    // SAME
     if (RULES.same) {
         const eq = adj.filter((i) => i.pSP === i.tSP);
         if (eq.length >= 2) eq.forEach((i) => sameSet.add(i.ni));
     }
 
-    // PLUS
     if (RULES.plus) {
         const groups = new Map();
         for (const i of adj) {
@@ -240,6 +237,7 @@ function captureByPowerFrom(idx, grid, boardElems) {
             if (flipToOwner(grid, ni, src.owner)) flipped.push(ni);
         }
     }
+
     return flipped;
 }
 
@@ -327,6 +325,7 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
 
     const myTgId = me?.id ? Number(me.id) : 0;
 
+<<<<<<< Updated upstream
     // AI enemy deck state (always declared!)
     const [enemyDeck, setEnemyDeck] = useState(() => getFallbackEnemyDeck());
     const [loadingEnemyDeck, setLoadingEnemyDeck] = useState(true);
@@ -334,6 +333,14 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
     // Core state (always declared!)
     const [hands, setHands] = useState(() => ({
         player: cloneDeckToHand(playerDeck?.map((n, idx) => nftToCard(n, idx)) || [], "player"),
+=======
+    // IMPORTANT: hooks MUST be declared unconditionally (no early returns)
+    const [enemyDeck, setEnemyDeck] = useState(() => getFallbackEnemyDeck());
+    const [loadingEnemyDeck, setLoadingEnemyDeck] = useState(true);
+
+    const [hands, setHands] = useState(() => ({
+        player: cloneDeckToHand((playerDeck || []).map((n, idx) => nftToCard(n, idx)), "player"),
+>>>>>>> Stashed changes
         enemy: cloneDeckToHand(getFallbackEnemyDeck(), "enemy"),
     }));
 
@@ -357,7 +364,10 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
     const [enemyRevealId, setEnemyRevealId] = useState(null);
     const [playerSpells, setPlayerSpells] = useState(() => ({ freeze: 1, reveal: 1 }));
 
+<<<<<<< Updated upstream
     // refs for AI to never "miss" a move
+=======
+>>>>>>> Stashed changes
     const boardRef = useRef(board);
     const handsRef = useRef(hands);
     const frozenRef = useRef(frozen);
@@ -368,6 +378,11 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
     useEffect(() => void (frozenRef.current = frozen), [frozen]);
     useEffect(() => void (boardElemsRef.current = boardElems), [boardElems]);
 
+<<<<<<< Updated upstream
+=======
+    const deckOk = Array.isArray(playerDeck) && playerDeck.length === 5;
+
+>>>>>>> Stashed changes
     // Stage2 match refresh
     const refreshStage2Match = async () => {
         if (!matchId) return;
@@ -381,6 +396,7 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
         }
     };
 
+<<<<<<< Updated upstream
     useEffect(() => {
         refreshStage2Match();
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -424,6 +440,53 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [playerDeck]);
 
+=======
+    useEffect(() => {
+        refreshStage2Match();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [matchId]);
+
+    // Load AI deck from backend
+    useEffect(() => {
+        let alive = true;
+
+        (async () => {
+            try {
+                setLoadingEnemyDeck(true);
+                const token = getStoredToken();
+                const aiDeck = await apiFetch("/api/decks/ai_opponent", { token });
+                const cards = Array.isArray(aiDeck) ? aiDeck.map((n, idx) => nftToCard(n, idx)) : [];
+
+                if (!alive) return;
+
+                if (cards.length === 5) setEnemyDeck(cards);
+                else setEnemyDeck(getFallbackEnemyDeck());
+            } catch {
+                if (!alive) return;
+                setEnemyDeck(getFallbackEnemyDeck());
+            } finally {
+                if (!alive) return;
+                setLoadingEnemyDeck(false);
+            }
+        })();
+
+        return () => {
+            alive = false;
+        };
+    }, []);
+
+    // Sync hands for player deck changes
+    useEffect(() => {
+        if (!deckOk) return;
+        setHands((h) => ({
+            ...h,
+            player: cloneDeckToHand(playerDeck.map((n, idx) => nftToCard(n, idx)), "player"),
+        }));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [playerDeck]);
+
+    // Sync hands for enemy deck changes
+>>>>>>> Stashed changes
     useEffect(() => {
         setHands((h) => ({
             ...h,
@@ -461,16 +524,23 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
         setBoard(Array(9).fill(null));
         setBoardElems(makeBoardElements());
 
+<<<<<<< Updated upstream
         if (Array.isArray(playerDeck) && playerDeck.length === 5) {
+=======
+        if (deckOk) {
+>>>>>>> Stashed changes
             setHands({
                 player: cloneDeckToHand(playerDeck.map((n, idx) => nftToCard(n, idx)), "player"),
                 enemy: cloneDeckToHand(ed, "enemy"),
             });
+<<<<<<< Updated upstream
         } else {
             setHands({
                 player: [],
                 enemy: cloneDeckToHand(ed, "enemy"),
             });
+=======
+>>>>>>> Stashed changes
         }
 
         setSelected(null);
@@ -813,9 +883,14 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
                         </div>
 
                         <PlayerBadge side="enemy" name={enemyName} avatarUrl={enemyAvatar} active={turn === "enemy"} />
+<<<<<<< Updated upstream
                         <PlayerBadge side="player" name={getPlayerName(me)} avatarUrl={myAvatar} active={turn === "player"} />
 
                         {/* LEFT enemy hand */}
+=======
+                        <PlayerBadge side="player" name={myName} avatarUrl={myAvatar} active={turn === "player"} />
+
+>>>>>>> Stashed changes
                         <div className="hand left">
                             <div className="hand-grid">
                                 {hands.enemy.map((c, i) => {
@@ -839,7 +914,10 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
                             </div>
                         </div>
 
+<<<<<<< Updated upstream
                         {/* CENTER BOARD */}
+=======
+>>>>>>> Stashed changes
                         <div className="center-col">
                             <div className="board">
                                 {board.map((cell, i) => {
@@ -872,7 +950,10 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
                             </div>
                         </div>
 
+<<<<<<< Updated upstream
                         {/* RIGHT player hand */}
+=======
+>>>>>>> Stashed changes
                         <div className="hand right">
                             <div className="hand-grid">
                                 {hands.player.map((c, i) => {
@@ -913,8 +994,12 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
                             </div>
                         </div>
 
+<<<<<<< Updated upstream
                         {/* LOADING OVERLAY (enemy deck) */}
                         {overlayLoading ? (
+=======
+                        {loadingEnemyDeck ? (
+>>>>>>> Stashed changes
                             <div className="game-over">
                                 <div className="game-over-box" style={{ minWidth: 320 }}>
                                     <h2 style={{ margin: 0 }}>Загрузка соперника…</h2>
@@ -925,7 +1010,10 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
                             </div>
                         ) : null}
 
+<<<<<<< Updated upstream
                         {/* GAME OVER / MATCH OVER */}
+=======
+>>>>>>> Stashed changes
                         {(roundOver || matchOver) && (
                             <div className="game-over">
                                 <div className="game-over-box" style={{ minWidth: 320 }}>

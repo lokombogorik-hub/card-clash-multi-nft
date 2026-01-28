@@ -1,5 +1,10 @@
 /* =========================================================
+<<<<<<< Updated upstream
    Card Clash — index.css (ONLY CSS)
+=======
+   Card Clash — index.css
+   ONLY CSS. NO JS/IMPORT.
+>>>>>>> Stashed changes
    ========================================================= */
 
 * {
@@ -36,16 +41,26 @@ button {
     }
 }
 
+<<<<<<< Updated upstream
+=======
+/* =========================
+   2) VARS
+   ========================= */
+>>>>>>> Stashed changes
 :root {
     --app-h: 100vh;
 
     --safe-t: env(safe-area-inset-top, 0px);
     --safe-b: env(safe-area-inset-bottom, 0px);
 
-    /* set via ResizeObserver in App.jsx */
     --bottom-stack-h: 160px;
+    /* set by App.jsx */
 
+<<<<<<< Updated upstream
     /* TT UI vars */
+=======
+    /* TT */
+>>>>>>> Stashed changes
     --ui-pad: clamp(8px, 2vw, 14px);
     --gap: clamp(6px, 1.6vw, 10px);
 
@@ -66,16 +81,15 @@ button {
 
     --tg-top-controls: 58px;
 
-    /* Magic column */
     --magic-w: 52px;
     --magic-gap: 12px;
     --magic-offset: 12px;
 
-    /* computed */
+    /* computed layout */
     --vw-safe: calc(100vw - (var(--ui-pad) * 2) - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
     --card-w-vw: calc((var(--vw-safe) - (var(--edge-inset) * 2) - (var(--hand-col-gap) * 2) - (var(--hand-pad-x) * 4) - (var(--gap) * 6)) / 7);
-    --available-h: calc(var(--app-h, 100vh) - (var(--ui-pad) * 2) - var(--safe-t) - var(--safe-b) - (var(--gap) * 2));
 
+    --available-h: calc(var(--app-h, 100vh) - (var(--ui-pad) * 2) - var(--safe-t) - var(--safe-b) - (var(--gap) * 2));
     --card-h-fit: calc((var(--available-h) - (var(--gap) * 4)) / 3);
     --card-w-fit: calc(var(--card-h-fit) / 1.375);
 
@@ -297,7 +311,10 @@ button {
     letter-spacing: 0.2px;
 }
 
+<<<<<<< Updated upstream
 /* Rotate-gate hides host */
+=======
+>>>>>>> Stashed changes
 .game-host.is-hidden {
     opacity: 0;
     pointer-events: none;
@@ -362,7 +379,153 @@ button {
 }
 
 /* =========================
+<<<<<<< Updated upstream
    INVENTORY (modern deck builder)
+=======
+   5) MATCHMAKING (AI vs PvP) — НЕОНОВОЕ МЕНЮ КАК БЫЛО
+   ========================= */
+.matchmaking-page {
+    padding: 18px;
+    max-width: 980px;
+    margin: 0 auto;
+    min-height: 65vh;
+}
+
+.matchmaking-header {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.matchmaking-back {
+    align-self: flex-start;
+    padding: 10px 14px;
+    border-radius: 14px;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: #fff;
+}
+
+.matchmaking-title {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 950;
+    letter-spacing: 0.2px;
+    color: #fff;
+    text-shadow: 0 0 22px rgba(120, 200, 255, 0.22);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.matchmaking-icon {
+    font-size: 22px;
+}
+
+.matchmaking-modes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+@media (max-width: 720px) {
+    .matchmaking-modes {
+        grid-template-columns: 1fr;
+    }
+}
+
+.mode-card {
+    position: relative;
+    border-radius: 22px;
+    padding: 18px 16px;
+    text-align: left;
+
+    background:
+        radial-gradient(120% 120% at 12% 10%, rgba(120, 200, 255, 0.14) 0%, rgba(0, 0, 0, 0) 55%),
+        radial-gradient(120% 120% at 85% 85%, rgba(255, 61, 242, 0.12) 0%, rgba(0, 0, 0, 0) 60%),
+        rgba(10, 10, 14, 0.86);
+
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 22px 90px rgba(0, 0, 0, 0.55);
+
+    transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.mode-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(120, 200, 255, 0.32);
+    box-shadow: 0 28px 110px rgba(0, 0, 0, 0.62), 0 0 26px rgba(120, 200, 255, 0.10);
+}
+
+.mode-icon {
+    font-size: 34px;
+}
+
+.mode-title {
+    margin-top: 10px;
+    font-weight: 950;
+    font-size: 16px;
+}
+
+.mode-subtitle {
+    margin-top: 8px;
+    opacity: 0.82;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.mode-badge {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 950;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(0, 0, 0, 0.45);
+}
+
+.mode-ai .mode-badge {
+    color: rgba(150, 255, 200, 0.95);
+    border-color: rgba(150, 255, 200, 0.22);
+}
+
+.mode-online .mode-badge {
+    color: rgba(120, 200, 255, 0.95);
+    border-color: rgba(120, 200, 255, 0.22);
+}
+
+.matchmaking-loading {
+    display: grid;
+    justify-items: center;
+    gap: 14px;
+    padding: 22px;
+}
+
+.matchmaking-spinner {
+    width: 46px;
+    height: 46px;
+    border-radius: 999px;
+    border: 4px solid rgba(120, 200, 255, 0.18);
+    border-top-color: rgba(120, 200, 255, 0.95);
+    animation: spin 0.8s linear infinite;
+}
+
+.matchmaking-error {
+    margin-top: 10px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: rgba(120, 20, 20, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font-size: 12px;
+}
+
+/* =========================
+   6) INVENTORY (modern deck builder)
+>>>>>>> Stashed changes
    ========================= */
 .inventory-page {
     padding: 20px;
@@ -464,6 +627,7 @@ button {
 .inv-empty-title {
     font-size: 20px;
     font-weight: 700;
+    color: #fff;
 }
 
 .inv-empty-text {
@@ -482,7 +646,7 @@ button {
 .inv-card-modern {
     position: relative;
     background: linear-gradient(135deg, rgba(20, 20, 30, 0.95) 0%, rgba(10, 10, 20, 0.95) 100%);
-    border: 2px solid rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.10);
     border-radius: 16px;
     padding: 0;
     overflow: hidden;
@@ -493,13 +657,13 @@ button {
 
 .inv-card-modern:hover {
     transform: translateY(-4px);
-    border-color: rgba(120, 200, 255, 0.4);
-    box-shadow: 0 8px 24px rgba(120, 200, 255, 0.2);
+    border-color: rgba(120, 200, 255, 0.40);
+    box-shadow: 0 8px 24px rgba(120, 200, 255, 0.20);
 }
 
 .inv-card-modern.is-selected {
-    border-color: rgba(120, 200, 255, 0.8);
-    box-shadow: 0 0 20px rgba(120, 200, 255, 0.4), inset 0 0 30px rgba(120, 200, 255, 0.1);
+    border-color: rgba(120, 200, 255, 0.80);
+    box-shadow: 0 0 20px rgba(120, 200, 255, 0.40), inset 0 0 30px rgba(120, 200, 255, 0.10);
 }
 
 .inv-card-art {
@@ -527,9 +691,8 @@ button {
     background: rgba(0, 0, 0, 0.75);
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: grid;
+    place-items: center;
     font-size: 18px;
     z-index: 2;
 }
@@ -543,11 +706,11 @@ button {
     background: rgba(0, 0, 0, 0.85);
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: grid;
+    place-items: center;
     font-size: 14px;
     font-weight: 900;
+    color: #fff;
     z-index: 2;
 }
 
@@ -559,6 +722,7 @@ button {
     padding: 0 12px;
     font-size: 13px;
     font-weight: 700;
+    color: #fff;
     text-align: center;
     white-space: nowrap;
     overflow: hidden;
@@ -597,10 +761,8 @@ button {
     position: absolute;
     inset: 0;
     background: linear-gradient(135deg, rgba(120, 200, 255, 0.25) 0%, rgba(80, 150, 255, 0.25) 100%);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    display: grid;
+    place-items: center;
     gap: 8px;
     pointer-events: none;
 }
@@ -610,19 +772,19 @@ button {
     height: 48px;
     background: rgba(120, 200, 255, 0.95);
     border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: grid;
+    place-items: center;
     font-size: 28px;
     font-weight: 900;
     color: #000;
-    box-shadow: 0 4px 12px rgba(120, 200, 255, 0.5);
+    box-shadow: 0 4px 12px rgba(120, 200, 255, 0.50);
 }
 
 .inv-card-selected-text {
     font-size: 12px;
     font-weight: 700;
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    color: #fff;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.50);
 }
 
 .inv-actions {
@@ -638,7 +800,9 @@ button {
     border-radius: 12px;
     font-size: 15px;
     font-weight: 700;
+    cursor: pointer;
     transition: all 0.2s;
+    border: none;
     min-width: 180px;
 }
 
@@ -671,8 +835,8 @@ button {
 .inv-hint {
     text-align: center;
     padding: 12px 20px;
-    background: rgba(100, 255, 150, 0.1);
-    border: 1px solid rgba(100, 255, 150, 0.2);
+    background: rgba(100, 255, 150, 0.10);
+    border: 1px solid rgba(100, 255, 150, 0.20);
     border-radius: 12px;
     font-size: 13px;
     color: #a0ffc8;
@@ -697,7 +861,11 @@ button {
 }
 
 /* =========================
+<<<<<<< Updated upstream
    TT GAME STAGE
+=======
+   7) TT GAME STAGE (твои текущие стили, без дублей)
+>>>>>>> Stashed changes
    ========================= */
 .game-root {
     position: fixed;
@@ -726,7 +894,6 @@ button {
     position: relative;
 }
 
-/* Exit button */
 .exit {
     position: fixed;
     left: 12px;
@@ -750,7 +917,6 @@ button {
     }
 }
 
-/* HUD score */
 .hud-corner {
     position: absolute;
     z-index: 100;
@@ -788,13 +954,10 @@ button {
     box-shadow: 0 0 14px rgba(0, 180, 255, 0.16);
 }
 
-/* Player badges */
 .player-badge {
     position: absolute;
     z-index: 105;
-
     top: max(calc(var(--safe-t) + var(--tg-top-controls) + 6px), calc(50% - (var(--board-h) / 2) - var(--badge-h) - 6px));
-
     height: var(--badge-h);
     max-width: min(260px, 34vw);
 
@@ -974,7 +1137,7 @@ button {
     height: var(--card-h);
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.05);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
 }
 
 .cell.highlight {
@@ -984,7 +1147,7 @@ button {
 }
 
 .cell.frozen {
-    background: rgba(120, 200, 255, 0.1);
+    background: rgba(120, 200, 255, 0.10);
     box-shadow: inset 0 0 0 2px rgba(120, 200, 255, 0.26), 0 0 18px rgba(120, 200, 255, 0.12);
 }
 
@@ -999,7 +1162,7 @@ button {
     filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.55));
 }
 
-/* Cards */
+/* Card */
 .card {
     width: var(--card-w);
     height: var(--card-h);
@@ -1031,7 +1194,7 @@ button {
 }
 
 .hand.right .card {
-    transition: transform 200ms cubic-bezier(0.2, 0.9, 0.2, 1), box-shadow 200ms ease, filter 200ms ease;
+    transition: transform 200ms cubic-bezier(.2, .9, .2, 1), box-shadow 200ms ease, filter 200ms ease;
 }
 
 .hand.right .card.selected {
@@ -1043,7 +1206,7 @@ button {
 
 .card.player {
     border: 2px solid rgba(42, 107, 255, 0.98);
-    box-shadow: 0 0 18px rgba(0, 180, 255, 0.3), 0 14px 30px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 0 18px rgba(0, 180, 255, 0.30), 0 14px 30px rgba(0, 0, 0, 0.45);
     animation: pulseBlue 2.6s ease-in-out infinite;
 }
 
@@ -1078,17 +1241,17 @@ button {
     }
 
     50% {
-        box-shadow: 0 0 26px rgba(255, 80, 80, 0.4), 0 16px 34px rgba(0, 0, 0, 0.52);
+        box-shadow: 0 0 26px rgba(255, 80, 80, 0.40), 0 16px 34px rgba(0, 0, 0, 0.52);
     }
 }
 
 .card.is-placed .card-anim {
-    animation: placeSmooth 380ms cubic-bezier(0.2, 0.9, 0.2, 1);
+    animation: placeSmooth 380ms cubic-bezier(.2, .9, .2, 1);
 }
 
 @keyframes placeSmooth {
     0% {
-        transform: translateY(18px) scale(0.96);
+        transform: translateY(18px) scale(.96);
         opacity: 0;
     }
 
@@ -1099,7 +1262,7 @@ button {
 }
 
 .card.is-captured .card-anim {
-    animation: captureBounce 360ms cubic-bezier(0.2, 0.9, 0.2, 1);
+    animation: captureBounce 360ms cubic-bezier(.2, .9, .2, 1);
 }
 
 @keyframes captureBounce {
@@ -1112,7 +1275,7 @@ button {
     }
 
     70% {
-        transform: translateY(0) scale(0.99);
+        transform: translateY(0) scale(.99);
     }
 
     100% {
@@ -1162,6 +1325,10 @@ button {
     left: 28px;
 }
 
+<<<<<<< Updated upstream
+=======
+/* back */
+>>>>>>> Stashed changes
 .card.back {
     cursor: default;
     background:
@@ -1193,7 +1360,11 @@ button {
     filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.65)) drop-shadow(0 0 18px rgba(120, 200, 255, 0.18));
 }
 
+<<<<<<< Updated upstream
 /* element visuals */
+=======
+/* element bg + pill */
+>>>>>>> Stashed changes
 .elem-bg {
     position: absolute;
     inset: 0;
@@ -1210,14 +1381,11 @@ button {
     top: 8px;
     right: 8px;
     z-index: 7;
-
     display: flex;
     align-items: center;
     gap: 8px;
-
     padding: 3px 7px;
     border-radius: 999px;
-
     background: rgba(0, 0, 0, 0.55);
     border: 1px solid rgba(255, 255, 255, 0.14);
 }
@@ -1250,7 +1418,7 @@ button {
     }
 }
 
-/* Magic column */
+/* magic column */
 .magic-column {
     position: absolute;
     top: 50%;
@@ -1283,7 +1451,6 @@ button {
     background: rgba(0, 0, 0, 0.55);
     position: relative;
     overflow: hidden;
-
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.65), 0 0 22px rgba(120, 200, 255, 0.08);
 }
 
@@ -1291,7 +1458,19 @@ button {
     content: "";
     position: absolute;
     inset: -55%;
+<<<<<<< Updated upstream
     background: conic-gradient(from 90deg, transparent 0 12%, var(--c1) 18%, transparent 34%, var(--c2) 52%, transparent 70%, var(--c1) 86%, transparent 100%);
+=======
+    background:
+        conic-gradient(from 90deg,
+            transparent 0 12%,
+            var(--c1) 18%,
+            transparent 34%,
+            var(--c2) 52%,
+            transparent 70%,
+            var(--c1) 86%,
+            transparent 100%);
+>>>>>>> Stashed changes
     opacity: 0.95;
     animation: magicSpin 2.8s linear infinite;
     z-index: 0;
@@ -1305,7 +1484,7 @@ button {
     background:
         radial-gradient(120% 120% at 30% 25%, rgba(255, 255, 255, 0.18), transparent 58%),
         radial-gradient(120% 120% at 70% 80%, rgba(255, 255, 255, 0.08), transparent 62%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.1)),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.10)),
         rgba(0, 0, 0, 0.55);
     z-index: 1;
 }
@@ -1334,6 +1513,7 @@ button {
     place-items: center;
     font-size: 11px;
     font-weight: 900;
+    color: rgba(255, 255, 255, 0.95);
     background: rgba(0, 0, 0, 0.55);
     border: 1px solid rgba(255, 255, 255, 0.16);
 }
@@ -1373,7 +1553,11 @@ button {
     }
 }
 
+<<<<<<< Updated upstream
 /* Game Over overlay */
+=======
+/* overlay */
+>>>>>>> Stashed changes
 .game-over {
     position: fixed;
     inset: 0;
@@ -1395,7 +1579,11 @@ button {
     z-index: 22000;
 }
 
+<<<<<<< Updated upstream
 /* Reduce motion */
+=======
+/* reduce motion */
+>>>>>>> Stashed changes
 @media (prefers-reduced-motion: reduce) {
     .rotate-phone {
         animation: none !important;
@@ -1412,7 +1600,11 @@ button {
     }
 }
 
+<<<<<<< Updated upstream
 /* Touch TT number tuning */
+=======
+/* touch TT tuning */
+>>>>>>> Stashed changes
 @media (hover: none) and (pointer: coarse),
 (max-height: 520px) and (orientation: landscape) {
     .tt-badge {
