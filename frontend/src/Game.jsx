@@ -39,7 +39,7 @@ const ART = [
 
 const ELEMENTS = ["Earth", "Fire", "Water", "Poison", "Holy", "Thunder", "Wind", "Ice"];
 const ELEM_ICON = {
-    Earth: "🟫",
+    Earth: "🪨",
     Fire: "🔥",
     Water: "💧",
     Poison: "☠️",

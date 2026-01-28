@@ -33,10 +33,10 @@ function getRankByTokenId(tokenId, totalSupply = 10000) {
     const num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
     const percent = (num / totalSupply) * 100;
 
-    if (percent <= 25) return { key: "legendary", label: "L", border: "#7c3aed" }; // Темно-фиолетовый
-    if (percent <= 50) return { key: "epic", label: "E", border: "#f97316" };      // Оранжевый
-    if (percent <= 75) return { key: "rare", label: "R", border: "#3b82f6" };      // Синий
-    return { key: "common", label: "C", border: "#22c55e" };                       // Зелёный
+    if (percent <= 25) return { key: "legendary", label: "L", border: "#7c3aed", glow: "rgba(124, 58, 237, 0.5)" }; // Темно-фиолетовый
+    if (percent <= 50) return { key: "epic", label: "E", border: "#f97316", glow: "rgba(249, 115, 22, 0.5)" };      // Оранжевый
+    if (percent <= 75) return { key: "rare", label: "R", border: "#3b82f6", glow: "rgba(59, 130, 246, 0.5)" };      // Синий
+    return { key: "common", label: "C", border: "#22c55e", glow: "rgba(34, 197, 94, 0.5)" };                       // Зелёный
 }
 
 export default function Inventory({ token, onDeckReady }) {
@@ -204,11 +204,14 @@ export default function Inventory({ token, onDeckReady }) {
                                 className={`inv-card-game ${isSel ? "is-selected" : ""}`}
                                 style={{
                                     borderColor: rank.border,
+                                    boxShadow: isSel
+                                        ? `0 0 32px ${rank.glow}, inset 0 0 40px ${rank.glow}`
+                                        : `0 4px 12px rgba(0,0,0,0.5)`,
                                 }}
                                 title={k}
                             >
-                                {/* Art */}
-                                <div className="inv-card-art">
+                                {/* Art (full card) */}
+                                <div className="inv-card-art-full">
                                     <img
                                         src={n.imageUrl || "/cards/card.jpg"}
                                         alt={n.name || `#${n.tokenId || n.token_id}`}
@@ -222,17 +225,12 @@ export default function Inventory({ token, onDeckReady }) {
                                     />
                                 </div>
 
-                                {/* Element badge (top-right) */}
+                                {/* Element badge (top-right corner) */}
                                 {element && (
                                     <div className="inv-card-elem-pill" title={element}>
                                         <span className="inv-card-elem-ic">{ELEM_ICON[element] || element}</span>
                                     </div>
                                 )}
-
-                                {/* Rank badge (top-left) */}
-                                <div className="inv-card-rank-badge" style={{ background: rank.border }}>
-                                    {rank.label}
-                                </div>
 
                                 {/* Triple Triad numbers (в углах) */}
                                 <div className="inv-tt-badge" />
