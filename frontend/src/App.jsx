@@ -334,12 +334,14 @@ export default function App() {
             </div>
 
             <div className="bottom-stack" ref={bottomStackRef}>
-                <SeasonBar
-                    title={seasonInfo.title}
-                    subtitle={seasonInfo.subtitle}
-                    progress={seasonInfo.progress}
-                    onRefresh={() => { }}
-                />
+                {screen === "home" && (
+                    <SeasonBar
+                        title={seasonInfo.title}
+                        subtitle={seasonInfo.subtitle}
+                        progress={seasonInfo.progress}
+                        onRefresh={() => { }}
+                    />
+                )}
                 <BottomNav active={screen} onChange={setScreen} />
             </div>
 
