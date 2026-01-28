@@ -18,7 +18,7 @@ function parseAllowedContracts() {
 }
 
 const ELEM_ICON = {
-    Earth: "🟫",
+    Earth: "🪨",
     Fire: "🔥",
     Water: "💧",
     Poison: "☠️",
@@ -27,6 +27,17 @@ const ELEM_ICON = {
     Wind: "🌪️",
     Ice: "❄️",
 };
+
+// Определение ранга по номеру токена (tokenId как число)
+function getRankByTokenId(tokenId, totalSupply = 10000) {
+    const num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
+    const percent = (num / totalSupply) * 100;
+
+    if (percent <= 25) return { key: "legendary", label: "L", border: "#7c3aed" }; // Темно-фиолетовый
+    if (percent <= 50) return { key: "epic", label: "E", border: "#f97316" };      // Оранжевый
+    if (percent <= 75) return { key: "rare", label: "R", border: "#3b82f6" };      // Синий
+    return { key: "common", label: "C", border: "#22c55e" };                       // Зелёный
+}
 
 export default function Inventory({ token, onDeckReady }) {
     const [loading, setLoading] = useState(false);
@@ -174,21 +185,29 @@ export default function Inventory({ token, onDeckReady }) {
                 </div>
             )}
 
-            {/* Grid */}
+            {/* Grid (карты в стиле Triple Triad) */}
             {nfts.length > 0 && (
-                <div className="inv-grid-modern">
+                <div className="inv-grid-game-style">
                     {nfts.map((n) => {
                         const k = nftKey(n);
                         const isSel = selected.has(k);
+
+                        const stats = n.stats || { top: 5, right: 5, bottom: 5, left: 5 };
+                        const element = n.element || null;
+
+                        const rank = getRankByTokenId(n.tokenId || n.token_id, 10000);
 
                         return (
                             <button
                                 key={k}
                                 onClick={() => toggle(k)}
-                                className={`inv-card-modern ${isSel ? "is-selected" : ""}`}
+                                className={`inv-card-game ${isSel ? "is-selected" : ""}`}
+                                style={{
+                                    borderColor: rank.border,
+                                }}
                                 title={k}
                             >
-                                {/* Card art */}
+                                {/* Art */}
                                 <div className="inv-card-art">
                                     <img
                                         src={n.imageUrl || "/cards/card.jpg"}
@@ -203,48 +222,29 @@ export default function Inventory({ token, onDeckReady }) {
                                     />
                                 </div>
 
-                                {/* Element badge */}
-                                {n.element && (
-                                    <div className="inv-card-elem" title={n.element}>
-                                        {ELEM_ICON[n.element] || n.element}
+                                {/* Element badge (top-right) */}
+                                {element && (
+                                    <div className="inv-card-elem-pill" title={element}>
+                                        <span className="inv-card-elem-ic">{ELEM_ICON[element] || element}</span>
                                     </div>
                                 )}
 
-                                {/* Rank badge */}
-                                <div className={`inv-card-rank rank-${n.rank || "common"}`}>
-                                    {n.rankLabel || n.rank?.charAt(0).toUpperCase() || "C"}
+                                {/* Rank badge (top-left) */}
+                                <div className="inv-card-rank-badge" style={{ background: rank.border }}>
+                                    {rank.label}
                                 </div>
 
-                                {/* Name */}
-                                <div className="inv-card-name">
-                                    {n.name || `Card #${n.tokenId || n.token_id || "?"}`}
-                                </div>
-
-                                {/* Stats */}
-                                <div className="inv-card-stats">
-                                    <div className="inv-stat">
-                                        <span className="inv-stat-label">↑</span>
-                                        <span className="inv-stat-value">{n.stats?.top ?? "-"}</span>
-                                    </div>
-                                    <div className="inv-stat">
-                                        <span className="inv-stat-label">→</span>
-                                        <span className="inv-stat-value">{n.stats?.right ?? "-"}</span>
-                                    </div>
-                                    <div className="inv-stat">
-                                        <span className="inv-stat-label">↓</span>
-                                        <span className="inv-stat-value">{n.stats?.bottom ?? "-"}</span>
-                                    </div>
-                                    <div className="inv-stat">
-                                        <span className="inv-stat-label">←</span>
-                                        <span className="inv-stat-value">{n.stats?.left ?? "-"}</span>
-                                    </div>
-                                </div>
+                                {/* Triple Triad numbers (в углах) */}
+                                <div className="inv-tt-badge" />
+                                <span className="inv-tt-num top">{stats.top}</span>
+                                <span className="inv-tt-num left">{stats.left}</span>
+                                <span className="inv-tt-num right">{stats.right}</span>
+                                <span className="inv-tt-num bottom">{stats.bottom}</span>
 
                                 {/* Selection overlay */}
                                 {isSel && (
                                     <div className="inv-card-selected-overlay">
                                         <div className="inv-card-selected-check">✓</div>
-                                        <div className="inv-card-selected-text">В колоде</div>
                                     </div>
                                 )}
                             </button>

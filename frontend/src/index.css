@@ -888,8 +888,8 @@ button {
     position: absolute;
     z-index: 105;
 
-    top: max(calc(var(--safe-t) + var(--tg-top-controls) + 6px),
-            calc(50% - (var(--board-h) / 2) - var(--badge-h) - 6px));
+    /* Поднять НАД верхней границей стола */
+    top: calc(50% - (var(--board-h) / 2) - var(--badge-h) - 12px);
 
     height: var(--badge-h);
     max-width: min(260px, 34vw);
@@ -901,12 +901,13 @@ button {
     padding: 6px 10px;
     border-radius: 14px;
 
-    background: rgba(0, 0, 0, 0.45);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 
     pointer-events: none;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
 }
 
 .player-badge-avatar {
@@ -915,7 +916,7 @@ button {
     border-radius: 999px;
     object-fit: cover;
     flex: 0 0 auto;
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .player-badge-avatar-fallback {
@@ -926,8 +927,8 @@ button {
     place-items: center;
     font-weight: 900;
     font-size: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.1);
 }
 
 .player-badge-name {
@@ -942,13 +943,15 @@ button {
 }
 
 .player-badge.active.enemy {
-    box-shadow: 0 0 22px rgba(255, 80, 80, 0.24);
-    border-color: rgba(255, 80, 80, 0.35);
+    box-shadow: 0 0 24px rgba(255, 80, 80, 0.3),
+        0 8px 24px rgba(0, 0, 0, 0.6);
+    border-color: rgba(255, 80, 80, 0.4);
 }
 
 .player-badge.active.player {
-    box-shadow: 0 0 22px rgba(0, 180, 255, 0.26);
-    border-color: rgba(0, 180, 255, 0.35);
+    box-shadow: 0 0 24px rgba(0, 180, 255, 0.35),
+        0 8px 24px rgba(0, 0, 0, 0.6);
+    border-color: rgba(0, 180, 255, 0.4);
 }
 
 .player-badge.enemy {
@@ -960,23 +963,36 @@ button {
     left: calc(50% + (var(--board-w) / 2) + 8px);
 }
 
+/* Mobile: badges остаются сверху */
 @media (hover: none) and (pointer: coarse),
-(max-height: 520px) and (orientation: landscape) {
+(max-height: 600px) and (orientation: landscape) {
     .player-badge {
-        max-width: 44vw;
-        padding: 5px 8px;
-        gap: 8px;
-        top: calc(50% - (var(--board-h) / 2) - 12px);
+        top: calc(50% - (var(--board-h) / 2) - var(--badge-h) - 10px) !important;
+        max-width: 180px !important;
     }
 
     .player-badge.enemy {
-        left: calc(50% - (var(--board-w) / 2) + 6px);
-        transform: translateY(-100%);
+        left: calc(50% - (var(--board-w) / 2) - 6px) !important;
+        transform: translateX(-100%) !important;
     }
 
     .player-badge.player {
-        left: calc(50% + (var(--board-w) / 2) - 6px);
-        transform: translate(-100%, -100%);
+        left: calc(50% + (var(--board-w) / 2) + 6px) !important;
+        transform: none !important;
+    }
+
+    .player-badge-name {
+        font-size: 11px !important;
+    }
+
+    .player-badge-avatar,
+    .player-badge-avatar-fallback {
+        width: 28px !important;
+        height: 28px !important;
+    }
+
+    .player-badge-avatar-fallback {
+        font-size: 11px !important;
     }
 }
 
@@ -1041,12 +1057,13 @@ button {
     gap: var(--gap);
     border-radius: 16px;
     padding: var(--gap);
+    isolation: isolate;
 }
 
 .board::before {
     content: "";
     position: absolute;
-    inset: 0;
+    inset: -2px;
     border-radius: 16px;
     pointer-events: none;
     z-index: 0;
@@ -1055,16 +1072,54 @@ button {
         repeating-linear-gradient(90deg,
             rgba(24, 231, 255, 0) 0,
             rgba(24, 231, 255, 0) calc(var(--card-w) - 2px),
-            rgba(24, 231, 255, 0.4) calc(var(--card-w) - 2px),
+            rgba(24, 231, 255, 0.5) calc(var(--card-w) - 2px),
             rgba(24, 231, 255, 0) var(--card-w)),
         repeating-linear-gradient(0deg,
             rgba(255, 61, 242, 0) 0,
             rgba(255, 61, 242, 0) calc(var(--card-h) - 2px),
-            rgba(255, 61, 242, 0.32) calc(var(--card-h) - 2px),
+            rgba(255, 61, 242, 0.4) calc(var(--card-h) - 2px),
             rgba(255, 61, 242, 0) var(--card-h));
 
-    filter: drop-shadow(0 0 22px rgba(24, 231, 255, 0.22));
-    opacity: 0.9;
+    filter: drop-shadow(0 0 20px rgba(24, 231, 255, 0.3));
+    opacity: 0.85;
+    animation: boardPulse 3s ease-in-out infinite;
+}
+
+@keyframes boardPulse {
+
+    0%,
+    100% {
+        opacity: 0.7;
+        filter: drop-shadow(0 0 18px rgba(24, 231, 255, 0.25));
+    }
+
+    50% {
+        opacity: 1;
+        filter: drop-shadow(0 0 28px rgba(24, 231, 255, 0.45));
+    }
+}
+
+.board::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    pointer-events: none;
+    z-index: 0;
+    background:
+        radial-gradient(circle at 20% 30%, rgba(120, 200, 255, 0.12), transparent 60%),
+        radial-gradient(circle at 80% 70%, rgba(255, 61, 242, 0.1), transparent 60%);
+    animation: boardGlow 5s ease-in-out infinite alternate;
+}
+
+@keyframes boardGlow {
+    0% {
+        opacity: 0.6;
+    }
+
+    100% {
+        opacity: 1;
+    }
 }
 
 .board>* {
@@ -1077,21 +1132,23 @@ button {
     width: var(--card-w);
     height: var(--card-h);
     border-radius: 12px;
-    background: rgba(255, 255, 255, 0.05);
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    transition: all 0.2s ease;
 }
 
 .cell.highlight {
-    background: rgba(24, 231, 255, 0.12);
-    box-shadow: inset 0 0 0 2px rgba(24, 231, 255, 0.4),
-        0 0 26px rgba(24, 231, 255, 0.2);
+    background: rgba(24, 231, 255, 0.18);
+    box-shadow: inset 0 0 0 2px rgba(24, 231, 255, 0.6),
+        0 0 32px rgba(24, 231, 255, 0.35);
     cursor: pointer;
+    z-index: 10;
 }
 
 .cell.frozen {
-    background: rgba(120, 200, 255, 0.1);
-    box-shadow: inset 0 0 0 2px rgba(120, 200, 255, 0.26),
-        0 0 18px rgba(120, 200, 255, 0.12);
+    background: rgba(120, 200, 255, 0.12);
+    box-shadow: inset 0 0 0 2px rgba(120, 200, 255, 0.3),
+        0 0 20px rgba(120, 200, 255, 0.15);
 }
 
 .cell.frozen::after {
@@ -1102,7 +1159,7 @@ button {
     font-size: 16px;
     opacity: 0.9;
     pointer-events: none;
-    filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.55));
+    filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.6));
 }
 
 /* Card */
@@ -1326,33 +1383,33 @@ button {
 
 .card-elem-pill {
     position: absolute;
-    top: 8px;
-    right: 8px;
+    top: 4px;
+    right: 4px;
     z-index: 7;
 
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
 
-    padding: 3px 7px;
+    padding: 2px 6px;
     border-radius: 999px;
 
-    background: rgba(0, 0, 0, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(0, 0, 0, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .card-elem-ic {
-    font-size: 17px;
+    font-size: 14px;
     line-height: 1;
     transform-origin: center;
     animation: elemPulse 1.6s ease-in-out infinite;
-    filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
 }
 
 .card-elem-delta {
-    font-size: 11px;
+    font-size: 9px;
     font-weight: 900;
-    opacity: 0.9;
+    opacity: 0.95;
 }
 
 @keyframes elemPulse {
@@ -1360,12 +1417,12 @@ button {
     0%,
     100% {
         transform: scale(1);
-        filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
+        filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
     }
 
     50% {
-        transform: scale(1.18);
-        filter: drop-shadow(0 10px 16px rgba(120, 200, 255, 0.18));
+        transform: scale(1.15);
+        filter: drop-shadow(0 6px 12px rgba(120, 200, 255, 0.2));
     }
 }
 
@@ -3004,5 +3061,203 @@ button {
 
     .lock-escrow-info-grid {
         grid-template-columns: 1fr;
+    }
+}
+
+/* =========================
+   INVENTORY: GAME-STYLE CARDS (Triple Triad в инвентаре)
+   ========================= */
+.inv-grid-game-style {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.inv-card-game {
+    position: relative;
+    aspect-ratio: 2.5 / 3.5;
+    border-radius: 14px;
+    overflow: hidden;
+    background: linear-gradient(145deg, #1a2232, #0f1625);
+    border: 3px solid rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    padding: 0;
+}
+
+.inv-card-game:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6),
+        0 0 24px rgba(120, 200, 255, 0.3);
+}
+
+.inv-card-game.is-selected {
+    box-shadow: 0 0 32px rgba(120, 200, 255, 0.6),
+        inset 0 0 40px rgba(120, 200, 255, 0.15);
+}
+
+.inv-card-art {
+    position: absolute;
+    inset: 8px;
+    border-radius: 10px;
+    overflow: hidden;
+    z-index: 1;
+}
+
+.inv-card-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+/* Element pill (top-right) */
+.inv-card-elem-pill {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 7;
+
+    display: flex;
+    align-items: center;
+    gap: 4px;
+
+    padding: 3px 7px;
+    border-radius: 999px;
+
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.inv-card-elem-ic {
+    font-size: 16px;
+    line-height: 1;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
+}
+
+/* Rank badge (top-left) */
+.inv-card-rank-badge {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    z-index: 7;
+
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+
+    font-size: 14px;
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+/* Triple Triad numbers в инвентаре */
+.inv-tt-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    width: 40px;
+    height: 40px;
+    background: rgba(0, 0, 0, 0.7);
+    transform: rotate(45deg);
+    border-radius: 4px;
+    z-index: 4;
+}
+
+.inv-card-game .inv-tt-num {
+    position: absolute !important;
+    z-index: 5;
+    font-size: 13px !important;
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+    line-height: 1 !important;
+    white-space: nowrap !important;
+}
+
+.inv-card-game .inv-tt-num.top {
+    top: 7px;
+    left: 27px;
+}
+
+.inv-card-game .inv-tt-num.left {
+    top: 24px;
+    left: 14px;
+}
+
+.inv-card-game .inv-tt-num.right {
+    top: 24px;
+    left: 40px;
+}
+
+.inv-card-game .inv-tt-num.bottom {
+    top: 40px;
+    left: 27px;
+}
+
+/* Selection overlay */
+.inv-card-selected-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(120, 200, 255, 0.3) 0%, rgba(80, 150, 255, 0.3) 100%);
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.inv-card-selected-check {
+    width: 52px;
+    height: 52px;
+    background: rgba(120, 200, 255, 0.95);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 32px;
+    font-weight: 900;
+    color: #000;
+    box-shadow: 0 6px 16px rgba(120, 200, 255, 0.6);
+}
+
+@media (max-width: 768px) {
+    .inv-grid-game-style {
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+        gap: 12px;
+    }
+
+    .inv-tt-badge {
+        width: 34px !important;
+        height: 34px !important;
+    }
+
+    .inv-card-game .inv-tt-num {
+        font-size: 11px !important;
+    }
+
+    .inv-card-game .inv-tt-num.top {
+        top: 6px !important;
+        left: 24px !important;
+    }
+
+    .inv-card-game .inv-tt-num.left {
+        top: 21px !important;
+        left: 12px !important;
+    }
+
+    .inv-card-game .inv-tt-num.right {
+        top: 21px !important;
+        left: 36px !important;
+    }
+
+    .inv-card-game .inv-tt-num.bottom {
+        top: 36px !important;
+        left: 24px !important;
     }
 }
