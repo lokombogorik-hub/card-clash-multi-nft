@@ -1357,17 +1357,17 @@ button {
     }
 }
 
-/* Wallet Selector Modal z-index fix */
+/* Wallet Selector Modal — должен быть выше всех overlay */
 .modal-overlay,
 [class*="modal-overlay"],
 [class*="near-wallet-selector"] {
-    z-index: 99999 !important;
+    z-index: 999999 !important;
 }
 
 .modal,
 [class*="modal-content"],
 [class*="near-wallet-selector-modal"] {
-    z-index: 100000 !important;
+    z-index: 1000000 !important;
 }
 
 /* Ensure modal backdrop is visible */

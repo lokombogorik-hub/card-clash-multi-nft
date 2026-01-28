@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useWalletStore } from "../../store/useWalletStore";
 
-const ICON_V = 23;
+const ICON_V = 24;
 
 function isTelegramWebApp() {
     return !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData)
@@ -147,10 +147,13 @@ export default function WalletPicker({ open, onClose }) {
 
     const onConnectMyNear = async () => {
         haptic("light");
+
+        // ВАЖНО: закрываем drawer ДО показа MyNearWallet modal
+        onClose?.();
+
         setBusy(true);
         try {
             await connectMyNear();
-            // Don't close — user returns from MyNearWallet tab
         } catch (err) {
             // Error handled in store
         } finally {

@@ -1,12 +1,10 @@
 import { HereWallet } from '@here-wallet/core'
 import { setupWalletSelector } from '@near-wallet-selector/core'
-import { setupModal } from '@near-wallet-selector/modal-ui'
 import { setupMyNearWallet } from '@near-wallet-selector/my-near-wallet'
 
 let hereInstance = null
 let connectedAccountId = null
 let walletSelector = null
-let modal = null
 let currentWalletType = null // 'hot' | 'mynear'
 
 // DEBUG: собираем все ошибки HOT Wallet
@@ -132,27 +130,26 @@ export async function connectMyNearWallet() {
 
         const selector = await initWalletSelector()
 
-        // Create modal if not exists
-        if (!modal) {
-            console.log('[nearWallet] Creating modal...')
-            modal = setupModal(selector, {
-                contractId: import.meta.env.VITE_NEAR_LOGIN_CONTRACT_ID || 'guest-book.testnet',
-            })
-            logError('mynear:modal_created', new Error('Modal created'))
-        }
+        logError('mynear:direct_signin', new Error('Signing in directly (no modal)...'))
 
-        logError('mynear:show_modal', new Error('Showing wallet modal...'))
+        // Get MyNearWallet instance
+        const wallet = await selector.wallet('my-near-wallet')
 
-        // Show modal
-        modal.show()
+        console.log('[nearWallet] Got wallet instance:', wallet)
+        logError('mynear:wallet_instance', new Error(`Wallet instance: ${wallet.id}`))
 
-        console.log('[nearWallet] Modal shown, waiting for wallet selection...')
+        // Sign in (will redirect to wallet.testnet.near.org)
+        const contractId = import.meta.env.VITE_NEAR_LOGIN_CONTRACT_ID || 'guest-book.testnet'
 
-        // Wait for wallet selection
+        console.log('[nearWallet] Calling signIn with contractId:', contractId)
+        logError('mynear:signin_call', new Error(`Calling signIn to ${contractId}...`))
+
+        await wallet.signIn({ contractId })
+
+        // After redirect back, check accounts
         return new Promise((resolve, reject) => {
             let resolved = false
 
-            // Subscribe to state changes
             const unsubscribe = selector.store.observable.subscribe((state) => {
                 console.log('[nearWallet] walletSelector state change:', state)
 
@@ -168,13 +165,6 @@ export async function connectMyNearWallet() {
                     connectedAccountId = accountId
                     currentWalletType = 'mynear'
 
-                    // Hide modal
-                    try {
-                        modal.hide()
-                    } catch (e) {
-                        console.warn('[nearWallet] modal.hide() error:', e)
-                    }
-
                     console.log('[nearWallet] MyNearWallet connected:', accountId)
                     logError('mynear:success', new Error(`Connected: ${accountId}`))
 
@@ -182,7 +172,7 @@ export async function connectMyNearWallet() {
                 }
             })
 
-            // Also check immediately (in case already connected)
+            // Check immediately (in case already signed in)
             setTimeout(() => {
                 const state = selector.store.getState()
                 if (state.accounts && state.accounts.length > 0 && !resolved) {
@@ -193,12 +183,6 @@ export async function connectMyNearWallet() {
                     connectedAccountId = accountId
                     currentWalletType = 'mynear'
 
-                    try {
-                        modal.hide()
-                    } catch (e) {
-                        console.warn('[nearWallet] modal.hide() error:', e)
-                    }
-
                     console.log('[nearWallet] MyNearWallet already connected:', accountId)
                     logError('mynear:already_connected', new Error(`Already connected: ${accountId}`))
 
@@ -206,18 +190,11 @@ export async function connectMyNearWallet() {
                 }
             }, 500)
 
-            // Timeout after 3 minutes
+            // Timeout
             setTimeout(() => {
                 if (!resolved) {
                     resolved = true
                     unsubscribe()
-
-                    try {
-                        modal.hide()
-                    } catch (e) {
-                        console.warn('[nearWallet] modal.hide() error:', e)
-                    }
-
                     const err = new Error('MyNearWallet connection timeout (180s)')
                     logError('mynear:timeout', err)
                     reject(err)
