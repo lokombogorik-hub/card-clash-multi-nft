@@ -2172,3 +2172,322 @@ button {
         margin-bottom: 16px;
     }
 }
+
+/* =========================
+   12) MOBILE FIXES: TT numbers, elements, badges
+   ========================= */
+
+/* Fix Triple Triad numbers на мобилке */
+@media (hover: none) and (pointer: coarse),
+(max-width: 768px) and (orientation: landscape) {
+
+    /* Уменьшить TT badge и числа */
+    .tt-badge {
+        width: 32px !important;
+        height: 32px !important;
+        top: 6px !important;
+        left: 7px !important;
+    }
+
+    .card .tt-num {
+        font-size: 10px !important;
+    }
+
+    .card .tt-num.top {
+        top: 4px !important;
+        left: 22px !important;
+    }
+
+    .card .tt-num.left {
+        top: 19px !important;
+        left: 9px !important;
+    }
+
+    .card .tt-num.right {
+        top: 19px !important;
+        left: 35px !important;
+    }
+
+    .card .tt-num.bottom {
+        top: 34px !important;
+        left: 22px !important;
+    }
+
+    /* Элемент в правый верхний угол */
+    .card-elem-pill {
+        top: 6px !important;
+        right: 6px !important;
+        padding: 2px 5px !important;
+        gap: 4px !important;
+    }
+
+    .card-elem-ic {
+        font-size: 14px !important;
+    }
+
+    .card-elem-delta {
+        font-size: 9px !important;
+    }
+}
+
+/* Player badges сбоку от board (не сверху) */
+@media (hover: none) and (pointer: coarse),
+(max-height: 600px) and (orientation: landscape) {
+    .player-badge {
+        top: 50% !important;
+        transform: translateY(-50%) !important;
+        max-width: 160px !important;
+    }
+
+    .player-badge.enemy {
+        left: calc(50% - (var(--board-w) / 2) - 8px) !important;
+        transform: translate(-100%, -50%) !important;
+    }
+
+    .player-badge.player {
+        left: calc(50% + (var(--board-w) / 2) + 8px) !important;
+        transform: translateY(-50%) !important;
+    }
+
+    .player-badge-name {
+        font-size: 11px !important;
+    }
+
+    .player-badge-avatar,
+    .player-badge-avatar-fallback {
+        width: 28px !important;
+        height: 28px !important;
+    }
+
+    .player-badge-avatar-fallback {
+        font-size: 11px !important;
+    }
+}
+
+/* =========================
+   13) LOCK ESCROW MODAL STYLES
+   ========================= */
+.lock-escrow-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 25000;
+    padding: 20px;
+}
+
+.lock-escrow-modal-box {
+    position: relative;
+    max-width: 600px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    background: linear-gradient(135deg, rgba(20, 20, 30, 0.98) 0%, rgba(10, 10, 20, 0.98) 100%);
+    border: 2px solid rgba(120, 200, 255, 0.3);
+    border-radius: 20px;
+    padding: 28px 24px;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7);
+}
+
+.lock-escrow-modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-size: 18px;
+    padding: 0;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.lock-escrow-modal-close:hover {
+    background: rgba(255, 80, 80, 0.2);
+    border-color: rgba(255, 80, 80, 0.4);
+}
+
+.lock-escrow-modal-title {
+    font-size: 24px;
+    font-weight: 900;
+    margin: 0 0 16px 0;
+    color: #fff;
+    text-align: center;
+}
+
+.lock-escrow-modal-info {
+    background: rgba(120, 200, 255, 0.08);
+    border: 1px solid rgba(120, 200, 255, 0.2);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.lock-escrow-modal-info p {
+    margin: 0 0 8px 0;
+}
+
+.lock-escrow-modal-info ul {
+    margin: 8px 0 0 0;
+    padding-left: 20px;
+}
+
+.lock-escrow-modal-info li {
+    margin-bottom: 4px;
+}
+
+.lock-escrow-modal-error {
+    background: rgba(255, 80, 80, 0.15);
+    border: 1px solid rgba(255, 80, 80, 0.3);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    color: #ffb3b3;
+    font-size: 13px;
+}
+
+.lock-escrow-modal-wallet {
+    background: rgba(100, 255, 150, 0.1);
+    border: 1px solid rgba(100, 255, 150, 0.25);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: #a0ffc8;
+}
+
+.lock-escrow-modal-wallet code {
+    font-family: monospace;
+    font-size: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.lock-escrow-modal-deck-label {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    color: #a0d8ff;
+}
+
+.lock-escrow-modal-deck-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.lock-escrow-modal-card {
+    position: relative;
+    aspect-ratio: 2.5 / 3.5;
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.lock-escrow-modal-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.lock-escrow-modal-card-name {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 6px 4px;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
+    font-size: 9px;
+    font-weight: 700;
+    color: #fff;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.lock-escrow-modal-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.lock-escrow-modal-btn {
+    padding: 14px 24px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.lock-escrow-modal-btn.primary {
+    background: linear-gradient(135deg, #78c8ff 0%, #5096ff 100%);
+    color: #000;
+    box-shadow: 0 4px 12px rgba(120, 200, 255, 0.3);
+}
+
+.lock-escrow-modal-btn.primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(120, 200, 255, 0.4);
+}
+
+.lock-escrow-modal-btn.secondary {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.lock-escrow-modal-btn.secondary:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.lock-escrow-modal-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.lock-escrow-modal-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 40px 20px;
+}
+
+.lock-escrow-modal-spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid rgba(120, 200, 255, 0.2);
+    border-top-color: #78c8ff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.lock-escrow-modal-loading-text {
+    font-size: 14px;
+    text-align: center;
+    line-height: 1.5;
+    color: #a0d8ff;
+}
+
+@media (max-width: 640px) {
+    .lock-escrow-modal-deck-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}

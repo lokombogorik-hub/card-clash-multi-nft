@@ -9,7 +9,7 @@ export default function Matchmaking({ me, onBack, onMatched }) {
         setSearching(true);
         setTimeout(() => {
             setSearching(false);
-            onMatched({ matchId: "" }); // Stage1 (no matchId = AI)
+            onMatched({ matchId: "", mode: "ai" }); // AI = no matchId
         }, 800);
     };
 
@@ -80,7 +80,9 @@ export default function Matchmaking({ me, onBack, onMatched }) {
             <div className="matchmaking-info">
                 <div className="matchmaking-info-icon">ℹ️</div>
                 <div className="matchmaking-info-text">
-                    In PvP mode, both players lock 5 NFTs. Winner takes 1 NFT from loser (Stage2 on-chain).
+                    <strong>AI mode:</strong> Play offline, pick 1 card from BunnyBot after win (off-chain).
+                    <br />
+                    <strong>PvP mode:</strong> Both players lock 5 NFTs. Winner takes 1 NFT from loser (on-chain via NEAR escrow).
                 </div>
             </div>
         </div>

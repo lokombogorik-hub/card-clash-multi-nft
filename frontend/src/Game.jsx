@@ -184,18 +184,15 @@ function resolvePlacementTT(placedIdx, grid, boardElems) {
     const sameSet = new Set();
     const plusSet = new Set();
 
-    // BASIC
     for (const i of adj) {
         if (i.target.owner !== placed.owner && i.pBattle > i.tSP) basicSet.add(i.ni);
     }
 
-    // SAME
     if (RULES.same) {
         const eq = adj.filter((i) => i.pSP === i.tSP);
         if (eq.length >= 2) eq.forEach((i) => sameSet.add(i.ni));
     }
 
-    // PLUS
     if (RULES.plus) {
         const groups = new Map();
         for (const i of adj) {
@@ -315,10 +312,10 @@ function getFallbackEnemyDeck() {
     return Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`));
 }
 
-export default function Game({ onExit, me, playerDeck, matchId }) {
+export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const revealTimerRef = useRef(null);
 
-    const { connected: nearConnected, walletAddress: nearAccountId, escrowClaim } = useWalletStore();
+    const { connected: nearConnected, accountId: nearAccountId, escrowClaim } = useWalletStore();
 
     const [stage2Busy, setStage2Busy] = useState(false);
     const [stage2Err, setStage2Err] = useState("");
@@ -326,7 +323,8 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
 
     const myTgId = me?.id ? Number(me.id) : 0;
 
-    // IMPORTANT: all hooks declared unconditionally
+    const isStage2 = mode === "pvp" && Boolean(matchId);
+
     const [enemyDeck, setEnemyDeck] = useState(() => getFallbackEnemyDeck());
     const [loadingEnemyDeck, setLoadingEnemyDeck] = useState(true);
 
@@ -355,7 +353,6 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
     const [enemyRevealId, setEnemyRevealId] = useState(null);
     const [playerSpells, setPlayerSpells] = useState(() => ({ freeze: 1, reveal: 1 }));
 
-    // refs for AI stability
     const boardRef = useRef(board);
     const handsRef = useRef(hands);
     const frozenRef = useRef(frozen);
@@ -369,7 +366,7 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
     const deckOk = Array.isArray(playerDeck) && playerDeck.length === 5;
 
     const refreshStage2Match = async () => {
-        if (!matchId) return;
+        if (!isStage2) return;
         try {
             const token = getStoredToken();
             if (!token) return;
@@ -383,9 +380,8 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
     useEffect(() => {
         refreshStage2Match();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [matchId]);
+    }, [matchId, isStage2]);
 
-    // Load AI deck from backend
     useEffect(() => {
         let alive = true;
 
@@ -414,7 +410,6 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
         };
     }, []);
 
-    // Sync player hand when playerDeck changes
     useEffect(() => {
         if (!deckOk) return;
         setHands((h) => ({
@@ -424,7 +419,6 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [playerDeck]);
 
-    // Sync enemy hand when enemyDeck changes
     useEffect(() => {
         setHands((h) => ({
             ...h,
@@ -594,7 +588,6 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
         setTurn("enemy");
     };
 
-    // ENEMY TURN
     useEffect(() => {
         if (turn !== "enemy" || roundOver || matchOver) return;
 
@@ -638,7 +631,6 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
         };
     }, [turn, roundOver, matchOver]);
 
-    // ROUND OVER
     useEffect(() => {
         if (roundOver || matchOver) return;
         if (board.some((c) => c === null)) return;
@@ -659,19 +651,17 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
         });
     }, [board, roundOver, matchOver]);
 
-    // MATCH OVER
     useEffect(() => {
         if (matchOver) return;
         if (series.player >= MATCH_WINS_TARGET || series.enemy >= MATCH_WINS_TARGET) {
             setMatchOver(true);
             setClaimPickId(null);
             setClaimDone(false);
-            if (matchId) refreshStage2Match();
+            if (isStage2) refreshStage2Match();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [series, matchOver, matchId]);
+    }, [series, matchOver, isStage2]);
 
-    // CONFETTI
     useEffect(() => {
         if (!roundOver) return;
         if (roundWinner !== "player") return;
@@ -698,27 +688,28 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
     const loserDeck = loserSide === "enemy" ? enemyDeck : loserSide === "player" ? playerDeckCards : [];
 
     const stage2OpponentDeposits = useMemo(() => {
-        if (!matchId || !stage2Match) return null;
+        if (!isStage2 || !stage2Match) return null;
         const players = stage2Match?.players || [];
         const deposits = stage2Match?.deposits || [];
         const opp = players.find((p) => Number(p.user_id) !== myTgId);
         if (!opp) return [];
         return deposits.filter((d) => Number(d.user_id) === Number(opp.user_id));
-    }, [matchId, stage2Match, myTgId]);
+    }, [isStage2, stage2Match, myTgId]);
 
     const onConfirmClaim = async () => {
         if (!matchOver) return;
         if (winnerSide !== "player") return;
         if (!loserSide) return;
 
-        // Stage1
-        if (!matchId) {
+        // Stage1 (AI)
+        if (!isStage2) {
             if (!claimPickId) return;
             setClaimDone(true);
             haptic("medium");
             return;
         }
 
+        // Stage2 (PvP on-chain)
         setStage2Err("");
         setStage2Busy(true);
 
@@ -800,7 +791,6 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
                         <PlayerBadge side="enemy" name={enemyName} avatarUrl={enemyAvatar} active={turn === "enemy"} />
                         <PlayerBadge side="player" name={myName} avatarUrl={myAvatar} active={turn === "player"} />
 
-                        {/* LEFT enemy hand */}
                         <div className="hand left">
                             <div className="hand-grid">
                                 {hands.enemy.map((c, i) => {
@@ -824,7 +814,6 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
                             </div>
                         </div>
 
-                        {/* CENTER BOARD */}
                         <div className="center-col">
                             <div className="board">
                                 {board.map((cell, i) => {
@@ -857,7 +846,6 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
                             </div>
                         </div>
 
-                        {/* RIGHT player hand */}
                         <div className="hand right">
                             <div className="hand-grid">
                                 {hands.player.map((c, i) => {
@@ -898,7 +886,6 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
                             </div>
                         </div>
 
-                        {/* LOADING AI deck overlay */}
                         {loadingEnemyDeck ? (
                             <div className="game-over">
                                 <div className="game-over-box" style={{ minWidth: 320 }}>
@@ -910,7 +897,6 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
                             </div>
                         ) : null}
 
-                        {/* GAME OVER / MATCH OVER */}
                         {(roundOver || matchOver) && (
                             <div className="game-over">
                                 <div className="game-over-box" style={{ minWidth: 320 }}>
@@ -928,7 +914,7 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
                                         Раунд {roundNo} • Серия до {MATCH_WINS_TARGET} • Счёт {series.player}:{series.enemy}
                                     </div>
 
-                                    {matchId ? (
+                                    {isStage2 && matchId ? (
                                         <div style={{ fontSize: 11, opacity: 0.85, marginBottom: 10, fontFamily: "monospace" }}>
                                             Stage2 matchId: {matchId}
                                         </div>
@@ -944,7 +930,7 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
 
                                             {matchWinner === "player" ? (
                                                 <>
-                                                    {matchId && Array.isArray(stage2OpponentDeposits) ? (
+                                                    {isStage2 && Array.isArray(stage2OpponentDeposits) ? (
                                                         <>
                                                             {stage2OpponentDeposits.length ? (
                                                                 <div
@@ -1021,7 +1007,7 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
                                                         </button>
                                                     ) : (
                                                         <div style={{ marginTop: 6, opacity: 0.9, fontSize: 12 }}>
-                                                            Карта получена. {matchId ? "Stage2 (on-chain)." : "Stage1 (off-chain)."}
+                                                            Карта получена. {isStage2 ? "Stage2 (on-chain)." : "Stage1 (off-chain)."}
                                                         </div>
                                                     )}
 
@@ -1029,7 +1015,7 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
                                                         <div style={{ marginTop: 8, color: "#ffb3b3", fontSize: 12 }}>{stage2Err}</div>
                                                     ) : null}
 
-                                                    {matchId && !nearConnected ? (
+                                                    {isStage2 && !nearConnected ? (
                                                         <div style={{ marginTop: 8, opacity: 0.85, fontSize: 12 }}>
                                                             Для Stage2 claim нужен подключённый NEAR кошелёк (HERE).
                                                         </div>

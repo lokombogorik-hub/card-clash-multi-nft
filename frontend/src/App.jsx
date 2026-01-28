@@ -61,6 +61,7 @@ export default function App() {
     const [me, setMe] = useState(null);
     const [playerDeck, setPlayerDeck] = useState(null);
 
+    const [gameMode, setGameMode] = useState("ai"); // "ai" | "pvp"
     const [stage2LockOpen, setStage2LockOpen] = useState(false);
     const [stage2MatchId, setStage2MatchId] = useState("");
 
@@ -220,10 +221,11 @@ export default function App() {
         setScreen("home");
         setPlayerDeck(null);
         setStage2MatchId("");
+        setGameMode("ai");
     };
 
     const showRotate = screen === "game" && !isLandscape;
-    const showWalletConnector = screen === "home" || screen === "game" || screen === "matchmaking";
+    const showWalletConnector = screen === "home"; // ONLY on home!
 
     const seasonInfo = useMemo(
         () => ({ title: "Digitall Bunny Турнир", subtitle: "Ends in 3d 12h", progress: 0.62 }),
@@ -234,11 +236,16 @@ export default function App() {
         return (
             <div className="shell">
                 <StormBg />
-                {showWalletConnector ? <WalletConnector /> : null}
 
                 <div className={`game-host ${showRotate ? "is-hidden" : ""}`}>
                     {playerDeck ? (
-                        <Game onExit={onExitGame} me={me} playerDeck={playerDeck} matchId={stage2MatchId} />
+                        <Game
+                            onExit={onExitGame}
+                            me={me}
+                            playerDeck={playerDeck}
+                            matchId={stage2MatchId}
+                            mode={gameMode}
+                        />
                     ) : (
                         <div style={{ color: "#fff", padding: 20 }}>Loading deck...</div>
                     )}
@@ -260,6 +267,7 @@ export default function App() {
                 onReady={({ matchId }) => {
                     setStage2MatchId(matchId || "");
                     setStage2LockOpen(false);
+                    setGameMode("pvp");
                     setScreen("game");
                 }}
                 me={me}
@@ -299,12 +307,21 @@ export default function App() {
                     <Matchmaking
                         me={me}
                         onBack={() => setScreen("home")}
-                        onMatched={({ matchId }) => {
+                        onMatched={({ matchId, mode }) => {
+                            setGameMode(mode || "ai");
+
+                            if (mode === "ai") {
+                                setStage2MatchId("");
+                                setScreen("game");
+                                return;
+                            }
+
                             if (!stage2Enabled) {
                                 setStage2MatchId(matchId || "");
                                 setScreen("game");
                                 return;
                             }
+
                             setStage2MatchId(matchId || "");
                             setStage2LockOpen(true);
                         }}
