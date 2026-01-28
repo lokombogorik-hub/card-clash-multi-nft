@@ -1,191 +1,117 @@
-import { useMemo, useState } from "react";
-import { apiFetch } from "../../api.js";
-
-function getStoredToken() {
-    try {
-        return (
-            localStorage.getItem("token") ||
-            localStorage.getItem("accessToken") ||
-            localStorage.getItem("access_token") ||
-            ""
-        );
-    } catch {
-        return "";
-    }
-}
+import { useEffect, useState } from "react";
+import { apiFetch } from "../../api";
 
 export default function Matchmaking({ me, onBack, onMatched }) {
-    const token = useMemo(() => getStoredToken(), []);
-    const myTgId = me?.id ? Number(me.id) : 0;
+    const [mode, setMode] = useState(null); // null | 'ai' | 'online'
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
 
-    const [matchId, setMatchId] = useState("");
-    const [joinId, setJoinId] = useState("");
-    const [match, setMatch] = useState(null);
-    const [busy, setBusy] = useState(false);
-    const [err, setErr] = useState("");
-
-    const refresh = async (id) => {
-        const mid = (id || matchId || "").trim();
-        if (!mid) return;
-        const m = await apiFetch(`/api/matches/${mid}`, { token });
-        setMatch(m);
+    const getToken = () => {
+        try {
+            return (
+                localStorage.getItem("token") ||
+                localStorage.getItem("accessToken") ||
+                localStorage.getItem("access_token") ||
+                ""
+            );
+        } catch {
+            return "";
+        }
     };
 
-    const onCreate = async () => {
-        setErr("");
-        setBusy(true);
+    const onPlayAI = () => {
+        // Stage1: мгновенный старт vs AI (без blockchain)
+        setMode("ai");
+        setTimeout(() => {
+            onMatched({ matchId: null }); // null = Stage1 offline
+        }, 300);
+    };
+
+    const onPlayOnline = async () => {
+        // Stage2: создаём матч в DB, ждём соперника, потом lock NFT
+        setMode("online");
+        setLoading(true);
+        setError("");
+
         try {
-            const r = await apiFetch("/api/matches/create", {
+            const token = getToken();
+            if (!token) {
+                throw new Error("Auth token missing");
+            }
+
+            // Создаём матч
+            const match = await apiFetch("/api/matches/create", {
                 method: "POST",
                 token,
                 body: JSON.stringify({}),
             });
-            setMatchId(r.matchId);
-            setMatch(null);
-            await refresh(r.matchId);
+
+            const matchId = match?.id || match?.match_id;
+            if (!matchId) {
+                throw new Error("No match ID returned");
+            }
+
+            // Симулируем "ожидание соперника" (в реальности тут websocket или polling)
+            // Для MVP просто сразу matched
+            setTimeout(() => {
+                onMatched({ matchId });
+            }, 800);
         } catch (e) {
-            setErr(String(e?.message || e));
-        } finally {
-            setBusy(false);
+            setError(String(e?.message || e));
+            setLoading(false);
         }
     };
-
-    const onJoin = async () => {
-        const id = joinId.trim();
-        if (!id) return;
-        setErr("");
-        setBusy(true);
-        try {
-            await apiFetch(`/api/matches/${id}/join`, { method: "POST", token });
-            setMatchId(id);
-            await refresh(id);
-        } catch (e) {
-            setErr(String(e?.message || e));
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    const players = match?.players || [];
-    const ready = players.length === 2 && players.every((p) => p.near_account_id);
 
     return (
-        <div className="page" style={{ paddingTop: 10 }}>
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <button onClick={onBack} style={{ padding: "10px 12px" }}>
+        <div className="matchmaking-page">
+            <div className="matchmaking-header">
+                <button className="matchmaking-back" onClick={onBack}>
                     ← Назад
                 </button>
-                <div style={{ fontWeight: 900 }}>Поиск соперника</div>
+                <h2 className="matchmaking-title">
+                    <span className="matchmaking-icon">⚔️</span>
+                    Выбери режим боя
+                </h2>
             </div>
 
-            <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
-                <button onClick={onCreate} disabled={busy} style={{ fontWeight: 900 }}>
-                    Создать матч
-                </button>
-
-                {matchId ? (
-                    <div
-                        style={{
-                            padding: 10,
-                            borderRadius: 12,
-                            background: "rgba(0,0,0,0.35)",
-                            border: "1px solid rgba(255,255,255,0.12)",
-                        }}
-                    >
-                        <div style={{ fontSize: 12, opacity: 0.85 }}>Match ID</div>
-                        <div style={{ fontFamily: "monospace", wordBreak: "break-all", marginTop: 6 }}>
-                            {matchId}
+            {!mode && (
+                <div className="matchmaking-modes">
+                    <button className="mode-card mode-ai" onClick={onPlayAI} disabled={loading}>
+                        <div className="mode-icon">🤖</div>
+                        <div className="mode-title">VS AI</div>
+                        <div className="mode-subtitle">
+                            Быстрый старт • Без ставок<br />
+                            Тренировка и тесты
                         </div>
+                        <div className="mode-badge">Stage 1</div>
+                    </button>
 
-                        <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
-                            <button
-                                onClick={() => {
-                                    try {
-                                        navigator.clipboard.writeText(matchId);
-                                    } catch { }
-                                }}
-                            >
-                                Copy
-                            </button>
-                            <button onClick={() => refresh(matchId)} disabled={busy}>
-                                Refresh
-                            </button>
+                    <button className="mode-card mode-online" onClick={onPlayOnline} disabled={loading}>
+                        <div className="mode-icon">🌐</div>
+                        <div className="mode-title">Online PvP</div>
+                        <div className="mode-subtitle">
+                            Реальный соперник • Lock NFT<br />
+                            Победитель забирает приз
                         </div>
-                    </div>
-                ) : null}
+                        <div className="mode-badge mode-badge-stage2">Stage 2</div>
+                    </button>
+                </div>
+            )}
 
-                <div
-                    style={{
-                        padding: 10,
-                        borderRadius: 12,
-                        background: "rgba(0,0,0,0.25)",
-                        border: "1px solid rgba(255,255,255,0.12)",
-                    }}
-                >
-                    <div style={{ fontWeight: 900, marginBottom: 8 }}>Присоединиться к матчу</div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                        <input
-                            value={joinId}
-                            onChange={(e) => setJoinId(e.target.value)}
-                            placeholder="вставь matchId"
-                            style={{
-                                flex: 1,
-                                padding: "10px 10px",
-                                borderRadius: 10,
-                                border: "1px solid rgba(255,255,255,0.14)",
-                                background: "rgba(0,0,0,0.35)",
-                                color: "#fff",
-                                outline: "none",
-                                fontFamily: "monospace",
-                            }}
-                        />
-                        <button onClick={onJoin} disabled={busy || !joinId.trim()}>
-                            Join
-                        </button>
+            {loading && (
+                <div className="matchmaking-loading">
+                    <div className="matchmaking-spinner" />
+                    <div className="matchmaking-loading-text">
+                        {mode === "ai" ? "Запуск боя с AI..." : "Поиск соперника..."}
                     </div>
                 </div>
+            )}
 
-                {match ? (
-                    <div
-                        style={{
-                            padding: 10,
-                            borderRadius: 12,
-                            background: "rgba(0,0,0,0.25)",
-                            border: "1px solid rgba(255,255,255,0.12)",
-                        }}
-                    >
-                        <div style={{ fontWeight: 900 }}>Статус</div>
-                        <div style={{ fontSize: 12, opacity: 0.85, marginTop: 6 }}>
-                            players: {players.length}/2 • near linked:{" "}
-                            {players.filter((p) => p.near_account_id).length}/2
-                        </div>
-
-                        <div style={{ marginTop: 10, display: "grid", gap: 6, fontSize: 12 }}>
-                            {players.map((p) => (
-                                <div key={p.user_id} style={{ fontFamily: "monospace", opacity: 0.9 }}>
-                                    {p.side}: tg={p.user_id} • near={p.near_account_id || "(not linked)"}
-                                    {Number(p.user_id) === myTgId ? "  (you)" : ""}
-                                </div>
-                            ))}
-                        </div>
-
-                        <button
-                            style={{ marginTop: 12, fontWeight: 900 }}
-                            disabled={!ready}
-                            onClick={() => onMatched({ matchId })}
-                            title={!ready ? "Нужно 2 игрока и привязанный near_account_id у обоих" : ""}
-                        >
-                            Перейти к lock NFT
-                        </button>
-                    </div>
-                ) : null}
-
-                {err ? (
-                    <div style={{ padding: 10, borderRadius: 12, background: "rgba(120,20,20,0.7)" }}>
-                        {err}
-                    </div>
-                ) : null}
-            </div>
+            {error && (
+                <div className="matchmaking-error">
+                    ⚠️ {error}
+                </div>
+            )}
         </div>
     );
 }

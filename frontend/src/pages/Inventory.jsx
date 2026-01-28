@@ -17,11 +17,23 @@ function parseAllowedContracts() {
         .filter(Boolean);
 }
 
+const ELEM_ICON = {
+    Earth: "🟫",
+    Fire: "🔥",
+    Water: "💧",
+    Poison: "☠️",
+    Holy: "✨",
+    Thunder: "⚡",
+    Wind: "🌪️",
+    Ice: "❄️",
+};
+
 export default function Inventory({ token, onDeckReady }) {
     const [loading, setLoading] = useState(false);
     const [nfts, setNfts] = useState([]);
     const [selected, setSelected] = useState(() => new Set());
     const [error, setError] = useState("");
+    const [saving, setSaving] = useState(false);
 
     const allowedContracts = useMemo(() => parseAllowedContracts(), []);
     const allowedSet = useMemo(() => new Set(allowedContracts), [allowedContracts]);
@@ -46,23 +58,18 @@ export default function Inventory({ token, onDeckReady }) {
 
                 const items = Array.isArray(inv.items) ? inv.items : [];
 
-                // Фильтр: если allowlist задан — показываем только NFT из разрешённых контрактов.
-                // Моки/без contractId оставляем, чтобы Stage1 не ломался.
                 const filtered = !allowedContracts.length
                     ? items
                     : items.filter((n) => {
                         const chain = String(n.chain || "").toLowerCase();
                         const cid = String(n.contractId || n.contract_id || "").trim();
 
-                        // mock cards / stage1 cards
                         if (!cid) return true;
 
-                        // if near NFTs exist in inventory payload
                         if (!chain || chain === "near") {
                             return allowedSet.has(cid);
                         }
 
-                        // other chains: пока скрываем если allowlist включен
                         return false;
                     });
 
@@ -99,84 +106,180 @@ export default function Inventory({ token, onDeckReady }) {
     const saveDeck = async () => {
         try {
             if (selected.size !== 5) return;
+            setSaving(true);
             await apiFetch("/api/decks/active", {
                 token,
                 method: "PUT",
                 body: JSON.stringify({ cards: selectedArr }),
             });
+            setSaving(false);
             onDeckReady?.();
         } catch (e) {
             setError(e.message);
+            setSaving(false);
         }
     };
 
     return (
-        <div className="page">
-            <h2>Инвентарь</h2>
+        <div className="page inventory-page">
+            {/* Header */}
+            <div className="inv-header">
+                <h2 className="inv-title">
+                    <span className="inv-title-icon">🎴</span>
+                    Deck Builder
+                </h2>
+                <div className="inv-subtitle">
+                    Выбери 5 карт для боя • {selected.size}/5
+                </div>
+            </div>
 
+            {/* Allowed contracts info */}
             {allowedContracts.length ? (
-                <div style={{ opacity: 0.85, fontSize: 12, marginBottom: 10, lineHeight: 1.35 }}>
-                    Разрешённые коллекции для игры (paid placement):{" "}
-                    <span style={{ fontFamily: "monospace" }}>{allowedContracts.join(", ")}</span>
+                <div className="inv-info-box">
+                    <div className="inv-info-label">✨ Разрешённые коллекции (paid placement):</div>
+                    <div className="inv-info-value">{allowedContracts.join(", ")}</div>
                 </div>
             ) : null}
 
-            <div style={{ opacity: 0.85, fontSize: 13, marginBottom: 10 }}>
-                Выбери 5 NFT-карт для колоды ({selected.size}/5)
-            </div>
+            {/* Errors */}
+            {error && (
+                <div className="inv-error">
+                    ⚠️ {error}
+                </div>
+            )}
 
-            {error && <div style={{ color: "#ff9aa9", marginBottom: 10 }}>{error}</div>}
-            {!token && <div style={{ opacity: 0.75 }}>Ожидание авторизации Telegram…</div>}
-            {loading && <div style={{ opacity: 0.75 }}>Загрузка NFT…</div>}
+            {/* Loading */}
+            {!token && (
+                <div className="inv-loading">
+                    <div className="inv-loading-spinner" />
+                    <div>Ожидание авторизации Telegram…</div>
+                </div>
+            )}
 
-            <div style={{ marginBottom: 10, opacity: 0.8, fontSize: 12 }}>
-                Выбрано: {selectedArr.length ? selectedArr.join(", ") : "—"}
-            </div>
+            {loading && (
+                <div className="inv-loading">
+                    <div className="inv-loading-spinner" />
+                    <div>Загрузка NFT из инвентаря…</div>
+                </div>
+            )}
 
-            <div className="inv-grid">
-                {nfts.map((n) => {
-                    const k = nftKey(n);
-                    const isSel = selected.has(k);
+            {/* Empty state */}
+            {!loading && nfts.length === 0 && token && (
+                <div className="inv-empty">
+                    <div className="inv-empty-icon">📭</div>
+                    <div className="inv-empty-title">Нет NFT карт</div>
+                    <div className="inv-empty-text">
+                        Купи или получи карты в турнирах, чтобы начать играть
+                    </div>
+                </div>
+            )}
 
-                    return (
-                        <button
-                            key={k}
-                            onClick={() => toggle(k)}
-                            className={`inv-card ${isSel ? "is-selected" : ""}`}
-                            title={k}
-                        >
-                            <div className="inv-top">
-                                <div className="inv-elem">{n.elementIcon || "?"}</div>
-                                <div className="inv-meta">
-                                    <div className="inv-name">{n.name || `#${n.tokenId || n.token_id}`}</div>
-                                    <div className="inv-sub">
-                                        {(n.element || "—")} • {(n.rank || "—")}
+            {/* Grid */}
+            {nfts.length > 0 && (
+                <div className="inv-grid-modern">
+                    {nfts.map((n) => {
+                        const k = nftKey(n);
+                        const isSel = selected.has(k);
+
+                        return (
+                            <button
+                                key={k}
+                                onClick={() => toggle(k)}
+                                className={`inv-card-modern ${isSel ? "is-selected" : ""}`}
+                                title={k}
+                            >
+                                {/* Card art */}
+                                <div className="inv-card-art">
+                                    <img
+                                        src={n.imageUrl || "/cards/card.jpg"}
+                                        alt={n.name || `#${n.tokenId || n.token_id}`}
+                                        draggable="false"
+                                        loading="lazy"
+                                        onError={(e) => {
+                                            try {
+                                                e.currentTarget.src = "/cards/card.jpg";
+                                            } catch { }
+                                        }}
+                                    />
+                                </div>
+
+                                {/* Element badge */}
+                                {n.element && (
+                                    <div className="inv-card-elem" title={n.element}>
+                                        {ELEM_ICON[n.element] || n.element}
+                                    </div>
+                                )}
+
+                                {/* Rank badge */}
+                                <div className={`inv-card-rank rank-${n.rank || "common"}`}>
+                                    {n.rankLabel || n.rank?.charAt(0).toUpperCase() || "C"}
+                                </div>
+
+                                {/* Name */}
+                                <div className="inv-card-name">
+                                    {n.name || `Card #${n.tokenId || n.token_id || "?"}`}
+                                </div>
+
+                                {/* Stats */}
+                                <div className="inv-card-stats">
+                                    <div className="inv-stat">
+                                        <span className="inv-stat-label">↑</span>
+                                        <span className="inv-stat-value">{n.stats?.top ?? "-"}</span>
+                                    </div>
+                                    <div className="inv-stat">
+                                        <span className="inv-stat-label">→</span>
+                                        <span className="inv-stat-value">{n.stats?.right ?? "-"}</span>
+                                    </div>
+                                    <div className="inv-stat">
+                                        <span className="inv-stat-label">↓</span>
+                                        <span className="inv-stat-value">{n.stats?.bottom ?? "-"}</span>
+                                    </div>
+                                    <div className="inv-stat">
+                                        <span className="inv-stat-label">←</span>
+                                        <span className="inv-stat-value">{n.stats?.left ?? "-"}</span>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="inv-stats">
-                                <div>↑ {n.stats?.top ?? "-"}</div>
-                                <div style={{ textAlign: "right" }}>→ {n.stats?.right ?? "-"}</div>
-                                <div>← {n.stats?.left ?? "-"}</div>
-                                <div style={{ textAlign: "right" }}>↓ {n.stats?.bottom ?? "-"}</div>
-                            </div>
+                                {/* Selection overlay */}
+                                {isSel && (
+                                    <div className="inv-card-selected-overlay">
+                                        <div className="inv-card-selected-check">✓</div>
+                                        <div className="inv-card-selected-text">В колоде</div>
+                                    </div>
+                                )}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
 
-                            <div className="inv-hint">{isSel ? "В колоде" : "Нажми, чтобы добавить"}</div>
-                        </button>
-                    );
-                })}
-            </div>
+            {/* Actions */}
+            {nfts.length > 0 && (
+                <div className="inv-actions">
+                    <button
+                        className="inv-btn inv-btn-secondary"
+                        onClick={clear}
+                        disabled={!selected.size || saving}
+                    >
+                        Очистить ({selected.size})
+                    </button>
 
-            <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                <button onClick={clear} disabled={!selected.size}>
-                    Очистить
-                </button>
-                <button disabled={selected.size !== 5} onClick={saveDeck}>
-                    Сохранить колоду
-                </button>
-                <div style={{ opacity: 0.7, fontSize: 12 }}>После сохранения можно нажимать Play.</div>
-            </div>
+                    <button
+                        className="inv-btn inv-btn-primary"
+                        disabled={selected.size !== 5 || saving}
+                        onClick={saveDeck}
+                    >
+                        {saving ? "Сохранение..." : `Сохранить колоду (${selected.size}/5)`}
+                    </button>
+                </div>
+            )}
+
+            {/* Hint */}
+            {nfts.length > 0 && selected.size === 5 && (
+                <div className="inv-hint">
+                    ✅ Колода готова! Теперь можешь нажать "Play" в главном меню
+                </div>
+            )}
         </div>
     );
 }

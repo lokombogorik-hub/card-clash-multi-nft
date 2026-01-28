@@ -357,9 +357,24 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
         );
     }
 
-    const [enemyDeck, setEnemyDeck] = useState(() =>
-        Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`))
-    );
+    const [enemyDeck, setEnemyDeck] = useState([]);
+    const [loadingEnemyDeck, setLoadingEnemyDeck] = useState(true);
+
+    // Load AI deck from backend
+    useEffect(() => {
+        (async () => {
+            try {
+                const token = getStoredToken();
+                const aiDeck = await apiFetch("/api/decks/ai_opponent", { token });
+                const cards = Array.isArray(aiDeck) ? aiDeck.map((n, idx) => nftToCard(n, idx)) : [];
+                setEnemyDeck(cards.length === 5 ? cards : Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`)));
+            } catch {
+                setEnemyDeck(Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`)));
+            } finally {
+                setLoadingEnemyDeck(false);
+            }
+        })();
+    }, []);
 
     const [hands, setHands] = useState(() => ({
         player: cloneDeckToHand(playerDeck.map((n, idx) => nftToCard(n, idx)), "player"),
