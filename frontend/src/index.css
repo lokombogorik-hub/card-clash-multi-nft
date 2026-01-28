@@ -2491,3 +2491,518 @@ button {
         grid-template-columns: repeat(3, 1fr);
     }
 }
+
+/* =========================
+   LOCK ESCROW MODAL (полностью переработанный)
+   ========================= */
+.lock-escrow-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.9);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 25000;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.lock-escrow-modal-box {
+    position: relative;
+    max-width: 900px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    background: linear-gradient(135deg, rgba(20, 20, 30, 0.98) 0%, rgba(10, 10, 20, 0.98) 100%);
+    border: 2px solid rgba(120, 200, 255, 0.3);
+    border-radius: 24px;
+    padding: 32px 28px;
+    box-shadow: 0 16px 64px rgba(0, 0, 0, 0.8);
+}
+
+.lock-escrow-modal-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(255, 80, 80, 0.15);
+    border: 1px solid rgba(255, 80, 80, 0.3);
+    color: #fff;
+    font-size: 20px;
+    padding: 0;
+    cursor: pointer;
+    transition: all 0.2s;
+    z-index: 10;
+}
+
+.lock-escrow-modal-close:hover:not(:disabled) {
+    background: rgba(255, 80, 80, 0.3);
+    transform: scale(1.1);
+}
+
+.lock-escrow-modal-close:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.lock-escrow-modal-title {
+    font-size: 28px;
+    font-weight: 900;
+    margin: 0 0 24px 0;
+    color: #fff;
+    text-align: center;
+    text-shadow: 0 0 20px rgba(120, 200, 255, 0.5);
+}
+
+.lock-escrow-step {
+    display: grid;
+    gap: 24px;
+}
+
+.lock-escrow-section {
+    display: grid;
+    gap: 16px;
+}
+
+.lock-escrow-section-title {
+    font-size: 18px;
+    font-weight: 900;
+    color: #a0d8ff;
+}
+
+.lock-escrow-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+}
+
+.lock-escrow-info-item {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 12px 16px;
+}
+
+.lock-escrow-info-label {
+    font-size: 11px;
+    font-weight: 700;
+    opacity: 0.7;
+    margin-bottom: 6px;
+    color: #a0d8ff;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.lock-escrow-info-value {
+    font-family: monospace;
+    font-size: 13px;
+    color: #fff;
+}
+
+.lock-escrow-warning {
+    background: rgba(255, 200, 0, 0.1);
+    border: 1px solid rgba(255, 200, 0, 0.3);
+    border-radius: 12px;
+    padding: 16px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #ffd700;
+}
+
+.lock-escrow-error {
+    background: rgba(255, 80, 80, 0.15);
+    border: 1px solid rgba(255, 80, 80, 0.3);
+    border-radius: 12px;
+    padding: 16px;
+    color: #ffb3b3;
+    font-size: 13px;
+}
+
+.lock-escrow-join-row {
+    display: flex;
+    gap: 12px;
+}
+
+.lock-escrow-input {
+    flex: 1;
+    padding: 12px 16px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(0, 0, 0, 0.35);
+    color: #fff;
+    outline: none;
+    font-family: monospace;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.lock-escrow-input:focus {
+    border-color: rgba(120, 200, 255, 0.5);
+    box-shadow: 0 0 0 3px rgba(120, 200, 255, 0.1);
+}
+
+.lock-escrow-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.lock-escrow-btn {
+    padding: 14px 24px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.lock-escrow-btn.primary {
+    background: linear-gradient(135deg, #78c8ff 0%, #5096ff 100%);
+    color: #000;
+    box-shadow: 0 4px 12px rgba(120, 200, 255, 0.3);
+}
+
+.lock-escrow-btn.primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(120, 200, 255, 0.4);
+}
+
+.lock-escrow-btn.secondary {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.lock-escrow-btn.secondary:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.lock-escrow-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Selected NFTs (5 slots) */
+.lock-escrow-selected-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+}
+
+.lock-escrow-slot {
+    position: relative;
+    aspect-ratio: 2.5 / 3.5;
+    border-radius: 14px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 2px dashed rgba(255, 255, 255, 0.2);
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+}
+
+.lock-escrow-slot.empty {
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.lock-escrow-slot.filled {
+    border: 2px solid rgba(120, 200, 255, 0.5);
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.lock-escrow-slot-number {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    font-size: 11px;
+    font-weight: 900;
+    color: rgba(255, 255, 255, 0.7);
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 6px;
+    padding: 4px 8px;
+    z-index: 2;
+}
+
+.lock-escrow-slot-placeholder {
+    font-size: 12px;
+    opacity: 0.5;
+    color: #fff;
+}
+
+.lock-escrow-slot-remove {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(255, 80, 80, 0.8);
+    border: 1px solid rgba(255, 80, 80, 0.5);
+    color: #fff;
+    font-size: 14px;
+    padding: 0;
+    cursor: pointer;
+    z-index: 3;
+    transition: all 0.2s;
+}
+
+.lock-escrow-slot-remove:hover {
+    background: rgba(255, 80, 80, 1);
+    transform: scale(1.1);
+}
+
+.lock-escrow-slot-image {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+}
+
+.lock-escrow-slot-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.lock-escrow-slot-no-image {
+    font-size: 11px;
+    opacity: 0.5;
+    color: #fff;
+}
+
+.lock-escrow-slot-title {
+    position: absolute;
+    bottom: 24px;
+    left: 0;
+    right: 0;
+    padding: 0 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+    z-index: 2;
+}
+
+.lock-escrow-slot-id {
+    position: absolute;
+    bottom: 8px;
+    left: 0;
+    right: 0;
+    padding: 0 8px;
+    font-size: 9px;
+    font-family: monospace;
+    color: rgba(255, 255, 255, 0.8);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+    z-index: 2;
+}
+
+/* NFT Picker */
+.lock-escrow-picker-controls {
+    display: flex;
+    gap: 12px;
+}
+
+.lock-escrow-recent {
+    display: grid;
+    gap: 8px;
+}
+
+.lock-escrow-recent-label {
+    font-size: 12px;
+    opacity: 0.8;
+    color: #a0d8ff;
+}
+
+.lock-escrow-recent-chips {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.lock-escrow-chip {
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-family: monospace;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.lock-escrow-chip:hover:not(:disabled) {
+    background: rgba(120, 200, 255, 0.15);
+    border-color: rgba(120, 200, 255, 0.3);
+}
+
+.lock-escrow-chip:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.lock-escrow-nft-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+}
+
+.lock-escrow-nft-card {
+    position: relative;
+    aspect-ratio: 2.5 / 3.5;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 0;
+}
+
+.lock-escrow-nft-card:hover:not(:disabled) {
+    transform: translateY(-4px);
+    border-color: rgba(120, 200, 255, 0.4);
+    box-shadow: 0 8px 24px rgba(120, 200, 255, 0.2);
+}
+
+.lock-escrow-nft-card.selected {
+    border-color: rgba(100, 255, 150, 0.6);
+    box-shadow: 0 0 20px rgba(100, 255, 150, 0.3);
+}
+
+.lock-escrow-nft-card:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.lock-escrow-nft-image {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+}
+
+.lock-escrow-nft-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.lock-escrow-nft-no-image {
+    font-size: 11px;
+    opacity: 0.5;
+    color: #fff;
+}
+
+.lock-escrow-nft-check {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(100, 255, 150, 0.9);
+    color: #000;
+    font-size: 16px;
+    font-weight: 900;
+    display: grid;
+    place-items: center;
+    box-shadow: 0 4px 12px rgba(100, 255, 150, 0.5);
+    z-index: 2;
+}
+
+.lock-escrow-nft-title {
+    position: absolute;
+    bottom: 24px;
+    left: 0;
+    right: 0;
+    padding: 0 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+    z-index: 2;
+}
+
+.lock-escrow-nft-id {
+    position: absolute;
+    bottom: 8px;
+    left: 0;
+    right: 0;
+    padding: 0 8px;
+    font-size: 9px;
+    font-family: monospace;
+    color: rgba(255, 255, 255, 0.8);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+    z-index: 2;
+}
+
+.lock-escrow-hint {
+    padding: 16px;
+    background: rgba(120, 200, 255, 0.08);
+    border: 1px solid rgba(120, 200, 255, 0.2);
+    border-radius: 12px;
+    font-size: 13px;
+    text-align: center;
+    color: #a0d8ff;
+}
+
+/* Loading */
+.lock-escrow-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 60px 20px;
+}
+
+.lock-escrow-loading-spinner {
+    width: 64px;
+    height: 64px;
+    border: 4px solid rgba(120, 200, 255, 0.2);
+    border-top-color: #78c8ff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.lock-escrow-loading-text {
+    font-size: 16px;
+    text-align: center;
+    line-height: 1.6;
+    color: #a0d8ff;
+}
+
+@media (max-width: 768px) {
+    .lock-escrow-selected-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .lock-escrow-nft-grid {
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    }
+
+    .lock-escrow-info-grid {
+        grid-template-columns: 1fr;
+    }
+}
