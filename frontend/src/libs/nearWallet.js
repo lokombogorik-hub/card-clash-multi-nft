@@ -2,7 +2,6 @@ import { HereWallet } from '@here-wallet/core'
 import { setupWalletSelector } from '@near-wallet-selector/core'
 import { setupModal } from '@near-wallet-selector/modal-ui'
 import { setupMyNearWallet } from '@near-wallet-selector/my-near-wallet'
-import '@near-wallet-selector/modal-ui/styles.css'
 
 let hereInstance = null
 let connectedAccountId = null

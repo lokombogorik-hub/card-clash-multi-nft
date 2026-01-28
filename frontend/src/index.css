@@ -1356,3 +1356,21 @@ button {
         left: 26px !important;
     }
 }
+
+/* Wallet Selector Modal z-index fix */
+.modal-overlay,
+[class*="modal-overlay"],
+[class*="near-wallet-selector"] {
+    z-index: 99999 !important;
+}
+
+.modal,
+[class*="modal-content"],
+[class*="near-wallet-selector-modal"] {
+    z-index: 100000 !important;
+}
+
+/* Ensure modal backdrop is visible */
+.modal-overlay {
+    background: rgba(0, 0, 0, 0.8) !important;
+}

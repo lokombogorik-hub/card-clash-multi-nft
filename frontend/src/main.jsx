@@ -10,6 +10,9 @@ globalThis.process = process
 globalThis.Buffer = Buffer
 if (!globalThis.process.env) globalThis.process.env = {}
 
+// ВАЖНО: импортируем CSS wallet-selector modal
+import '@near-wallet-selector/modal-ui/styles.css'
+
 // === GLOBAL ERROR CATCHER (показываем все ошибки в UI) ===
 window.__CARDCLASH_ERRORS__ = []
 
