@@ -1,117 +1,88 @@
-import { useEffect, useState } from "react";
-import { apiFetch } from "../../api";
+import { useState } from "react";
 
 export default function Matchmaking({ me, onBack, onMatched }) {
-    const [mode, setMode] = useState(null); // null | 'ai' | 'online'
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState("");
+    const [mode, setMode] = useState(null); // "ai" | "pvp"
+    const [searching, setSearching] = useState(false);
 
-    const getToken = () => {
-        try {
-            return (
-                localStorage.getItem("token") ||
-                localStorage.getItem("accessToken") ||
-                localStorage.getItem("access_token") ||
-                ""
-            );
-        } catch {
-            return "";
-        }
-    };
-
-    const onPlayAI = () => {
-        // Stage1: мгновенный старт vs AI (без blockchain)
+    const handleAI = () => {
         setMode("ai");
+        setSearching(true);
         setTimeout(() => {
-            onMatched({ matchId: null }); // null = Stage1 offline
-        }, 300);
+            setSearching(false);
+            onMatched({ matchId: "" }); // Stage1 (no matchId = AI)
+        }, 800);
     };
 
-    const onPlayOnline = async () => {
-        // Stage2: создаём матч в DB, ждём соперника, потом lock NFT
-        setMode("online");
-        setLoading(true);
-        setError("");
-
-        try {
-            const token = getToken();
-            if (!token) {
-                throw new Error("Auth token missing");
-            }
-
-            // Создаём матч
-            const match = await apiFetch("/api/matches/create", {
-                method: "POST",
-                token,
-                body: JSON.stringify({}),
-            });
-
-            const matchId = match?.id || match?.match_id;
-            if (!matchId) {
-                throw new Error("No match ID returned");
-            }
-
-            // Симулируем "ожидание соперника" (в реальности тут websocket или polling)
-            // Для MVP просто сразу matched
-            setTimeout(() => {
-                onMatched({ matchId });
-            }, 800);
-        } catch (e) {
-            setError(String(e?.message || e));
-            setLoading(false);
-        }
+    const handlePvP = () => {
+        setMode("pvp");
+        setSearching(true);
+        // TODO: integrate backend matchmaking
+        setTimeout(() => {
+            setSearching(false);
+            alert("PvP matchmaking coming soon!");
+            setMode(null);
+        }, 2000);
     };
+
+    if (searching) {
+        return (
+            <div className="matchmaking-page">
+                <div className="matchmaking-searching">
+                    <div className="matchmaking-spinner" />
+                    <div className="matchmaking-searching-text">
+                        {mode === "ai" ? "Preparing AI opponent..." : "Searching for player..."}
+                    </div>
+                    <button className="matchmaking-cancel-btn" onClick={() => { setSearching(false); setMode(null); }}>
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="matchmaking-page">
+            {/* Header */}
             <div className="matchmaking-header">
-                <button className="matchmaking-back" onClick={onBack}>
-                    ← Назад
+                <button className="matchmaking-back-btn" onClick={onBack}>
+                    ← Back
                 </button>
                 <h2 className="matchmaking-title">
-                    <span className="matchmaking-icon">⚔️</span>
-                    Выбери режим боя
+                    <span className="matchmaking-title-icon">⚔️</span>
+                    Choose Game Mode
                 </h2>
             </div>
 
-            {!mode && (
-                <div className="matchmaking-modes">
-                    <button className="mode-card mode-ai" onClick={onPlayAI} disabled={loading}>
-                        <div className="mode-icon">🤖</div>
-                        <div className="mode-title">VS AI</div>
-                        <div className="mode-subtitle">
-                            Быстрый старт • Без ставок<br />
-                            Тренировка и тесты
-                        </div>
-                        <div className="mode-badge">Stage 1</div>
-                    </button>
-
-                    <button className="mode-card mode-online" onClick={onPlayOnline} disabled={loading}>
-                        <div className="mode-icon">🌐</div>
-                        <div className="mode-title">Online PvP</div>
-                        <div className="mode-subtitle">
-                            Реальный соперник • Lock NFT<br />
-                            Победитель забирает приз
-                        </div>
-                        <div className="mode-badge mode-badge-stage2">Stage 2</div>
-                    </button>
-                </div>
-            )}
-
-            {loading && (
-                <div className="matchmaking-loading">
-                    <div className="matchmaking-spinner" />
-                    <div className="matchmaking-loading-text">
-                        {mode === "ai" ? "Запуск боя с AI..." : "Поиск соперника..."}
+            {/* Mode Cards */}
+            <div className="matchmaking-modes">
+                {/* AI Mode */}
+                <button className="matchmaking-mode-card ai" onClick={handleAI}>
+                    <div className="matchmaking-mode-icon">🤖</div>
+                    <div className="matchmaking-mode-name">vs AI</div>
+                    <div className="matchmaking-mode-desc">
+                        Practice against BunnyBot
                     </div>
-                </div>
-            )}
+                    <div className="matchmaking-mode-badge">Free Play</div>
+                </button>
 
-            {error && (
-                <div className="matchmaking-error">
-                    ⚠️ {error}
+                {/* PvP Mode */}
+                <button className="matchmaking-mode-card pvp" onClick={handlePvP}>
+                    <div className="matchmaking-mode-icon">👥</div>
+                    <div className="matchmaking-mode-name">PvP</div>
+                    <div className="matchmaking-mode-desc">
+                        Battle real players for NFTs
+                    </div>
+                    <div className="matchmaking-mode-badge coming-soon">Coming Soon</div>
+                </button>
+            </div>
+
+            {/* Info */}
+            <div className="matchmaking-info">
+                <div className="matchmaking-info-icon">ℹ️</div>
+                <div className="matchmaking-info-text">
+                    In PvP mode, both players lock 5 NFTs. Winner takes 1 NFT from loser (Stage2 on-chain).
                 </div>
-            )}
+            </div>
         </div>
     );
 }

@@ -1581,3 +1581,594 @@ button {
         animation: none !important;
     }
 }
+
+/* =========================
+   9) PROFILE PAGE
+   ========================= */
+.profile-page {
+    padding: 20px;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.profile-header-card {
+    background: linear-gradient(135deg, rgba(20, 20, 30, 0.95) 0%, rgba(10, 10, 20, 0.95) 100%);
+    border: 2px solid rgba(120, 200, 255, 0.2);
+    border-radius: 20px;
+    padding: 32px 24px;
+    text-align: center;
+    margin-bottom: 24px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.profile-avatar-wrapper {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 16px;
+}
+
+.profile-avatar,
+.profile-avatar-fallback {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid rgba(120, 200, 255, 0.5);
+    background: rgba(255, 255, 255, 0.05);
+    display: grid;
+    place-items: center;
+    font-size: 48px;
+    font-weight: 900;
+    color: #fff;
+}
+
+.profile-avatar-ring {
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    background: linear-gradient(45deg, rgba(120, 200, 255, 0.6), rgba(255, 61, 242, 0.4)) border-box;
+    -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: destination-out;
+    mask-composite: exclude;
+    animation: profileRingSpin 3s linear infinite;
+}
+
+@keyframes profileRingSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.profile-name {
+    font-size: 24px;
+    font-weight: 900;
+    color: #fff;
+    margin-bottom: 4px;
+}
+
+.profile-tg-id {
+    font-size: 13px;
+    opacity: 0.7;
+    color: #a0d8ff;
+    margin-bottom: 16px;
+}
+
+.profile-wallet-box {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(120, 200, 255, 0.2);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-top: 16px;
+}
+
+.profile-wallet-label {
+    font-size: 11px;
+    font-weight: 700;
+    opacity: 0.7;
+    margin-bottom: 6px;
+    color: #a0d8ff;
+}
+
+.profile-wallet-account {
+    font-family: monospace;
+    font-size: 12px;
+    color: #fff;
+    margin-bottom: 4px;
+}
+
+.profile-wallet-balance {
+    font-size: 14px;
+    font-weight: 700;
+    color: #78c8ff;
+}
+
+.profile-wallet-disconnected {
+    font-size: 12px;
+    opacity: 0.7;
+    color: #ffb3b3;
+}
+
+.profile-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.profile-stat-card {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 20px 16px;
+    text-align: center;
+}
+
+.profile-stat-icon {
+    font-size: 32px;
+    margin-bottom: 8px;
+}
+
+.profile-stat-value {
+    font-size: 28px;
+    font-weight: 900;
+    color: #78c8ff;
+    margin-bottom: 4px;
+}
+
+.profile-stat-label {
+    font-size: 12px;
+    opacity: 0.7;
+    color: #a0d8ff;
+}
+
+.profile-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 40px 20px;
+    opacity: 0.7;
+}
+
+.profile-loading-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid rgba(120, 200, 255, 0.2);
+    border-top-color: #78c8ff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.profile-achievements {
+    margin-top: 24px;
+}
+
+.profile-section-title {
+    font-size: 18px;
+    font-weight: 900;
+    margin-bottom: 12px;
+    color: #fff;
+}
+
+.profile-achievements-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.profile-achievement {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 16px 12px;
+    text-align: center;
+}
+
+.profile-achievement.locked {
+    opacity: 0.5;
+}
+
+.profile-achievement-icon {
+    font-size: 28px;
+    margin-bottom: 6px;
+}
+
+.profile-achievement-name {
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+}
+
+@media (max-width: 640px) {
+    .profile-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .profile-achievements-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* =========================
+   10) MARKET PAGE
+   ========================= */
+.market-page {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.market-header {
+    margin-bottom: 24px;
+    text-align: center;
+}
+
+.market-title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-size: 28px;
+    font-weight: 900;
+    margin: 0 0 8px 0;
+    color: #fff;
+    text-shadow: 0 0 20px rgba(120, 200, 255, 0.5);
+}
+
+.market-title-icon {
+    font-size: 32px;
+}
+
+.market-subtitle {
+    font-size: 14px;
+    opacity: 0.85;
+    color: #a0d8ff;
+}
+
+.market-cases-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+.market-case-card {
+    position: relative;
+    background: linear-gradient(135deg, rgba(20, 20, 30, 0.95) 0%, rgba(10, 10, 20, 0.95) 100%);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 0;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.market-case-card:hover {
+    transform: translateY(-8px);
+    border-color: rgba(120, 200, 255, 0.5);
+    box-shadow: 0 12px 32px rgba(120, 200, 255, 0.3);
+}
+
+.market-case-card.selected {
+    border-color: rgba(120, 200, 255, 0.8);
+    box-shadow: 0 0 30px rgba(120, 200, 255, 0.5);
+}
+
+.market-case-image {
+    width: 100%;
+    aspect-ratio: 1;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.market-case-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.market-case-rarity-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+}
+
+.market-case-rarity-badge[data-rarity="common"] {
+    border-color: rgba(200, 200, 200, 0.5);
+}
+
+.market-case-rarity-badge[data-rarity="rare"] {
+    border-color: rgba(120, 200, 255, 0.5);
+}
+
+.market-case-rarity-badge[data-rarity="legendary"] {
+    border-color: rgba(255, 215, 0, 0.6);
+}
+
+.market-case-name {
+    font-size: 18px;
+    font-weight: 900;
+    color: #fff;
+    padding: 16px 16px 8px;
+}
+
+.market-case-desc {
+    font-size: 13px;
+    opacity: 0.8;
+    color: #a0d8ff;
+    padding: 0 16px 12px;
+}
+
+.market-case-price {
+    font-size: 20px;
+    font-weight: 900;
+    color: #78c8ff;
+    padding: 0 16px 16px;
+}
+
+.market-buy-section {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 32px;
+}
+
+.market-buy-btn {
+    padding: 16px 32px;
+    border-radius: 14px;
+    font-size: 16px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #78c8ff 0%, #5096ff 100%);
+    color: #000;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 6px 20px rgba(120, 200, 255, 0.4);
+    transition: all 0.2s;
+}
+
+.market-buy-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(120, 200, 255, 0.5);
+}
+
+.market-buy-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.market-footer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 32px 20px;
+    background: rgba(120, 200, 255, 0.05);
+    border: 1px solid rgba(120, 200, 255, 0.1);
+    border-radius: 16px;
+}
+
+.market-footer-icon {
+    font-size: 48px;
+}
+
+.market-footer-text {
+    font-size: 14px;
+    opacity: 0.85;
+    color: #a0d8ff;
+}
+
+/* =========================
+   11) MATCHMAKING PAGE
+   ========================= */
+.matchmaking-page {
+    padding: 20px;
+    max-width: 800px;
+    margin: 0 auto;
+    min-height: 60vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.matchmaking-header {
+    margin-bottom: 32px;
+    text-align: center;
+    position: relative;
+}
+
+.matchmaking-back-btn {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 10px 16px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.matchmaking-title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-size: 28px;
+    font-weight: 900;
+    margin: 0;
+    color: #fff;
+    text-shadow: 0 0 20px rgba(120, 200, 255, 0.5);
+}
+
+.matchmaking-title-icon {
+    font-size: 32px;
+}
+
+.matchmaking-modes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-bottom: 24px;
+}
+
+.matchmaking-mode-card {
+    position: relative;
+    background: linear-gradient(135deg, rgba(20, 20, 30, 0.95) 0%, rgba(10, 10, 20, 0.95) 100%);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 32px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.matchmaking-mode-card::before {
+    content: "";
+    position: absolute;
+    inset: -100%;
+    background: conic-gradient(from 90deg, transparent 0 30%, rgba(120, 200, 255, 0.3) 50%, transparent 70% 100%);
+    animation: modeSpin 4s linear infinite;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.matchmaking-mode-card:hover::before {
+    opacity: 1;
+}
+
+.matchmaking-mode-card:hover {
+    transform: translateY(-8px);
+    border-color: rgba(120, 200, 255, 0.5);
+    box-shadow: 0 12px 32px rgba(120, 200, 255, 0.3);
+}
+
+.matchmaking-mode-card.ai {
+    border-color: rgba(120, 200, 255, 0.3);
+}
+
+.matchmaking-mode-card.pvp {
+    border-color: rgba(255, 61, 242, 0.3);
+}
+
+.matchmaking-mode-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+}
+
+.matchmaking-mode-name {
+    font-size: 24px;
+    font-weight: 900;
+    color: #fff;
+    margin-bottom: 8px;
+}
+
+.matchmaking-mode-desc {
+    font-size: 14px;
+    opacity: 0.8;
+    color: #a0d8ff;
+    margin-bottom: 16px;
+}
+
+.matchmaking-mode-badge {
+    display: inline-block;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    background: rgba(100, 255, 150, 0.2);
+    border: 1px solid rgba(100, 255, 150, 0.4);
+    color: #a0ffc8;
+}
+
+.matchmaking-mode-badge.coming-soon {
+    background: rgba(255, 215, 0, 0.15);
+    border-color: rgba(255, 215, 0, 0.3);
+    color: #ffd700;
+}
+
+.matchmaking-info {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px 20px;
+    background: rgba(120, 200, 255, 0.08);
+    border: 1px solid rgba(120, 200, 255, 0.2);
+    border-radius: 12px;
+}
+
+.matchmaking-info-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.matchmaking-info-text {
+    font-size: 13px;
+    line-height: 1.5;
+    opacity: 0.9;
+    color: #a0d8ff;
+}
+
+.matchmaking-searching {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 60px 20px;
+}
+
+.matchmaking-spinner {
+    width: 64px;
+    height: 64px;
+    border: 4px solid rgba(120, 200, 255, 0.2);
+    border-top-color: #78c8ff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.matchmaking-searching-text {
+    font-size: 18px;
+    font-weight: 700;
+    color: #78c8ff;
+}
+
+.matchmaking-cancel-btn {
+    padding: 12px 24px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+@keyframes modeSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (max-width: 640px) {
+    .matchmaking-modes {
+        grid-template-columns: 1fr;
+    }
+
+    .matchmaking-back-btn {
+        position: static;
+        transform: none;
+        margin-bottom: 16px;
+    }
+}
