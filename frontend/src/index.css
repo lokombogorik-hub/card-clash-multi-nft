@@ -1,11 +1,7 @@
 /* =========================================================
-   Card Clash — index.css
-   ONLY CSS. NO JS/IMPORTS.
+   Card Clash — index.css (ONLY CSS)
    ========================================================= */
 
-/* =========================
-   1) GLOBAL BASE
-   ========================= */
 * {
     box-sizing: border-box;
     font-family: sans-serif;
@@ -34,16 +30,12 @@ button {
     -webkit-tap-highlight-color: transparent;
 }
 
-/* reusable spinner */
 @keyframes spin {
     to {
         transform: rotate(360deg);
     }
 }
 
-/* =========================
-   2) CSS VARIABLES
-   ========================= */
 :root {
     --app-h: 100vh;
 
@@ -53,7 +45,7 @@ button {
     /* set via ResizeObserver in App.jsx */
     --bottom-stack-h: 160px;
 
-    /* TT layout */
+    /* TT UI vars */
     --ui-pad: clamp(8px, 2vw, 14px);
     --gap: clamp(6px, 1.6vw, 10px);
 
@@ -99,7 +91,6 @@ button {
     --stage-w: calc((var(--edge-inset) * 2) + (var(--side-w) * 2) + var(--board-w) + (var(--gap) * 2));
 }
 
-/* Android-ish landscape safe tweaks */
 @media (hover: none) and (pointer: coarse),
 (max-height: 520px) and (orientation: landscape) {
     :root {
@@ -111,7 +102,7 @@ button {
 }
 
 /* =========================
-   3) SHELL / HOME / NAV
+   SHELL / HOME / NAV
    ========================= */
 .shell {
     position: fixed;
@@ -137,7 +128,6 @@ button {
     padding-top: calc(var(--safe-t) + 8px);
     padding-bottom: calc(var(--safe-b) + var(--bottom-stack-h) + 18px);
 
-    /* pages scroll (body is hidden overflow) */
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
@@ -193,7 +183,6 @@ button {
     padding: 18px;
 }
 
-/* bottom stack */
 .bottom-stack {
     position: absolute;
     left: 0;
@@ -308,14 +297,14 @@ button {
     letter-spacing: 0.2px;
 }
 
-/* rotate gate hides host */
+/* Rotate-gate hides host */
 .game-host.is-hidden {
     opacity: 0;
     pointer-events: none;
 }
 
 /* =========================
-   4) ROTATE GATE
+   ROTATE GATE
    ========================= */
 .rotate-gate {
     position: fixed;
@@ -373,203 +362,7 @@ button {
 }
 
 /* =========================
-   5) MATCHMAKING PAGE
-   ========================= */
-.matchmaking-page {
-    padding: 20px;
-    max-width: 800px;
-    margin: 0 auto;
-    min-height: 60vh;
-    display: flex;
-    flex-direction: column;
-}
-
-.matchmaking-header {
-    margin-bottom: 32px;
-}
-
-.matchmaking-back {
-    padding: 10px 16px;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    color: #fff;
-    font-size: 14px;
-    font-weight: 700;
-    margin-bottom: 16px;
-    transition: all 0.2s;
-}
-
-.matchmaking-back:hover {
-    background: rgba(255, 255, 255, 0.12);
-}
-
-.matchmaking-title {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    font-size: 28px;
-    font-weight: 900;
-    margin: 0;
-    color: #fff;
-    text-shadow: 0 0 20px rgba(120, 200, 255, 0.5);
-}
-
-.matchmaking-icon {
-    font-size: 32px;
-}
-
-.matchmaking-modes {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 20px;
-    flex: 1;
-    align-content: start;
-}
-
-.mode-card {
-    position: relative;
-    padding: 32px 24px;
-    border-radius: 20px;
-    border: 2px solid rgba(255, 255, 255, 0.1);
-    background: linear-gradient(135deg, rgba(20, 20, 30, 0.95) 0%, rgba(10, 10, 20, 0.95) 100%);
-    color: #fff;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    text-align: center;
-    overflow: hidden;
-}
-
-.mode-card::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: 18px;
-    padding: 2px;
-    background: linear-gradient(135deg, rgba(120, 200, 255, 0.3), rgba(255, 61, 242, 0.2));
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    opacity: 0;
-    transition: opacity 0.3s;
-}
-
-.mode-card:hover::before {
-    opacity: 1;
-}
-
-.mode-card:hover {
-    transform: translateY(-6px);
-    box-shadow: 0 12px 32px rgba(120, 200, 255, 0.2);
-}
-
-.mode-card:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-}
-
-.mode-icon {
-    font-size: 64px;
-    margin-bottom: 16px;
-}
-
-.mode-title {
-    font-size: 22px;
-    font-weight: 900;
-    margin-bottom: 12px;
-}
-
-.mode-subtitle {
-    font-size: 13px;
-    opacity: 0.85;
-    line-height: 1.5;
-    margin-bottom: 16px;
-}
-
-.mode-badge {
-    display: inline-block;
-    padding: 6px 14px;
-    border-radius: 999px;
-    background: rgba(100, 255, 150, 0.15);
-    border: 1px solid rgba(100, 255, 150, 0.3);
-    color: #a0ffc8;
-    font-size: 11px;
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.mode-badge-stage2 {
-    background: rgba(120, 200, 255, 0.15);
-    border-color: rgba(120, 200, 255, 0.3);
-    color: #78c8ff;
-}
-
-.mode-ai {
-    border-color: rgba(100, 255, 150, 0.2);
-}
-
-.mode-ai:hover {
-    box-shadow: 0 12px 32px rgba(100, 255, 150, 0.2);
-}
-
-.mode-online {
-    border-color: rgba(120, 200, 255, 0.2);
-}
-
-.mode-online:hover {
-    box-shadow: 0 12px 32px rgba(120, 200, 255, 0.25);
-}
-
-.matchmaking-loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 20px;
-    padding: 60px 20px;
-}
-
-.matchmaking-spinner {
-    width: 48px;
-    height: 48px;
-    border: 4px solid rgba(120, 200, 255, 0.2);
-    border-top-color: #78c8ff;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-}
-
-.matchmaking-loading-text {
-    font-size: 16px;
-    font-weight: 700;
-    color: #78c8ff;
-}
-
-.matchmaking-error {
-    text-align: center;
-    padding: 16px 20px;
-    background: rgba(255, 80, 80, 0.15);
-    border: 1px solid rgba(255, 80, 80, 0.3);
-    border-radius: 12px;
-    color: #ffb3b3;
-    font-size: 14px;
-    margin-top: 20px;
-}
-
-@media (max-width: 640px) {
-    .matchmaking-modes {
-        grid-template-columns: 1fr;
-    }
-
-    .matchmaking-title {
-        font-size: 24px;
-    }
-}
-
-/* =========================
-   6) INVENTORY (modern)
+   INVENTORY (modern deck builder)
    ========================= */
 .inventory-page {
     padding: 20px;
@@ -590,7 +383,6 @@ button {
     font-size: 28px;
     font-weight: 900;
     margin: 0 0 8px 0;
-    color: #fff;
     text-shadow: 0 0 20px rgba(120, 200, 255, 0.5);
 }
 
@@ -623,7 +415,6 @@ button {
 .inv-info-value {
     font-family: monospace;
     opacity: 0.9;
-    color: #fff;
 }
 
 .inv-error {
@@ -906,7 +697,7 @@ button {
 }
 
 /* =========================
-   7) GAME (TT) STAGE
+   TT GAME STAGE
    ========================= */
 .game-root {
     position: fixed;
@@ -1165,16 +956,8 @@ button {
     z-index: 0;
 
     background:
-        repeating-linear-gradient(90deg,
-            rgba(24, 231, 255, 0) 0,
-            rgba(24, 231, 255, 0) calc(var(--card-w) - 2px),
-            rgba(24, 231, 255, 0.4) calc(var(--card-w) - 2px),
-            rgba(24, 231, 255, 0) var(--card-w)),
-        repeating-linear-gradient(0deg,
-            rgba(255, 61, 242, 0) 0,
-            rgba(255, 61, 242, 0) calc(var(--card-h) - 2px),
-            rgba(255, 61, 242, 0.32) calc(var(--card-h) - 2px),
-            rgba(255, 61, 242, 0) var(--card-h));
+        repeating-linear-gradient(90deg, rgba(24, 231, 255, 0) 0, rgba(24, 231, 255, 0) calc(var(--card-w) - 2px), rgba(24, 231, 255, 0.4) calc(var(--card-w) - 2px), rgba(24, 231, 255, 0) var(--card-w)),
+        repeating-linear-gradient(0deg, rgba(255, 61, 242, 0) 0, rgba(255, 61, 242, 0) calc(var(--card-h) - 2px), rgba(255, 61, 242, 0.32) calc(var(--card-h) - 2px), rgba(255, 61, 242, 0) var(--card-h));
 
     filter: drop-shadow(0 0 22px rgba(24, 231, 255, 0.22));
     opacity: 0.9;
@@ -1337,7 +1120,6 @@ button {
     }
 }
 
-/* TT numbers */
 .tt-badge {
     position: absolute;
     top: 9px;
@@ -1355,7 +1137,6 @@ button {
     z-index: 5;
     font-size: 12px !important;
     font-weight: 900;
-    color: #fff;
     text-shadow: 0 2px 6px rgba(0, 0, 0, 0.85);
     line-height: 1 !important;
     white-space: nowrap !important;
@@ -1381,7 +1162,6 @@ button {
     left: 28px;
 }
 
-/* card back */
 .card.back {
     cursor: default;
     background:
@@ -1413,7 +1193,7 @@ button {
     filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.65)) drop-shadow(0 0 18px rgba(120, 200, 255, 0.18));
 }
 
-/* elements */
+/* element visuals */
 .elem-bg {
     position: absolute;
     inset: 0;
@@ -1421,7 +1201,6 @@ button {
     place-items: center;
     pointer-events: none;
     z-index: 0;
-
     opacity: 0.16;
     font-size: 34px;
 }
@@ -1512,14 +1291,7 @@ button {
     content: "";
     position: absolute;
     inset: -55%;
-    background: conic-gradient(from 90deg,
-            transparent 0 12%,
-            var(--c1) 18%,
-            transparent 34%,
-            var(--c2) 52%,
-            transparent 70%,
-            var(--c1) 86%,
-            transparent 100%);
+    background: conic-gradient(from 90deg, transparent 0 12%, var(--c1) 18%, transparent 34%, var(--c2) 52%, transparent 70%, var(--c1) 86%, transparent 100%);
     opacity: 0.95;
     animation: magicSpin 2.8s linear infinite;
     z-index: 0;
@@ -1570,10 +1342,6 @@ button {
     transform: translateY(1px) scale(0.99);
 }
 
-.magic-btn.active {
-    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.7), 0 0 34px rgba(120, 200, 255, 0.16);
-}
-
 .magic-btn:disabled {
     opacity: 0.32;
     filter: saturate(0.75);
@@ -1605,7 +1373,7 @@ button {
     }
 }
 
-/* Game over */
+/* Game Over overlay */
 .game-over {
     position: fixed;
     inset: 0;
@@ -1627,11 +1395,7 @@ button {
     z-index: 22000;
 }
 
-.game-over-box h2 {
-    margin: 0 0 12px;
-}
-
-/* reduce motion */
+/* Reduce motion */
 @media (prefers-reduced-motion: reduce) {
     .rotate-phone {
         animation: none !important;
@@ -1648,7 +1412,7 @@ button {
     }
 }
 
-/* small TT tweaks for touch */
+/* Touch TT number tuning */
 @media (hover: none) and (pointer: coarse),
 (max-height: 520px) and (orientation: landscape) {
     .tt-badge {

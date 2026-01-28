@@ -64,7 +64,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const randInt = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
 const pick = (arr) => arr[(Math.random() * arr.length) | 0];
 const randomFirstTurn = () => (Math.random() < 0.5 ? "player" : "enemy");
-const showVal = (v) => String(v);
+const showVal = (v) => String(v); // always digits
 
 const RANKS = [
     { key: "common", label: "C", weight: 50, min: 1, max: 7, elemChance: 0.6 },
@@ -72,6 +72,9 @@ const RANKS = [
     { key: "epic", label: "E", weight: 15, min: 3, max: 10, elemChance: 0.8 },
     { key: "legendary", label: "L", weight: 5, min: 4, max: 10, elemChance: 0.9 },
 ];
+
+const FREEZE_DURATION_MOVES = 2;
+const REVEAL_MS = 3000;
 
 function weightedPick(defs) {
     const total = defs.reduce((s, d) => s + d.weight, 0);
@@ -271,9 +274,6 @@ function initialsFrom(name) {
     return (n[0] || "?").toUpperCase();
 }
 
-const FREEZE_DURATION_MOVES = 2;
-const REVEAL_MS = 3000;
-
 function makeBoardElements() {
     if (!RULES.elementalSquares) return Array(9).fill(null);
     const chance = 0.38;
@@ -312,19 +312,8 @@ function getStoredToken() {
     }
 }
 
-function LoadingScreen({ onExit, text }) {
-    return (
-        <div className="game-root">
-            <div className="game-ui tt-layout">
-                <button className="exit" onClick={onExit}>
-                    ← Меню
-                </button>
-                <div style={{ color: "#fff", padding: 20, textAlign: "center", gridColumn: "1 / -1", fontSize: 14 }}>
-                    {text}
-                </div>
-            </div>
-        </div>
-    );
+function getFallbackEnemyDeck() {
+    return Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`));
 }
 
 export default function Game({ onExit, me, playerDeck, matchId }) {
@@ -338,81 +327,14 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
 
     const myTgId = me?.id ? Number(me.id) : 0;
 
-    const refreshStage2Match = async () => {
-        if (!matchId) return;
-        try {
-            const token = getStoredToken();
-            if (!token) return;
-            const m = await apiFetch(`/api/matches/${matchId}`, { token });
-            setStage2Match(m);
-        } catch {
-            // ignore
-        }
-    };
-
-    useEffect(() => {
-        refreshStage2Match();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [matchId]);
-
-    if (!playerDeck || !Array.isArray(playerDeck) || playerDeck.length !== 5) {
-        return (
-            <div className="game-root">
-                <div className="game-ui tt-layout">
-                    <button className="exit" onClick={onExit}>
-                        ← Меню
-                    </button>
-                    <div style={{ color: "#fff", padding: 20, textAlign: "center", gridColumn: "1 / -1", fontSize: 14 }}>
-                        ⚠️ Ошибка: активная колода не содержит 5 карт.
-                        <br />
-                        Вернитесь в Инвентарь и выберите 5 NFT.
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    // ===== Enemy deck (AI) =====
-    const [enemyDeck, setEnemyDeck] = useState(null); // array of cards
+    // AI enemy deck state (always declared!)
+    const [enemyDeck, setEnemyDeck] = useState(() => getFallbackEnemyDeck());
     const [loadingEnemyDeck, setLoadingEnemyDeck] = useState(true);
 
-    useEffect(() => {
-        let alive = true;
-
-        (async () => {
-            try {
-                const token = getStoredToken();
-                const aiDeck = await apiFetch("/api/decks/ai_opponent", { token });
-                const cards = Array.isArray(aiDeck) ? aiDeck.map((n, idx) => nftToCard(n, idx)) : [];
-                if (!alive) return;
-
-                if (cards.length === 5) {
-                    setEnemyDeck(cards);
-                } else {
-                    setEnemyDeck(Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`)));
-                }
-            } catch {
-                if (!alive) return;
-                setEnemyDeck(Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`)));
-            } finally {
-                if (!alive) return;
-                setLoadingEnemyDeck(false);
-            }
-        })();
-
-        return () => {
-            alive = false;
-        };
-    }, []);
-
-    if (loadingEnemyDeck || !enemyDeck) {
-        return <LoadingScreen onExit={onExit} text="Загрузка соперника..." />;
-    }
-
-    // ===== Core game state =====
+    // Core state (always declared!)
     const [hands, setHands] = useState(() => ({
-        player: [],
-        enemy: [],
+        player: cloneDeckToHand(playerDeck?.map((n, idx) => nftToCard(n, idx)) || [], "player"),
+        enemy: cloneDeckToHand(getFallbackEnemyDeck(), "enemy"),
     }));
 
     const [boardElems, setBoardElems] = useState(() => makeBoardElements());
@@ -427,7 +349,6 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
     const [roundWinner, setRoundWinner] = useState(null);
     const [matchOver, setMatchOver] = useState(false);
 
-    // CLAIM (winner picks 1 from loser)
     const [claimPickId, setClaimPickId] = useState(null);
     const [claimDone, setClaimDone] = useState(false);
 
@@ -447,14 +368,68 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
     useEffect(() => void (frozenRef.current = frozen), [frozen]);
     useEffect(() => void (boardElemsRef.current = boardElems), [boardElems]);
 
-    // init hands once we have both decks
+    // Stage2 match refresh
+    const refreshStage2Match = async () => {
+        if (!matchId) return;
+        try {
+            const token = getStoredToken();
+            if (!token) return;
+            const m = await apiFetch(`/api/matches/${matchId}`, { token });
+            setStage2Match(m);
+        } catch {
+            // ignore
+        }
+    };
+
     useEffect(() => {
-        setHands({
-            player: cloneDeckToHand(playerDeck.map((n, idx) => nftToCard(n, idx)), "player"),
-            enemy: cloneDeckToHand(enemyDeck, "enemy"),
-        });
+        refreshStage2Match();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [enemyDeck, playerDeck]);
+    }, [matchId]);
+
+    // Load AI deck from backend
+    useEffect(() => {
+        let alive = true;
+        (async () => {
+            try {
+                setLoadingEnemyDeck(true);
+                const token = getStoredToken();
+                const aiDeck = await apiFetch("/api/decks/ai_opponent", { token });
+                const cards = Array.isArray(aiDeck) ? aiDeck.map((n, idx) => nftToCard(n, idx)) : [];
+
+                if (!alive) return;
+
+                if (cards.length === 5) setEnemyDeck(cards);
+                else setEnemyDeck(getFallbackEnemyDeck());
+            } catch {
+                if (!alive) return;
+                setEnemyDeck(getFallbackEnemyDeck());
+            } finally {
+                if (!alive) return;
+                setLoadingEnemyDeck(false);
+            }
+        })();
+
+        return () => {
+            alive = false;
+        };
+    }, []);
+
+    // Sync hands on deck changes
+    useEffect(() => {
+        if (!Array.isArray(playerDeck) || playerDeck.length !== 5) return;
+        setHands((h) => ({
+            ...h,
+            player: cloneDeckToHand(playerDeck.map((n, idx) => nftToCard(n, idx)), "player"),
+        }));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [playerDeck]);
+
+    useEffect(() => {
+        setHands((h) => ({
+            ...h,
+            enemy: cloneDeckToHand(enemyDeck, "enemy"),
+        }));
+    }, [enemyDeck]);
 
     const haptic = (kind = "light") => {
         try {
@@ -480,14 +455,23 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
         setFrozen((prev) => prev.map((v) => (v > 0 ? v - 1 : 0)));
     };
 
-    const startRound = ({ keepSeries = true } = {}) => {
+    const startRound = ({ keepSeries = true, enemyDeckOverride = null } = {}) => {
+        const ed = enemyDeckOverride || enemyDeck;
+
         setBoard(Array(9).fill(null));
         setBoardElems(makeBoardElements());
 
-        setHands({
-            player: cloneDeckToHand(playerDeck.map((n, idx) => nftToCard(n, idx)), "player"),
-            enemy: cloneDeckToHand(enemyDeck, "enemy"),
-        });
+        if (Array.isArray(playerDeck) && playerDeck.length === 5) {
+            setHands({
+                player: cloneDeckToHand(playerDeck.map((n, idx) => nftToCard(n, idx)), "player"),
+                enemy: cloneDeckToHand(ed, "enemy"),
+            });
+        } else {
+            setHands({
+                player: [],
+                enemy: cloneDeckToHand(ed, "enemy"),
+            });
+        }
 
         setSelected(null);
         setTurn(randomFirstTurn());
@@ -512,13 +496,11 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
     };
 
     const resetMatch = () => {
-        // new random AI deck (offline fallback style)
         const newEnemy = Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${Date.now()}_${i}`));
         setEnemyDeck(newEnemy);
-        setTimeout(() => startRound({ keepSeries: false }), 0);
+        setTimeout(() => startRound({ keepSeries: false, enemyDeckOverride: newEnemy }), 0);
     };
 
-    // score on board only (0..9)
     const boardScore = useMemo(() => {
         return board.reduce(
             (a, c) => {
@@ -616,7 +598,7 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
         setTurn("enemy");
     };
 
-    // ENEMY TURN — always happens
+    // ENEMY TURN
     useEffect(() => {
         if (turn !== "enemy" || roundOver || matchOver) return;
 
@@ -660,7 +642,7 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
         };
     }, [turn, roundOver, matchOver]);
 
-    // ROUND OVER (no draw)
+    // ROUND OVER
     useEffect(() => {
         if (roundOver || matchOver) return;
         if (board.some((c) => c === null)) return;
@@ -700,8 +682,12 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
 
         const origin = { x: 0.5, y: 0.35 };
         const timers = [];
-        timers.push(setTimeout(() => confetti({ zIndex: 99999, particleCount: 34, spread: 75, startVelocity: 30, origin }), 0));
-        timers.push(setTimeout(() => confetti({ zIndex: 99999, particleCount: 22, spread: 95, startVelocity: 26, origin }), 160));
+        timers.push(
+            setTimeout(() => confetti({ zIndex: 99999, particleCount: 34, spread: 75, startVelocity: 30, origin }), 0)
+        );
+        timers.push(
+            setTimeout(() => confetti({ zIndex: 99999, particleCount: 22, spread: 95, startVelocity: 26, origin }), 160)
+        );
         return () => timers.forEach(clearTimeout);
     }, [roundOver, roundWinner]);
 
@@ -716,7 +702,6 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
     const loserSide = matchWinner === "player" ? "enemy" : matchWinner === "enemy" ? "player" : null;
     const winnerSide = matchWinner;
 
-    // Stage1 claim UI fallback
     const playerDeckCards = useMemo(() => playerDeck.map((n, idx) => nftToCard(n, idx)), [playerDeck]);
     const loserDeck = loserSide === "enemy" ? enemyDeck : loserSide === "player" ? playerDeckCards : [];
 
@@ -731,10 +716,10 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
 
     const onConfirmClaim = async () => {
         if (!matchOver) return;
-        if (winnerSide !== "player") return; // MVP: only player picks
+        if (winnerSide !== "player") return;
         if (!loserSide) return;
 
-        // Stage1 fallback
+        // Stage1
         if (!matchId) {
             if (!claimPickId) return;
             setClaimDone(true);
@@ -760,10 +745,11 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
             if (!opp) throw new Error("Opponent not found in match");
 
             const loserUserId = Number(opp.user_id);
-            const picked = deposits.find((d) => String(d.id) === String(claimPickId) && Number(d.user_id) === loserUserId);
+            const picked = deposits.find(
+                (d) => String(d.id) === String(claimPickId) && Number(d.user_id) === loserUserId
+            );
             if (!picked) throw new Error("Selected deposit not found (or not opponent deposit)");
 
-            // record finish + chosen token in DB
             await apiFetch(`/api/matches/${matchId}/finish`, {
                 method: "POST",
                 token,
@@ -775,7 +761,6 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
                 }),
             });
 
-            // on-chain claim
             const { txHash } = await escrowClaim({
                 matchId,
                 winnerAccountId: nearAccountId,
@@ -800,6 +785,11 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
         }
     };
 
+    // UI guard rendering (no early returns before hooks)
+    const deckOk = Array.isArray(playerDeck) && playerDeck.length === 5;
+
+    const overlayLoading = loadingEnemyDeck;
+
     return (
         <div className="game-root">
             <div className="game-ui tt-layout">
@@ -807,147 +797,210 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
                     ← Меню
                 </button>
 
-                <div className="hud-corner hud-score red hud-near-left">🟥 {boardScore.red}</div>
-                <div className="hud-corner hud-score blue hud-near-right">
-                    {boardScore.blue} 🟦
-                </div>
-
-                <PlayerBadge side="enemy" name={enemyName} avatarUrl={enemyAvatar} active={turn === "enemy"} />
-                <PlayerBadge side="player" name={myName} avatarUrl={myAvatar} active={turn === "player"} />
-
-                {/* LEFT enemy hand */}
-                <div className="hand left">
-                    <div className="hand-grid">
-                        {hands.enemy.map((c, i) => {
-                            const { col, row } = posForHandIndex(i);
-                            const isRevealed = enemyRevealId === c.id;
-                            return (
-                                <div key={c.id} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
-                                    {isRevealed ? <Card card={c} disabled /> : <Card hidden />}
-                                </div>
-                            );
-                        })}
+                {!deckOk ? (
+                    <div style={{ color: "#fff", padding: 20, textAlign: "center", gridColumn: "1 / -1", fontSize: 14 }}>
+                        ⚠️ Ошибка: активная колода не содержит 5 карт.
+                        <br />
+                        Вернитесь в Инвентарь и выберите 5 NFT.
                     </div>
+                ) : null}
 
-                    <div className="magic-column enemy" aria-hidden="true">
-                        <button className="magic-btn freeze" disabled title="Enemy magic (soon)">
-                            <span className="magic-ic">❄</span>
-                        </button>
-                        <button className="magic-btn reveal" disabled title="Enemy magic (soon)">
-                            <span className="magic-ic">👁</span>
-                        </button>
-                    </div>
-                </div>
+                {deckOk ? (
+                    <>
+                        <div className="hud-corner hud-score red hud-near-left">🟥 {boardScore.red}</div>
+                        <div className="hud-corner hud-score blue hud-near-right">
+                            {boardScore.blue} 🟦
+                        </div>
 
-                {/* CENTER BOARD */}
-                <div className="center-col">
-                    <div className="board">
-                        {board.map((cell, i) => {
-                            const isFrozen = frozen[i] > 0;
-                            const canHighlight =
-                                !roundOver &&
-                                !matchOver &&
-                                !cell &&
-                                !isFrozen &&
-                                ((spellMode === "freeze" && turn === "player") || (spellMode == null && selected));
+                        <PlayerBadge side="enemy" name={enemyName} avatarUrl={enemyAvatar} active={turn === "enemy"} />
+                        <PlayerBadge side="player" name={getPlayerName(me)} avatarUrl={myAvatar} active={turn === "player"} />
 
-                            const elem = boardElems[i];
-
-                            return (
-                                <div
-                                    key={i}
-                                    className={`cell ${canHighlight ? "highlight" : ""} ${isFrozen ? "frozen" : ""}`}
-                                    onClick={() => onCellClick(i)}
-                                    title={isFrozen ? `Frozen (${frozen[i]})` : elem ? `Element: ${elem}` : undefined}
-                                >
-                                    {elem && (
-                                        <div className="elem-bg" aria-hidden="true">
-                                            {ELEM_ICON[elem]}
+                        {/* LEFT enemy hand */}
+                        <div className="hand left">
+                            <div className="hand-grid">
+                                {hands.enemy.map((c, i) => {
+                                    const { col, row } = posForHandIndex(i);
+                                    const isRevealed = enemyRevealId === c.id;
+                                    return (
+                                        <div key={c.id} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
+                                            {isRevealed ? <Card card={c} disabled /> : <Card hidden />}
                                         </div>
-                                    )}
-                                    {cell && <Card card={cell} cellElement={elem} />}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                {/* RIGHT player hand */}
-                <div className="hand right">
-                    <div className="hand-grid">
-                        {hands.player.map((c, i) => {
-                            const { col, row } = posForHandIndex(i);
-                            return (
-                                <div key={c.id} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
-                                    <Card
-                                        card={c}
-                                        selected={selected?.id === c.id}
-                                        disabled={roundOver || matchOver || turn !== "player" || spellMode === "freeze"}
-                                        onClick={() => setSelected((prev) => (prev?.id === c.id ? null : c))}
-                                    />
-                                </div>
-                            );
-                        })}
-                    </div>
-
-                    <div className="magic-column player">
-                        <button
-                            className={`magic-btn freeze ${spellMode === "freeze" ? "active" : ""}`}
-                            onClick={onMagicFreeze}
-                            disabled={!canUseMagic || playerSpells.freeze <= 0}
-                            title="Freeze (house rule)"
-                        >
-                            <span className="magic-ic">❄</span>
-                            <span className="magic-count">{playerSpells.freeze}</span>
-                        </button>
-
-                        <button
-                            className="magic-btn reveal"
-                            onClick={onMagicReveal}
-                            disabled={!canUseMagic || playerSpells.reveal <= 0}
-                            title="Reveal (house rule)"
-                        >
-                            <span className="magic-ic">👁</span>
-                            <span className="magic-count">{playerSpells.reveal}</span>
-                        </button>
-                    </div>
-                </div>
-
-                {/* OVERLAY */}
-                {(roundOver || matchOver) && (
-                    <div className="game-over">
-                        <div className="game-over-box" style={{ minWidth: 320 }}>
-                            <h2 style={{ marginBottom: 8 }}>
-                                {matchOver
-                                    ? matchWinner === "player"
-                                        ? "Матч выигран"
-                                        : "Матч проигран"
-                                    : roundWinner === "player"
-                                        ? "Победа"
-                                        : "Поражение"}
-                            </h2>
-
-                            <div style={{ opacity: 0.9, fontSize: 12, marginBottom: 10 }}>
-                                Раунд {roundNo} • Серия до {MATCH_WINS_TARGET} • Счёт {series.player}:{series.enemy}
+                                    );
+                                })}
                             </div>
 
-                            {matchId ? (
-                                <div style={{ fontSize: 11, opacity: 0.85, marginBottom: 10, fontFamily: "monospace" }}>
-                                    Stage2 matchId: {matchId}
-                                </div>
-                            ) : null}
+                            <div className="magic-column enemy" aria-hidden="true">
+                                <button className="magic-btn freeze" disabled title="Enemy magic (soon)">
+                                    <span className="magic-ic">❄</span>
+                                </button>
+                                <button className="magic-btn reveal" disabled title="Enemy magic (soon)">
+                                    <span className="magic-ic">👁</span>
+                                </button>
+                            </div>
+                        </div>
 
-                            {matchOver && matchWinner && loserSide && (
-                                <>
-                                    <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 8 }}>
-                                        {matchWinner === "player" ? "Выбери 1 карту соперника" : "Соперник забирает 1 твою карту"}
+                        {/* CENTER BOARD */}
+                        <div className="center-col">
+                            <div className="board">
+                                {board.map((cell, i) => {
+                                    const isFrozen = frozen[i] > 0;
+                                    const canHighlight =
+                                        !roundOver &&
+                                        !matchOver &&
+                                        !cell &&
+                                        !isFrozen &&
+                                        ((spellMode === "freeze" && turn === "player") || (spellMode == null && selected));
+
+                                    const elem = boardElems[i];
+
+                                    return (
+                                        <div
+                                            key={i}
+                                            className={`cell ${canHighlight ? "highlight" : ""} ${isFrozen ? "frozen" : ""}`}
+                                            onClick={() => onCellClick(i)}
+                                            title={isFrozen ? `Frozen (${frozen[i]})` : elem ? `Element: ${elem}` : undefined}
+                                        >
+                                            {elem && (
+                                                <div className="elem-bg" aria-hidden="true">
+                                                    {ELEM_ICON[elem]}
+                                                </div>
+                                            )}
+                                            {cell && <Card card={cell} cellElement={elem} />}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* RIGHT player hand */}
+                        <div className="hand right">
+                            <div className="hand-grid">
+                                {hands.player.map((c, i) => {
+                                    const { col, row } = posForHandIndex(i);
+                                    return (
+                                        <div key={c.id} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
+                                            <Card
+                                                card={c}
+                                                selected={selected?.id === c.id}
+                                                disabled={roundOver || matchOver || turn !== "player" || spellMode === "freeze"}
+                                                onClick={() => setSelected((prev) => (prev?.id === c.id ? null : c))}
+                                            />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="magic-column player">
+                                <button
+                                    className={`magic-btn freeze ${spellMode === "freeze" ? "active" : ""}`}
+                                    onClick={onMagicFreeze}
+                                    disabled={!canUseMagic || playerSpells.freeze <= 0}
+                                    title="Freeze (house rule)"
+                                >
+                                    <span className="magic-ic">❄</span>
+                                    <span className="magic-count">{playerSpells.freeze}</span>
+                                </button>
+
+                                <button
+                                    className="magic-btn reveal"
+                                    onClick={onMagicReveal}
+                                    disabled={!canUseMagic || playerSpells.reveal <= 0}
+                                    title="Reveal (house rule)"
+                                >
+                                    <span className="magic-ic">👁</span>
+                                    <span className="magic-count">{playerSpells.reveal}</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* LOADING OVERLAY (enemy deck) */}
+                        {overlayLoading ? (
+                            <div className="game-over">
+                                <div className="game-over-box" style={{ minWidth: 320 }}>
+                                    <h2 style={{ margin: 0 }}>Загрузка соперника…</h2>
+                                    <div style={{ opacity: 0.85, fontSize: 12, marginTop: 10 }}>
+                                        Получаем AI deck из backend…
+                                    </div>
+                                </div>
+                            </div>
+                        ) : null}
+
+                        {/* GAME OVER / MATCH OVER */}
+                        {(roundOver || matchOver) && (
+                            <div className="game-over">
+                                <div className="game-over-box" style={{ minWidth: 320 }}>
+                                    <h2 style={{ marginBottom: 8 }}>
+                                        {matchOver
+                                            ? matchWinner === "player"
+                                                ? "Матч выигран"
+                                                : "Матч проигран"
+                                            : roundWinner === "player"
+                                                ? "Победа"
+                                                : "Поражение"}
+                                    </h2>
+
+                                    <div style={{ opacity: 0.9, fontSize: 12, marginBottom: 10 }}>
+                                        Раунд {roundNo} • Серия до {MATCH_WINS_TARGET} • Счёт {series.player}:{series.enemy}
                                     </div>
 
-                                    {matchWinner === "player" ? (
+                                    {matchId ? (
+                                        <div style={{ fontSize: 11, opacity: 0.85, marginBottom: 10, fontFamily: "monospace" }}>
+                                            Stage2 matchId: {matchId}
+                                        </div>
+                                    ) : null}
+
+                                    {matchOver && matchWinner && loserSide && (
                                         <>
-                                            {matchId && Array.isArray(stage2OpponentDeposits) ? (
+                                            <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 8 }}>
+                                                {matchWinner === "player"
+                                                    ? "Выбери 1 карту соперника"
+                                                    : "Соперник забирает 1 твою карту"}
+                                            </div>
+
+                                            {matchWinner === "player" ? (
                                                 <>
-                                                    {stage2OpponentDeposits.length ? (
+                                                    {matchId && Array.isArray(stage2OpponentDeposits) ? (
+                                                        <>
+                                                            {stage2OpponentDeposits.length ? (
+                                                                <div
+                                                                    style={{
+                                                                        display: "grid",
+                                                                        gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+                                                                        gap: 8,
+                                                                        marginBottom: 10,
+                                                                    }}
+                                                                >
+                                                                    {stage2OpponentDeposits.map((d) => (
+                                                                        <div
+                                                                            key={d.id}
+                                                                            onClick={() => !claimDone && setClaimPickId(String(d.id))}
+                                                                            style={{
+                                                                                cursor: claimDone ? "default" : "pointer",
+                                                                                outline:
+                                                                                    claimPickId === String(d.id)
+                                                                                        ? "2px solid rgba(120,200,255,0.75)"
+                                                                                        : "1px solid rgba(255,255,255,0.12)",
+                                                                                borderRadius: 12,
+                                                                                padding: 10,
+                                                                                background: "rgba(0,0,0,0.35)",
+                                                                                fontSize: 11,
+                                                                                fontFamily: "monospace",
+                                                                                opacity: claimDone ? 0.6 : 1,
+                                                                            }}
+                                                                        >
+                                                                            <div style={{ fontWeight: 900, marginBottom: 6 }}>NFT</div>
+                                                                            <div style={{ opacity: 0.9 }}>{d.nft_contract_id}</div>
+                                                                            <div style={{ opacity: 0.9 }}>{d.token_id}</div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            ) : (
+                                                                <div style={{ opacity: 0.85, fontSize: 12, marginBottom: 10 }}>
+                                                                    Нет депозитов соперника в матче. Stage2 claim невозможен (нужно lock 5 NFT до боя).
+                                                                </div>
+                                                            )}
+                                                        </>
+                                                    ) : (
                                                         <div
                                                             style={{
                                                                 display: "grid",
@@ -956,98 +1009,63 @@ export default function Game({ onExit, me, playerDeck, matchId }) {
                                                                 marginBottom: 10,
                                                             }}
                                                         >
-                                                            {stage2OpponentDeposits.map((d) => (
+                                                            {loserDeck.map((c) => (
                                                                 <div
-                                                                    key={d.id}
-                                                                    onClick={() => !claimDone && setClaimPickId(String(d.id))}
+                                                                    key={c.id}
+                                                                    onClick={() => !claimDone && setClaimPickId(c.id)}
                                                                     style={{
                                                                         cursor: claimDone ? "default" : "pointer",
                                                                         outline:
-                                                                            claimPickId === String(d.id)
+                                                                            claimPickId === c.id
                                                                                 ? "2px solid rgba(120,200,255,0.75)"
                                                                                 : "1px solid rgba(255,255,255,0.12)",
                                                                         borderRadius: 12,
-                                                                        padding: 10,
-                                                                        background: "rgba(0,0,0,0.35)",
-                                                                        fontSize: 11,
-                                                                        fontFamily: "monospace",
+                                                                        padding: 4,
                                                                         opacity: claimDone ? 0.6 : 1,
                                                                     }}
                                                                 >
-                                                                    <div style={{ fontWeight: 900, marginBottom: 6 }}>NFT</div>
-                                                                    <div style={{ opacity: 0.9 }}>{d.nft_contract_id}</div>
-                                                                    <div style={{ opacity: 0.9 }}>{d.token_id}</div>
+                                                                    <Card card={c} disabled />
                                                                 </div>
                                                             ))}
                                                         </div>
+                                                    )}
+
+                                                    {!claimDone ? (
+                                                        <button disabled={!claimPickId || stage2Busy} onClick={onConfirmClaim}>
+                                                            {stage2Busy ? "On-chain..." : "Забрать выбранную карту"}
+                                                        </button>
                                                     ) : (
-                                                        <div style={{ opacity: 0.85, fontSize: 12, marginBottom: 10 }}>
-                                                            Нет депозитов соперника в матче. Stage2 claim невозможен (нужно lock 5 NFT до боя).
+                                                        <div style={{ marginTop: 6, opacity: 0.9, fontSize: 12 }}>
+                                                            Карта получена. {matchId ? "Stage2 (on-chain)." : "Stage1 (off-chain)."}
                                                         </div>
                                                     )}
+
+                                                    {stage2Err ? (
+                                                        <div style={{ marginTop: 8, color: "#ffb3b3", fontSize: 12 }}>{stage2Err}</div>
+                                                    ) : null}
+
+                                                    {matchId && !nearConnected ? (
+                                                        <div style={{ marginTop: 8, opacity: 0.85, fontSize: 12 }}>
+                                                            Для Stage2 claim нужен подключённый NEAR кошелёк (HERE).
+                                                        </div>
+                                                    ) : null}
                                                 </>
                                             ) : (
-                                                <div
-                                                    style={{
-                                                        display: "grid",
-                                                        gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
-                                                        gap: 8,
-                                                        marginBottom: 10,
-                                                    }}
-                                                >
-                                                    {loserDeck.map((c) => (
-                                                        <div
-                                                            key={c.id}
-                                                            onClick={() => !claimDone && setClaimPickId(c.id)}
-                                                            style={{
-                                                                cursor: claimDone ? "default" : "pointer",
-                                                                outline:
-                                                                    claimPickId === c.id
-                                                                        ? "2px solid rgba(120,200,255,0.75)"
-                                                                        : "1px solid rgba(255,255,255,0.12)",
-                                                                borderRadius: 12,
-                                                                padding: 4,
-                                                                opacity: claimDone ? 0.6 : 1,
-                                                            }}
-                                                        >
-                                                            <Card card={c} disabled />
-                                                        </div>
-                                                    ))}
-                                                </div>
+                                                <div style={{ opacity: 0.85, fontSize: 12, marginBottom: 10 }}>(Пока AI не выбирает.)</div>
                                             )}
-
-                                            {!claimDone ? (
-                                                <button disabled={!claimPickId || stage2Busy} onClick={onConfirmClaim}>
-                                                    {stage2Busy ? "On-chain..." : "Забрать выбранную карту"}
-                                                </button>
-                                            ) : (
-                                                <div style={{ marginTop: 6, opacity: 0.9, fontSize: 12 }}>
-                                                    Карта получена. {matchId ? "Stage2 (on-chain)." : "Stage1 (off-chain)."}
-                                                </div>
-                                            )}
-
-                                            {stage2Err ? <div style={{ marginTop: 8, color: "#ffb3b3", fontSize: 12 }}>{stage2Err}</div> : null}
-
-                                            {matchId && !nearConnected ? (
-                                                <div style={{ marginTop: 8, opacity: 0.85, fontSize: 12 }}>
-                                                    Для Stage2 claim нужен подключённый NEAR кошелёк (HERE).
-                                                </div>
-                                            ) : null}
                                         </>
-                                    ) : (
-                                        <div style={{ opacity: 0.85, fontSize: 12, marginBottom: 10 }}>(Пока AI не выбирает.)</div>
                                     )}
-                                </>
-                            )}
 
-                            <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 10, flexWrap: "wrap" }}>
-                                {!matchOver && <button onClick={onNextRound}>Следующий раунд</button>}
-                                {matchOver && <button onClick={resetMatch}>Новый матч</button>}
-                                <button onClick={onExit}>Меню</button>
+                                    <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 10, flexWrap: "wrap" }}>
+                                        {!matchOver && <button onClick={onNextRound}>Следующий раунд</button>}
+                                        {matchOver && <button onClick={resetMatch}>Новый матч</button>}
+                                        <button onClick={onExit}>Меню</button>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-                )}
+                        )}
+                    </>
+                ) : null}
             </div>
         </div>
     );
