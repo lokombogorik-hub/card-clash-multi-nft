@@ -215,6 +215,48 @@ async def _near_inventory(account_id: str, limit: int = 30) -> List[MockNFT]:
     return items
 
 
+@router.get("/decks/ai_opponent")
+async def get_ai_opponent_deck():
+    """
+    Возвращает колоду AI (5 карт) для Stage1 быстрого матча.
+    Детерминированная, но случайная.
+    """
+    rng = random.Random(12345)  # фиксированный seed для консистентности
+
+    deck: List[MockNFT] = []
+    for i in range(5):
+        element: str = rng.choice(ELEMENTS)
+        rank: str = _roll_rank(rng)
+        lo, hi = _rank_budget(rank)
+
+        stats = {
+            "top": rng.randint(lo, hi),
+            "right": rng.randint(lo, hi),
+            "bottom": rng.randint(lo, hi),
+            "left": rng.randint(lo, hi),
+        }
+
+        key = f"ai:bot:{i + 1}"
+        rank_label = {"common": "C", "rare": "R", "epic": "E", "legendary": "L"}[rank]
+
+        deck.append(
+            MockNFT(
+                key=key,
+                chain="near",
+                contractId="ai.collection.near",
+                tokenId=key,
+                name=f"AI {element} #{i + 1}",
+                element=element,
+                elementIcon=ELEM_ICONS[element],
+                rank=rank,
+                rankLabel=rank_label,
+                stats=stats,
+                imageUrl=None,
+            )
+        )
+
+    return [n.model_dump() for n in deck]
+
 @router.get("/nfts/my")
 async def my_nfts(
     current_user: User = Depends(get_current_user),
