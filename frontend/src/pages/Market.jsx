@@ -1,10 +1,11 @@
 import { useState } from "react";
+import { useWalletStore } from "../store/useWalletStore";
 
 const CASES = [
     {
         id: "starter",
         name: "Starter Case",
-        price: "0.5 NEAR",
+        price: 0.5, // NEAR
         image: "/ui/case-starter.png",
         rarity: "common",
         description: "3 random Common cards",
@@ -13,7 +14,7 @@ const CASES = [
     {
         id: "premium",
         name: "Premium Case",
-        price: "2 NEAR",
+        price: 2,
         image: "/ui/case-premium.png",
         rarity: "rare",
         description: "2 Rare + 1 Epic card",
@@ -22,7 +23,7 @@ const CASES = [
     {
         id: "legendary",
         name: "Legendary Case",
-        price: "10 NEAR",
+        price: 10,
         image: "/ui/case-legendary.png",
         rarity: "legendary",
         description: "1 Legendary + 2 Epic cards",
@@ -31,7 +32,7 @@ const CASES = [
     {
         id: "ultimate",
         name: "Ultimate Case",
-        price: "50 NEAR",
+        price: 50,
         image: "/ui/case-ultimate.png",
         rarity: "legendary",
         description: "5 Legendary cards guaranteed",
@@ -40,28 +41,39 @@ const CASES = [
 ];
 
 export default function Market() {
-    const [selectedCase, setSelectedCase] = useState(null);
-    const [buying, setBuying] = useState(false);
+    const { connected, accountId, sendNear } = useWalletStore();
+
+    const [buying, setBuying] = useState(null); // id кейса
     const [opening, setOpening] = useState(false);
     const [revealedNFT, setRevealedNFT] = useState(null);
+    const [selectedCase, setSelectedCase] = useState(null);
 
-    const handleBuy = async (caseId) => {
-        const selectedCaseData = CASES.find((c) => c.id === caseId);
-        if (!selectedCaseData) return;
+    const handleBuy = async (caseData) => {
+        if (!connected || !accountId) {
+            alert("Подключи HOT Wallet на главной странице!");
+            return;
+        }
 
-        setBuying(true);
-        setOpening(true);
+        setBuying(caseData.id);
 
-        // Simulate purchase
-        setTimeout(() => {
-            setBuying(false);
+        try {
+            // Оплата через HOT Wallet
+            const receiverId = "cardclash.near"; // Замени на свой аккаунт
+            const amount = caseData.price.toString();
 
-            // Simulate NFT reveal
+            await sendNear({ receiverId, amount });
+
+            // После успешной оплаты — открываем кейс
+            setBuying(null);
+            setSelectedCase(caseData);
+            setOpening(true);
+
+            // Simulate case opening
             setTimeout(() => {
                 setRevealedNFT({
                     name: "Epic Bunny #1337",
                     image: "/cards/card3.jpg",
-                    rarity: selectedCaseData.rarity,
+                    rarity: caseData.rarity,
                 });
 
                 setTimeout(() => {
@@ -70,7 +82,11 @@ export default function Market() {
                     setSelectedCase(null);
                 }, 3000);
             }, 2000);
-        }, 1500);
+
+        } catch (e) {
+            alert(`Ошибка оплаты: ${e.message}`);
+            setBuying(null);
+        }
     };
 
     return (
@@ -86,14 +102,16 @@ export default function Market() {
                 </div>
             </div>
 
+            {!connected && (
+                <div className="market-warning">
+                    ⚠️ Подключи HOT Wallet на главной странице, чтобы покупать кейсы
+                </div>
+            )}
+
             {/* Cases Grid */}
             <div className="market-cases-grid">
                 {CASES.map((c) => (
-                    <button
-                        key={c.id}
-                        className={`market-case-card ${selectedCase?.id === c.id ? "selected" : ""}`}
-                        onClick={() => setSelectedCase(c)}
-                    >
+                    <div key={c.id} className="market-case-card">
                         <div className="market-case-image">
                             <img
                                 src={c.image}
@@ -114,33 +132,28 @@ export default function Market() {
 
                         <div className="market-case-name">{c.name}</div>
                         <div className="market-case-desc">{c.description}</div>
-                        <div className="market-case-price">{c.price}</div>
-                    </button>
+                        <div className="market-case-price">{c.price} Ⓝ</div>
+
+                        <button
+                            className="market-case-buy-btn"
+                            onClick={() => handleBuy(c)}
+                            disabled={!connected || buying === c.id}
+                        >
+                            {buying === c.id ? "Покупка..." : "Купить"}
+                        </button>
+                    </div>
                 ))}
             </div>
 
-            {/* Buy Button */}
-            {selectedCase && !opening && (
-                <div className="market-buy-section">
-                    <button
-                        className="market-buy-btn"
-                        disabled={buying}
-                        onClick={() => handleBuy(selectedCase.id)}
-                    >
-                        {buying ? "Processing..." : `Buy ${selectedCase.name} for ${selectedCase.price}`}
-                    </button>
-                </div>
-            )}
-
             {/* Opening Animation */}
-            {opening && (
+            {opening && selectedCase && (
                 <div className="market-opening-overlay">
-                    <div className={`market-opening-container ${selectedCase?.animation || "fadeIn"}`}>
+                    <div className={`market-opening-container ${selectedCase.animation}`}>
                         {!revealedNFT ? (
                             <>
                                 <div className="market-opening-case">
                                     <img
-                                        src={selectedCase?.image}
+                                        src={selectedCase.image}
                                         alt="Opening"
                                         draggable="false"
                                     />
