@@ -889,7 +889,7 @@ button {
     z-index: 105;
 
     /* СБОКУ от стола, на уровне ВЕРХНИХ карт в руке */
-    top: calc(50% - (var(--board-h) / 2) + (var(--card-h) * 0.3));
+    top: calc(50% - (var(--board-h) / 2) + (var(--card-h) * 0.1));
 
     height: var(--badge-h);
     max-width: min(220px, 30vw);
@@ -2492,13 +2492,13 @@ button {
 
 /* Enemy слева от стола */
 .player-badge.enemy {
-    left: calc(50% - (var(--board-w) / 2) - var(--gap) - 14px);
+    left: calc(50% - (var(--board-w) / 2) - var(--gap) - 12px);
     transform: translateX(-100%);
 }
 
 /* Player справа от стола */
 .player-badge.player {
-    right: calc(50% - (var(--board-w) / 2) - var(--gap) - 14px);
+    right: calc(50% - (var(--board-w) / 2) - var(--gap) - 12px);
     transform: translateX(100%);
 }
 
