@@ -1027,13 +1027,13 @@ button {
 
 /* Левая рука: вторая колонка сдвигается К столу */
 .hand.left .hand-slot.col2 {
-    transform: translateX(calc(var(--towards-board) + 6px)) translateY(var(--half-step));
+    transform: translateX(calc(var(--towards-board) + 0px)) translateY(var(--half-step));
 }
 
 /* Правая рука: первая колонка сдвигается К столу */
 .hand.right .hand-slot.col2 {
     grid-column: 1 !important;
-    transform: translateX(calc(-1 * (var(--towards-board) + 6px))) translateY(var(--half-step));
+    transform: translateX(calc(-1 * (var(--towards-board) + 0px))) translateY(var(--half-step));
 }
 
 .hand.right .hand-slot.col1 {
@@ -3676,3 +3676,49 @@ button {
             filter: blur(0px);
         }
     }
+}
+
+.market-warning {
+    background: rgba(255, 200, 0, 0.1);
+    border: 1px solid rgba(255, 200, 0, 0.3);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 24px;
+    text-align: center;
+    color: #ffd700;
+    font-size: 14px;
+}
+
+.market-case-card {
+    position: relative;
+    background: linear-gradient(135deg, rgba(20, 20, 30, 0.95) 0%, rgba(10, 10, 20, 0.95) 100%);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 16px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    display: grid;
+    gap: 12px;
+}
+
+.market-case-buy-btn {
+    padding: 12px 20px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #78c8ff 0%, #5096ff 100%);
+    color: #000;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(120, 200, 255, 0.3);
+}
+
+.market-case-buy-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(120, 200, 255, 0.4);
+}
+
+.market-case-buy-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
