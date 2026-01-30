@@ -2507,7 +2507,7 @@ button {
 (max-height: 600px) and (orientation: landscape) {
     .player-badge {
         max-width: 160px !important;
-        top: calc(50% - (var(--board-h) / 2) + (var(--card-h) * 0.1)) !important;
+        top: calc(50% - (var(--board-h) / 2) + (var(--card-h) * 0.05)) !important;
     }
 
     .player-badge-name {
