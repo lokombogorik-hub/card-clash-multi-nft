@@ -2507,7 +2507,7 @@ button {
 (max-height: 600px) and (orientation: landscape) {
     .player-badge {
         max-width: 160px !important;
-        top: calc(50% - (var(--board-h) / 2) + (var(--card-h) * 0.3)) !important;
+        top: calc(50% - (var(--board-h) / 2) + (var(--card-h) * 0.1)) !important;
     }
 
     .player-badge-name {
@@ -2525,12 +2525,12 @@ button {
     }
 
     .player-badge.enemy {
-        left: calc(50% - (var(--board-w) / 2) - var(--gap) - 10px) !important;
+        left: calc(50% - (var(--board-w) / 2) - var(--gap) - 8px) !important;
         transform: translateX(-100%) !important;
     }
 
     .player-badge.player {
-        right: calc(50% - (var(--board-w) / 2) - var(--gap) - 10px) !important;
+        right: calc(50% - (var(--board-w) / 2) - var(--gap) - 8px) !important;
         transform: translateX(100%) !important;
     }
 }
