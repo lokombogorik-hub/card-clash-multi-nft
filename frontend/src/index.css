@@ -1510,14 +1510,14 @@ button {
 
     /* Стихия МЕНЬШЕ и в УГОЛ */
     .card-elem-pill {
-        top: 3px !important;
-        right: 3px !important;
+        top: 1px !important;
+        right: 1px !important;
         padding: 2px 5px !important;
         gap: 3px !important;
     }
 
     .card-elem-ic {
-        font-size: 12px !important;
+        font-size: 10px !important;
     }
 
     .card-elem-delta {
@@ -1526,10 +1526,10 @@ button {
 
     /* TT badge МЕНЬШЕ и БЛИЖЕ к углу */
     .tt-badge {
-        width: 30px !important;
-        height: 30px !important;
-        top: 5px !important;
-        left: 5px !important;
+        width: 24px !important;
+        height: 24px !important;
+        top: 3px !important;
+        left: 3px !important;
     }
 
     /* TT numbers МЕНЬШЕ и в УГОЛ */
@@ -1539,7 +1539,7 @@ button {
 
     .card .tt-num.top {
         top: 3px !important;
-        left: 19px !important;
+        left: 15px !important;
     }
 
     .card .tt-num.left {
@@ -1549,12 +1549,12 @@ button {
 
     .card .tt-num.right {
         top: 16px !important;
-        left: 30px !important;
+        left: 24px !important;
     }
 
     .card .tt-num.bottom {
-        top: 29px !important;
-        left: 19px !important;
+        top: 24px !important;
+        left: 18px !important;
     }
 }
 
@@ -2525,12 +2525,12 @@ button {
     }
 
     .player-badge.enemy {
-        left: calc(50% - (var(--board-w) / 2) - var(--gap) - 6px) !important;
+        left: calc(50% - (var(--board-w) / 2) - var(--gap) - 3px) !important;
         transform: translateX(-100%) !important;
     }
 
     .player-badge.player {
-        right: calc(50% - (var(--board-w) / 2) - var(--gap) - 6px) !important;
+        right: calc(50% - (var(--board-w) / 2) - var(--gap) - 3px) !important;
         transform: translateX(100%) !important;
     }
 }
