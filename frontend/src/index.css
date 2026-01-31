@@ -1608,57 +1608,6 @@ button {
         z-index: 22000;
     }
 
-    /* Touch TT number tuning */
-    @media (hover: none) and (pointer: coarse),
-    (max-height: 520px) and (orientation: landscape) {
-        .tt-badge {
-            width: 36px !important;
-            height: 36px !important;
-            top: 8px !important;
-            left: 8px !important;
-        }
-
-        .card .tt-num {
-            font-size: 11px !important;
-        }
-
-        .card .tt-num.top {
-            top: 5px !important;
-            left: 26px !important;
-        }
-
-        .card .tt-num.left {
-            top: 22px !important;
-            left: 10px !important;
-        }
-
-        .card .tt-num.right {
-            top: 22px !important;
-            left: 40px !important;
-        }
-
-        .card .tt-num.bottom {
-            top: 38px !important;
-            left: 26px !important;
-        }
-    }
-
-    /* Reduce motion */
-    @media (prefers-reduced-motion: reduce) {
-        .rotate-phone {
-            animation: none !important;
-        }
-
-        .card.player,
-        .card.enemy {
-            animation: none !important;
-        }
-
-        .card.is-placed .card-anim,
-        .card.is-captured .card-anim {
-            animation: none !important;
-        }
-    }
 
     /* =========================
    9) PROFILE PAGE
