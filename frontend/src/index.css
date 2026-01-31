@@ -2251,62 +2251,6 @@ button {
         }
     }
 
-    /* =========================
-   12) MOBILE FIXES: TT numbers, elements, badges
-   ========================= */
-
-    /* Fix Triple Triad numbers на мобилке */
-    @media (hover: none) and (pointer: coarse),
-    (max-width: 768px) and (orientation: landscape) {
-
-        /* Уменьшить TT badge и числа */
-        .tt-badge {
-            width: 32px !important;
-            height: 32px !important;
-            top: 6px !important;
-            left: 7px !important;
-        }
-
-        .card .tt-num {
-            font-size: 10px !important;
-        }
-
-        .card .tt-num.top {
-            top: 4px !important;
-            left: 22px !important;
-        }
-
-        .card .tt-num.left {
-            top: 19px !important;
-            left: 9px !important;
-        }
-
-        .card .tt-num.right {
-            top: 19px !important;
-            left: 35px !important;
-        }
-
-        .card .tt-num.bottom {
-            top: 34px !important;
-            left: 22px !important;
-        }
-
-        /* Элемент в правый верхний угол */
-        .card-elem-pill {
-            top: 6px !important;
-            right: 6px !important;
-            padding: 2px 5px !important;
-            gap: 4px !important;
-        }
-
-        .card-elem-ic {
-            font-size: 14px !important;
-        }
-
-        .card-elem-delta {
-            font-size: 9px !important;
-        }
-    }
 
     /* Player badges */
     .player-badge {
