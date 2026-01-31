@@ -28,16 +28,15 @@ const ELEM_ICON = {
     Ice: "❄️",
 };
 
-// Ранг по номеру токена (используется для border/glow)
-// Важно: label не рисуем (ты просил убрать буквы), только цвет.
+// Ранг по tokenId (цвет рамки/свечения)
 function getRankByTokenId(tokenId, totalSupply = 10000) {
     const num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
     const percent = (num / totalSupply) * 100;
 
-    if (percent <= 25) return { border: "#7c3aed", glow: "rgba(124, 58, 237, 0.55)" };     // dark purple
-    if (percent <= 50) return { border: "#a78bfa", glow: "rgba(167, 139, 250, 0.50)" };     // light purple
-    if (percent <= 75) return { border: "#f97316", glow: "rgba(249, 115, 22, 0.50)" };      // orange
-    return { border: "#22c55e", glow: "rgba(34, 197, 94, 0.45)" };                           // green
+    if (percent <= 25) return { border: "#7c3aed", glow: "rgba(124, 58, 237, 0.60)" };  // dark purple
+    if (percent <= 50) return { border: "#a78bfa", glow: "rgba(167, 139, 250, 0.55)" };  // light purple
+    if (percent <= 75) return { border: "#f97316", glow: "rgba(249, 115, 22, 0.55)" };   // orange
+    return { border: "#22c55e", glow: "rgba(34, 197, 94, 0.50)" };                        // green
 }
 
 export default function Inventory({ token, onDeckReady }) {
@@ -51,6 +50,12 @@ export default function Inventory({ token, onDeckReady }) {
     const allowedSet = useMemo(() => new Set(allowedContracts), [allowedContracts]);
 
     const selectedArr = useMemo(() => Array.from(selected), [selected]);
+
+    const orderMap = useMemo(() => {
+        const m = new Map();
+        selectedArr.forEach((k, i) => m.set(k, i + 1)); // 1..5
+        return m;
+    }, [selectedArr]);
 
     useEffect(() => {
         if (!token) return;
@@ -77,11 +82,7 @@ export default function Inventory({ token, onDeckReady }) {
                         const cid = String(n.contractId || n.contract_id || "").trim();
 
                         if (!cid) return true;
-
-                        if (!chain || chain === "near") {
-                            return allowedSet.has(cid);
-                        }
-
+                        if (!chain || chain === "near") return allowedSet.has(cid);
                         return false;
                     });
 
@@ -106,8 +107,16 @@ export default function Inventory({ token, onDeckReady }) {
             const next = new Set(prev);
             if (next.has(k)) next.delete(k);
             else {
-                if (next.size >= 5) return next;
+                if (next.size >= 5) {
+                    try {
+                        window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("error");
+                    } catch { }
+                    return next;
+                }
                 next.add(k);
+                try {
+                    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
+                } catch { }
             }
             return next;
         });
@@ -130,6 +139,28 @@ export default function Inventory({ token, onDeckReady }) {
             setError(e.message);
             setSaving(false);
         }
+    };
+
+    const onCardPointerDown = (e) => {
+        const el = e.currentTarget;
+        const rect = el.getBoundingClientRect();
+        const cx = (e.clientX ?? rect.left + rect.width / 2) - rect.left;
+        const cy = (e.clientY ?? rect.top + rect.height / 2) - rect.top;
+
+        const x = Math.max(0, Math.min(100, (cx / rect.width) * 100));
+        const y = Math.max(0, Math.min(100, (cy / rect.height) * 100));
+
+        el.style.setProperty("--px", `${x}%`);
+        el.style.setProperty("--py", `${y}%`);
+
+        el.classList.remove("is-tapping");
+        // reflow
+        void el.offsetWidth;
+        el.classList.add("is-tapping");
+
+        window.setTimeout(() => {
+            el.classList.remove("is-tapping");
+        }, 520);
     };
 
     return (
@@ -178,6 +209,7 @@ export default function Inventory({ token, onDeckReady }) {
                     {nfts.map((n, idx) => {
                         const k = nftKey(n);
                         const isSel = selected.has(k);
+                        const pickNo = orderMap.get(k) || 0;
 
                         const stats = n.stats || { top: 5, right: 5, bottom: 5, left: 5 };
                         const element = n.element || null;
@@ -187,15 +219,15 @@ export default function Inventory({ token, onDeckReady }) {
                         return (
                             <button
                                 key={k}
+                                type="button"
+                                onPointerDown={onCardPointerDown}
                                 onClick={() => toggle(k)}
                                 className={`inv-card-game ${isSel ? "is-selected" : ""}`}
                                 title={k}
                                 style={{
-                                    borderColor: rank.border,
-                                    boxShadow: isSel
-                                        ? `0 0 28px ${rank.glow}, inset 0 0 26px ${rank.glow}`
-                                        : `0 6px 18px rgba(0,0,0,0.45)`,
                                     ["--i"]: idx,
+                                    ["--rank"]: rank.border,
+                                    ["--rankGlow"]: rank.glow,
                                 }}
                             >
                                 <div className="inv-card-art-full">
@@ -224,11 +256,14 @@ export default function Inventory({ token, onDeckReady }) {
                                 <span className="inv-tt-num right">{stats.right}</span>
                                 <span className="inv-tt-num bottom">{stats.bottom}</span>
 
-                                {isSel && (
-                                    <div className="inv-card-selected-overlay">
-                                        <div className="inv-card-selected-check">✓</div>
+                                {isSel ? (
+                                    <div className="inv-pick-badge" aria-label={`Selected ${pickNo}/5`}>
+                                        <div className="inv-pick-badge-inner">
+                                            <div className="inv-pick-check">✓</div>
+                                            <div className="inv-pick-no">{pickNo}</div>
+                                        </div>
                                     </div>
-                                )}
+                                ) : null}
                             </button>
                         );
                     })}
@@ -247,7 +282,9 @@ export default function Inventory({ token, onDeckReady }) {
                 </div>
             )}
 
-            {nfts.length > 0 && selected.size === 5 && <div className="inv-hint">✅ Колода готова! Теперь можешь нажать "Play" в главном меню</div>}
+            {nfts.length > 0 && selected.size === 5 ? (
+                <div className="inv-hint">✅ Колода готова! Теперь можешь нажать "Play" в главном меню</div>
+            ) : null}
         </div>
     );
 }

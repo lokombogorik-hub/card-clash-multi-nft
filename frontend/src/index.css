@@ -1319,106 +1319,125 @@ button {
     perspective: 900px;
 }
 
+.inv-grid-game-style {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+
+    perspective: 1000px;
+}
+
+/* RADICAL: очень эффектные карты + ясная выбранность */
 .inv-card-game {
+    --rank: rgba(255, 255, 255, 0.18);
+    --rankGlow: rgba(120, 200, 255, 0.25);
+    --px: 50%;
+    --py: 50%;
+
     position: relative;
     aspect-ratio: 2.5 / 3.5;
-    border-radius: 14px;
+    border-radius: 16px;
     overflow: hidden;
-    background: linear-gradient(145deg, #1a2232, #0f1625);
-    border: 3px solid;
     cursor: pointer;
     padding: 0;
+    border: 2px solid var(--rank);
 
     transform-style: preserve-3d;
     will-change: transform, opacity, box-shadow, filter;
     transition:
-        transform 220ms cubic-bezier(0.2, 0.9, 0.2, 1),
-        box-shadow 220ms ease,
-        filter 220ms ease,
-        border-color 220ms ease;
+        transform 260ms cubic-bezier(0.2, 0.9, 0.2, 1),
+        box-shadow 260ms ease,
+        filter 260ms ease,
+        border-color 260ms ease;
 
-    /* появление карточек (stagger через --i) */
+    /* красивый “стеклянный” базовый вид */
+    background:
+        radial-gradient(120% 120% at 20% 20%, rgba(120, 200, 255, 0.10), transparent 55%),
+        radial-gradient(120% 120% at 80% 80%, rgba(255, 61, 242, 0.08), transparent 55%),
+        linear-gradient(145deg, rgba(26, 34, 50, 1), rgba(10, 14, 26, 1));
+
+    box-shadow:
+        0 10px 26px rgba(0, 0, 0, 0.55),
+        0 0 0 rgba(0, 0, 0, 0);
+
+    /* stagger enter */
     opacity: 0;
-    animation: inv-card-enter 600ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
-    animation-delay: calc(var(--i, 0) * 30ms);
+    animation: inv-enter-3d 720ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+    animation-delay: calc(var(--i, 0) * 28ms);
 }
 
-@keyframes inv-card-enter {
+@keyframes inv-enter-3d {
     0% {
         opacity: 0;
-        transform: translateY(22px) rotateX(10deg) scale(0.97);
-        filter: saturate(0.92) brightness(0.96);
+        transform: translateY(34px) rotateX(18deg) rotateY(-8deg) scale(0.96);
+        filter: saturate(0.85) brightness(0.92);
     }
 
     100% {
         opacity: 1;
-        transform: translateY(0) rotateX(0deg) scale(1);
+        transform: translateY(0) rotateX(0) rotateY(0) scale(1);
         filter: saturate(1) brightness(1);
     }
 }
 
-/* hover “ring” */
+/* neon ring (hover only shows stronger) */
 .inv-card-game::before {
     content: "";
     position: absolute;
-    inset: -140%;
+    inset: -150%;
     background: conic-gradient(from 90deg,
-            transparent 0 30%,
-            rgba(120, 200, 255, 0.35) 45%,
-            rgba(255, 61, 242, 0.22) 55%,
-            transparent 70% 100%);
-    opacity: 0;
-    transition: opacity 220ms ease;
-    animation: inv-conic-spin 5s linear infinite;
+            transparent 0 25%,
+            rgba(120, 200, 255, 0.35) 44%,
+            rgba(255, 61, 242, 0.22) 56%,
+            transparent 75% 100%);
+    opacity: 0.12;
+    animation: inv-ring-spin 6s linear infinite;
     pointer-events: none;
     z-index: 2;
 }
 
-@keyframes inv-conic-spin {
+@keyframes inv-ring-spin {
     to {
         transform: rotate(360deg);
     }
 }
 
-.inv-card-game:hover::before {
-    opacity: 1;
-}
-
 .inv-card-game:hover {
-    transform: translateY(-10px) rotateX(4deg) rotateY(-3deg) scale(1.02);
-    filter: saturate(1.05);
+    transform: translateY(-14px) rotateX(6deg) rotateY(-6deg) scale(1.03);
+    border-color: color-mix(in oklab, var(--rank) 75%, white 25%);
+    box-shadow:
+        0 16px 44px rgba(0, 0, 0, 0.65),
+        0 0 26px rgba(120, 200, 255, 0.12);
+    filter: saturate(1.06);
 }
 
-.inv-card-game.is-selected {
-    transform: translateY(-10px) scale(1.02);
-}
-
-/* TAP эффект (ripple) */
+/* TAP: энергетический взрыв из точки тапа */
 .inv-card-game::after {
     content: "";
     position: absolute;
-    inset: 0;
+    inset: -10%;
     pointer-events: none;
     z-index: 3;
     opacity: 0;
-    background: radial-gradient(circle at 50% 50%, rgba(120, 200, 255, 0.30), transparent 55%);
+    background:
+        radial-gradient(circle at var(--px) var(--py),
+            rgba(120, 200, 255, 0.42),
+            rgba(255, 61, 242, 0.18) 28%,
+            transparent 55%);
 }
 
-.inv-card-game:active {
-    transform: translateY(-6px) scale(0.99);
+.inv-card-game.is-tapping::after {
+    animation: inv-tap-burst 520ms ease-out both;
 }
 
-.inv-card-game:active::after {
-    animation: inv-tap-ripple 420ms ease-out both;
-}
-
-@keyframes inv-tap-ripple {
+@keyframes inv-tap-burst {
     0% {
         opacity: 0;
         transform: scale(0.85);
     }
 
-    25% {
+    20% {
         opacity: 1;
         transform: scale(1);
     }
@@ -1429,12 +1448,57 @@ button {
     }
 }
 
-.inv-card-game:focus-visible {
-    outline: 2px solid rgba(120, 200, 255, 0.6);
-    outline-offset: 2px;
+/* SELECTED: мощная выбранность */
+.inv-card-game.is-selected {
+    border-color: var(--rank);
+    box-shadow:
+        0 18px 54px rgba(0, 0, 0, 0.72),
+        0 0 30px var(--rankGlow),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.10);
 }
 
-/* Art (full card) */
+/* скан-линия по арту (только когда selected) */
+.inv-card-art-full::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0;
+    background:
+        linear-gradient(120deg,
+            transparent 0 40%,
+            rgba(120, 200, 255, 0.18) 50%,
+            transparent 60% 100%);
+    transform: translateX(-50%);
+}
+
+.inv-card-game.is-selected .inv-card-art-full::before {
+    opacity: 1;
+    animation: inv-scan 1.6s ease-in-out infinite;
+}
+
+@keyframes inv-scan {
+    0% {
+        transform: translateX(-65%);
+        opacity: 0.0;
+    }
+
+    20% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.8;
+    }
+
+    100% {
+        transform: translateX(65%);
+        opacity: 0.0;
+    }
+}
+
+/* Art full + readability */
 .inv-card-art-full {
     position: absolute;
     inset: 0;
@@ -1452,17 +1516,18 @@ button {
     content: "";
     position: absolute;
     inset: 0;
-    background:
-        linear-gradient(to bottom, rgba(0, 0, 0, 0.28) 0%, transparent 30%, transparent 70%, rgba(0, 0, 0, 0.30) 100%),
-        linear-gradient(to right, rgba(0, 0, 0, 0.22) 0%, transparent 30%, transparent 70%, rgba(0, 0, 0, 0.22) 100%);
     pointer-events: none;
+    background:
+        radial-gradient(120% 120% at 50% 10%, rgba(0, 0, 0, 0.10), transparent 60%),
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.28) 0%, transparent 30%, transparent 70%, rgba(0, 0, 0, 0.35) 100%),
+        linear-gradient(to right, rgba(0, 0, 0, 0.22) 0%, transparent 30%, transparent 70%, rgba(0, 0, 0, 0.22) 100%);
 }
 
-/* Element pill */
+/* element pill */
 .inv-card-elem-pill {
     position: absolute;
-    top: 5px;
-    right: 5px;
+    top: 6px;
+    right: 6px;
     z-index: 7;
     display: flex;
     align-items: center;
@@ -1482,10 +1547,10 @@ button {
 /* TT numbers */
 .inv-tt-badge {
     position: absolute;
-    top: 7px;
-    left: 7px;
-    width: 38px;
-    height: 38px;
+    top: 8px;
+    left: 8px;
+    width: 40px;
+    height: 40px;
     background: rgba(0, 0, 0, 0.82);
     transform: rotate(45deg);
     border-radius: 4px;
@@ -1504,46 +1569,47 @@ button {
 }
 
 .inv-card-game .inv-tt-num.top {
-    top: 6px;
-    left: 26px;
+    top: 7px;
+    left: 27px;
 }
 
 .inv-card-game .inv-tt-num.left {
-    top: 23px;
-    left: 13px;
+    top: 24px;
+    left: 14px;
 }
 
 .inv-card-game .inv-tt-num.right {
-    top: 23px;
-    left: 39px;
+    top: 24px;
+    left: 41px;
 }
 
 .inv-card-game .inv-tt-num.bottom {
-    top: 39px;
-    left: 26px;
+    top: 40px;
+    left: 27px;
 }
 
-/* Новый стиль выбранности — бейдж вместо огромной плашки */
-.inv-select-badge {
+/* ВЫБРАНО: большой понятный ✓ + номер 1..5 */
+.inv-pick-badge {
     position: absolute;
     right: 10px;
     bottom: 10px;
-    width: 34px;
-    height: 34px;
+    width: 44px;
+    height: 44px;
     border-radius: 999px;
-    z-index: 8;
+    z-index: 9;
+    padding: 0;
     display: grid;
     place-items: center;
 
     background: conic-gradient(from 90deg,
-            rgba(120, 200, 255, 0.95),
-            rgba(255, 61, 242, 0.65),
-            rgba(120, 200, 255, 0.95));
-    box-shadow: 0 0 18px rgba(120, 200, 255, 0.45);
-    animation: inv-badge-pop 220ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+            rgba(120, 200, 255, 1),
+            rgba(255, 61, 242, 0.75),
+            rgba(120, 200, 255, 1));
+    box-shadow: 0 0 28px rgba(120, 200, 255, 0.35);
+    animation: inv-badge-appear 220ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
 }
 
-@keyframes inv-badge-pop {
+@keyframes inv-badge-appear {
     from {
         transform: scale(0.6);
         opacity: 0;
@@ -1555,25 +1621,47 @@ button {
     }
 }
 
-.inv-select-badge::before {
+.inv-pick-badge-inner {
+    width: 100%;
+    height: 100%;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    position: relative;
+}
+
+.inv-pick-badge-inner::before {
     content: "";
     position: absolute;
     inset: 2px;
     border-radius: 999px;
-    background: rgba(0, 0, 0, 0.65);
+    background: rgba(0, 0, 0, 0.62);
     border: 1px solid rgba(255, 255, 255, 0.16);
 }
 
-.inv-select-check {
+.inv-pick-check {
+    position: relative;
+    z-index: 1;
+    font-weight: 1000;
+    font-size: 18px;
+    line-height: 1;
+    color: #fff;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
+    transform: translateY(-2px);
+}
+
+.inv-pick-no {
     position: relative;
     z-index: 1;
     font-weight: 900;
-    font-size: 16px;
-    color: #fff;
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
+    font-size: 12px;
+    line-height: 1;
+    color: rgba(255, 255, 255, 0.95);
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
+    transform: translateY(8px);
 }
 
-/* mobile tweaks */
+/* mobile */
 @media (max-width: 768px) {
     .inv-grid-game-style {
         grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
@@ -1584,24 +1672,30 @@ button {
         font-size: 12px !important;
     }
 
-    .inv-select-badge {
-        width: 30px;
-        height: 30px;
+    .inv-pick-badge {
+        width: 40px;
+        height: 40px;
         right: 8px;
         bottom: 8px;
     }
 
-    .inv-select-check {
-        font-size: 14px;
+    .inv-pick-check {
+        font-size: 16px;
+    }
+
+    .inv-pick-no {
+        font-size: 11px;
     }
 }
 
+/* reduce motion */
 @media (prefers-reduced-motion: reduce) {
 
     .inv-card-game,
     .inv-card-game::before,
     .inv-card-game::after,
-    .inv-select-badge {
+    .inv-card-art-full::before,
+    .inv-pick-badge {
         animation: none !important;
         transition: none !important;
     }
