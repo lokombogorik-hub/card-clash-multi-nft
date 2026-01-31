@@ -28,15 +28,16 @@ const ELEM_ICON = {
     Ice: "❄️",
 };
 
-// Определение ранга по номеру токена (tokenId как число)
+// Ранг по номеру токена (используется для border/glow)
+// Важно: label не рисуем (ты просил убрать буквы), только цвет.
 function getRankByTokenId(tokenId, totalSupply = 10000) {
     const num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
     const percent = (num / totalSupply) * 100;
 
-    if (percent <= 25) return { key: "legendary", label: "L", border: "#7c3aed", glow: "rgba(124, 58, 237, 0.5)" }; // Темно-фиолетовый
-    if (percent <= 50) return { key: "epic", label: "E", border: "#f97316", glow: "rgba(249, 115, 22, 0.5)" };      // Оранжевый
-    if (percent <= 75) return { key: "rare", label: "R", border: "#3b82f6", glow: "rgba(59, 130, 246, 0.5)" };      // Синий
-    return { key: "common", label: "C", border: "#22c55e", glow: "rgba(34, 197, 94, 0.5)" };                       // Зелёный
+    if (percent <= 25) return { border: "#7c3aed", glow: "rgba(124, 58, 237, 0.55)" };     // dark purple
+    if (percent <= 50) return { border: "#a78bfa", glow: "rgba(167, 139, 250, 0.50)" };     // light purple
+    if (percent <= 75) return { border: "#f97316", glow: "rgba(249, 115, 22, 0.50)" };      // orange
+    return { border: "#22c55e", glow: "rgba(34, 197, 94, 0.45)" };                           // green
 }
 
 export default function Inventory({ token, onDeckReady }) {
@@ -133,18 +134,14 @@ export default function Inventory({ token, onDeckReady }) {
 
     return (
         <div className="page inventory-page">
-            {/* Header */}
             <div className="inv-header">
                 <h2 className="inv-title">
                     <span className="inv-title-icon">🎴</span>
                     Deck Builder
                 </h2>
-                <div className="inv-subtitle">
-                    Выбери 5 карт для боя • {selected.size}/5
-                </div>
+                <div className="inv-subtitle">Выбери 5 карт для боя • {selected.size}/5</div>
             </div>
 
-            {/* Allowed contracts info */}
             {allowedContracts.length ? (
                 <div className="inv-info-box">
                     <div className="inv-info-label">✨ Разрешённые коллекции (paid placement):</div>
@@ -152,14 +149,8 @@ export default function Inventory({ token, onDeckReady }) {
                 </div>
             ) : null}
 
-            {/* Errors */}
-            {error && (
-                <div className="inv-error">
-                    ⚠️ {error}
-                </div>
-            )}
+            {error && <div className="inv-error">⚠️ {error}</div>}
 
-            {/* Loading */}
             {!token && (
                 <div className="inv-loading">
                     <div className="inv-loading-spinner" />
@@ -174,21 +165,17 @@ export default function Inventory({ token, onDeckReady }) {
                 </div>
             )}
 
-            {/* Empty state */}
             {!loading && nfts.length === 0 && token && (
                 <div className="inv-empty">
                     <div className="inv-empty-icon">📭</div>
                     <div className="inv-empty-title">Нет NFT карт</div>
-                    <div className="inv-empty-text">
-                        Купи или получи карты в турнирах, чтобы начать играть
-                    </div>
+                    <div className="inv-empty-text">Купи или получи карты в турнирах, чтобы начать играть</div>
                 </div>
             )}
 
-            {/* Grid (карты в стиле Triple Triad) */}
             {nfts.length > 0 && (
                 <div className="inv-grid-game-style">
-                    {nfts.map((n) => {
+                    {nfts.map((n, idx) => {
                         const k = nftKey(n);
                         const isSel = selected.has(k);
 
@@ -202,15 +189,15 @@ export default function Inventory({ token, onDeckReady }) {
                                 key={k}
                                 onClick={() => toggle(k)}
                                 className={`inv-card-game ${isSel ? "is-selected" : ""}`}
+                                title={k}
                                 style={{
                                     borderColor: rank.border,
                                     boxShadow: isSel
-                                        ? `0 0 32px ${rank.glow}, inset 0 0 40px ${rank.glow}`
-                                        : `0 4px 12px rgba(0,0,0,0.5)`,
+                                        ? `0 0 28px ${rank.glow}, inset 0 0 26px ${rank.glow}`
+                                        : `0 6px 18px rgba(0,0,0,0.45)`,
+                                    ["--i"]: idx,
                                 }}
-                                title={k}
                             >
-                                {/* Art (full card) */}
                                 <div className="inv-card-art-full">
                                     <img
                                         src={n.imageUrl || "/cards/card.jpg"}
@@ -225,21 +212,18 @@ export default function Inventory({ token, onDeckReady }) {
                                     />
                                 </div>
 
-                                {/* Element badge (top-right corner) */}
                                 {element && (
                                     <div className="inv-card-elem-pill" title={element}>
                                         <span className="inv-card-elem-ic">{ELEM_ICON[element] || element}</span>
                                     </div>
                                 )}
 
-                                {/* Triple Triad numbers (в углах) */}
                                 <div className="inv-tt-badge" />
                                 <span className="inv-tt-num top">{stats.top}</span>
                                 <span className="inv-tt-num left">{stats.left}</span>
                                 <span className="inv-tt-num right">{stats.right}</span>
                                 <span className="inv-tt-num bottom">{stats.bottom}</span>
 
-                                {/* Selection overlay */}
                                 {isSel && (
                                     <div className="inv-card-selected-overlay">
                                         <div className="inv-card-selected-check">✓</div>
@@ -251,33 +235,19 @@ export default function Inventory({ token, onDeckReady }) {
                 </div>
             )}
 
-            {/* Actions */}
             {nfts.length > 0 && (
                 <div className="inv-actions">
-                    <button
-                        className="inv-btn inv-btn-secondary"
-                        onClick={clear}
-                        disabled={!selected.size || saving}
-                    >
+                    <button className="inv-btn inv-btn-secondary" onClick={clear} disabled={!selected.size || saving}>
                         Очистить ({selected.size})
                     </button>
 
-                    <button
-                        className="inv-btn inv-btn-primary"
-                        disabled={selected.size !== 5 || saving}
-                        onClick={saveDeck}
-                    >
+                    <button className="inv-btn inv-btn-primary" disabled={selected.size !== 5 || saving} onClick={saveDeck}>
                         {saving ? "Сохранение..." : `Сохранить колоду (${selected.size}/5)`}
                     </button>
                 </div>
             )}
 
-            {/* Hint */}
-            {nfts.length > 0 && selected.size === 5 && (
-                <div className="inv-hint">
-                    ✅ Колода готова! Теперь можешь нажать "Play" в главном меню
-                </div>
-            )}
+            {nfts.length > 0 && selected.size === 5 && <div className="inv-hint">✅ Колода готова! Теперь можешь нажать "Play" в главном меню</div>}
         </div>
     );
 }
