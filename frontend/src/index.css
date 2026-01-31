@@ -699,24 +699,66 @@ button {
     border-radius: 12px;
     background: rgba(10, 10, 20, 0.6);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
-    transition: all 0.12s cubic-bezier(0.2, 0.9, 0.3, 1);
+    overflow: hidden;
+
+    /* важно: transition НЕ на box-shadow, а на transform/opacity (дешево) */
+    transition: transform 120ms cubic-bezier(0.2, 0.9, 0.3, 1);
+    will-change: transform;
 }
 
+/* ПЛАВНЫЙ HIGHLIGHT СЛОЙ (всегда есть, просто opacity 0/1) */
+.cell::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 12px;
+    pointer-events: none;
+
+    /* “неоновая заливка” */
+    background: radial-gradient(120% 120% at 25% 25%,
+            rgba(24, 231, 255, 0.18),
+            transparent 60%);
+
+    /* “неоновая рамка” + мягкое свечение (не слишком тяжёлое) */
+    box-shadow:
+        inset 0 0 0 2px rgba(24, 231, 255, 0.0),
+        0 0 18px rgba(24, 231, 255, 0.0);
+
+    opacity: 0;
+    transform: scale(0.98);
+
+    /* плавность и скорость — это главное */
+    transition:
+        opacity 120ms cubic-bezier(0.2, 0.9, 0.3, 1),
+        transform 120ms cubic-bezier(0.2, 0.9, 0.3, 1),
+        box-shadow 120ms cubic-bezier(0.2, 0.9, 0.3, 1);
+    will-change: opacity, transform;
+}
+
+/* при highlight мы НЕ трогаем фон/box-shadow клетки напрямую */
 .cell.highlight {
-    background: rgba(24, 231, 255, 0.25);
-    box-shadow: inset 0 0 0 2px rgba(24, 231, 255, 0.8),
-        0 0 40px rgba(24, 231, 255, 0.5);
     cursor: pointer;
-    z-index: 10;
-    transition: all 0.12s cubic-bezier(0.2, 0.9, 0.3, 1);
+    transform: translateZ(0) scale(1.01);
+}
+
+/* включаем подсветку мгновенно и красиво */
+.cell.highlight::before {
+    opacity: 1;
+    transform: scale(1);
+
+    box-shadow:
+        inset 0 0 0 2px rgba(24, 231, 255, 0.75),
+        0 0 22px rgba(24, 231, 255, 0.35);
 }
 
 .cell.frozen {
     background: rgba(120, 200, 255, 0.15);
-    box-shadow: inset 0 0 0 2px rgba(120, 200, 255, 0.35),
+    box-shadow:
+        inset 0 0 0 2px rgba(120, 200, 255, 0.35),
         0 0 24px rgba(120, 200, 255, 0.2);
 }
 
+/* снежинка — оставляем как было (она использует ::after, не конфликтует) */
 .cell.frozen::after {
     content: "❄";
     position: absolute;
