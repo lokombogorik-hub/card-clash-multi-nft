@@ -1,4 +1,11 @@
-import { connectWallet, connectHotWallet, connectMyNearWallet, disconnectWallet as disconnect, signAndSendTransaction as signTx } from "../libs/nearWallet";
+import { useEffect, useState } from "react";
+import {
+    connectWallet,
+    connectHotWallet,
+    connectMyNearWallet,
+    disconnectWallet as disconnect,
+    signAndSendTransaction as signTx,
+} from "../libs/nearWallet";
 
 const LS_NEAR_ACCOUNT_ID = "cc_near_account_id";
 
@@ -17,6 +24,7 @@ const GAS_100_TGAS = "100000000000000";
 const GAS_150_TGAS = "150000000000000";
 const GAS_300_TGAS = "300000000000000";
 const ONE_YOCTO = "1";
+const STORAGE_DEPOSIT_0_1_NEAR = "100000000000000000000000"; // 0.1 NEAR
 
 function yoctoToNearFloat(yoctoStr) {
     try {
@@ -62,6 +70,10 @@ let state = {
     balanceError: "",
     status: "",
 
+    // on-chain NFTs cache
+    nfts: [],
+    nftsError: "",
+
     lastError: null,
 };
 
@@ -79,7 +91,13 @@ function applyAccount(accountId) {
     const id = String(accountId || "").trim();
     if (!id) return;
 
-    setState({ connected: true, walletAddress: id, status: "", balanceError: "", lastError: null });
+    setState({
+        connected: true,
+        walletAddress: id,
+        status: "",
+        balanceError: "",
+        lastError: null,
+    });
 
     try {
         localStorage.setItem(LS_NEAR_ACCOUNT_ID, id);
@@ -101,6 +119,25 @@ function restoreFromStorage() {
     }
 }
 
+function clearStatus() {
+    setState({ status: "", lastError: null });
+}
+
+function extractTxHash(outcome) {
+    return (
+        outcome?.transaction?.hash ||
+        outcome?.transaction_outcome?.id ||
+        outcome?.final_execution_outcome?.transaction?.hash ||
+        null
+    );
+}
+
+async function signAndSendTransaction({ receiverId, actions }) {
+    if (!receiverId) throw new Error("receiverId is required");
+    if (!actions || !actions.length) throw new Error("actions are required");
+    return await signTx({ receiverId, actions });
+}
+
 async function connectHot() {
     setState({ status: "Opening HOT Wallet…", lastError: null });
 
@@ -115,6 +152,9 @@ async function connectHot() {
 
         applyAccount(accountId);
         setState({ status: "", lastError: null });
+
+        // preload NFTs
+        await getUserNFTs();
     } catch (e) {
         console.error("[walletStore] HOT connect failed:", e);
 
@@ -129,7 +169,7 @@ async function connectHot() {
                 message: errMsg,
                 stack: errStack,
                 raw: e,
-            }
+            },
         });
     }
 }
@@ -148,6 +188,9 @@ async function connectMyNear() {
 
         applyAccount(accountId);
         setState({ status: "", lastError: null });
+
+        // preload NFTs
+        await getUserNFTs();
     } catch (e) {
         console.error("[walletStore] MyNear connect failed:", e);
 
@@ -162,7 +205,7 @@ async function connectMyNear() {
                 message: errMsg,
                 stack: errStack,
                 raw: e,
-            }
+            },
         });
     }
 }
@@ -174,30 +217,23 @@ async function disconnectWallet() {
     try {
         localStorage.removeItem(LS_NEAR_ACCOUNT_ID);
     } catch { }
-    setState({ connected: false, walletAddress: "", balance: 0, balanceError: "", status: "", lastError: null });
+    setState({
+        connected: false,
+        walletAddress: "",
+        balance: 0,
+        balanceError: "",
+        status: "",
+        nfts: [],
+        nftsError: "",
+        lastError: null,
+    });
 }
 
 async function restoreSession() {
-    restoreFromStorage();
-}
-
-function clearStatus() {
-    setState({ status: "", lastError: null });
-}
-
-function extractTxHash(outcome) {
-    return (
-        outcome?.transaction?.hash ||
-        outcome?.transaction_outcome?.id ||
-        outcome?.final_execution_outcome?.transaction?.hash ||
-        null
-    );
-}
-
-async function signAndSendTransaction({ receiverId, actions }) {
-    if (!receiverId) throw new Error("receiverId is required");
-    if (!actions || !actions.length) throw new Error("actions are required");
-    return await signTx({ receiverId, actions });
+    const ok = restoreFromStorage();
+    if (!ok) return;
+    // preload NFTs for restored session
+    await getUserNFTs();
 }
 
 async function nftTransferCall({ nftContractId, tokenId, matchId, side, playerA, playerB, receiverId }) {
@@ -247,12 +283,13 @@ async function escrowClaim({ matchId, winnerAccountId, loserNftContractId, loser
     return { outcome, txHash: extractTxHash(outcome) };
 }
 
-// ==================== NEW: NFT MINT ====================
+// ==================== NFT MINT (nft.examples.testnet compatible) ====================
 
 async function mintCard() {
     if (!nftContractId) throw new Error("NFT contract id missing (VITE_NEAR_NFT_CONTRACT_ID)");
+    if (!state.walletAddress) throw new Error("Wallet not connected");
 
-    const tokenId = `card_${Date.now()}_${state.walletAddress}`;
+    const tokenId = `card_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
 
     const actions = [
         {
@@ -263,32 +300,36 @@ async function mintCard() {
                     token_id: tokenId,
                     receiver_id: state.walletAddress,
                     metadata: {
-                        title: `Card #${Date.now()}`,
+                        title: `Card #${tokenId.slice(-6)}`,
                         description: "Card Clash NFT",
                         media: "",
                         extra: JSON.stringify({
-                            rarity: ['common', 'rare', 'epic', 'legendary'][Math.floor(Math.random() * 4)],
+                            rarity: ["common", "rare", "epic", "legendary"][Math.floor(Math.random() * 4)],
                             power: Math.floor(Math.random() * 100),
+                            element: ["Fire", "Water", "Earth", "Wind"][Math.floor(Math.random() * 4)],
                         }),
                     },
                 },
                 gas: GAS_300_TGAS,
-                deposit: "100000000000000000000000", // 0.1 NEAR for storage
+                deposit: STORAGE_DEPOSIT_0_1_NEAR,
             },
         },
     ];
 
     const outcome = await signAndSendTransaction({ receiverId: nftContractId, actions });
-    return { outcome, txHash: extractTxHash(outcome) };
+
+    // refresh cache
+    await getUserNFTs();
+
+    return { outcome, txHash: extractTxHash(outcome), tokenId };
 }
 
 async function mintPack() {
     if (!nftContractId) throw new Error("NFT contract id missing (VITE_NEAR_NFT_CONTRACT_ID)");
-
     const results = [];
     for (let i = 0; i < 5; i++) {
-        const result = await mintCard();
-        results.push(result);
+        // eslint-disable-next-line no-await-in-loop
+        results.push(await mintCard());
     }
     return results;
 }
@@ -311,7 +352,7 @@ async function getUserNFTs() {
                     finality: "final",
                     account_id: nftContractId,
                     method_name: "nft_tokens_for_owner",
-                    args_base64: btoa(JSON.stringify({ account_id: accountId })),
+                    args_base64: btoa(JSON.stringify({ account_id: accountId, from_index: "0", limit: 200 })),
                 },
             }),
         });
@@ -320,12 +361,19 @@ async function getUserNFTs() {
         if (json.error) throw new Error(json.error.message || "RPC error");
 
         const resultBytes = json?.result?.result;
-        if (!resultBytes) return [];
+        if (!resultBytes) {
+            setState({ nfts: [], nftsError: "" });
+            return [];
+        }
 
         const resultString = new TextDecoder().decode(new Uint8Array(resultBytes));
-        return JSON.parse(resultString);
+        const tokens = JSON.parse(resultString);
+
+        setState({ nfts: Array.isArray(tokens) ? tokens : [], nftsError: "" });
+        return Array.isArray(tokens) ? tokens : [];
     } catch (e) {
         console.error("[walletStore] getUserNFTs error:", e);
+        setState({ nfts: [], nftsError: String(e?.message || e) });
         return [];
     }
 }
@@ -368,9 +416,47 @@ export const walletStore = {
     nftTransferCall,
     escrowClaim,
 
-    // NEW
     mintCard,
     mintPack,
     getUserNFTs,
     sendNear,
 };
+
+// React hook adapter (so WalletConnector can import { useWalletStore } from "../../store/walletStore")
+export function useWalletStore() {
+    const [snap, setSnap] = useState(walletStore.getState());
+
+    useEffect(() => {
+        const unsub = walletStore.subscribe(() => setSnap(walletStore.getState()));
+        walletStore.restoreSession();
+        return unsub;
+    }, []);
+
+    return {
+        connected: snap.connected,
+        accountId: snap.walletAddress,
+        walletAddress: snap.walletAddress,
+        balance: snap.balance,
+        balanceError: snap.balanceError,
+        status: snap.status,
+        lastError: snap.lastError,
+
+        nfts: snap.nfts,
+        nftsError: snap.nftsError,
+
+        connectHot: walletStore.connectHot,
+        connectMyNear: walletStore.connectMyNear,
+        disconnectWallet: walletStore.disconnectWallet,
+        clearStatus: walletStore.clearStatus,
+
+        sendNear: walletStore.sendNear,
+
+        mintCard: walletStore.mintCard,
+        mintPack: walletStore.mintPack,
+        getUserNFTs: walletStore.getUserNFTs,
+
+        signAndSendTransaction: walletStore.signAndSendTransaction,
+        nftTransferCall: walletStore.nftTransferCall,
+        escrowClaim: walletStore.escrowClaim,
+    };
+}
