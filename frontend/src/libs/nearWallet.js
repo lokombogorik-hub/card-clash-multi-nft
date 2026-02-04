@@ -36,7 +36,6 @@ function tgOpen(url) {
 }
 
 function walletBotUsernameFromId(walletId) {
-    // "herewalletbot/app" -> "herewalletbot"
     const s = String(walletId || "").trim();
     const username = s.split("/")[0].trim();
     return username || "herewalletbot";
@@ -44,11 +43,7 @@ function walletBotUsernameFromId(walletId) {
 
 function openHereWalletTelegram() {
     const username = walletBotUsernameFromId(HOT_WALLET_ID);
-
-    // startapp payload: можно передать network, чтобы кошелек был в нужной сети
-    // HERE понимает startapp, остальное зависит от бота/версии
     const payload = encodeURIComponent(`network=${networkId}`);
-
     const url = `https://t.me/${username}?startapp=${payload}`;
     logHot("hot:deeplink", "Opening HERE wallet via Telegram deep link", { url });
     tgOpen(url);
@@ -87,8 +82,8 @@ async function trySignIn(w) {
     return "";
 }
 
-export async function connectHotWallet() {
-    logHot("hot:start", "Starting HERE/HOT connect...");
+export async function connectHotWallet({ silent = false } = {}) {
+    logHot("hot:start", "Starting HERE/HOT connect...", { silent });
     logHot("hot:env", "ENV", { botId: TG_BOT_ID, walletId: HOT_WALLET_ID, networkId, RPC_URL });
 
     const w = await getWallet();
@@ -107,18 +102,17 @@ export async function connectHotWallet() {
             return { accountId, wallet: w };
         }
 
-        // если ничего не вернулось — откроем deeplink
-        logHot("hot:connect_empty", "No accountId returned, opening deeplink...");
-        openHereWalletTelegram();
+        logHot("hot:connect_empty", "No accountId returned", { silent });
+
+        if (!silent) openHereWalletTelegram();
         return { accountId: "", wallet: w };
     } catch (e) {
         const msg = e?.message || String(e);
-        logHot("hot:signin_throw", msg, { stack: e?.stack });
+        logHot("hot:signin_throw", msg, { stack: e?.stack, silent });
 
-        // fallback для TG WebView: Load failed => открываем deeplink
         if (msg.toLowerCase().includes("load failed")) {
-            logHot("hot:fallback", "signIn failed with Load failed, using Telegram deeplink fallback");
-            openHereWalletTelegram();
+            logHot("hot:fallback", "signIn failed with Load failed", { silent });
+            if (!silent) openHereWalletTelegram();
             return { accountId: "", wallet: w };
         }
 
@@ -132,7 +126,7 @@ export async function connectMyNearWallet() {
 }
 
 export async function connectWallet() {
-    return connectHotWallet();
+    return connectHotWallet({ silent: false });
 }
 
 export async function disconnectWallet() {
@@ -146,8 +140,8 @@ export async function disconnectWallet() {
 export async function signAndSendTransaction({ receiverId, actions }) {
     const w = await getWallet();
 
-    // На случай если пользователь не залогинен — дернем connectHotWallet (она откроет deeplink)
-    const { accountId } = await connectHotWallet();
+    // важно: тут НЕ silent — если пользователь не залогинен, надо открыть кошелек
+    const { accountId } = await connectHotWallet({ silent: false });
     if (!accountId) throw new Error("Wallet not signed in yet. Complete login in HERE wallet and return.");
 
     if (typeof w.signAndSendTransaction !== "function") {

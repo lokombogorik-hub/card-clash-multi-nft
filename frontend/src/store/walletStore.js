@@ -70,7 +70,6 @@ let state = {
     balanceError: "",
     status: "",
 
-    // on-chain NFTs cache
     nfts: [],
     nftsError: "",
 
@@ -142,18 +141,17 @@ async function connectHot() {
     setState({ status: "Opening HOT Wallet…", lastError: null });
 
     try {
-        const { accountId } = await connectHotWallet();
+        const { accountId } = await connectHotWallet({ silent: false });
 
+        // accountId может быть пустым если открылся deeplink — тогда просто ждём restoreSession polling
         if (!accountId) {
-            const err = new Error("HOT Wallet не вернул accountId");
-            setState({ status: `Connect failed: ${err.message}`, lastError: err });
+            setState({ status: "HOT Wallet opened. Complete login and return to the game…", lastError: null });
             return;
         }
 
         applyAccount(accountId);
         setState({ status: "", lastError: null });
 
-        // preload NFTs
         await getUserNFTs();
     } catch (e) {
         console.error("[walletStore] HOT connect failed:", e);
@@ -189,7 +187,6 @@ async function connectMyNear() {
         applyAccount(accountId);
         setState({ status: "", lastError: null });
 
-        // preload NFTs
         await getUserNFTs();
     } catch (e) {
         console.error("[walletStore] MyNear connect failed:", e);
@@ -230,10 +227,23 @@ async function disconnectWallet() {
 }
 
 async function restoreSession() {
+    // 1) storage restore
     const ok = restoreFromStorage();
-    if (!ok) return;
-    // preload NFTs for restored session
-    await getUserNFTs();
+    if (ok) {
+        await getUserNFTs();
+        return;
+    }
+
+    // 2) silent HERE check (НЕ открывает deeplink)
+    try {
+        const { accountId } = await connectHotWallet({ silent: true });
+        if (accountId) {
+            applyAccount(accountId);
+            await getUserNFTs();
+        }
+    } catch {
+        // silent: ignore
+    }
 }
 
 async function nftTransferCall({ nftContractId, tokenId, matchId, side, playerA, playerB, receiverId }) {
@@ -283,7 +293,7 @@ async function escrowClaim({ matchId, winnerAccountId, loserNftContractId, loser
     return { outcome, txHash: extractTxHash(outcome) };
 }
 
-// ==================== NFT MINT (nft.examples.testnet compatible) ====================
+// ==================== NFT MINT ====================
 
 async function mintCard() {
     if (!nftContractId) throw new Error("NFT contract id missing (VITE_NEAR_NFT_CONTRACT_ID)");
@@ -317,8 +327,6 @@ async function mintCard() {
     ];
 
     const outcome = await signAndSendTransaction({ receiverId: nftContractId, actions });
-
-    // refresh cache
     await getUserNFTs();
 
     return { outcome, txHash: extractTxHash(outcome), tokenId };
@@ -397,8 +405,6 @@ async function sendNear({ receiverId, amount }) {
     return { outcome, txHash: extractTxHash(outcome) };
 }
 
-// ==================== EXPORT ====================
-
 export const walletStore = {
     getState: () => state,
     subscribe: (fn) => {
@@ -422,7 +428,6 @@ export const walletStore = {
     sendNear,
 };
 
-// React hook adapter (so WalletConnector can import { useWalletStore } from "../../store/walletStore")
 export function useWalletStore() {
     const [snap, setSnap] = useState(walletStore.getState());
 
