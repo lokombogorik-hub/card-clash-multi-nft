@@ -1,15 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from backend.database.session import get_db
-from backend.database.models.user import User
-from backend.api.users import get_current_user
 from pydantic import BaseModel
 from typing import Optional
 import time
 
+from database.session import get_db
+from database.models.user import User
+from api.users import get_current_user
+
 router = APIRouter(prefix="/api/matchmaking", tags=["matchmaking"])
 
+# in-memory очередь (на Railway будет сбрасываться при рестарте/масштабировании — ок для демо)
 matchmaking_queue = {}
 
 
@@ -26,46 +27,54 @@ class MatchFound(BaseModel):
 
 @router.post("/join_queue")
 async def join_queue(
-        request: QueueRequest,
-        current_user: User = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db)
+    request: QueueRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
+    # если уже в очереди — перезаписываем
     if current_user.id in matchmaking_queue:
         del matchmaking_queue[current_user.id]
 
-    user_elo = current_user.elo_rating
-    best_match = None
-    min_diff = request.max_elo_diff
+    user_elo = int(getattr(current_user, "elo_rating", 1000) or 1000)
+    best_match_user_id = None
+    min_diff = int(request.max_elo_diff or 200)
 
-    for user_id, data in matchmaking_queue.items():
-        elo_diff = abs(data["elo"] - user_elo)
+    # ищем ближайшего по elo
+    for user_id, data in list(matchmaking_queue.items()):
+        elo_diff = abs(int(data.get("elo", 0)) - user_elo)
         if elo_diff <= min_diff:
             min_diff = elo_diff
-            best_match = user_id
+            best_match_user_id = user_id
 
-    if best_match:
-        opponent_id = best_match
-        del matchmaking_queue[opponent_id]
+    if best_match_user_id is not None:
+        opponent_id = best_match_user_id
+        # убираем оппонента из очереди
+        matchmaking_queue.pop(opponent_id, None)
+
         opponent = await db.get(User, opponent_id)
+
+        # оппонент мог быть удалён/не найден — тогда просто ставим пользователя в очередь
+        if opponent is None:
+            matchmaking_queue[current_user.id] = {"elo": user_elo, "timestamp": time.time()}
+            return {"status": "waiting", "queue_size": len(matchmaking_queue)}
+
         match_id = f"match_{current_user.id}_{opponent_id}_{int(time.time())}"
+
         return MatchFound(
-            opponent_id=opponent.id,
-            opponent_username=opponent.username or "Player",
-            opponent_elo=opponent.elo_rating,
-            match_id=match_id
+            opponent_id=int(opponent.id),
+            opponent_username=(opponent.username or "Player"),
+            opponent_elo=int(getattr(opponent, "elo_rating", 1000) or 1000),
+            match_id=match_id,
         )
-    else:
-        matchmaking_queue[current_user.id] = {
-            "elo": user_elo,
-            "timestamp": time.time()
-        }
-        return {"status": "waiting", "queue_size": len(matchmaking_queue)}
+
+    # не нашли — добавляем в очередь
+    matchmaking_queue[current_user.id] = {"elo": user_elo, "timestamp": time.time()}
+    return {"status": "waiting", "queue_size": len(matchmaking_queue)}
 
 
 @router.post("/leave_queue")
 async def leave_queue(current_user: User = Depends(get_current_user)):
-    if current_user.id in matchmaking_queue:
-        del matchmaking_queue[current_user.id]
+    matchmaking_queue.pop(current_user.id, None)
     return {"status": "left"}
 
 
@@ -74,5 +83,5 @@ async def queue_status(current_user: User = Depends(get_current_user)):
     return {
         "in_queue": current_user.id in matchmaking_queue,
         "queue_size": len(matchmaking_queue),
-        "your_elo": current_user.elo_rating
+        "your_elo": int(getattr(current_user, "elo_rating", 1000) or 1000),
     }
