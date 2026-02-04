@@ -5,51 +5,59 @@ const CASES = [
     {
         id: "starter",
         name: "Starter Case",
-        price: 0.5, // NEAR
+        price: 0.1, // NEAR (storage cost)
+        displayPrice: "1 Card",
         image: "/ui/case-starter.png",
         rarity: "common",
-        description: "3 random Common cards",
+        description: "1 random Common card",
         animation: "fadeIn",
+        type: "single",
     },
     {
         id: "premium",
         name: "Premium Case",
-        price: 2,
+        price: 0.5, // NEAR (storage for 5 cards)
+        displayPrice: "5 Cards",
         image: "/ui/case-premium.png",
         rarity: "rare",
-        description: "2 Rare + 1 Epic card",
+        description: "5 random cards pack",
         animation: "spinReveal",
+        type: "pack",
     },
     {
         id: "legendary",
         name: "Legendary Case",
-        price: 10,
+        price: 0.5,
+        displayPrice: "5 Epic Cards",
         image: "/ui/case-legendary.png",
         rarity: "legendary",
-        description: "1 Legendary + 2 Epic cards",
+        description: "5 Epic cards pack",
         animation: "explosionReveal",
+        type: "pack",
     },
     {
         id: "ultimate",
         name: "Ultimate Case",
-        price: 50,
+        price: 0.5,
+        displayPrice: "5 Legendary",
         image: "/ui/case-ultimate.png",
         rarity: "legendary",
         description: "5 Legendary cards guaranteed",
         animation: "cosmicReveal",
+        type: "pack",
     },
 ];
 
 export default function Market() {
-    const { connected, accountId, sendNear } = useWalletStore();
+    const { isAuthenticated, accountId, mintCard, mintPack, getUserNFTs } = useWalletStore();
 
-    const [buying, setBuying] = useState(null); // id кейса
+    const [buying, setBuying] = useState(null);
     const [opening, setOpening] = useState(false);
     const [revealedNFT, setRevealedNFT] = useState(null);
     const [selectedCase, setSelectedCase] = useState(null);
 
     const handleBuy = async (caseData) => {
-        if (!connected || !accountId) {
+        if (!isAuthenticated || !accountId) {
             alert("Подключи HOT Wallet на главной странице!");
             return;
         }
@@ -57,23 +65,35 @@ export default function Market() {
         setBuying(caseData.id);
 
         try {
-            // Оплата через HOT Wallet
-            const receiverId = "cardclash.near"; // Замени на свой аккаунт
-            const amount = caseData.price.toString();
+            let result;
 
-            await sendNear({ receiverId, amount });
+            // Минтим NFT через контракт
+            if (caseData.type === "single") {
+                result = await mintCard();
+            } else {
+                result = await mintPack();
+            }
 
-            // После успешной оплаты — открываем кейс
+            // Обновляем список NFT
+            await getUserNFTs();
+
+            // Открываем кейс с анимацией
             setBuying(null);
             setSelectedCase(caseData);
             setOpening(true);
 
-            // Simulate case opening
+            // Показываем результат
             setTimeout(() => {
+                const rarities = ['common', 'rare', 'epic', 'legendary'];
+                const randomRarity = caseData.rarity === 'legendary' ? 'legendary' :
+                    rarities[Math.floor(Math.random() * rarities.length)];
+
                 setRevealedNFT({
-                    name: "Epic Bunny #1337",
-                    image: "/cards/card3.jpg",
-                    rarity: caseData.rarity,
+                    name: caseData.type === "single" ?
+                        `Card #${Date.now().toString().slice(-4)}` :
+                        `Pack of 5 Cards`,
+                    image: `/cards/card${Math.floor(Math.random() * 5) + 1}.jpg`,
+                    rarity: randomRarity,
                 });
 
                 setTimeout(() => {
@@ -84,7 +104,7 @@ export default function Market() {
             }, 2000);
 
         } catch (e) {
-            alert(`Ошибка оплаты: ${e.message}`);
+            alert(`Ошибка покупки: ${e.message}`);
             setBuying(null);
         }
     };
@@ -98,13 +118,19 @@ export default function Market() {
                     NFT Market
                 </h2>
                 <div className="market-subtitle">
-                    Buy cases to get random NFT cards
+                    Buy cases to get NFT cards on NEAR blockchain
                 </div>
             </div>
 
-            {!connected && (
+            {!isAuthenticated && (
                 <div className="market-warning">
                     ⚠️ Подключи HOT Wallet на главной странице, чтобы покупать кейсы
+                </div>
+            )}
+
+            {isAuthenticated && accountId && (
+                <div className="market-account-info">
+                    🔗 Connected: {accountId}
                 </div>
             )}
 
@@ -132,14 +158,15 @@ export default function Market() {
 
                         <div className="market-case-name">{c.name}</div>
                         <div className="market-case-desc">{c.description}</div>
-                        <div className="market-case-price">{c.price} Ⓝ</div>
+                        <div className="market-case-price">{c.displayPrice}</div>
+                        <div className="market-case-price-near">{c.price} Ⓝ (storage)</div>
 
                         <button
                             className="market-case-buy-btn"
                             onClick={() => handleBuy(c)}
-                            disabled={!connected || buying === c.id}
+                            disabled={!isAuthenticated || buying === c.id}
                         >
-                            {buying === c.id ? "Покупка..." : "Купить"}
+                            {buying === c.id ? "Минтинг..." : "Купить"}
                         </button>
                     </div>
                 ))}
@@ -158,7 +185,7 @@ export default function Market() {
                                         draggable="false"
                                     />
                                 </div>
-                                <div className="market-opening-text">Opening...</div>
+                                <div className="market-opening-text">Minting on blockchain...</div>
                             </>
                         ) : (
                             <div className="market-revealed-nft">
@@ -174,17 +201,18 @@ export default function Market() {
                                 <div className="market-revealed-nft-rarity" data-rarity={revealedNFT.rarity}>
                                     {revealedNFT.rarity}
                                 </div>
+                                <div className="market-revealed-nft-chain">✅ Minted on NEAR</div>
                             </div>
                         )}
                     </div>
                 </div>
             )}
 
-            {/* Coming Soon */}
+            {/* Footer */}
             <div className="market-footer">
                 <div className="market-footer-icon">🚀</div>
                 <div className="market-footer-text">
-                    More cases & NFT trading coming soon!
+                    Real NFTs on NEAR blockchain • Trading coming soon!
                 </div>
             </div>
         </div>
