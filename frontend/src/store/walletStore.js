@@ -59,6 +59,77 @@ async function fetchNearBalance(accountId) {
     return yoctoToNearFloat(json?.result?.amount || "0");
 }
 
+function isLikelyNearAccountId(s) {
+    const v = String(s || "").trim();
+    if (!v) return false;
+    if (v.length < 2 || v.length > 64) return false;
+    // near account ids are lowercase
+    if (v.toLowerCase() !== v) return false;
+    // basic allowed charset
+    if (!/^[a-z0-9._-]+$/.test(v)) return false;
+    // usually have dot on testnet/mainnet, but not required
+    return true;
+}
+
+function extractAccountIdFromUrl() {
+    try {
+        const u = new URL(window.location.href);
+        const cands = [
+            u.searchParams.get("account_id"),
+            u.searchParams.get("accountId"),
+            u.searchParams.get("near_account_id"),
+        ].filter(Boolean);
+
+        if (cands.length) {
+            const v = String(cands[0]).trim();
+            if (isLikelyNearAccountId(v)) return v;
+        }
+
+        // also check hash params: #account_id=...
+        const hash = (u.hash || "").replace(/^#/, "");
+        if (hash) {
+            const p = new URLSearchParams(hash);
+            const hv =
+                p.get("account_id") ||
+                p.get("accountId") ||
+                p.get("near_account_id") ||
+                "";
+            if (isLikelyNearAccountId(hv)) return hv;
+        }
+    } catch { }
+    return "";
+}
+
+function extractAccountIdFromLocalStorageScan() {
+    try {
+        // scan some keys that HERE might use
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (!k) continue;
+            const lk = k.toLowerCase();
+            if (!lk.includes("here") && !lk.includes("hot") && !lk.includes("wallet")) continue;
+            const val = localStorage.getItem(k);
+            if (!val) continue;
+
+            // try direct value
+            if (isLikelyNearAccountId(val)) return val;
+
+            // try json
+            try {
+                const j = JSON.parse(val);
+                const cand =
+                    j?.accountId ||
+                    j?.account_id ||
+                    j?.nearAccountId ||
+                    j?.near_account_id ||
+                    "";
+                if (isLikelyNearAccountId(cand)) return cand;
+            } catch { }
+        }
+    } catch { }
+    return "";
+}
+
 let state = {
     connected: false,
     walletAddress: "",
@@ -154,20 +225,10 @@ async function connectHot() {
 
         await getUserNFTs();
     } catch (e) {
-        console.error("[walletStore] HOT connect failed:", e);
-
         const errMsg = e?.message || String(e);
-        const errStack = e?.stack || "";
-        const errName = e?.name || "Error";
-
         setState({
             status: `HOT Connect failed: ${errMsg}`,
-            lastError: {
-                name: errName,
-                message: errMsg,
-                stack: errStack,
-                raw: e,
-            },
+            lastError: { name: e?.name || "Error", message: errMsg, stack: e?.stack || "" },
         });
     }
 }
@@ -177,43 +238,22 @@ async function connectMyNear() {
 
     try {
         const { accountId } = await connectMyNearWallet();
-
-        if (!accountId) {
-            const err = new Error("MyNearWallet не вернул accountId");
-            setState({ status: `Connect failed: ${err.message}`, lastError: err });
-            return;
-        }
-
+        if (!accountId) throw new Error("MyNearWallet не вернул accountId");
         applyAccount(accountId);
         setState({ status: "", lastError: null });
-
         await getUserNFTs();
     } catch (e) {
-        console.error("[walletStore] MyNear connect failed:", e);
-
         const errMsg = e?.message || String(e);
-        const errStack = e?.stack || "";
-        const errName = e?.name || "Error";
-
         setState({
             status: `MyNear Connect failed: ${errMsg}`,
-            lastError: {
-                name: errName,
-                message: errMsg,
-                stack: errStack,
-                raw: e,
-            },
+            lastError: { name: e?.name || "Error", message: errMsg, stack: e?.stack || "" },
         });
     }
 }
 
 async function disconnectWallet() {
-    try {
-        await disconnect();
-    } catch { }
-    try {
-        localStorage.removeItem(LS_NEAR_ACCOUNT_ID);
-    } catch { }
+    try { await disconnect(); } catch { }
+    try { localStorage.removeItem(LS_NEAR_ACCOUNT_ID); } catch { }
     setState({
         connected: false,
         walletAddress: "",
@@ -227,23 +267,36 @@ async function disconnectWallet() {
 }
 
 async function restoreSession() {
-    // 1) storage restore
-    const ok = restoreFromStorage();
-    if (ok) {
+    // 1) app storage
+    if (restoreFromStorage()) {
         await getUserNFTs();
         return;
     }
 
-    // 2) silent check from HERE wallet (NO signIn)
+    // 2) URL
+    const fromUrl = extractAccountIdFromUrl();
+    if (fromUrl) {
+        applyAccount(fromUrl);
+        await getUserNFTs();
+        return;
+    }
+
+    // 3) localStorage scan (HERE/HOT may store somewhere)
+    const fromLs = extractAccountIdFromLocalStorageScan();
+    if (fromLs) {
+        applyAccount(fromLs);
+        await getUserNFTs();
+        return;
+    }
+
+    // 4) silent SDK check (no signIn)
     try {
         const id = await getSignedInAccountId();
         if (id) {
             applyAccount(id);
             await getUserNFTs();
         }
-    } catch {
-        // ignore
-    }
+    } catch { }
 }
 
 async function nftTransferCall({ nftContractId, tokenId, matchId, side, playerA, playerB, receiverId }) {
@@ -252,17 +305,15 @@ async function nftTransferCall({ nftContractId, tokenId, matchId, side, playerA,
 
     const msg = JSON.stringify({ match_id: matchId, side, player_a: playerA, player_b: playerB });
 
-    const actions = [
-        {
-            type: "FunctionCall",
-            params: {
-                methodName: "nft_transfer_call",
-                args: { receiver_id: escrowId, token_id: tokenId, approval_id: null, memo: null, msg },
-                gas: GAS_150_TGAS,
-                deposit: ONE_YOCTO,
-            },
+    const actions = [{
+        type: "FunctionCall",
+        params: {
+            methodName: "nft_transfer_call",
+            args: { receiver_id: escrowId, token_id: tokenId, approval_id: null, memo: null, msg },
+            gas: GAS_150_TGAS,
+            deposit: ONE_YOCTO,
         },
-    ];
+    }];
 
     const outcome = await signAndSendTransaction({ receiverId: nftContractId, actions });
     return { outcome, txHash: extractTxHash(outcome) };
@@ -272,22 +323,20 @@ async function escrowClaim({ matchId, winnerAccountId, loserNftContractId, loser
     const escrowId = (receiverId || escrowContractId || "").trim();
     if (!escrowId) throw new Error("Escrow contract id missing (VITE_NEAR_ESCROW_CONTRACT_ID)");
 
-    const actions = [
-        {
-            type: "FunctionCall",
-            params: {
-                methodName: "claim",
-                args: {
-                    match_id: matchId,
-                    winner: winnerAccountId,
-                    loser_nft_contract_id: loserNftContractId,
-                    loser_token_id: loserTokenId,
-                },
-                gas: GAS_100_TGAS,
-                deposit: "0",
+    const actions = [{
+        type: "FunctionCall",
+        params: {
+            methodName: "claim",
+            args: {
+                match_id: matchId,
+                winner: winnerAccountId,
+                loser_nft_contract_id: loserNftContractId,
+                loser_token_id: loserTokenId,
             },
+            gas: GAS_100_TGAS,
+            deposit: "0",
         },
-    ];
+    }];
 
     const outcome = await signAndSendTransaction({ receiverId: escrowId, actions });
     return { outcome, txHash: extractTxHash(outcome) };
@@ -299,43 +348,37 @@ async function mintCard() {
 
     const tokenId = `card_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
 
-    const actions = [
-        {
-            type: "FunctionCall",
-            params: {
-                methodName: "nft_mint",
-                args: {
-                    token_id: tokenId,
-                    receiver_id: state.walletAddress,
-                    metadata: {
-                        title: `Card #${tokenId.slice(-6)}`,
-                        description: "Card Clash NFT",
-                        media: "",
-                        extra: JSON.stringify({
-                            rarity: ["common", "rare", "epic", "legendary"][Math.floor(Math.random() * 4)],
-                            power: Math.floor(Math.random() * 100),
-                            element: ["Fire", "Water", "Earth", "Wind"][Math.floor(Math.random() * 4)],
-                        }),
-                    },
+    const actions = [{
+        type: "FunctionCall",
+        params: {
+            methodName: "nft_mint",
+            args: {
+                token_id: tokenId,
+                receiver_id: state.walletAddress,
+                metadata: {
+                    title: `Card #${tokenId.slice(-6)}`,
+                    description: "Card Clash NFT",
+                    media: "",
+                    extra: JSON.stringify({
+                        rarity: ["common", "rare", "epic", "legendary"][Math.floor(Math.random() * 4)],
+                        power: Math.floor(Math.random() * 100),
+                        element: ["Fire", "Water", "Earth", "Wind"][Math.floor(Math.random() * 4)],
+                    }),
                 },
-                gas: GAS_300_TGAS,
-                deposit: STORAGE_DEPOSIT_0_1_NEAR,
             },
+            gas: GAS_300_TGAS,
+            deposit: STORAGE_DEPOSIT_0_1_NEAR,
         },
-    ];
+    }];
 
     const outcome = await signAndSendTransaction({ receiverId: nftContractId, actions });
     await getUserNFTs();
-
     return { outcome, txHash: extractTxHash(outcome), tokenId };
 }
 
 async function mintPack() {
     const results = [];
-    for (let i = 0; i < 5; i++) {
-        // eslint-disable-next-line no-await-in-loop
-        results.push(await mintCard());
-    }
+    for (let i = 0; i < 5; i++) results.push(await mintCard());
     return results;
 }
 
@@ -377,18 +420,13 @@ async function getUserNFTs() {
         setState({ nfts: Array.isArray(tokens) ? tokens : [], nftsError: "" });
         return Array.isArray(tokens) ? tokens : [];
     } catch (e) {
-        console.error("[walletStore] getUserNFTs error:", e);
         setState({ nfts: [], nftsError: String(e?.message || e) });
         return [];
     }
 }
 
 async function sendNear({ receiverId, amount }) {
-    if (!receiverId) throw new Error("receiverId is required");
-    if (!amount || isNaN(parseFloat(amount))) throw new Error("amount must be a valid number");
-
     const amountYocto = (parseFloat(amount) * 1e24).toString();
-
     const actions = [{ type: "Transfer", params: { deposit: amountYocto } }];
     const outcome = await signAndSendTransaction({ receiverId, actions });
     return { outcome, txHash: extractTxHash(outcome) };
@@ -434,7 +472,6 @@ export function useWalletStore() {
         balanceError: snap.balanceError,
         status: snap.status,
         lastError: snap.lastError,
-
         nfts: snap.nfts,
         nftsError: snap.nftsError,
 
@@ -442,9 +479,9 @@ export function useWalletStore() {
         connectMyNear: walletStore.connectMyNear,
         disconnectWallet: walletStore.disconnectWallet,
         clearStatus: walletStore.clearStatus,
+        restoreSession: walletStore.restoreSession,
 
         sendNear: walletStore.sendNear,
-
         mintCard: walletStore.mintCard,
         mintPack: walletStore.mintPack,
         getUserNFTs: walletStore.getUserNFTs,
@@ -452,7 +489,5 @@ export function useWalletStore() {
         signAndSendTransaction: walletStore.signAndSendTransaction,
         nftTransferCall: walletStore.nftTransferCall,
         escrowClaim: walletStore.escrowClaim,
-
-        restoreSession: walletStore.restoreSession,
     };
 }
