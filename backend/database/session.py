@@ -84,3 +84,13 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         raise RuntimeError("Database is not configured or failed to initialize")
     async with AsyncSessionLocal() as session:
         yield session
+
+
+# ----------------------------------------------------------------------
+# Compatibility alias (used by some routers)
+# Railway logs show routers importing: from database.session import get_db
+# Keep get_session() as canonical, but expose get_db() to avoid crashes.
+# ----------------------------------------------------------------------
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    async for s in get_session():
+        yield s
