@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
+import { useWalletStore } from "../store/useWalletStore"; // Правильный импорт
+
 
 function nftKey(n) {
     if (n.key) return n.key;

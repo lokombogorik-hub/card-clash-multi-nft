@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { useWalletStore } from "../store/useWalletStore";
+import { useWalletStore } from "../store/useWalletStore"; // Правильный импорт
+
 
 const CASES = [
     {

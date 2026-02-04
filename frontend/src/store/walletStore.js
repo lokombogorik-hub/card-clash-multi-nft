@@ -252,14 +252,28 @@ async function escrowClaim({ matchId, winnerAccountId, loserNftContractId, loser
 async function mintCard() {
     if (!nftContractId) throw new Error("NFT contract id missing (VITE_NEAR_NFT_CONTRACT_ID)");
 
+    const tokenId = `card_${Date.now()}_${state.walletAddress}`;
+
     const actions = [
         {
             type: "FunctionCall",
             params: {
-                methodName: "mint_card",
-                args: {},
+                methodName: "nft_mint",
+                args: {
+                    token_id: tokenId,
+                    receiver_id: state.walletAddress,
+                    metadata: {
+                        title: `Card #${Date.now()}`,
+                        description: "Card Clash NFT",
+                        media: "",
+                        extra: JSON.stringify({
+                            rarity: ['common', 'rare', 'epic', 'legendary'][Math.floor(Math.random() * 4)],
+                            power: Math.floor(Math.random() * 100),
+                        }),
+                    },
+                },
                 gas: GAS_300_TGAS,
-                deposit: "5000000000000000000000000", // 5 NEAR
+                deposit: "100000000000000000000000", // 0.1 NEAR for storage
             },
         },
     ];
@@ -271,20 +285,12 @@ async function mintCard() {
 async function mintPack() {
     if (!nftContractId) throw new Error("NFT contract id missing (VITE_NEAR_NFT_CONTRACT_ID)");
 
-    const actions = [
-        {
-            type: "FunctionCall",
-            params: {
-                methodName: "mint_pack",
-                args: {},
-                gas: GAS_300_TGAS,
-                deposit: "20000000000000000000000000", // 20 NEAR
-            },
-        },
-    ];
-
-    const outcome = await signAndSendTransaction({ receiverId: nftContractId, actions });
-    return { outcome, txHash: extractTxHash(outcome) };
+    const results = [];
+    for (let i = 0; i < 5; i++) {
+        const result = await mintCard();
+        results.push(result);
+    }
+    return results;
 }
 
 async function getUserNFTs() {
