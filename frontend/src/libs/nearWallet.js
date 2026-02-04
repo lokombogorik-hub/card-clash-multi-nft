@@ -1,315 +1,151 @@
-import { HereWallet } from '@here-wallet/core'
-import { setupWalletSelector } from '@near-wallet-selector/core'
-import { setupMyNearWallet } from '@near-wallet-selector/my-near-wallet'
+import { setupWalletSelector } from "@near-wallet-selector/core";
+import { setupMyNearWallet } from "@near-wallet-selector/my-near-wallet";
+import { setupHereWallet } from "@near-wallet-selector/here-wallet";
+import { providers, transactions, utils } from "near-api-js";
 
-let hereInstance = null
-let connectedAccountId = null
-let walletSelector = null
-let currentWalletType = null // 'hot' | 'mynear'
+const envNetworkIdRaw = (import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet").toLowerCase();
+const networkId = envNetworkIdRaw === "testnet" ? "testnet" : "mainnet";
 
-// DEBUG: собираем все ошибки HOT Wallet
-if (!window.__HOT_WALLET_ERRORS__) {
-    window.__HOT_WALLET_ERRORS__ = []
-}
+const RPC_URL =
+    import.meta.env.VITE_NEAR_RPC_URL ||
+    (networkId === "testnet" ? "https://rpc.testnet.near.org" : "https://rpc.mainnet.near.org");
 
-function logError(step, error) {
-    const err = {
-        step,
-        message: error?.message || String(error),
-        stack: error?.stack || '',
-        name: error?.name || 'Error',
-        time: new Date().toISOString(),
-    }
-    console.error(`[nearWallet] ${step}:`, error)
-    window.__HOT_WALLET_ERRORS__.push(err)
-    if (window.__HOT_WALLET_ERRORS__.length > 20) {
-        window.__HOT_WALLET_ERRORS__.shift()
-    }
+const TG_BOT_ID = (import.meta.env.VITE_TG_BOT_ID || "Cardclashbot/app").trim();
+const HOT_WALLET_ID = (import.meta.env.VITE_HOT_WALLET_ID || "herewalletbot/app").trim();
 
-    // Trigger re-render
+// важно: wrap контракт зависит от сети
+const WRAP_CONTRACT_ID = networkId === "testnet" ? "wrap.testnet" : "wrap.near";
+
+function log(tag, message, extra) {
     try {
-        window.dispatchEvent(new Event('hot-wallet-error'))
+        window.__CC_WALLET_LOGS__ = window.__CC_WALLET_LOGS__ || [];
+        window.__CC_WALLET_LOGS__.push({
+            t: new Date().toISOString(),
+            tag,
+            message,
+            extra,
+        });
     } catch { }
 }
 
-const networkId = import.meta.env.VITE_NEAR_NETWORK_ID || 'testnet'
+let selectorPromise = null;
 
-// Check if running in Telegram WebApp
-function isTelegramWebApp() {
-    return !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData)
+async function getSelector() {
+    if (selectorPromise) return selectorPromise;
+
+    selectorPromise = setupWalletSelector({
+        network: networkId,
+        modules: [
+            setupMyNearWallet(),
+            setupHereWallet({
+                botId: HOT_WALLET_ID, // herewalletbot/app
+            }),
+        ],
+    });
+
+    return selectorPromise;
 }
 
-// ============ HOT WALLET ============
-
-export async function connectHotWallet() {
-    let step = 'init'
-
-    try {
-        // Check Telegram
-        if (!isTelegramWebApp()) {
-            throw new Error('HOT Wallet работает только в Telegram WebApp. Откройте игру через бота в Telegram или используйте MyNearWallet.')
-        }
-
-        step = 'read_env'
-        const botId = import.meta.env.VITE_TG_BOT_ID || 'Cardclashbot'
-        const walletId = import.meta.env.VITE_HOT_WALLET_ID || 'herewalletbot'
-
-        console.log('[nearWallet] connectHotWallet start', { networkId, botId, walletId })
-        logError('hot:env', new Error(`ENV: botId=${botId}, walletId=${walletId}, network=${networkId}`))
-
-        step = 'HereWallet.connect'
-        console.log('[nearWallet] calling HereWallet.connect...')
-
-        hereInstance = await HereWallet.connect({
-            networkId,
-            botId,
-            walletId,
-        })
-
-        console.log('[nearWallet] HereWallet.connect OK:', hereInstance)
-        logError('hot:instance', new Error(`Instance created: ${typeof hereInstance}`))
-
-        step = 'authenticate'
-        console.log('[nearWallet] calling authenticate...')
-
-        const authResult = await hereInstance.authenticate()
-
-        console.log('[nearWallet] authenticate result:', authResult)
-        logError('hot:auth_result', new Error(`Auth result: ${JSON.stringify(authResult)}`))
-
-        step = 'extract_accountId'
-        connectedAccountId = authResult.accountId || authResult.account_id
-
-        if (!connectedAccountId) {
-            throw new Error('No accountId in authenticate result: ' + JSON.stringify(authResult))
-        }
-
-        currentWalletType = 'hot'
-        console.log('[nearWallet] HOT wallet connected:', connectedAccountId)
-        logError('hot:success', new Error(`Connected: ${connectedAccountId}`))
-
-        return { accountId: connectedAccountId, wallet: 'hot' }
-    } catch (err) {
-        console.error(`[nearWallet] HOT ERROR at step "${step}":`, err)
-        logError(`hot:error:${step}`, err)
-        throw err
-    }
+function getProvider() {
+    return new providers.JsonRpcProvider({ url: RPC_URL });
 }
 
-// ============ WALLET SELECTOR (MyNearWallet) ============
-
-async function initWalletSelector() {
-    if (walletSelector) {
-        console.log('[nearWallet] walletSelector already initialized')
-        return walletSelector
-    }
-
-    try {
-        console.log('[nearWallet] Initializing wallet-selector...')
-        logError('mynear:init_start', new Error(`Initializing for network: ${networkId}`))
-
-        walletSelector = await setupWalletSelector({
-            network: networkId,
-            modules: [setupMyNearWallet()],
-        })
-
-        console.log('[nearWallet] walletSelector initialized:', walletSelector)
-        logError('mynear:init_success', new Error('WalletSelector initialized'))
-
-        return walletSelector
-    } catch (err) {
-        console.error('[nearWallet] walletSelector init error:', err)
-        logError('mynear:init_error', err)
-        throw err
-    }
+async function getAccountIdFromWallet(wallet) {
+    const accounts = await wallet.getAccounts();
+    return accounts?.[0]?.accountId || "";
 }
 
 export async function connectMyNearWallet() {
+    log("mynear:start", "Starting MyNearWallet connection...");
+    const selector = await getSelector();
+
+    log("mynear:init_success", `WalletSelector initialized`, { networkId, RPC_URL, WRAP_CONTRACT_ID });
+
+    const wallet = await selector.wallet("my-near-wallet");
+    log("mynear:wallet_instance", `Wallet instance: my-near-wallet`);
+
+    // MyNearWallet требует contractId — даём WRAP для сети
     try {
-        logError('mynear:start', new Error('Starting MyNearWallet connection...'))
-
-        const selector = await initWalletSelector()
-
-        logError('mynear:direct_signin', new Error('Signing in directly (no modal)...'))
-
-        // Get MyNearWallet instance
-        const wallet = await selector.wallet('my-near-wallet')
-
-        console.log('[nearWallet] Got wallet instance:', wallet)
-        logError('mynear:wallet_instance', new Error(`Wallet instance: ${wallet.id}`))
-
-        // Sign in (will redirect to wallet.testnet.near.org)
-        const contractId = import.meta.env.VITE_NEAR_LOGIN_CONTRACT_ID || 'guest-book.testnet'
-
-        console.log('[nearWallet] Calling signIn with contractId:', contractId)
-        logError('mynear:signin_call', new Error(`Calling signIn to ${contractId}...`))
-
-        await wallet.signIn({ contractId })
-
-        // After redirect back, check accounts
-        return new Promise((resolve, reject) => {
-            let resolved = false
-
-            const unsubscribe = selector.store.observable.subscribe((state) => {
-                console.log('[nearWallet] walletSelector state change:', state)
-
-                if (resolved) return
-
-                const accounts = state.accounts
-
-                if (accounts && accounts.length > 0) {
-                    resolved = true
-                    unsubscribe()
-
-                    const accountId = accounts[0].accountId
-                    connectedAccountId = accountId
-                    currentWalletType = 'mynear'
-
-                    console.log('[nearWallet] MyNearWallet connected:', accountId)
-                    logError('mynear:success', new Error(`Connected: ${accountId}`))
-
-                    resolve({ accountId, wallet: 'mynear' })
-                }
-            })
-
-            // Check immediately (in case already signed in)
-            setTimeout(() => {
-                const state = selector.store.getState()
-                if (state.accounts && state.accounts.length > 0 && !resolved) {
-                    resolved = true
-                    unsubscribe()
-
-                    const accountId = state.accounts[0].accountId
-                    connectedAccountId = accountId
-                    currentWalletType = 'mynear'
-
-                    console.log('[nearWallet] MyNearWallet already connected:', accountId)
-                    logError('mynear:already_connected', new Error(`Already connected: ${accountId}`))
-
-                    resolve({ accountId, wallet: 'mynear' })
-                }
-            }, 500)
-
-            // Timeout
-            setTimeout(() => {
-                if (!resolved) {
-                    resolved = true
-                    unsubscribe()
-                    const err = new Error('MyNearWallet connection timeout (180s)')
-                    logError('mynear:timeout', err)
-                    reject(err)
-                }
-            }, 180000)
-        })
-    } catch (err) {
-        console.error('[nearWallet] MyNearWallet error:', err)
-        logError('mynear:error', err)
-        throw err
+        log("mynear:signin_call", `Calling signIn to ${WRAP_CONTRACT_ID}...`);
+        await wallet.signIn({ contractId: WRAP_CONTRACT_ID });
+    } catch (e) {
+        log("mynear:error", e?.message || String(e), { stack: e?.stack });
+        throw e;
     }
+
+    const accountId = await getAccountIdFromWallet(wallet);
+    log("mynear:account", `Connected account: ${accountId}`);
+
+    return { accountId, wallet };
 }
 
-// ============ GENERIC CONNECT (default to HOT if mainnet, MyNear if testnet) ============
+export async function connectHotWallet() {
+    log("hot:env", "ENV", { botId: TG_BOT_ID, walletId: HOT_WALLET_ID, networkId });
 
+    const selector = await getSelector();
+    const wallet = await selector.wallet("here-wallet");
+
+    // here-wallet на практике тоже требует signIn с contractId, но можно дать wrap
+    try {
+        log("hot:signin_call", `Calling signIn to ${WRAP_CONTRACT_ID}...`);
+        await wallet.signIn({ contractId: WRAP_CONTRACT_ID });
+    } catch (e) {
+        log("hot:error", e?.message || String(e), { stack: e?.stack });
+        throw e;
+    }
+
+    const accountId = await getAccountIdFromWallet(wallet);
+    log("hot:account", `Connected account: ${accountId}`);
+
+    return { accountId, wallet };
+}
+
+// старый алиас (если где-то используется)
 export async function connectWallet() {
-    if (networkId === 'testnet') {
-        return await connectMyNearWallet()
-    } else {
-        return await connectHotWallet()
-    }
+    return connectHotWallet();
 }
-
-// ============ DISCONNECT ============
 
 export async function disconnectWallet() {
-    try {
-        if (hereInstance) {
-            hereInstance = null
-            console.log('[nearWallet] HOT wallet disconnected')
-        }
+    const selector = await getSelector();
+    const wallets = await selector.wallets();
 
-        if (walletSelector) {
-            const wallet = await walletSelector.wallet()
-            if (wallet) {
-                await wallet.signOut()
-                console.log('[nearWallet] MyNearWallet disconnected')
-            }
-        }
-
-        connectedAccountId = null
-        currentWalletType = null
-        console.log('[nearWallet] all wallets disconnected')
-    } catch (err) {
-        console.error('[nearWallet] disconnect error:', err)
+    // выходим из всех кошельков
+    for (const w of wallets) {
+        try {
+            const wallet = await selector.wallet(w.id);
+            await wallet.signOut();
+        } catch { }
     }
 }
-
-// ============ SIGN & SEND TX ============
 
 export async function signAndSendTransaction({ receiverId, actions }) {
-    if (!connectedAccountId) {
-        const err = new Error('Wallet not connected')
-        logError('tx:not_connected', err)
-        throw err
-    }
+    const selector = await getSelector();
+    const wallet = await selector.wallet(); // активный
 
-    if (!receiverId) {
-        const err = new Error('receiverId is required')
-        logError('tx:no_receiver', err)
-        throw err
-    }
+    const accountId = await getAccountIdFromWallet(wallet);
+    if (!accountId) throw new Error("Wallet not signed in");
 
-    if (!actions || !actions.length) {
-        const err = new Error('actions are required')
-        logError('tx:no_actions', err)
-        throw err
-    }
-
-    try {
-        console.log('[nearWallet] signAndSendTransaction', { receiverId, actions, walletType: currentWalletType })
-        logError('tx:start', new Error(`TX to ${receiverId}, actions: ${actions.length}, wallet: ${currentWalletType}`))
-
-        let result
-
-        // HOT Wallet
-        if (currentWalletType === 'hot' && hereInstance) {
-            console.log('[nearWallet] Using HOT wallet for tx...')
-            result = await hereInstance.signAndSendTransaction({
-                receiverId,
-                actions,
-            })
-        }
-        // MyNearWallet
-        else if (currentWalletType === 'mynear' && walletSelector) {
-            console.log('[nearWallet] Using MyNearWallet for tx...')
-            const wallet = await walletSelector.wallet()
-            result = await wallet.signAndSendTransaction({
-                receiverId,
-                actions,
-            })
-        }
-        else {
-            throw new Error(`No wallet instance available (type: ${currentWalletType})`)
+    // actions: [{type:"FunctionCall"|"Transfer", params:{...}}]
+    const nearActions = actions.map((a) => {
+        if (a.type === "Transfer") {
+            return transactions.transfer(utils.format.parseNearAmount("0") ? a.params.deposit : a.params.deposit);
         }
 
-        console.log('[nearWallet] tx result:', result)
-        logError('tx:success', new Error(`TX OK: ${JSON.stringify(result)}`))
+        if (a.type === "FunctionCall") {
+            const { methodName, args, gas, deposit } = a.params;
+            return transactions.functionCall(
+                methodName,
+                args ? Buffer.from(JSON.stringify(args)) : Buffer.from("{}"),
+                BigInt(gas || "100000000000000"),
+                BigInt(deposit || "0")
+            );
+        }
 
-        return result
-    } catch (err) {
-        console.error('[nearWallet] tx error:', err)
-        logError('tx:error', err)
-        throw err
-    }
-}
+        throw new Error(`Unsupported action type: ${a.type}`);
+    });
 
-export function getConnectedAccountId() {
-    return connectedAccountId
-}
-
-export function getWalletType() {
-    return currentWalletType
-}
-
-export function isTelegram() {
-    return isTelegramWebApp()
+    return await wallet.signAndSendTransaction({
+        receiverId,
+        actions: nearActions,
+    });
 }
