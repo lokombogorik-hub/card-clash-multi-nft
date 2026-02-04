@@ -10,6 +10,7 @@ export default function WalletConnector() {
         balance,
         status,
         lastError,
+        connectHot,
         disconnectWallet,
         restoreSession,
         clearStatus,
@@ -104,7 +105,22 @@ export default function WalletConnector() {
 
     return (
         <div style={{ position: "fixed", top: topOffset, right: 16, zIndex: 9999 }}>
-            <WalletPicker open={pickerOpen} onClose={() => setPickerOpen(false)} />
+            <WalletPicker
+                open={pickerOpen}
+                onClose={() => setPickerOpen(false)}
+                onHot={async () => {
+                    setErr("");
+                    setLoading(true);
+                    try {
+                        await connectHot();
+                        setPickerOpen(false);
+                    } catch (e) {
+                        setErr(String(e?.message || e));
+                    } finally {
+                        setLoading(false);
+                    }
+                }}
+            />
 
             {!connected ? (
                 <div style={{ display: "grid", gap: 8, justifyItems: "end", maxWidth: 360 }}>
@@ -141,7 +157,6 @@ export default function WalletConnector() {
                         </div>
                     ) : null}
 
-                    {/* ПОЛНАЯ ОШИБКА (с stack) */}
                     {lastError ? (
                         <div
                             style={{
@@ -192,7 +207,6 @@ export default function WalletConnector() {
                         </div>
                     ) : null}
 
-                    {/* HOT WALLET ERRORS DEBUG */}
                     {window.__HOT_WALLET_ERRORS__?.length > 0 ? (
                         <div
                             style={{

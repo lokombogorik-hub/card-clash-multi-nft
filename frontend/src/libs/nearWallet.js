@@ -1,8 +1,6 @@
-import { setupWalletSelector } from "@near-wallet-selector/core";
-import { setupMyNearWallet } from "@near-wallet-selector/my-near-wallet";
-import { setupHereWallet } from "@near-wallet-selector/here-wallet";
-import { providers, transactions, utils } from "near-api-js";
+import { HereWallet } from "@here-wallet/core";
 
+// network / rpc
 const envNetworkIdRaw = (import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet").toLowerCase();
 const networkId = envNetworkIdRaw === "testnet" ? "testnet" : "mainnet";
 
@@ -10,142 +8,109 @@ const RPC_URL =
     import.meta.env.VITE_NEAR_RPC_URL ||
     (networkId === "testnet" ? "https://rpc.testnet.near.org" : "https://rpc.mainnet.near.org");
 
+// telegram ids
 const TG_BOT_ID = (import.meta.env.VITE_TG_BOT_ID || "Cardclashbot/app").trim();
 const HOT_WALLET_ID = (import.meta.env.VITE_HOT_WALLET_ID || "herewalletbot/app").trim();
 
-// важно: wrap контракт зависит от сети
-const WRAP_CONTRACT_ID = networkId === "testnet" ? "wrap.testnet" : "wrap.near";
-
-function log(tag, message, extra) {
+function logHot(step, message) {
     try {
-        window.__CC_WALLET_LOGS__ = window.__CC_WALLET_LOGS__ || [];
-        window.__CC_WALLET_LOGS__.push({
-            t: new Date().toISOString(),
-            tag,
+        window.__HOT_WALLET_ERRORS__ = window.__HOT_WALLET_ERRORS__ || [];
+        window.__HOT_WALLET_ERRORS__.push({
+            step,
             message,
-            extra,
+            time: new Date().toISOString(),
         });
     } catch { }
 }
 
-let selectorPromise = null;
+function tgOpen(url) {
+    const tg = window.Telegram?.WebApp;
+    try {
+        // лучший вариант внутри Telegram
+        tg?.openTelegramLink?.(url);
+        return;
+    } catch { }
+    try {
+        tg?.openLink?.(url);
+        return;
+    } catch { }
+    window.open(url, "_blank", "noopener,noreferrer");
+}
 
-async function getSelector() {
-    if (selectorPromise) return selectorPromise;
+let wallet = null;
 
-    selectorPromise = setupWalletSelector({
-        network: networkId,
-        modules: [
-            setupMyNearWallet(),
-            setupHereWallet({
-                botId: HOT_WALLET_ID, // herewalletbot/app
-            }),
-        ],
+async function getWallet() {
+    if (wallet) return wallet;
+
+    // HereWallet сам умеет открывать нужные ссылки в Telegram,
+    // но мы подстрахуемся openUrl.
+    wallet = await HereWallet.connect({
+        networkId,
+        // некоторые версии core игнорируют эти поля — это ок
+        walletId: HOT_WALLET_ID,
+        telegramBotId: TG_BOT_ID,
+        openUrl: (url) => tgOpen(url),
     });
 
-    return selectorPromise;
+    return wallet;
 }
 
-function getProvider() {
-    return new providers.JsonRpcProvider({ url: RPC_URL });
-}
-
-async function getAccountIdFromWallet(wallet) {
-    const accounts = await wallet.getAccounts();
-    return accounts?.[0]?.accountId || "";
-}
-
-export async function connectMyNearWallet() {
-    log("mynear:start", "Starting MyNearWallet connection...");
-    const selector = await getSelector();
-
-    log("mynear:init_success", `WalletSelector initialized`, { networkId, RPC_URL, WRAP_CONTRACT_ID });
-
-    const wallet = await selector.wallet("my-near-wallet");
-    log("mynear:wallet_instance", `Wallet instance: my-near-wallet`);
-
-    // MyNearWallet требует contractId — даём WRAP для сети
-    try {
-        log("mynear:signin_call", `Calling signIn to ${WRAP_CONTRACT_ID}...`);
-        await wallet.signIn({ contractId: WRAP_CONTRACT_ID });
-    } catch (e) {
-        log("mynear:error", e?.message || String(e), { stack: e?.stack });
-        throw e;
-    }
-
-    const accountId = await getAccountIdFromWallet(wallet);
-    log("mynear:account", `Connected account: ${accountId}`);
-
-    return { accountId, wallet };
-}
-
+/**
+ * HOT/HERE connect (Telegram-safe)
+ */
 export async function connectHotWallet() {
-    log("hot:env", "ENV", { botId: TG_BOT_ID, walletId: HOT_WALLET_ID, networkId });
+    logHot("hot:start", "Starting HERE/HOT connect...");
+    logHot("hot:env", `ENV: botId=${TG_BOT_ID}, walletId=${HOT_WALLET_ID}, network=${networkId}`);
 
-    const selector = await getSelector();
-    const wallet = await selector.wallet("here-wallet");
+    const w = await getWallet();
 
-    // here-wallet на практике тоже требует signIn с contractId, но можно дать wrap
     try {
-        log("hot:signin_call", `Calling signIn to ${WRAP_CONTRACT_ID}...`);
-        await wallet.signIn({ contractId: WRAP_CONTRACT_ID });
+        logHot("hot:connect_call", "Calling wallet.connect()...");
+        const accountId = await w.connect();
+        logHot("hot:connect_ok", `Connected: ${accountId || "(empty)"}`);
+
+        if (!accountId) {
+            throw new Error("HERE/HOT did not return accountId");
+        }
+
+        return { accountId, wallet: w };
     } catch (e) {
-        log("hot:error", e?.message || String(e), { stack: e?.stack });
+        logHot("hot:error", e?.message || String(e));
         throw e;
     }
-
-    const accountId = await getAccountIdFromWallet(wallet);
-    log("hot:account", `Connected account: ${accountId}`);
-
-    return { accountId, wallet };
 }
 
-// старый алиас (если где-то используется)
+/**
+ * MyNearWallet is DISABLED in Telegram WebApp because it redirects to web login/seed.
+ */
+export async function connectMyNearWallet() {
+    throw new Error("MyNearWallet disabled in Telegram WebApp. Use HOT Wallet.");
+}
+
+// legacy alias
 export async function connectWallet() {
     return connectHotWallet();
 }
 
 export async function disconnectWallet() {
-    const selector = await getSelector();
-    const wallets = await selector.wallets();
-
-    // выходим из всех кошельков
-    for (const w of wallets) {
-        try {
-            const wallet = await selector.wallet(w.id);
-            await wallet.signOut();
-        } catch { }
-    }
+    const w = await getWallet();
+    try {
+        await w.disconnect();
+    } catch { }
 }
 
+/**
+ * signAndSendTransaction format is compatible with your walletStore:
+ * actions: [{ type: "FunctionCall"/"Transfer", params: { ... } }]
+ */
 export async function signAndSendTransaction({ receiverId, actions }) {
-    const selector = await getSelector();
-    const wallet = await selector.wallet(); // активный
-
-    const accountId = await getAccountIdFromWallet(wallet);
+    const w = await getWallet();
+    const accountId = await w.connect();
     if (!accountId) throw new Error("Wallet not signed in");
 
-    // actions: [{type:"FunctionCall"|"Transfer", params:{...}}]
-    const nearActions = actions.map((a) => {
-        if (a.type === "Transfer") {
-            return transactions.transfer(utils.format.parseNearAmount("0") ? a.params.deposit : a.params.deposit);
-        }
-
-        if (a.type === "FunctionCall") {
-            const { methodName, args, gas, deposit } = a.params;
-            return transactions.functionCall(
-                methodName,
-                args ? Buffer.from(JSON.stringify(args)) : Buffer.from("{}"),
-                BigInt(gas || "100000000000000"),
-                BigInt(deposit || "0")
-            );
-        }
-
-        throw new Error(`Unsupported action type: ${a.type}`);
-    });
-
-    return await wallet.signAndSendTransaction({
+    return await w.signAndSendTransaction({
+        signerId: accountId,
         receiverId,
-        actions: nearActions,
+        actions,
     });
 }
