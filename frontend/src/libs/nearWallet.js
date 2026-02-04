@@ -35,6 +35,25 @@ function tgOpen(url) {
     window.open(url, "_blank", "noopener,noreferrer");
 }
 
+function walletBotUsernameFromId(walletId) {
+    // "herewalletbot/app" -> "herewalletbot"
+    const s = String(walletId || "").trim();
+    const username = s.split("/")[0].trim();
+    return username || "herewalletbot";
+}
+
+function openHereWalletTelegram() {
+    const username = walletBotUsernameFromId(HOT_WALLET_ID);
+
+    // startapp payload: можно передать network, чтобы кошелек был в нужной сети
+    // HERE понимает startapp, остальное зависит от бота/версии
+    const payload = encodeURIComponent(`network=${networkId}`);
+
+    const url = `https://t.me/${username}?startapp=${payload}`;
+    logHot("hot:deeplink", "Opening HERE wallet via Telegram deep link", { url });
+    tgOpen(url);
+}
+
 let wallet = null;
 
 async function getWallet() {
@@ -51,95 +70,21 @@ async function getWallet() {
     return wallet;
 }
 
-function listMethods(obj) {
-    try {
-        const keys = new Set();
-        for (const k in obj) keys.add(k);
-        Object.getOwnPropertyNames(obj).forEach((k) => keys.add(k));
-        const proto = Object.getPrototypeOf(obj);
-        if (proto) Object.getOwnPropertyNames(proto).forEach((k) => keys.add(k));
-        return Array.from(keys).sort();
-    } catch {
-        return [];
-    }
-}
-
-function safeStringify(x) {
-    try {
-        return JSON.stringify(x);
-    } catch {
-        return String(x);
-    }
-}
-
-async function ensureSignedIn(w) {
-    // 1) new API
+async function trySignIn(w) {
     if (typeof w.connect === "function") {
         logHot("hot:connect_api", "Using wallet.connect()");
-        const accountId = await w.connect();
-        logHot("hot:connect_result", "wallet.connect() result", {
-            type: typeof accountId,
-            value: String(accountId || ""),
-        });
-        return accountId || "";
+        return await w.connect();
     }
-
-    // 2) old API: signIn
     if (typeof w.signIn === "function") {
         logHot("hot:connect_api", "Using wallet.signIn()");
-
-        let res;
-        try {
-            res = await w.signIn();
-        } catch (e) {
-            logHot("hot:signin_throw", e?.message || String(e), { stack: e?.stack });
-            throw e;
-        }
-
-        logHot("hot:signin_result", "wallet.signIn() raw result", {
-            type: typeof res,
-            value: typeof res === "string" ? res : safeStringify(res),
-        });
-
-        if (typeof res === "string") return res;
-        if (res?.accountId) return res.accountId;
-        if (res?.account_id) return res.account_id;
-
-        // some versions store account id on wallet after signin
-        if (typeof w.getAccounts === "function") {
-            const accounts = await w.getAccounts().catch(() => []);
-            logHot("hot:getaccounts_after_signin", "wallet.getAccounts() after signIn", { accounts });
-            const id = accounts?.[0]?.accountId || "";
-            if (id) return id;
-        }
+        return await w.signIn();
     }
-
-    // 3) try getAccounts without signIn
     if (typeof w.getAccounts === "function") {
         logHot("hot:connect_api", "Using wallet.getAccounts()");
-        const accounts = await w.getAccounts();
-        logHot("hot:getaccounts_result", "wallet.getAccounts() result", { accounts });
-        const accountId = accounts?.[0]?.accountId || "";
-        if (accountId) return accountId;
+        const acc = await w.getAccounts();
+        return acc?.[0]?.accountId || "";
     }
-
-    // 4) try accountId/getAccountId
-    if (typeof w.accountId === "function") {
-        logHot("hot:connect_api", "Using wallet.accountId()");
-        const id = await w.accountId();
-        logHot("hot:accountid_result", "wallet.accountId() result", { id });
-        if (id) return id;
-    }
-    if (typeof w.getAccountId === "function") {
-        logHot("hot:connect_api", "Using wallet.getAccountId()");
-        const id = await w.getAccountId();
-        logHot("hot:getaccountid_result", "wallet.getAccountId() result", { id });
-        if (id) return id;
-    }
-
-    const methods = listMethods(w);
-    logHot("hot:no_api", "No supported connect method on wallet object", { methods });
-    throw new Error("HERE wallet API mismatch: no connect/signIn/getAccounts method found");
+    return "";
 }
 
 export async function connectHotWallet() {
@@ -149,19 +94,35 @@ export async function connectHotWallet() {
     const w = await getWallet();
 
     try {
-        logHot("hot:connect_call", "Ensuring signed in...");
-        const accountId = await ensureSignedIn(w);
-        logHot("hot:connect_ok", `Connected: ${accountId || "(empty)"}`);
+        logHot("hot:connect_call", "Attempting sign in...");
+        const res = await trySignIn(w);
 
-        if (!accountId) {
-            const methods = listMethods(w);
-            logHot("hot:connect_empty", "Connected but accountId empty", { methods });
-            throw new Error("HERE/HOT did not return accountId");
+        const accountId =
+            typeof res === "string"
+                ? res
+                : res?.accountId || res?.account_id || "";
+
+        if (accountId) {
+            logHot("hot:connect_ok", `Connected: ${accountId}`);
+            return { accountId, wallet: w };
         }
 
-        return { accountId, wallet: w };
+        // если ничего не вернулось — откроем deeplink
+        logHot("hot:connect_empty", "No accountId returned, opening deeplink...");
+        openHereWalletTelegram();
+        return { accountId: "", wallet: w };
     } catch (e) {
-        logHot("hot:error", e?.message || String(e), { stack: e?.stack });
+        const msg = e?.message || String(e);
+        logHot("hot:signin_throw", msg, { stack: e?.stack });
+
+        // fallback для TG WebView: Load failed => открываем deeplink
+        if (msg.toLowerCase().includes("load failed")) {
+            logHot("hot:fallback", "signIn failed with Load failed, using Telegram deeplink fallback");
+            openHereWalletTelegram();
+            return { accountId: "", wallet: w };
+        }
+
+        logHot("hot:error", msg, { stack: e?.stack });
         throw e;
     }
 }
@@ -177,26 +138,21 @@ export async function connectWallet() {
 export async function disconnectWallet() {
     const w = await getWallet();
     try {
-        if (typeof w.disconnect === "function") {
-            await w.disconnect();
-            return;
-        }
-        if (typeof w.signOut === "function") {
-            await w.signOut();
-            return;
-        }
+        if (typeof w.disconnect === "function") await w.disconnect();
+        else if (typeof w.signOut === "function") await w.signOut();
     } catch { }
 }
 
 export async function signAndSendTransaction({ receiverId, actions }) {
     const w = await getWallet();
-    const accountId = await ensureSignedIn(w);
-    if (!accountId) throw new Error("Wallet not signed in");
+
+    // На случай если пользователь не залогинен — дернем connectHotWallet (она откроет deeplink)
+    const { accountId } = await connectHotWallet();
+    if (!accountId) throw new Error("Wallet not signed in yet. Complete login in HERE wallet and return.");
 
     if (typeof w.signAndSendTransaction !== "function") {
-        const methods = listMethods(w);
-        logHot("hot:no_sign", "wallet.signAndSendTransaction is missing", { methods });
-        throw new Error("HERE wallet API mismatch: signAndSendTransaction is missing");
+        logHot("hot:no_sign", "wallet.signAndSendTransaction missing");
+        throw new Error("HERE wallet API mismatch: signAndSendTransaction missing");
     }
 
     return await w.signAndSendTransaction({
