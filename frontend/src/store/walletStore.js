@@ -5,6 +5,7 @@ import {
     connectMyNearWallet,
     disconnectWallet as disconnect,
     signAndSendTransaction as signTx,
+    getSignedInAccountId,
 } from "../libs/nearWallet";
 
 const LS_NEAR_ACCOUNT_ID = "cc_near_account_id";
@@ -141,9 +142,8 @@ async function connectHot() {
     setState({ status: "Opening HOT Wallet…", lastError: null });
 
     try {
-        const { accountId } = await connectHotWallet({ silent: false });
+        const { accountId } = await connectHotWallet();
 
-        // accountId может быть пустым если открылся deeplink — тогда просто ждём restoreSession polling
         if (!accountId) {
             setState({ status: "HOT Wallet opened. Complete login and return to the game…", lastError: null });
             return;
@@ -234,15 +234,15 @@ async function restoreSession() {
         return;
     }
 
-    // 2) silent HERE check (НЕ открывает deeplink)
+    // 2) silent check from HERE wallet (NO signIn)
     try {
-        const { accountId } = await connectHotWallet({ silent: true });
-        if (accountId) {
-            applyAccount(accountId);
+        const id = await getSignedInAccountId();
+        if (id) {
+            applyAccount(id);
             await getUserNFTs();
         }
     } catch {
-        // silent: ignore
+        // ignore
     }
 }
 
@@ -293,8 +293,6 @@ async function escrowClaim({ matchId, winnerAccountId, loserNftContractId, loser
     return { outcome, txHash: extractTxHash(outcome) };
 }
 
-// ==================== NFT MINT ====================
-
 async function mintCard() {
     if (!nftContractId) throw new Error("NFT contract id missing (VITE_NEAR_NFT_CONTRACT_ID)");
     if (!state.walletAddress) throw new Error("Wallet not connected");
@@ -333,7 +331,6 @@ async function mintCard() {
 }
 
 async function mintPack() {
-    if (!nftContractId) throw new Error("NFT contract id missing (VITE_NEAR_NFT_CONTRACT_ID)");
     const results = [];
     for (let i = 0; i < 5; i++) {
         // eslint-disable-next-line no-await-in-loop
@@ -392,15 +389,7 @@ async function sendNear({ receiverId, amount }) {
 
     const amountYocto = (parseFloat(amount) * 1e24).toString();
 
-    const actions = [
-        {
-            type: "Transfer",
-            params: {
-                deposit: amountYocto,
-            },
-        },
-    ];
-
+    const actions = [{ type: "Transfer", params: { deposit: amountYocto } }];
     const outcome = await signAndSendTransaction({ receiverId, actions });
     return { outcome, txHash: extractTxHash(outcome) };
 }
@@ -463,5 +452,7 @@ export function useWalletStore() {
         signAndSendTransaction: walletStore.signAndSendTransaction,
         nftTransferCall: walletStore.nftTransferCall,
         escrowClaim: walletStore.escrowClaim,
+
+        restoreSession: walletStore.restoreSession,
     };
 }

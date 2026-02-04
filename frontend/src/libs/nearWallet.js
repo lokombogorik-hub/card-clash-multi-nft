@@ -65,58 +65,91 @@ async function getWallet() {
     return wallet;
 }
 
-async function trySignIn(w) {
-    if (typeof w.connect === "function") {
-        logHot("hot:connect_api", "Using wallet.connect()");
-        return await w.connect();
+/**
+ * Silent check: DO NOT call signIn/connect here.
+ * Only tries to read already-authorized account from wallet storage/session.
+ */
+export async function getSignedInAccountId() {
+    const w = await getWallet();
+
+    try {
+        if (typeof w.getAccounts === "function") {
+            const accounts = await w.getAccounts();
+            const id = accounts?.[0]?.accountId || "";
+            logHot("hot:silent_accounts", "getAccounts()", { id });
+            return id;
+        }
+    } catch (e) {
+        logHot("hot:silent_accounts_err", e?.message || String(e));
     }
-    if (typeof w.signIn === "function") {
-        logHot("hot:connect_api", "Using wallet.signIn()");
-        return await w.signIn();
+
+    try {
+        if (typeof w.getAccountId === "function") {
+            const id = await w.getAccountId();
+            logHot("hot:silent_getAccountId", "getAccountId()", { id });
+            return id || "";
+        }
+    } catch (e) {
+        logHot("hot:silent_getAccountId_err", e?.message || String(e));
     }
-    if (typeof w.getAccounts === "function") {
-        logHot("hot:connect_api", "Using wallet.getAccounts()");
-        const acc = await w.getAccounts();
-        return acc?.[0]?.accountId || "";
+
+    try {
+        if (typeof w.accountId === "function") {
+            const id = await w.accountId();
+            logHot("hot:silent_accountId", "accountId()", { id });
+            return id || "";
+        }
+    } catch (e) {
+        logHot("hot:silent_accountId_err", e?.message || String(e));
     }
+
     return "";
 }
 
-export async function connectHotWallet({ silent = false } = {}) {
-    logHot("hot:start", "Starting HERE/HOT connect...", { silent });
+/**
+ * Active connect: MAY call signIn/connect and MAY open deeplink.
+ * Call ONLY from user click.
+ */
+export async function connectHotWallet() {
+    logHot("hot:start", "Starting HERE/HOT connect (active)...");
     logHot("hot:env", "ENV", { botId: TG_BOT_ID, walletId: HOT_WALLET_ID, networkId, RPC_URL });
 
     const w = await getWallet();
 
     try {
-        logHot("hot:connect_call", "Attempting sign in...");
-        const res = await trySignIn(w);
-
-        const accountId =
-            typeof res === "string"
-                ? res
-                : res?.accountId || res?.account_id || "";
-
-        if (accountId) {
-            logHot("hot:connect_ok", `Connected: ${accountId}`);
-            return { accountId, wallet: w };
+        // Some versions have connect()
+        if (typeof w.connect === "function") {
+            logHot("hot:connect_api", "Using wallet.connect()");
+            const id = await w.connect();
+            if (id) return { accountId: id, wallet: w };
         }
 
-        logHot("hot:connect_empty", "No accountId returned", { silent });
+        // Old versions: signIn()
+        if (typeof w.signIn === "function") {
+            logHot("hot:connect_api", "Using wallet.signIn()");
+            const res = await w.signIn();
+            const accountId =
+                typeof res === "string" ? res : res?.accountId || res?.account_id || "";
 
-        if (!silent) openHereWalletTelegram();
+            if (accountId) return { accountId, wallet: w };
+
+            // maybe wallet now has accounts
+            const silentId = await getSignedInAccountId();
+            if (silentId) return { accountId: silentId, wallet: w };
+        }
+
+        // If no id - open deeplink
+        openHereWalletTelegram();
         return { accountId: "", wallet: w };
     } catch (e) {
         const msg = e?.message || String(e);
-        logHot("hot:signin_throw", msg, { stack: e?.stack, silent });
+        logHot("hot:error", msg, { stack: e?.stack });
 
         if (msg.toLowerCase().includes("load failed")) {
-            logHot("hot:fallback", "signIn failed with Load failed", { silent });
-            if (!silent) openHereWalletTelegram();
+            openHereWalletTelegram();
             return { accountId: "", wallet: w };
         }
 
-        logHot("hot:error", msg, { stack: e?.stack });
         throw e;
     }
 }
@@ -126,7 +159,7 @@ export async function connectMyNearWallet() {
 }
 
 export async function connectWallet() {
-    return connectHotWallet({ silent: false });
+    return connectHotWallet();
 }
 
 export async function disconnectWallet() {
@@ -140,9 +173,10 @@ export async function disconnectWallet() {
 export async function signAndSendTransaction({ receiverId, actions }) {
     const w = await getWallet();
 
-    // важно: тут НЕ silent — если пользователь не залогинен, надо открыть кошелек
-    const { accountId } = await connectHotWallet({ silent: false });
-    if (!accountId) throw new Error("Wallet not signed in yet. Complete login in HERE wallet and return.");
+    // IMPORTANT: do not auto-open deeplink here.
+    // If not signed in, throw and UI should ask user to connect.
+    const accountId = await getSignedInAccountId();
+    if (!accountId) throw new Error("Wallet not signed in. Click Connect HOT Wallet.");
 
     if (typeof w.signAndSendTransaction !== "function") {
         logHot("hot:no_sign", "wallet.signAndSendTransaction missing");
