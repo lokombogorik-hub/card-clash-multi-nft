@@ -11,9 +11,11 @@ const rpcUrl =
     (nearNetworkId === "testnet" ? "https://rpc.testnet.near.org" : "https://rpc.mainnet.near.org");
 
 const escrowContractId = (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim();
+const nftContractId = (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim();
 
 const GAS_100_TGAS = "100000000000000";
 const GAS_150_TGAS = "150000000000000";
+const GAS_300_TGAS = "300000000000000";
 const ONE_YOCTO = "1";
 
 function yoctoToNearFloat(yoctoStr) {
@@ -54,12 +56,12 @@ let state = {
     nearNetworkId,
     rpcUrl,
     escrowContractId,
+    nftContractId,
 
     balance: 0,
     balanceError: "",
     status: "",
 
-    // DEBUG: полная ошибка (показываем в UI)
     lastError: null,
 };
 
@@ -169,6 +171,9 @@ async function disconnectWallet() {
     try {
         await disconnect();
     } catch { }
+    try {
+        localStorage.removeItem(LS_NEAR_ACCOUNT_ID);
+    } catch { }
     setState({ connected: false, walletAddress: "", balance: 0, balanceError: "", status: "", lastError: null });
 }
 
@@ -242,6 +247,104 @@ async function escrowClaim({ matchId, winnerAccountId, loserNftContractId, loser
     return { outcome, txHash: extractTxHash(outcome) };
 }
 
+// ==================== NEW: NFT MINT ====================
+
+async function mintCard() {
+    if (!nftContractId) throw new Error("NFT contract id missing (VITE_NEAR_NFT_CONTRACT_ID)");
+
+    const actions = [
+        {
+            type: "FunctionCall",
+            params: {
+                methodName: "mint_card",
+                args: {},
+                gas: GAS_300_TGAS,
+                deposit: "5000000000000000000000000", // 5 NEAR
+            },
+        },
+    ];
+
+    const outcome = await signAndSendTransaction({ receiverId: nftContractId, actions });
+    return { outcome, txHash: extractTxHash(outcome) };
+}
+
+async function mintPack() {
+    if (!nftContractId) throw new Error("NFT contract id missing (VITE_NEAR_NFT_CONTRACT_ID)");
+
+    const actions = [
+        {
+            type: "FunctionCall",
+            params: {
+                methodName: "mint_pack",
+                args: {},
+                gas: GAS_300_TGAS,
+                deposit: "20000000000000000000000000", // 20 NEAR
+            },
+        },
+    ];
+
+    const outcome = await signAndSendTransaction({ receiverId: nftContractId, actions });
+    return { outcome, txHash: extractTxHash(outcome) };
+}
+
+async function getUserNFTs() {
+    const accountId = state.walletAddress;
+    if (!accountId) return [];
+    if (!nftContractId) return [];
+
+    try {
+        const res = await fetch(rpcUrl, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                jsonrpc: "2.0",
+                id: "cc-get-nfts",
+                method: "query",
+                params: {
+                    request_type: "call_function",
+                    finality: "final",
+                    account_id: nftContractId,
+                    method_name: "nft_tokens_for_owner",
+                    args_base64: btoa(JSON.stringify({ account_id: accountId })),
+                },
+            }),
+        });
+
+        const json = await res.json();
+        if (json.error) throw new Error(json.error.message || "RPC error");
+
+        const resultBytes = json?.result?.result;
+        if (!resultBytes) return [];
+
+        const resultString = new TextDecoder().decode(new Uint8Array(resultBytes));
+        return JSON.parse(resultString);
+    } catch (e) {
+        console.error("[walletStore] getUserNFTs error:", e);
+        return [];
+    }
+}
+
+async function sendNear({ receiverId, amount }) {
+    if (!receiverId) throw new Error("receiverId is required");
+    if (!amount || isNaN(parseFloat(amount))) throw new Error("amount must be a valid number");
+
+    const amountYocto = (parseFloat(amount) * 1e24).toString();
+
+    const actions = [
+        {
+            type: "Transfer",
+            params: {
+                deposit: amountYocto,
+            },
+        },
+    ];
+
+    const outcome = await signAndSendTransaction({ receiverId, actions });
+    return { outcome, txHash: extractTxHash(outcome) };
+}
+
+// ==================== EXPORT ====================
+
 export const walletStore = {
     getState: () => state,
     subscribe: (fn) => {
@@ -258,4 +361,10 @@ export const walletStore = {
     signAndSendTransaction,
     nftTransferCall,
     escrowClaim,
+
+    // NEW
+    mintCard,
+    mintPack,
+    getUserNFTs,
+    sendNear,
 };
