@@ -1,14 +1,22 @@
 import { useEffect, useState } from "react";
 import {
     connectWallet,
+    connectHotWallet,
+    connectMyNearWallet,
     disconnectWallet as disconnect,
     signAndSendTransaction as signTx,
     getSignedInAccountId,
-    networkId,
-    RPC_URL,
-} from "../libs/walletSelector";
+} from "../libs/nearWallet";
 
 const LS_NEAR_ACCOUNT_ID = "cc_near_account_id";
+
+const envNetworkId = (import.meta.env.VITE_NEAR_NETWORK_ID || "").toLowerCase();
+const nearNetworkId = envNetworkId === "testnet" ? "testnet" : "mainnet";
+
+const envRpcUrl = import.meta.env.VITE_NEAR_RPC_URL || "";
+const rpcUrl =
+    envRpcUrl ||
+    (nearNetworkId === "testnet" ? "https://rpc.testnet.near.org" : "https://rpc.mainnet.near.org");
 
 const escrowContractId = (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim();
 const nftContractId = (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim();
@@ -33,7 +41,7 @@ function yoctoToNearFloat(yoctoStr) {
 }
 
 async function fetchNearBalance(accountId) {
-    const res = await fetch(RPC_URL, {
+    const res = await fetch(rpcUrl, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -51,11 +59,75 @@ async function fetchNearBalance(accountId) {
     return yoctoToNearFloat(json?.result?.amount || "0");
 }
 
+function isLikelyNearAccountId(s) {
+    const v = String(s || "").trim();
+    if (!v) return false;
+    if (v.length < 2 || v.length > 64) return false;
+    if (v.toLowerCase() !== v) return false;
+    if (!/^[a-z0-9._-]+$/.test(v)) return false;
+    return true;
+}
+
+function extractAccountIdFromUrl() {
+    try {
+        const u = new URL(window.location.href);
+        const cands = [
+            u.searchParams.get("account_id"),
+            u.searchParams.get("accountId"),
+            u.searchParams.get("near_account_id"),
+        ].filter(Boolean);
+
+        if (cands.length) {
+            const v = String(cands[0]).trim();
+            if (isLikelyNearAccountId(v)) return v;
+        }
+
+        const hash = (u.hash || "").replace(/^#/, "");
+        if (hash) {
+            const p = new URLSearchParams(hash);
+            const hv =
+                p.get("account_id") ||
+                p.get("accountId") ||
+                p.get("near_account_id") ||
+                "";
+            if (isLikelyNearAccountId(hv)) return hv;
+        }
+    } catch { }
+    return "";
+}
+
+function extractAccountIdFromLocalStorageScan() {
+    try {
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (!k) continue;
+            const lk = k.toLowerCase();
+            if (!lk.includes("here") && !lk.includes("hot") && !lk.includes("wallet")) continue;
+            const val = localStorage.getItem(k);
+            if (!val) continue;
+
+            if (isLikelyNearAccountId(val)) return val;
+
+            try {
+                const j = JSON.parse(val);
+                const cand =
+                    j?.accountId ||
+                    j?.account_id ||
+                    j?.nearAccountId ||
+                    j?.near_account_id ||
+                    "";
+                if (isLikelyNearAccountId(cand)) return cand;
+            } catch { }
+        }
+    } catch { }
+    return "";
+}
+
 let state = {
     connected: false,
     walletAddress: "",
-    nearNetworkId: networkId,
-    rpcUrl: RPC_URL,
+    nearNetworkId,
+    rpcUrl,
     escrowContractId,
     nftContractId,
 
@@ -100,6 +172,17 @@ function applyAccount(accountId) {
         .catch((e) => setState({ balance: 0, balanceError: String(e?.message || e) }));
 }
 
+function restoreFromStorage() {
+    try {
+        const id = localStorage.getItem(LS_NEAR_ACCOUNT_ID) || "";
+        if (!id) return false;
+        applyAccount(id);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 function clearStatus() {
     setState({ status: "", lastError: null });
 }
@@ -120,13 +203,51 @@ async function signAndSendTransaction({ receiverId, actions }) {
 }
 
 async function connectHot() {
-    setState({ status: "Opening wallet selector…", lastError: null });
+    setState({ status: "Opening HOT Wallet…", lastError: null });
 
     try {
-        const { accountId } = await connectWallet();
+        const { accountId } = await connectHotWallet();
 
         if (!accountId) {
-            setState({ status: "Please select wallet and sign in", lastError: null });
+            setState({
+                status: "✅ HOT Wallet opened. Complete login and return to game…",
+                lastError: null
+            });
+
+            // Polling для авторизации
+            let pollCount = 0;
+            const maxPolls = 120;
+
+            const pollInterval = setInterval(async () => {
+                pollCount++;
+
+                try {
+                    const id = await getSignedInAccountId();
+                    if (id) {
+                        clearInterval(pollInterval);
+                        applyAccount(id);
+                        setState({ status: "✅ Connected successfully!", lastError: null });
+                        await getUserNFTs();
+
+                        setTimeout(() => {
+                            setState({ status: "" });
+                        }, 3000);
+                    }
+                } catch (e) {
+                    console.error("Poll error:", e);
+                }
+
+                if (pollCount >= maxPolls) {
+                    clearInterval(pollInterval);
+                    if (!state.connected) {
+                        setState({
+                            status: "⏱️ Connection timeout. Please try again.",
+                            lastError: null
+                        });
+                    }
+                }
+            }, 1000);
+
             return;
         }
 
@@ -142,7 +263,25 @@ async function connectHot() {
     } catch (e) {
         const errMsg = e?.message || String(e);
         setState({
-            status: `Connect failed: ${errMsg}`,
+            status: `HOT Connect failed: ${errMsg}`,
+            lastError: { name: e?.name || "Error", message: errMsg, stack: e?.stack || "" },
+        });
+    }
+}
+
+async function connectMyNear() {
+    setState({ status: "Opening MyNearWallet…", lastError: null });
+
+    try {
+        const { accountId } = await connectMyNearWallet();
+        if (!accountId) throw new Error("MyNearWallet не вернул accountId");
+        applyAccount(accountId);
+        setState({ status: "", lastError: null });
+        await getUserNFTs();
+    } catch (e) {
+        const errMsg = e?.message || String(e);
+        setState({
+            status: `MyNear Connect failed: ${errMsg}`,
             lastError: { name: e?.name || "Error", message: errMsg, stack: e?.stack || "" },
         });
     }
@@ -164,6 +303,25 @@ async function disconnectWallet() {
 }
 
 async function restoreSession() {
+    if (restoreFromStorage()) {
+        await getUserNFTs();
+        return;
+    }
+
+    const fromUrl = extractAccountIdFromUrl();
+    if (fromUrl) {
+        applyAccount(fromUrl);
+        await getUserNFTs();
+        return;
+    }
+
+    const fromLs = extractAccountIdFromLocalStorageScan();
+    if (fromLs) {
+        applyAccount(fromLs);
+        await getUserNFTs();
+        return;
+    }
+
     try {
         const id = await getSignedInAccountId();
         if (id) {
@@ -272,7 +430,7 @@ async function getUserNFTs() {
     if (!nftContractId) return [];
 
     try {
-        const res = await fetch(RPC_URL, {
+        const res = await fetch(rpcUrl, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
@@ -344,6 +502,7 @@ export const walletStore = {
     },
 
     connectHot,
+    connectMyNear,
     disconnectWallet,
     restoreSession,
     clearStatus,
@@ -379,6 +538,7 @@ export function useWalletStore() {
         nftsError: snap.nftsError,
 
         connectHot: walletStore.connectHot,
+        connectMyNear: walletStore.connectMyNear,
         disconnectWallet: walletStore.disconnectWallet,
         clearStatus: walletStore.clearStatus,
         restoreSession: walletStore.restoreSession,

@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import { useWalletStore } from "../../store/walletStore";
 import { apiFetch } from "../../api.js";
 import WalletPicker from "./WalletPicker";
-import { openHereWalletSwitchNetwork } from "../../libs/nearWallet"; // ✅ FIX: импорт
 
 export default function WalletConnector() {
     const {
@@ -26,12 +25,6 @@ export default function WalletConnector() {
 
     const networkId = import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet";
     const isTestnet = networkId.toLowerCase() === "testnet";
-
-    // ✅ FIX: проверяем, на правильной ли сети текущий аккаунт
-    const isWrongNetwork = connected && walletAddress && (
-        (isTestnet && !walletAddress.includes(".testnet")) ||
-        (!isTestnet && walletAddress.includes(".testnet"))
-    );
 
     useEffect(() => {
         restoreSession?.().catch(() => { });
@@ -110,12 +103,6 @@ export default function WalletConnector() {
         }
     };
 
-    // ✅ FIX: кнопка переключения сети
-    const onSwitchNetwork = () => {
-        haptic("light");
-        openHereWalletSwitchNetwork();
-    };
-
     const topOffset =
         "calc(var(--safe-t, env(safe-area-inset-top, 0px)) + var(--tg-top-controls, 58px) + 6px)";
 
@@ -170,23 +157,6 @@ export default function WalletConnector() {
                         }}
                     >
                         Подключить кошелёк
-                    </button>
-
-                    {/* ✅ FIX: кнопка переключения сети если нужно */}
-                    <button
-                        onClick={onSwitchNetwork}
-                        style={{
-                            padding: "8px 12px",
-                            borderRadius: 12,
-                            border: "1px solid rgba(251, 146, 60, 0.3)",
-                            background: "rgba(251, 146, 60, 0.15)",
-                            color: "#fff",
-                            fontSize: 11,
-                            fontWeight: 800,
-                            cursor: "pointer",
-                        }}
-                    >
-                        🔄 Switch HOT Wallet to {isTestnet ? "testnet" : "mainnet"}
                     </button>
 
                     {status ? (
@@ -317,26 +287,6 @@ export default function WalletConnector() {
                         {isTestnet ? "🧪 TESTNET" : "🚀 MAINNET"}
                     </div>
 
-                    {/* ✅ FIX: предупреждение если аккаунт на другой сети */}
-                    {isWrongNetwork && (
-                        <div
-                            style={{
-                                padding: "8px 12px",
-                                borderRadius: 12,
-                                background: "rgba(220, 38, 38, 0.85)",
-                                border: "1px solid rgba(255,255,255,0.12)",
-                                color: "#fff",
-                                fontSize: 11,
-                                fontWeight: 800,
-                                textAlign: "center",
-                            }}
-                        >
-                            ⚠️ Wrong network!<br />
-                            Account: {walletAddress.includes(".testnet") ? "testnet" : "mainnet"}<br />
-                            Expected: {isTestnet ? "testnet" : "mainnet"}
-                        </div>
-                    )}
-
                     <div
                         style={{
                             display: "flex",
@@ -395,30 +345,6 @@ export default function WalletConnector() {
                             {loading ? "..." : "⎋"}
                         </button>
                     </div>
-
-                    {/* ✅ FIX: кнопка переключения сети если подключён не тот аккаунт */}
-                    {isWrongNetwork && (
-                        <button
-                            onClick={() => {
-                                onDisconnect();
-                                setTimeout(() => {
-                                    onSwitchNetwork();
-                                }, 500);
-                            }}
-                            style={{
-                                padding: "8px 12px",
-                                borderRadius: 12,
-                                border: "1px solid rgba(251, 146, 60, 0.3)",
-                                background: "rgba(251, 146, 60, 0.15)",
-                                color: "#fff",
-                                fontSize: 11,
-                                fontWeight: 800,
-                                cursor: "pointer",
-                            }}
-                        >
-                            🔄 Disconnect & Switch to {isTestnet ? "testnet" : "mainnet"}
-                        </button>
-                    )}
                 </div>
             )}
         </div>
