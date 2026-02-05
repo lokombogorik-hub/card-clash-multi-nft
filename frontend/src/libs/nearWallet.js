@@ -26,13 +26,20 @@ function tgOpen(url) {
     const tg = window.Telegram?.WebApp;
     try {
         tg?.openTelegramLink?.(url);
+        logHot("tg:openTelegramLink", "Opened via openTelegramLink", { url });
         return;
-    } catch { }
+    } catch (e) {
+        logHot("tg:openTelegramLink_err", e?.message || String(e));
+    }
     try {
         tg?.openLink?.(url);
+        logHot("tg:openLink", "Opened via openLink", { url });
         return;
-    } catch { }
+    } catch (e) {
+        logHot("tg:openLink_err", e?.message || String(e));
+    }
     window.open(url, "_blank", "noopener,noreferrer");
+    logHot("tg:window.open", "Opened via window.open", { url });
 }
 
 function walletBotUsernameFromId(walletId) {
@@ -43,10 +50,33 @@ function walletBotUsernameFromId(walletId) {
 
 function openHereWalletTelegram() {
     const username = walletBotUsernameFromId(HOT_WALLET_ID);
-    const payload = encodeURIComponent(`network=${networkId}`);
+    // ✅ FIX: передаём network в startapp
+    const payload = encodeURIComponent(networkId);
     const url = `https://t.me/${username}?startapp=${payload}`;
-    logHot("hot:deeplink", "Opening HERE wallet via Telegram deep link", { url });
+    logHot("hot:deeplink", "Opening HERE wallet via Telegram deep link", { url, networkId });
     tgOpen(url);
+}
+
+// ✅ FIX: очищаем старые сессии HOT при смене сети
+function clearHereWalletStorage() {
+    try {
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (!k) continue;
+            const lk = k.toLowerCase();
+            // Удаляем старые ключи HOT/HERE
+            if (lk.includes("herewallet") || lk.includes("here_wallet") || lk.includes("hot_wallet")) {
+                keysToRemove.push(k);
+            }
+        }
+        keysToRemove.forEach((k) => {
+            localStorage.removeItem(k);
+            logHot("hot:clear_storage", `Removed old key: ${k}`);
+        });
+    } catch (e) {
+        logHot("hot:clear_storage_err", e?.message || String(e));
+    }
 }
 
 let wallet = null;
@@ -54,14 +84,35 @@ let wallet = null;
 async function getWallet() {
     if (wallet) return wallet;
 
+    // ✅ FIX: очищаем старые сессии перед инициализацией
+    clearHereWalletStorage();
+
+    logHot("hot:init", "Initializing HereWallet", { networkId, RPC_URL, HOT_WALLET_ID, TG_BOT_ID });
+
     wallet = await HereWallet.connect({
         networkId,
         walletId: HOT_WALLET_ID,
         telegramBotId: TG_BOT_ID,
         rpcUrl: RPC_URL,
-        openUrl: (url) => tgOpen(url),
+        // ✅ FIX: используем только openTelegramLink для Telegram WebApp
+        openUrl: (url) => {
+            logHot("hot:openUrl", "HOT requested openUrl", { url });
+            const tg = window.Telegram?.WebApp;
+            if (tg?.openTelegramLink) {
+                try {
+                    tg.openTelegramLink(url);
+                    logHot("hot:openUrl_ok", "Opened via openTelegramLink");
+                    return;
+                } catch (e) {
+                    logHot("hot:openUrl_err", e?.message || String(e));
+                }
+            }
+            // Fallback
+            tgOpen(url);
+        },
     });
 
+    logHot("hot:init_ok", "HereWallet initialized");
     return wallet;
 }
 
@@ -76,7 +127,7 @@ export async function getSignedInAccountId() {
         if (typeof w.getAccounts === "function") {
             const accounts = await w.getAccounts();
             const id = accounts?.[0]?.accountId || "";
-            logHot("hot:silent_accounts", "getAccounts()", { id });
+            logHot("hot:silent_accounts", "getAccounts()", { id, networkId });
             return id;
         }
     } catch (e) {
@@ -86,7 +137,7 @@ export async function getSignedInAccountId() {
     try {
         if (typeof w.getAccountId === "function") {
             const id = await w.getAccountId();
-            logHot("hot:silent_getAccountId", "getAccountId()", { id });
+            logHot("hot:silent_getAccountId", "getAccountId()", { id, networkId });
             return id || "";
         }
     } catch (e) {
@@ -96,7 +147,7 @@ export async function getSignedInAccountId() {
     try {
         if (typeof w.accountId === "function") {
             const id = await w.accountId();
-            logHot("hot:silent_accountId", "accountId()", { id });
+            logHot("hot:silent_accountId", "accountId()", { id, networkId });
             return id || "";
         }
     } catch (e) {
@@ -117,33 +168,50 @@ export async function connectHotWallet() {
     const w = await getWallet();
 
     try {
-        // Some versions have connect()
-        if (typeof w.connect === "function") {
-            logHot("hot:connect_api", "Using wallet.connect()");
-            const id = await w.connect();
-            if (id) return { accountId: id, wallet: w };
-        }
-
-        // Old versions: signIn()
+        // ✅ FIX: сначала пробуем signIn без автоматического открытия deeplink
         if (typeof w.signIn === "function") {
             logHot("hot:connect_api", "Using wallet.signIn()");
-            const res = await w.signIn();
+
+            const res = await w.signIn({
+                contractId: import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "",
+            }).catch((e) => {
+                logHot("hot:signIn_err", e?.message || String(e), { stack: e?.stack });
+                // Если ошибка "Load failed" — открываем deeplink вручную
+                if ((e?.message || "").toLowerCase().includes("load failed")) {
+                    logHot("hot:signIn_fallback", "Load failed, opening deeplink manually");
+                    openHereWalletTelegram();
+                    return null;
+                }
+                throw e;
+            });
+
+            if (!res) {
+                // signIn не вернул результат, но deeplink уже открыт
+                return { accountId: "", wallet: w };
+            }
+
             const accountId =
                 typeof res === "string" ? res : res?.accountId || res?.account_id || "";
 
-            if (accountId) return { accountId, wallet: w };
+            if (accountId) {
+                logHot("hot:signIn_ok", "SignIn successful", { accountId, networkId });
+                return { accountId, wallet: w };
+            }
 
-            // maybe wallet now has accounts
+            // Пробуем получить аккаунт после signIn
             const silentId = await getSignedInAccountId();
-            if (silentId) return { accountId: silentId, wallet: w };
+            if (silentId) {
+                logHot("hot:signIn_silent_ok", "Got account after signIn", { silentId, networkId });
+                return { accountId: silentId, wallet: w };
+            }
         }
 
-        // If no id - open deeplink
+        // Если signIn не сработал — открываем deeplink
         openHereWalletTelegram();
         return { accountId: "", wallet: w };
     } catch (e) {
         const msg = e?.message || String(e);
-        logHot("hot:error", msg, { stack: e?.stack });
+        logHot("hot:error", msg, { stack: e?.stack, networkId });
 
         if (msg.toLowerCase().includes("load failed")) {
             openHereWalletTelegram();
@@ -168,6 +236,10 @@ export async function disconnectWallet() {
         if (typeof w.disconnect === "function") await w.disconnect();
         else if (typeof w.signOut === "function") await w.signOut();
     } catch { }
+
+    // ✅ FIX: очищаем кеш HOT при disconnect
+    clearHereWalletStorage();
+    wallet = null; // ✅ FIX: сбрасываем инстанс
 }
 
 export async function signAndSendTransaction({ receiverId, actions }) {

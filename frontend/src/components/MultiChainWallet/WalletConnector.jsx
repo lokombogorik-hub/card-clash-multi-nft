@@ -23,6 +23,9 @@ export default function WalletConnector() {
 
     const pollRef = useRef(null);
 
+    const networkId = import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet";
+    const isTestnet = networkId.toLowerCase() === "testnet";
+
     useEffect(() => {
         restoreSession?.().catch(() => { });
     }, [restoreSession]);
@@ -124,6 +127,22 @@ export default function WalletConnector() {
 
             {!connected ? (
                 <div style={{ display: "grid", gap: 8, justifyItems: "end", maxWidth: 360 }}>
+                    {/* ✅ FIX: показываем текущую сеть */}
+                    <div
+                        style={{
+                            padding: "6px 12px",
+                            borderRadius: 8,
+                            background: isTestnet ? "rgba(251, 146, 60, 0.15)" : "rgba(34, 197, 94, 0.15)",
+                            border: `1px solid ${isTestnet ? "rgba(251, 146, 60, 0.3)" : "rgba(34, 197, 94, 0.3)"}`,
+                            color: "#fff",
+                            fontSize: 11,
+                            fontWeight: 800,
+                            textTransform: "uppercase",
+                        }}
+                    >
+                        {isTestnet ? "🧪 TESTNET" : "🚀 MAINNET"}
+                    </div>
+
                     <button
                         onClick={onOpenPicker}
                         disabled={loading}
@@ -221,10 +240,15 @@ export default function WalletConnector() {
                             }}
                         >
                             <div style={{ fontWeight: 900, marginBottom: 8 }}>HOT Wallet Errors:</div>
-                            {window.__HOT_WALLET_ERRORS__.map((err, idx) => (
+                            {window.__HOT_WALLET_ERRORS__.slice(-5).map((err, idx) => (
                                 <div key={idx} style={{ marginBottom: 8, opacity: 0.95 }}>
                                     <div style={{ fontWeight: 800 }}>{err.step}</div>
                                     <div>{err.message}</div>
+                                    {err.extra && typeof err.extra === "object" ? (
+                                        <div style={{ fontSize: 10, opacity: 0.7 }}>
+                                            {JSON.stringify(err.extra, null, 2)}
+                                        </div>
+                                    ) : null}
                                     <div style={{ fontSize: 10, opacity: 0.7 }}>{err.time}</div>
                                 </div>
                             ))}
@@ -249,6 +273,22 @@ export default function WalletConnector() {
                 </div>
             ) : (
                 <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
+                    {/* ✅ FIX: показываем сеть и при подключённом кошельке */}
+                    <div
+                        style={{
+                            padding: "6px 12px",
+                            borderRadius: 8,
+                            background: isTestnet ? "rgba(251, 146, 60, 0.15)" : "rgba(34, 197, 94, 0.15)",
+                            border: `1px solid ${isTestnet ? "rgba(251, 146, 60, 0.3)" : "rgba(34, 197, 94, 0.3)"}`,
+                            color: "#fff",
+                            fontSize: 11,
+                            fontWeight: 800,
+                            textTransform: "uppercase",
+                        }}
+                    >
+                        {isTestnet ? "🧪 TESTNET" : "🚀 MAINNET"}
+                    </div>
+
                     <div
                         style={{
                             display: "flex",
