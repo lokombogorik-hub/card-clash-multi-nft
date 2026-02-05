@@ -25,7 +25,7 @@ const GAS_100_TGAS = "100000000000000";
 const GAS_150_TGAS = "150000000000000";
 const GAS_300_TGAS = "300000000000000";
 const ONE_YOCTO = "1";
-const STORAGE_DEPOSIT_0_1_NEAR = "100000000000000000000000"; // 0.1 NEAR
+const MINT_DEPOSIT = "100000000000000000000000"; // 0.1 NEAR
 
 function yoctoToNearFloat(yoctoStr) {
     try {
@@ -63,11 +63,8 @@ function isLikelyNearAccountId(s) {
     const v = String(s || "").trim();
     if (!v) return false;
     if (v.length < 2 || v.length > 64) return false;
-    // near account ids are lowercase
     if (v.toLowerCase() !== v) return false;
-    // basic allowed charset
     if (!/^[a-z0-9._-]+$/.test(v)) return false;
-    // usually have dot on testnet/mainnet, but not required
     return true;
 }
 
@@ -85,7 +82,6 @@ function extractAccountIdFromUrl() {
             if (isLikelyNearAccountId(v)) return v;
         }
 
-        // also check hash params: #account_id=...
         const hash = (u.hash || "").replace(/^#/, "");
         if (hash) {
             const p = new URLSearchParams(hash);
@@ -102,7 +98,6 @@ function extractAccountIdFromUrl() {
 
 function extractAccountIdFromLocalStorageScan() {
     try {
-        // scan some keys that HERE might use
         for (let i = 0; i < localStorage.length; i++) {
             const k = localStorage.key(i);
             if (!k) continue;
@@ -111,10 +106,8 @@ function extractAccountIdFromLocalStorageScan() {
             const val = localStorage.getItem(k);
             if (!val) continue;
 
-            // try direct value
             if (isLikelyNearAccountId(val)) return val;
 
-            // try json
             try {
                 const j = JSON.parse(val);
                 const cand =
@@ -267,13 +260,11 @@ async function disconnectWallet() {
 }
 
 async function restoreSession() {
-    // 1) app storage
     if (restoreFromStorage()) {
         await getUserNFTs();
         return;
     }
 
-    // 2) URL
     const fromUrl = extractAccountIdFromUrl();
     if (fromUrl) {
         applyAccount(fromUrl);
@@ -281,7 +272,6 @@ async function restoreSession() {
         return;
     }
 
-    // 3) localStorage scan (HERE/HOT may store somewhere)
     const fromLs = extractAccountIdFromLocalStorageScan();
     if (fromLs) {
         applyAccount(fromLs);
@@ -289,7 +279,6 @@ async function restoreSession() {
         return;
     }
 
-    // 4) silent SDK check (no signIn)
     try {
         const id = await getSignedInAccountId();
         if (id) {
@@ -342,11 +331,23 @@ async function escrowClaim({ matchId, winnerAccountId, loserNftContractId, loser
     return { outcome, txHash: extractTxHash(outcome) };
 }
 
+// ✅ ВАЖНО: nft.examples.testnet использует nft_mint (не mint_card)
 async function mintCard() {
     if (!nftContractId) throw new Error("NFT contract id missing (VITE_NEAR_NFT_CONTRACT_ID)");
     if (!state.walletAddress) throw new Error("Wallet not connected");
 
     const tokenId = `card_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
+
+    // Генерируем случайные статы для Triple Triad
+    const stats = {
+        top: Math.floor(Math.random() * 10) + 1,
+        right: Math.floor(Math.random() * 10) + 1,
+        bottom: Math.floor(Math.random() * 10) + 1,
+        left: Math.floor(Math.random() * 10) + 1,
+    };
+
+    const elements = ["Fire", "Water", "Earth", "Wind", "Ice", "Thunder", "Holy", "Poison"];
+    const element = elements[Math.floor(Math.random() * elements.length)];
 
     const actions = [{
         type: "FunctionCall",
@@ -357,17 +358,17 @@ async function mintCard() {
                 receiver_id: state.walletAddress,
                 metadata: {
                     title: `Card #${tokenId.slice(-6)}`,
-                    description: "Card Clash NFT",
-                    media: "",
+                    description: `Top:${stats.top} Right:${stats.right} Bottom:${stats.bottom} Left:${stats.left}`,
+                    media: null,
                     extra: JSON.stringify({
+                        stats,
+                        element,
                         rarity: ["common", "rare", "epic", "legendary"][Math.floor(Math.random() * 4)],
-                        power: Math.floor(Math.random() * 100),
-                        element: ["Fire", "Water", "Earth", "Wind"][Math.floor(Math.random() * 4)],
                     }),
                 },
             },
             gas: GAS_300_TGAS,
-            deposit: STORAGE_DEPOSIT_0_1_NEAR,
+            deposit: MINT_DEPOSIT,
         },
     }];
 
@@ -417,8 +418,29 @@ async function getUserNFTs() {
         const resultString = new TextDecoder().decode(new Uint8Array(resultBytes));
         const tokens = JSON.parse(resultString);
 
-        setState({ nfts: Array.isArray(tokens) ? tokens : [], nftsError: "" });
-        return Array.isArray(tokens) ? tokens : [];
+        // ✅ Преобразуем в формат фронта
+        const mapped = (Array.isArray(tokens) ? tokens : []).map((t) => {
+            let extra = {};
+            try {
+                extra = JSON.parse(t.metadata?.extra || "{}");
+            } catch { }
+
+            return {
+                chain: "near",
+                contractId: nftContractId,
+                contract_id: nftContractId,
+                tokenId: t.token_id,
+                token_id: t.token_id,
+                name: t.metadata?.title || `Card #${t.token_id}`,
+                imageUrl: t.metadata?.media || "/cards/card.jpg",
+                stats: extra.stats || { top: 5, right: 5, bottom: 5, left: 5 },
+                element: extra.element || null,
+                rarity: extra.rarity || "common",
+            };
+        });
+
+        setState({ nfts: mapped, nftsError: "" });
+        return mapped;
     } catch (e) {
         setState({ nfts: [], nftsError: String(e?.message || e) });
         return [];
