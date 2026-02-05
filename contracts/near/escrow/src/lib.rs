@@ -1,14 +1,15 @@
-use borsh::{BorshDeserialize, BorshSerialize};
 use near_contract_standards::non_fungible_token::core::NonFungibleTokenReceiver;
-use near_sdk::collections::LookupMap;
+use near_sdk::store::LookupMap;
 use near_sdk::{
     env, near, require, AccountId, Gas, NearToken, PanicOnDefault, Promise, PromiseOrValue,
-    serde::{Deserialize, Serialize},
+    BorshStorageKey,
 };
+use near_sdk::serde::{Deserialize, Serialize};
 
 const GAS_NFT_TRANSFER: Gas = Gas::from_tgas(25);
 
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(Clone)]
+#[near(serializers = [borsh, json])]
 pub struct Deposit {
     pub nft_contract_id: AccountId,
     pub token_id: String,
@@ -16,7 +17,8 @@ pub struct Deposit {
     pub deposited_by: AccountId,
 }
 
-#[derive(BorshDeserialize, BorshSerialize)]
+#[derive(Clone)]
+#[near(serializers = [borsh])]
 pub struct MatchState {
     pub player_a: AccountId,
     pub player_b: AccountId,
@@ -29,9 +31,15 @@ pub struct MatchState {
 #[serde(crate = "near_sdk::serde")]
 pub struct TransferCallMsg {
     pub match_id: String,
-    pub side: String, // "A" | "B"
+    pub side: String,
     pub player_a: AccountId,
     pub player_b: AccountId,
+}
+
+#[derive(BorshStorageKey)]
+#[near(serializers = [borsh])]
+pub enum StorageKey {
+    Matches,
 }
 
 #[derive(PanicOnDefault)]
@@ -45,7 +53,7 @@ impl Escrow {
     #[init]
     pub fn new() -> Self {
         Self {
-            matches: LookupMap::new(b"m"),
+            matches: LookupMap::new(StorageKey::Matches),
         }
     }
 
@@ -59,7 +67,7 @@ impl Escrow {
         let caller = env::predecessor_account_id();
         require!(caller == winner, "Only winner can claim");
 
-        let mut st = self.matches.get(&match_id).expect("Match not found");
+        let mut st = self.matches.get(&match_id).expect("Match not found").clone();
         require!(!st.finished, "Already finished");
 
         let dep_a = st.deposit_a.as_ref().expect("Deposit A missing");
@@ -75,7 +83,7 @@ impl Escrow {
         );
 
         st.finished = true;
-        self.matches.insert(&match_id, &st);
+        self.matches.insert(match_id, st);
 
         ext_nft::ext(loser_nft_contract_id)
             .with_attached_deposit(NearToken::from_yoctonear(1))
@@ -86,8 +94,8 @@ impl Escrow {
     pub fn get_match(&self, match_id: String) -> Option<MatchView> {
         self.matches.get(&match_id).map(|st| MatchView {
             match_id,
-            player_a: st.player_a,
-            player_b: st.player_b,
+            player_a: st.player_a.clone(),
+            player_b: st.player_b.clone(),
             has_deposit_a: st.deposit_a.is_some(),
             has_deposit_b: st.deposit_b.is_some(),
             finished: st.finished,
@@ -111,7 +119,7 @@ impl NonFungibleTokenReceiver for Escrow {
         require!(parsed.side == "A" || parsed.side == "B", "side must be A or B");
         require!(parsed.player_a != parsed.player_b, "players must differ");
 
-        let mut st = self.matches.get(&parsed.match_id).unwrap_or(MatchState {
+        let mut st = self.matches.get(&parsed.match_id).cloned().unwrap_or(MatchState {
             player_a: parsed.player_a.clone(),
             player_b: parsed.player_b.clone(),
             deposit_a: None,
@@ -140,7 +148,7 @@ impl NonFungibleTokenReceiver for Escrow {
             st.deposit_b = Some(dep);
         }
 
-        self.matches.insert(&parsed.match_id, &st);
+        self.matches.insert(parsed.match_id, st);
 
         PromiseOrValue::Value(false)
     }
