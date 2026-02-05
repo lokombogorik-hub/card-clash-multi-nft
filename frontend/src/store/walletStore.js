@@ -209,14 +209,58 @@ async function connectHot() {
         const { accountId } = await connectHotWallet();
 
         if (!accountId) {
-            setState({ status: "HOT Wallet opened. Complete login and return to the game…", lastError: null });
+            setState({
+                status: "✅ HOT Wallet opened!\n\n1️⃣ Switch network to TESTNET if needed\n2️⃣ Select account\n3️⃣ Click CONNECT\n4️⃣ Return to game",
+                lastError: null
+            });
+
+            // ✅ Polling для проверки авторизации
+            let pollCount = 0;
+            const maxPolls = 120; // 2 минуты (120 секунд)
+
+            const pollInterval = setInterval(async () => {
+                pollCount++;
+
+                try {
+                    const id = await getSignedInAccountId();
+                    if (id) {
+                        clearInterval(pollInterval);
+                        applyAccount(id);
+                        setState({ status: "✅ Connected successfully!", lastError: null });
+                        await getUserNFTs();
+
+                        setTimeout(() => {
+                            setState({ status: "" });
+                        }, 3000);
+                    }
+                } catch (e) {
+                    console.error("Poll error:", e);
+                }
+
+                // Таймаут через 2 минуты
+                if (pollCount >= maxPolls) {
+                    clearInterval(pollInterval);
+                    if (!state.connected) {
+                        setState({
+                            status: "⏱️ Connection timeout. Please try again.",
+                            lastError: null
+                        });
+                    }
+                }
+            }, 1000);
+
             return;
         }
 
         applyAccount(accountId);
-        setState({ status: "", lastError: null });
+        setState({ status: "✅ Connected!", lastError: null });
 
         await getUserNFTs();
+
+        setTimeout(() => {
+            setState({ status: "" });
+        }, 2000);
+
     } catch (e) {
         const errMsg = e?.message || String(e);
         setState({
