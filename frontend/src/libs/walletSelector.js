@@ -1,6 +1,3 @@
-import { setupWalletSelector } from "@near-wallet-selector/core";
-import { setupHereWallet } from "@near-wallet-selector/here-wallet";
-
 var networkId =
     (import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet").toLowerCase() === "testnet"
         ? "testnet"
@@ -12,159 +9,168 @@ var RPC_URL =
         ? "https://rpc.testnet.near.org"
         : "https://rpc.mainnet.near.org");
 
-var selector = null;
-var initPromise = null;
+var currentAccountId = "";
+var STORAGE_KEY = "cardclash_near_account";
 
-async function initWalletSelector() {
-    if (selector) return selector;
-    if (initPromise) return initPromise;
-
-    initPromise = (async function () {
-        try {
-            console.log("[WS] Initializing wallet selector, network:", networkId);
-
-            selector = await setupWalletSelector({
-                network: networkId,
-                modules: [
-                    setupHereWallet(),
-                ],
-            });
-
-            console.log("[WS] Wallet selector initialized OK");
-
-            // Проверяем текущее состояние
-            var state = selector.store.getState();
-            console.log("[WS] Current accounts:", state.accounts);
-
-            return selector;
-        } catch (e) {
-            console.error("[WS] Init failed:", e);
-            initPromise = null;
-            selector = null;
-            throw e;
-        }
-    })();
-
-    return initPromise;
+async function verifyAccount(accountId) {
+    var res = await fetch(RPC_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+            jsonrpc: "2.0", id: "v", method: "query",
+            params: { request_type: "view_account", finality: "final", account_id: accountId },
+        }),
+    });
+    var json = await res.json();
+    return !json.error;
 }
 
-async function connectWallet() {
-    var sel = await initWalletSelector();
-
-    console.log("[WS] Getting here-wallet module...");
-
-    var wallet;
+async function fetchBalance(accountId) {
     try {
-        wallet = await sel.wallet("here-wallet");
+        var res = await fetch(RPC_URL, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                jsonrpc: "2.0", id: "b", method: "query",
+                params: { request_type: "view_account", finality: "final", account_id: accountId },
+            }),
+        });
+        var json = await res.json();
+        if (json.error) return 0;
+        var amount = (json.result && json.result.amount) || "0";
+        var yocto = BigInt(amount);
+        var base = 10n ** 24n;
+        var whole = yocto / base;
+        var frac = (yocto % base).toString().padStart(24, "0").slice(0, 6);
+        return Number(whole.toString() + "." + frac);
     } catch (e) {
-        console.error("[WS] Failed to get here-wallet:", e);
-        throw new Error("HERE Wallet not available: " + e.message);
+        return 0;
     }
+}
 
-    if (!wallet) {
-        throw new Error("HERE Wallet module not found");
-    }
-
-    console.log("[WS] HERE Wallet module loaded, calling signIn...");
-    console.log("[WS] Wallet type:", wallet.type);
-    console.log("[WS] Wallet id:", wallet.id);
-
-    // signIn БЕЗ contractId — просто авторизация
-    var accounts;
+function scanLocalStorageForHereWallet() {
+    // HOT Wallet / HERE Wallet пишет данные в localStorage
+    // Ищем ключи содержащие account info
+    var found = "";
     try {
-        accounts = await wallet.signIn({});
-    } catch (e1) {
-        console.warn("[WS] signIn({}) failed:", e1.message);
-        // Пробуем с пустым permission
-        try {
-            accounts = await wallet.signIn({ permission: "FullAccess" });
-        } catch (e2) {
-            console.warn("[WS] signIn(FullAccess) failed:", e2.message);
-            // Последняя попытка
-            try {
-                accounts = await wallet.signIn();
-            } catch (e3) {
-                console.error("[WS] All signIn attempts failed:", e3.message);
-                throw e3;
+        for (var i = 0; i < localStorage.length; i++) {
+            var key = localStorage.key(i);
+            if (!key) continue;
+            var kl = key.toLowerCase();
+
+            // HERE Wallet хранит аккаунт в разных ключах
+            if (kl.indexOf("herewallet") !== -1 ||
+                kl.indexOf("here_wallet") !== -1 ||
+                kl.indexOf("hot_wallet") !== -1 ||
+                kl.indexOf("near_app_wallet_auth_key") !== -1 ||
+                kl.indexOf("wallet_auth_key") !== -1) {
+
+                try {
+                    var val = localStorage.getItem(key);
+                    if (!val) continue;
+
+                    // Пробуем распарсить JSON
+                    var parsed = JSON.parse(val);
+
+                    // Ищем accountId в разных форматах
+                    var accId = parsed.accountId || parsed.account_id || parsed.nearAccountId || "";
+
+                    if (!accId && Array.isArray(parsed)) {
+                        for (var j = 0; j < parsed.length; j++) {
+                            if (parsed[j] && parsed[j].accountId) {
+                                accId = parsed[j].accountId;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!accId && typeof parsed === "string" && parsed.indexOf(".") !== -1) {
+                        accId = parsed;
+                    }
+
+                    if (accId && accId.length >= 2 && accId.length <= 64) {
+                        console.log("[Wallet] Found account in localStorage key:", key, "->", accId);
+                        found = accId;
+                        break;
+                    }
+                } catch (e) {
+                    // Не JSON — пробуем как строку
+                    var raw = localStorage.getItem(key);
+                    if (raw && raw.indexOf(".near") !== -1) {
+                        found = raw.trim();
+                        break;
+                    }
+                    if (raw && raw.indexOf(".tg") !== -1) {
+                        found = raw.trim();
+                        break;
+                    }
+                }
             }
         }
+    } catch (e) {
+        console.warn("[Wallet] localStorage scan error:", e);
     }
+    return found;
+}
 
-    console.log("[WS] signIn result:", accounts);
+async function connectWithAccountId(accountId) {
+    accountId = String(accountId || "").trim().toLowerCase();
+    if (!accountId) throw new Error("Enter your account ID");
+    if (accountId.length < 2 || accountId.length > 64) throw new Error("Invalid account ID");
 
-    var accountId = "";
+    var exists = await verifyAccount(accountId);
+    if (!exists) throw new Error("Account '" + accountId + "' not found on NEAR " + networkId);
 
-    if (Array.isArray(accounts) && accounts.length > 0) {
-        accountId = accounts[0].accountId || String(accounts[0]);
-    } else if (accounts && accounts.accountId) {
-        accountId = accounts.accountId;
-    } else if (typeof accounts === "string") {
-        accountId = accounts;
-    }
-
-    // Fallback: проверяем store
-    if (!accountId) {
-        var state = sel.store.getState();
-        if (state.accounts && state.accounts.length > 0) {
-            accountId = state.accounts[0].accountId;
-        }
-    }
-
-    console.log("[WS] Final accountId:", accountId);
-
-    if (!accountId) {
-        throw new Error("No account returned from wallet");
-    }
-
+    currentAccountId = accountId;
+    localStorage.setItem(STORAGE_KEY, accountId);
     return { accountId: accountId };
 }
 
-async function disconnectWallet() {
-    try {
-        var sel = await initWalletSelector();
-        var wallet = await sel.wallet();
-        if (wallet) await wallet.signOut();
-    } catch (e) {
-        console.warn("[WS] disconnect error:", e);
+async function tryAutoConnect() {
+    // 1. Проверяем наш собственный storage
+    var saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+        currentAccountId = saved;
+        return saved;
     }
-    selector = null;
-    initPromise = null;
-}
 
-async function getSignedInAccountId() {
-    try {
-        var sel = await initWalletSelector();
-        var state = sel.store.getState();
-        if (state.accounts && state.accounts.length > 0) {
-            return state.accounts[0].accountId;
+    // 2. Сканируем localStorage на данные от HERE Wallet
+    var scanned = scanLocalStorageForHereWallet();
+    if (scanned) {
+        var valid = await verifyAccount(scanned);
+        if (valid) {
+            currentAccountId = scanned;
+            localStorage.setItem(STORAGE_KEY, scanned);
+            console.log("[Wallet] Auto-connected from HERE Wallet data:", scanned);
+            return scanned;
         }
-    } catch (e) {
-        console.warn("[WS] getSignedInAccountId error:", e);
     }
+
     return "";
 }
 
-async function signAndSendTransaction(params) {
-    var sel = await initWalletSelector();
-    var wallet = await sel.wallet();
-    if (!wallet) throw new Error("No wallet connected");
+async function disconnectWallet() {
+    currentAccountId = "";
+    localStorage.removeItem(STORAGE_KEY);
+}
 
-    var state = sel.store.getState();
-    var accountId = state.accounts && state.accounts[0] && state.accounts[0].accountId;
-    if (!accountId) throw new Error("No signed-in account");
+async function getSignedInAccountId() {
+    if (currentAccountId) return currentAccountId;
+    return await tryAutoConnect();
+}
 
-    return await wallet.signAndSendTransaction({
-        signerId: accountId,
-        receiverId: params.receiverId,
-        actions: params.actions,
-    });
+async function signAndSendTransaction() {
+    throw new Error("Transaction signing coming in Stage 2");
 }
 
 export {
     networkId,
     RPC_URL,
-    connectWallet,
+    connectWithAccountId,
+    tryAutoConnect,
     disconnectWallet,
     getSignedInAccountId,
     signAndSendTransaction,
+    verifyAccount,
+    fetchBalance,
 };
