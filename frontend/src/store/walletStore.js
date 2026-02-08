@@ -150,13 +150,16 @@ async function signAndSendTransaction({ receiverId, actions }) {
 
 /* ───── connect ───── */
 async function connectHot() {
-    setState({ status: "Opening wallet selector…", lastError: null });
+    setState({ status: "Connecting to HOT Wallet…", lastError: null });
 
     try {
         const { accountId } = await connectWallet();
 
         if (!accountId) {
-            setState({ status: "Please select wallet and sign in", lastError: null });
+            setState({
+                status: "No account returned. Please try again.",
+                lastError: null,
+            });
             return;
         }
 
@@ -168,6 +171,7 @@ async function connectHot() {
         setTimeout(() => setState({ status: "" }), 2000);
     } catch (e) {
         const errMsg = e?.message || String(e);
+        console.error("[Wallet] connect failed:", e);
         setState({
             status: `Connect failed: ${errMsg}`,
             lastError: {
