@@ -1,5 +1,9 @@
-import { setupWalletSelector } from "@near-wallet-selector/core";
-import { setupHereWallet } from "@near-wallet-selector/here-wallet";
+/**
+ * HOT Wallet через @here-wallet/core
+ * 
+ * В Telegram WebApp: виджет открывается ПОВЕРХ игры (не закрывает)
+ * На десктопе: QR код или redirect
+ */
 
 var networkId =
     (import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet").toLowerCase() === "testnet"
@@ -12,100 +16,158 @@ var RPC_URL =
         ? "https://rpc.testnet.near.org"
         : "https://rpc.mainnet.near.org");
 
-var selector = null;
-var initPromise = null;
+var wallet = null;
+var currentAccountId = "";
+var STORAGE_KEY = "cardclash_near_account";
 
-async function initWalletSelector() {
-    if (selector) return selector;
-    if (initPromise) return initPromise;
+function isTelegramWebApp() {
+    try {
+        return !!(
+            window.Telegram &&
+            window.Telegram.WebApp &&
+            window.Telegram.WebApp.initData &&
+            window.Telegram.WebApp.initData.length > 0
+        );
+    } catch (e) {
+        return false;
+    }
+}
 
-    initPromise = (async function () {
+async function getWallet() {
+    if (wallet) return wallet;
+
+    var HereWalletModule = await import("@here-wallet/core");
+    var HereWallet = HereWalletModule.HereWallet || HereWalletModule.default;
+
+    if (!HereWallet) {
+        throw new Error("HereWallet not found in @here-wallet/core. Keys: " + Object.keys(HereWalletModule).join(", "));
+    }
+
+    if (isTelegramWebApp()) {
+        console.log("[HOT] Telegram WebApp detected, using widget strategy");
+
+        // В Telegram — кошелёк откроется как виджет ПОВЕРХ приложения
         try {
-            selector = await setupWalletSelector({
-                network: networkId,
-                modules: [setupHereWallet()],
+            wallet = new HereWallet({
+                networkId: networkId,
+                // defaultStrategy будет TelegramStrategy в Telegram WebApp
             });
-            console.log("[WS] initialized, network:", networkId);
-            return selector;
         } catch (e) {
-            console.error("[WS] init failed:", e);
-            initPromise = null;
-            throw e;
+            console.warn("[HOT] HereWallet constructor failed:", e);
+            wallet = new HereWallet();
         }
-    })();
+    } else {
+        console.log("[HOT] Desktop/browser detected");
+        wallet = new HereWallet({
+            networkId: networkId,
+        });
+    }
 
-    return initPromise;
+    return wallet;
 }
 
 async function connectWallet() {
-    var sel = await initWalletSelector();
-    var wallet = await sel.wallet("here-wallet");
+    var w = await getWallet();
 
-    if (!wallet) {
-        throw new Error("HERE Wallet module not available");
-    }
+    console.log("[HOT] Starting signIn...");
 
-    var accounts = await wallet.signIn({
-        permission: { receiverId: "" },
+    // signIn возвращает accountId напрямую
+    var accountId = await w.signIn({
+        contractId: "",
+        allowance: "0",
     });
 
-    var accountId = "";
-
-    if (Array.isArray(accounts) && accounts.length > 0) {
-        accountId = accounts[0].accountId || "";
-    }
-
-    if (!accountId) {
-        var state = sel.store.getState();
-        if (state.accounts && state.accounts.length > 0) {
-            accountId = state.accounts[0].accountId;
+    // accountId может быть строка или объект
+    if (typeof accountId === "object" && accountId !== null) {
+        if (accountId.accountId) {
+            accountId = accountId.accountId;
+        } else if (Array.isArray(accountId) && accountId.length > 0) {
+            accountId = accountId[0].accountId || accountId[0];
         }
     }
 
+    // Если пусто — пробуем getAccountId
     if (!accountId) {
-        throw new Error("No account returned from HERE Wallet");
+        try {
+            accountId = w.getAccountId ? w.getAccountId() : "";
+        } catch (e) {
+            console.warn("[HOT] getAccountId failed:", e);
+        }
     }
 
-    console.log("[WS] connected:", accountId);
+    // Если promise
+    if (accountId && typeof accountId.then === "function") {
+        accountId = await accountId;
+    }
+
+    accountId = String(accountId || "").trim();
+
+    if (!accountId) {
+        throw new Error("HOT Wallet did not return an account ID");
+    }
+
+    currentAccountId = accountId;
+    localStorage.setItem(STORAGE_KEY, accountId);
+    console.log("[HOT] Connected:", accountId);
+
     return { accountId: accountId };
 }
 
 async function disconnectWallet() {
     try {
-        var sel = await initWalletSelector();
-        var wallet = await sel.wallet("here-wallet");
-        await wallet.signOut();
+        if (wallet && wallet.signOut) {
+            await wallet.signOut();
+        }
     } catch (e) {
-        console.warn("[WS] disconnect error:", e);
+        console.warn("[HOT] signOut error:", e);
     }
+    wallet = null;
+    currentAccountId = "";
+    localStorage.removeItem(STORAGE_KEY);
 }
 
 async function getSignedInAccountId() {
-    try {
-        var sel = await initWalletSelector();
-        var state = sel.store.getState();
-        if (state.accounts && state.accounts.length > 0) {
-            return state.accounts[0].accountId;
+    // Сначала проверяем memory
+    if (currentAccountId) return currentAccountId;
+
+    // Потом localStorage
+    var saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+        currentAccountId = saved;
+
+        // Пробуем восстановить wallet instance
+        try {
+            var w = await getWallet();
+            var wId = "";
+            try {
+                wId = w.getAccountId ? w.getAccountId() : "";
+                if (wId && typeof wId.then === "function") wId = await wId;
+            } catch (e) {
+                // ignore
+            }
+
+            if (wId) {
+                currentAccountId = String(wId);
+                localStorage.setItem(STORAGE_KEY, currentAccountId);
+            }
+        } catch (e) {
+            // Wallet не инициализирован — ок, используем saved
         }
-    } catch (e) {
-        console.warn("[WS] getSignedInAccountId error:", e);
+
+        return currentAccountId;
     }
+
     return "";
 }
 
 async function signAndSendTransaction(params) {
-    var sel = await initWalletSelector();
-    var wallet = await sel.wallet();
+    var w = await getWallet();
+    if (!w) throw new Error("Wallet not initialized");
 
-    if (!wallet) throw new Error("No wallet connected");
+    var accountId = await getSignedInAccountId();
+    if (!accountId) throw new Error("Not connected");
 
-    var state = sel.store.getState();
-    var accountId = state.accounts && state.accounts[0] && state.accounts[0].accountId;
-
-    if (!accountId) throw new Error("No signed-in account");
-
-    var result = await wallet.signAndSendTransaction({
-        signerId: accountId,
+    var result = await w.signAndSendTransaction({
         receiverId: params.receiverId,
         actions: params.actions,
     });

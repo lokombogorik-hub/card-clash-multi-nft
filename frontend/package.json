@@ -8,12 +8,8 @@
     "build": "node node_modules/vite/bin/vite.js build",
     "preview": "vite preview"
   },
-  "overrides": {
-    "@here-wallet/core": "latest"
-  },
   "dependencies": {
-    "@near-wallet-selector/core": "^8.10.2",
-    "@near-wallet-selector/here-wallet": "^8.10.2",
+    "@here-wallet/core": "^3.2.3",
     "buffer": "^6.0.3",
     "canvas-confetti": "1.9.3",
     "crypto-browserify": "^3.12.1",
