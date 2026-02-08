@@ -1,11 +1,3 @@
-/**
- * HOT Wallet через Telegram Mini App Widget
- * 
- * Работает БЕЗ @here-wallet/core (который сломан)
- * Использует HERE Wallet Telegram Widget API напрямую
- * Кошелёк открывается ПОВЕРХ игры как iframe
- */
-
 var networkId =
     (import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet").toLowerCase() === "testnet"
         ? "testnet"
@@ -20,110 +12,6 @@ var RPC_URL =
 var currentAccountId = "";
 var STORAGE_KEY = "cardclash_near_account";
 
-// HERE Wallet Widget URL
-var HERE_WIDGET_URL = "https://my.herewallet.app/connector/";
-var HERE_BOT_ID = "herewalletbot/app";
-
-/**
- * Создаём iframe overlay поверх игры
- */
-function createOverlay() {
-    // Удаляем старый если есть
-    var old = document.getElementById("hot-wallet-overlay");
-    if (old) old.remove();
-
-    // Контейнер
-    var overlay = document.createElement("div");
-    overlay.id = "hot-wallet-overlay";
-    overlay.style.cssText =
-        "position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.7);" +
-        "display:flex;align-items:center;justify-content:center;padding:16px;" +
-        "backdrop-filter:blur(4px);";
-
-    // Карточка
-    var card = document.createElement("div");
-    card.style.cssText =
-        "background:linear-gradient(145deg,#1a1a2e,#0f0f1a);border:1px solid rgba(255,255,255,0.15);" +
-        "border-radius:20px;padding:24px;max-width:360px;width:100%;text-align:center;" +
-        "box-shadow:0 24px 80px rgba(0,0,0,0.8);color:#fff;";
-
-    // Заголовок
-    var title = document.createElement("div");
-    title.style.cssText = "font-size:18px;font-weight:900;margin-bottom:12px;";
-    title.textContent = "🔥 Connect HOT Wallet";
-
-    // Описание
-    var desc = document.createElement("div");
-    desc.style.cssText = "font-size:13px;color:#a0d8ff;margin-bottom:16px;line-height:1.4;opacity:0.8;";
-    desc.textContent = "Enter your NEAR account ID from HOT Wallet";
-
-    // Input
-    var input = document.createElement("input");
-    input.type = "text";
-    input.placeholder = "yourname.near";
-    input.autocomplete = "off";
-    input.autocapitalize = "none";
-    input.spellcheck = false;
-    input.style.cssText =
-        "width:100%;padding:14px;border-radius:12px;border:1px solid rgba(255,255,255,0.15);" +
-        "background:rgba(0,0,0,0.4);color:#fff;font-size:16px;font-family:monospace;" +
-        "outline:none;box-sizing:border-box;margin-bottom:12px;-webkit-appearance:none;";
-
-    // Error div
-    var errorDiv = document.createElement("div");
-    errorDiv.style.cssText =
-        "display:none;padding:8px;border-radius:8px;background:rgba(255,40,40,0.15);" +
-        "border:1px solid rgba(255,80,80,0.3);color:#fca5a5;font-size:12px;margin-bottom:12px;";
-
-    // Status div
-    var statusDiv = document.createElement("div");
-    statusDiv.style.cssText =
-        "display:none;padding:8px;border-radius:8px;background:rgba(34,197,94,0.15);" +
-        "border:1px solid rgba(34,197,94,0.3);color:#86efac;font-size:12px;margin-bottom:12px;";
-
-    // Connect button
-    var btn = document.createElement("button");
-    btn.textContent = "Connect";
-    btn.style.cssText =
-        "width:100%;padding:14px;border-radius:12px;border:1px solid rgba(255,140,0,0.4);" +
-        "background:linear-gradient(135deg,rgba(255,140,0,0.3),rgba(255,80,0,0.2));" +
-        "color:#fff;font-size:16px;font-weight:900;cursor:pointer;margin-bottom:10px;";
-
-    // Cancel button
-    var cancelBtn = document.createElement("button");
-    cancelBtn.textContent = "Cancel";
-    cancelBtn.style.cssText =
-        "width:100%;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);" +
-        "background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.6);font-size:14px;cursor:pointer;";
-
-    // Help text
-    var help = document.createElement("div");
-    help.style.cssText = "font-size:10px;color:rgba(255,255,255,0.35);margin-top:12px;line-height:1.4;";
-    help.textContent = "Open HOT Wallet → Profile → Copy account ID";
-
-    card.appendChild(title);
-    card.appendChild(desc);
-    card.appendChild(input);
-    card.appendChild(errorDiv);
-    card.appendChild(statusDiv);
-    card.appendChild(btn);
-    card.appendChild(cancelBtn);
-    card.appendChild(help);
-    overlay.appendChild(card);
-
-    return {
-        overlay: overlay,
-        input: input,
-        btn: btn,
-        cancelBtn: cancelBtn,
-        errorDiv: errorDiv,
-        statusDiv: statusDiv,
-    };
-}
-
-/**
- * Проверяем что аккаунт существует на NEAR через RPC
- */
 async function verifyAccount(accountId) {
     var res = await fetch(RPC_URL, {
         method: "POST",
@@ -140,49 +28,164 @@ async function verifyAccount(accountId) {
         }),
     });
     var json = await res.json();
-    if (json.error) {
-        return false;
-    }
-    return true;
+    return !json.error;
 }
 
-/**
- * Подключение — показываем overlay ПОВЕРХ игры
- */
 function connectWallet() {
     return new Promise(function (resolve, reject) {
-        var ui = createOverlay();
-        document.body.appendChild(ui.overlay);
+        var old = document.getElementById("hot-wallet-overlay");
+        if (old) old.remove();
 
-        // Фокус на input
-        setTimeout(function () { ui.input.focus(); }, 100);
+        var overlay = document.createElement("div");
+        overlay.id = "hot-wallet-overlay";
+        overlay.style.cssText =
+            "position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.8);" +
+            "display:flex;align-items:center;justify-content:center;padding:16px;" +
+            "backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);";
 
-        function showError(msg) {
-            ui.errorDiv.textContent = msg;
-            ui.errorDiv.style.display = "block";
-            ui.statusDiv.style.display = "none";
-        }
+        var card = document.createElement("div");
+        card.style.cssText =
+            "background:linear-gradient(145deg,#1a1a2e,#0f0f1a);" +
+            "border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:28px 24px;" +
+            "max-width:340px;width:100%;text-align:center;" +
+            "box-shadow:0 24px 80px rgba(0,0,0,0.8);color:#fff;";
 
-        function showStatus(msg) {
-            ui.statusDiv.textContent = msg;
-            ui.statusDiv.style.display = "block";
-            ui.errorDiv.style.display = "none";
-        }
+        card.innerHTML =
+            '<div style="font-size:42px;margin-bottom:8px;">🔥</div>' +
+            '<div style="font-size:20px;font-weight:900;margin-bottom:6px;">HOT Wallet</div>' +
+            '<div style="font-size:12px;color:#a0d8ff;margin-bottom:20px;line-height:1.5;opacity:0.8;">' +
+            'Step 1: Open HOT Wallet and copy your Account ID<br>' +
+            'Step 2: Paste it below and tap Connect' +
+            '</div>' +
+
+            '<button id="hot-open-btn" style="' +
+            'width:100%;padding:14px;border-radius:14px;margin-bottom:14px;' +
+            'border:1px solid rgba(255,140,0,0.5);cursor:pointer;' +
+            'background:linear-gradient(135deg,rgba(255,140,0,0.35),rgba(255,80,0,0.2));' +
+            'color:#fff;font-size:15px;font-weight:900;' +
+            'display:flex;align-items:center;justify-content:center;gap:8px;' +
+            '">📱 Open HOT Wallet</button>' +
+
+            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">' +
+            '<div style="flex:1;height:1px;background:rgba(255,255,255,0.1);"></div>' +
+            '<div style="font-size:11px;color:rgba(255,255,255,0.3);">then paste your ID</div>' +
+            '<div style="flex:1;height:1px;background:rgba(255,255,255,0.1);"></div>' +
+            '</div>' +
+
+            '<input id="hot-input" type="text" placeholder="yourname.near" ' +
+            'autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" ' +
+            'style="width:100%;padding:14px;border-radius:12px;' +
+            'border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.4);' +
+            'color:#fff;font-size:16px;font-family:monospace;outline:none;' +
+            'box-sizing:border-box;margin-bottom:12px;-webkit-appearance:none;" />' +
+
+            '<div id="hot-error" style="display:none;padding:10px;border-radius:10px;' +
+            'background:rgba(255,40,40,0.15);border:1px solid rgba(255,80,80,0.3);' +
+            'color:#fca5a5;font-size:12px;margin-bottom:12px;"></div>' +
+
+            '<div id="hot-status" style="display:none;padding:10px;border-radius:10px;' +
+            'background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);' +
+            'color:#86efac;font-size:12px;margin-bottom:12px;"></div>' +
+
+            '<button id="hot-connect-btn" style="' +
+            'width:100%;padding:14px;border-radius:12px;' +
+            'border:1px solid rgba(120,200,255,0.4);' +
+            'background:linear-gradient(135deg,rgba(37,99,235,0.5),rgba(124,58,237,0.4));' +
+            'color:#fff;font-size:16px;font-weight:900;cursor:pointer;margin-bottom:10px;' +
+            '">⚡ Connect</button>' +
+
+            '<button id="hot-cancel-btn" style="' +
+            'width:100%;padding:12px;border-radius:12px;' +
+            'border:1px solid rgba(255,255,255,0.08);' +
+            'background:rgba(255,255,255,0.03);' +
+            'color:rgba(255,255,255,0.4);font-size:13px;cursor:pointer;' +
+            '">Cancel</button>';
+
+        overlay.appendChild(card);
+        document.body.appendChild(overlay);
+
+        var input = document.getElementById("hot-input");
+        var errorDiv = document.getElementById("hot-error");
+        var statusDiv = document.getElementById("hot-status");
+        var connectBtn = document.getElementById("hot-connect-btn");
+        var cancelBtn = document.getElementById("hot-cancel-btn");
+        var openBtn = document.getElementById("hot-open-btn");
+
+        var settled = false;
 
         function cleanup() {
             var el = document.getElementById("hot-wallet-overlay");
             if (el) el.remove();
         }
 
-        function setLoading(loading) {
-            ui.btn.disabled = loading;
-            ui.btn.textContent = loading ? "Verifying..." : "Connect";
-            ui.btn.style.opacity = loading ? "0.5" : "1";
-            ui.input.disabled = loading;
+        function showError(msg) {
+            errorDiv.textContent = msg;
+            errorDiv.style.display = "block";
+            statusDiv.style.display = "none";
         }
 
+        function showStatus(msg) {
+            statusDiv.textContent = msg;
+            statusDiv.style.display = "block";
+            errorDiv.style.display = "none";
+        }
+
+        function setLoading(on) {
+            connectBtn.disabled = on;
+            connectBtn.textContent = on ? "Verifying..." : "⚡ Connect";
+            connectBtn.style.opacity = on ? "0.5" : "1";
+            input.disabled = on;
+        }
+
+        // Open HOT Wallet button
+        openBtn.addEventListener("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            try {
+                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink) {
+                    window.Telegram.WebApp.openTelegramLink("https://t.me/herewalletbot/app");
+                } else {
+                    window.open("https://t.me/herewalletbot/app", "_blank");
+                }
+            } catch (err) {
+                window.open("https://t.me/herewalletbot/app", "_blank");
+            }
+        });
+
+        // Connect button
+        connectBtn.addEventListener("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            doConnect();
+        });
+
+        // Enter key
+        input.addEventListener("keydown", function (e) {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                doConnect();
+            }
+        });
+
+        // Cancel button
+        cancelBtn.addEventListener("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!settled) {
+                settled = true;
+                cleanup();
+                reject(new Error("Cancelled"));
+            }
+        });
+
+        // Click outside — НЕ закрываем (чтобы не было случайного закрытия)
+        // Убрали обработчик клика на overlay
+
         async function doConnect() {
-            var val = ui.input.value.trim().toLowerCase();
+            if (settled) return;
+
+            var val = input.value.trim().toLowerCase();
 
             if (!val) {
                 showError("Please enter your NEAR account ID");
@@ -190,7 +193,12 @@ function connectWallet() {
             }
 
             if (val.length < 2 || val.length > 64) {
-                showError("Invalid account ID length");
+                showError("Account ID must be 2-64 characters");
+                return;
+            }
+
+            if (!/^[a-z0-9._-]+$/.test(val)) {
+                showError("Invalid characters. Use: a-z, 0-9, . _ -");
                 return;
             }
 
@@ -201,7 +209,7 @@ function connectWallet() {
                 var exists = await verifyAccount(val);
 
                 if (!exists) {
-                    showError("Account '" + val + "' not found on NEAR " + networkId);
+                    showError("Account '" + val + "' not found on NEAR " + networkId + ". Check spelling.");
                     setLoading(false);
                     return;
                 }
@@ -210,35 +218,23 @@ function connectWallet() {
                 localStorage.setItem(STORAGE_KEY, val);
 
                 showStatus("✅ Connected: " + val);
+                settled = true;
 
                 setTimeout(function () {
                     cleanup();
                     resolve({ accountId: val });
-                }, 800);
+                }, 600);
 
             } catch (e) {
-                showError("Error: " + ((e && e.message) || String(e)));
+                showError("Network error: " + ((e && e.message) || String(e)));
                 setLoading(false);
             }
         }
 
-        ui.btn.addEventListener("click", doConnect);
-
-        ui.input.addEventListener("keydown", function (e) {
-            if (e.key === "Enter") doConnect();
-        });
-
-        ui.cancelBtn.addEventListener("click", function () {
-            cleanup();
-            reject(new Error("Connection cancelled"));
-        });
-
-        ui.overlay.addEventListener("click", function (e) {
-            if (e.target === ui.overlay) {
-                cleanup();
-                reject(new Error("Connection cancelled"));
-            }
-        });
+        // Focus input
+        setTimeout(function () {
+            if (input) input.focus();
+        }, 200);
     });
 }
 
@@ -260,7 +256,7 @@ async function getSignedInAccountId() {
 }
 
 async function signAndSendTransaction(params) {
-    throw new Error("Direct transaction signing requires full wallet connection. This feature is coming soon.");
+    throw new Error("Transaction signing coming soon. Account is linked for game stats.");
 }
 
 export {
