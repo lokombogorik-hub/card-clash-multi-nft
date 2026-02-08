@@ -8,17 +8,14 @@ import {
     RPC_URL,
 } from "../libs/walletSelector";
 
-/* ───── env ───── */
 const escrowContractId = (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim();
 const nftContractId = (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim();
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").trim();
 
-/* ───── constants ───── */
 const GAS_100_TGAS = "100000000000000";
 const GAS_150_TGAS = "150000000000000";
 const ONE_YOCTO = "1";
 
-/* ───── helpers ───── */
 function yoctoToNearFloat(yoctoStr) {
     try {
         const yocto = BigInt(yoctoStr || "0");
@@ -26,14 +23,14 @@ function yoctoToNearFloat(yoctoStr) {
         const whole = yocto / base;
         const frac = yocto % base;
         const fracStr = frac.toString().padStart(24, "0").slice(0, 6);
-        return Number(`${whole.toString()}.${fracStr}`);
-    } catch {
+        return Number(whole.toString() + "." + fracStr);
+    } catch (e) {
         return 0;
     }
 }
 
 async function fetchNearBalance(accountId) {
-    const res = await fetch(RPC_URL, {
+    var res = await fetch(RPC_URL, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -48,30 +45,30 @@ async function fetchNearBalance(accountId) {
         }),
     });
 
-    const json = await res.json().catch(() => null);
-    if (!res.ok) throw new Error(`RPC HTTP ${res.status}`);
+    var json = await res.json().catch(function () { return null; });
+    if (!res.ok) throw new Error("RPC HTTP " + res.status);
     if (!json) throw new Error("RPC invalid JSON");
-    if (json.error) throw new Error(json?.error?.message || "NEAR RPC error");
-    return yoctoToNearFloat(json?.result?.amount || "0");
+    if (json.error) throw new Error((json.error && json.error.message) || "NEAR RPC error");
+    return yoctoToNearFloat((json.result && json.result.amount) || "0");
 }
 
 function extractTxHash(outcome) {
-    return (
-        outcome?.transaction?.hash ||
-        outcome?.transaction_outcome?.id ||
-        outcome?.final_execution_outcome?.transaction?.hash ||
-        null
-    );
+    if (!outcome) return null;
+    if (outcome.transaction && outcome.transaction.hash) return outcome.transaction.hash;
+    if (outcome.transaction_outcome && outcome.transaction_outcome.id) return outcome.transaction_outcome.id;
+    if (outcome.final_execution_outcome && outcome.final_execution_outcome.transaction && outcome.final_execution_outcome.transaction.hash) {
+        return outcome.final_execution_outcome.transaction.hash;
+    }
+    return null;
 }
 
-/* ───── state ───── */
-let state = {
+var state = {
     connected: false,
     walletAddress: "",
     nearNetworkId: networkId,
     rpcUrl: RPC_URL,
-    escrowContractId,
-    nftContractId,
+    escrowContractId: escrowContractId,
+    nftContractId: nftContractId,
     balance: 0,
     balanceError: "",
     status: "",
@@ -80,20 +77,21 @@ let state = {
     lastError: null,
 };
 
-const listeners = new Set();
+var listeners = new Set();
+
 function emit() {
-    for (const l of listeners) l();
+    listeners.forEach(function (l) { l(); });
 }
+
 function setState(patch) {
-    state = { ...state, ...patch };
+    state = Object.assign({}, state, patch);
     emit();
 }
 
-/* ───── link to backend ───── */
 async function linkToBackend(accountId) {
     if (!accountId || !API_BASE) return;
 
-    const token =
+    var token =
         localStorage.getItem("token") ||
         localStorage.getItem("accessToken") ||
         localStorage.getItem("access_token") ||
@@ -102,13 +100,13 @@ async function linkToBackend(accountId) {
     if (!token) return;
 
     try {
-        await fetch(`${API_BASE}/api/near/link`, {
+        await fetch(API_BASE + "/api/near/link", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
+                Authorization: "Bearer " + token,
             },
-            body: JSON.stringify({ accountId }),
+            body: JSON.stringify({ accountId: accountId }),
         });
         console.log("[Wallet] linked to backend:", accountId);
     } catch (e) {
@@ -116,9 +114,8 @@ async function linkToBackend(accountId) {
     }
 }
 
-/* ───── apply account ───── */
 function applyAccount(accountId) {
-    const id = String(accountId || "").trim();
+    var id = String(accountId || "").trim();
     if (!id) return;
 
     setState({
@@ -130,30 +127,28 @@ function applyAccount(accountId) {
     });
 
     fetchNearBalance(id)
-        .then((b) => setState({ balance: b, balanceError: "" }))
-        .catch((e) => setState({ balance: 0, balanceError: String(e?.message || e) }));
+        .then(function (b) { setState({ balance: b, balanceError: "" }); })
+        .catch(function (e) { setState({ balance: 0, balanceError: String(e && e.message || e) }); });
 
     linkToBackend(id);
 }
 
-/* ───── clear ───── */
 function clearStatus() {
     setState({ status: "", lastError: null });
 }
 
-/* ───── sign & send ───── */
-async function signAndSendTransaction({ receiverId, actions }) {
-    if (!receiverId) throw new Error("receiverId is required");
-    if (!actions || !actions.length) throw new Error("actions are required");
-    return await signTx({ receiverId, actions });
+async function signAndSendTransaction(params) {
+    if (!params.receiverId) throw new Error("receiverId is required");
+    if (!params.actions || !params.actions.length) throw new Error("actions are required");
+    return await signTx({ receiverId: params.receiverId, actions: params.actions });
 }
 
-/* ───── connect ───── */
 async function connectHot() {
     setState({ status: "Connecting to HOT Wallet…", lastError: null });
 
     try {
-        const { accountId } = await connectWallet();
+        var result = await connectWallet();
+        var accountId = result.accountId;
 
         if (!accountId) {
             setState({
@@ -168,26 +163,27 @@ async function connectHot() {
 
         await getUserNFTs();
 
-        setTimeout(() => setState({ status: "" }), 2000);
+        setTimeout(function () { setState({ status: "" }); }, 2000);
     } catch (e) {
-        const errMsg = e?.message || String(e);
+        var errMsg = (e && e.message) || String(e);
         console.error("[Wallet] connect failed:", e);
         setState({
-            status: `Connect failed: ${errMsg}`,
+            status: "Connect failed: " + errMsg,
             lastError: {
-                name: e?.name || "Error",
+                name: (e && e.name) || "Error",
                 message: errMsg,
-                stack: e?.stack || "",
+                stack: (e && e.stack) || "",
             },
         });
     }
 }
 
-/* ───── disconnect ───── */
 async function disconnectWallet() {
     try {
         await disconnect();
-    } catch { }
+    } catch (e) {
+        console.warn("[Wallet] disconnect error:", e);
+    }
     setState({
         connected: false,
         walletAddress: "",
@@ -200,48 +196,40 @@ async function disconnectWallet() {
     });
 }
 
-/* ───── restore ───── */
 async function restoreSession() {
     try {
-        const id = await getSignedInAccountId();
+        var id = await getSignedInAccountId();
         if (id) {
             applyAccount(id);
             await getUserNFTs();
         }
-    } catch { }
+    } catch (e) {
+        console.warn("[Wallet] restoreSession error:", e);
+    }
 }
 
-/* ───── NFT transfer call ───── */
-async function nftTransferCall({
-    nftContractId: nftContract,
-    tokenId,
-    matchId,
-    side,
-    playerA,
-    playerB,
-    receiverId,
-}) {
-    const escrowId = (receiverId || escrowContractId || "").trim();
+async function nftTransferCall(params) {
+    var escrowId = (params.receiverId || escrowContractId || "").trim();
     if (!escrowId) throw new Error("Escrow contract id missing");
 
-    const msg = JSON.stringify({
-        match_id: matchId,
-        side,
-        player_a: playerA,
-        player_b: playerB,
+    var msg = JSON.stringify({
+        match_id: params.matchId,
+        side: params.side,
+        player_a: params.playerA,
+        player_b: params.playerB,
     });
 
-    const actions = [
+    var actions = [
         {
             type: "FunctionCall",
             params: {
                 methodName: "nft_transfer_call",
                 args: {
                     receiver_id: escrowId,
-                    token_id: tokenId,
+                    token_id: params.tokenId,
                     approval_id: null,
                     memo: null,
-                    msg,
+                    msg: msg,
                 },
                 gas: GAS_150_TGAS,
                 deposit: ONE_YOCTO,
@@ -249,34 +237,27 @@ async function nftTransferCall({
         },
     ];
 
-    const outcome = await signAndSendTransaction({
-        receiverId: nftContract,
-        actions,
+    var outcome = await signAndSendTransaction({
+        receiverId: params.nftContractId,
+        actions: actions,
     });
-    return { outcome, txHash: extractTxHash(outcome) };
+    return { outcome: outcome, txHash: extractTxHash(outcome) };
 }
 
-/* ───── escrow claim ───── */
-async function escrowClaim({
-    matchId,
-    winnerAccountId,
-    loserNftContractId,
-    loserTokenId,
-    receiverId,
-}) {
-    const escrowId = (receiverId || escrowContractId || "").trim();
+async function escrowClaim(params) {
+    var escrowId = (params.receiverId || escrowContractId || "").trim();
     if (!escrowId) throw new Error("Escrow contract id missing");
 
-    const actions = [
+    var actions = [
         {
             type: "FunctionCall",
             params: {
                 methodName: "claim",
                 args: {
-                    match_id: matchId,
-                    winner: winnerAccountId,
-                    loser_nft_contract_id: loserNftContractId,
-                    loser_token_id: loserTokenId,
+                    match_id: params.matchId,
+                    winner: params.winnerAccountId,
+                    loser_nft_contract_id: params.loserNftContractId,
+                    loser_token_id: params.loserTokenId,
                 },
                 gas: GAS_100_TGAS,
                 deposit: "0",
@@ -284,21 +265,20 @@ async function escrowClaim({
         },
     ];
 
-    const outcome = await signAndSendTransaction({
+    var outcome = await signAndSendTransaction({
         receiverId: escrowId,
-        actions,
+        actions: actions,
     });
-    return { outcome, txHash: extractTxHash(outcome) };
+    return { outcome: outcome, txHash: extractTxHash(outcome) };
 }
 
-/* ───── get user NFTs ───── */
 async function getUserNFTs() {
-    const accountId = state.walletAddress;
+    var accountId = state.walletAddress;
     if (!accountId) return [];
     if (!nftContractId) return [];
 
     try {
-        const res = await fetch(RPC_URL, {
+        var res = await fetch(RPC_URL, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
@@ -321,23 +301,23 @@ async function getUserNFTs() {
             }),
         });
 
-        const json = await res.json();
+        var json = await res.json();
         if (json.error) throw new Error(json.error.message || "RPC error");
 
-        const resultBytes = json?.result?.result;
+        var resultBytes = json && json.result && json.result.result;
         if (!resultBytes) {
             setState({ nfts: [], nftsError: "" });
             return [];
         }
 
-        const resultString = new TextDecoder().decode(new Uint8Array(resultBytes));
-        const tokens = JSON.parse(resultString);
+        var resultString = new TextDecoder().decode(new Uint8Array(resultBytes));
+        var tokens = JSON.parse(resultString);
 
-        const mapped = (Array.isArray(tokens) ? tokens : []).map((t) => {
-            let extra = {};
+        var mapped = (Array.isArray(tokens) ? tokens : []).map(function (t) {
+            var extra = {};
             try {
-                extra = JSON.parse(t.metadata?.extra || "{}");
-            } catch { }
+                extra = JSON.parse((t.metadata && t.metadata.extra) || "{}");
+            } catch (e) { /* ignore */ }
 
             return {
                 chain: "near",
@@ -345,59 +325,58 @@ async function getUserNFTs() {
                 contract_id: nftContractId,
                 tokenId: t.token_id,
                 token_id: t.token_id,
-                name: t.metadata?.title || `Card #${t.token_id}`,
-                imageUrl: t.metadata?.media || "/cards/card.jpg",
-                stats: extra.stats || { top: 5, right: 5, bottom: 5, left: 5 },
-                element: extra.element || null,
-                rarity: extra.rarity || "common",
+                name: (t.metadata && t.metadata.title) || ("Card #" + t.token_id),
+                imageUrl: (t.metadata && t.metadata.media) || "/cards/card.jpg",
+                stats: (extra && extra.stats) || { top: 5, right: 5, bottom: 5, left: 5 },
+                element: (extra && extra.element) || null,
+                rarity: (extra && extra.rarity) || "common",
             };
         });
 
         setState({ nfts: mapped, nftsError: "" });
         return mapped;
     } catch (e) {
-        setState({ nfts: [], nftsError: String(e?.message || e) });
+        setState({ nfts: [], nftsError: String((e && e.message) || e) });
         return [];
     }
 }
 
-/* ───── send NEAR ───── */
-async function sendNear({ receiverId, amount }) {
-    const amountYocto = (parseFloat(amount) * 1e24).toFixed(0);
-    const actions = [{ type: "Transfer", params: { deposit: amountYocto } }];
-    const outcome = await signAndSendTransaction({ receiverId, actions });
-    return { outcome, txHash: extractTxHash(outcome) };
+async function sendNear(params) {
+    var amountYocto = (parseFloat(params.amount) * 1e24).toFixed(0);
+    var actions = [{ type: "Transfer", params: { deposit: amountYocto } }];
+    var outcome = await signAndSendTransaction({ receiverId: params.receiverId, actions: actions });
+    return { outcome: outcome, txHash: extractTxHash(outcome) };
 }
 
-/* ───── public store ───── */
-export const walletStore = {
-    getState: () => state,
-    subscribe: (fn) => {
+export var walletStore = {
+    getState: function () { return state; },
+    subscribe: function (fn) {
         listeners.add(fn);
-        return () => listeners.delete(fn);
+        return function () { listeners.delete(fn); };
     },
 
-    connectHot,
-    disconnectWallet,
-    restoreSession,
-    clearStatus,
+    connectHot: connectHot,
+    disconnectWallet: disconnectWallet,
+    restoreSession: restoreSession,
+    clearStatus: clearStatus,
 
-    signAndSendTransaction,
-    nftTransferCall,
-    escrowClaim,
+    signAndSendTransaction: signAndSendTransaction,
+    nftTransferCall: nftTransferCall,
+    escrowClaim: escrowClaim,
 
-    getUserNFTs,
-    sendNear,
+    getUserNFTs: getUserNFTs,
+    sendNear: sendNear,
 };
 
-/* ───── React hook ───── */
 export function useWalletStore() {
-    const [snap, setSnap] = useState(walletStore.getState());
+    var snapState = useState(walletStore.getState());
+    var snap = snapState[0];
+    var setSnap = snapState[1];
 
-    useEffect(() => {
-        const unsub = walletStore.subscribe(() =>
-            setSnap(walletStore.getState())
-        );
+    useEffect(function () {
+        var unsub = walletStore.subscribe(function () {
+            setSnap(walletStore.getState());
+        });
         walletStore.restoreSession();
         return unsub;
     }, []);

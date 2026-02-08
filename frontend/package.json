@@ -8,27 +8,24 @@
     "build": "node node_modules/vite/bin/vite.js build",
     "preview": "vite preview"
   },
+  "overrides": {
+    "@here-wallet/core": "latest"
+  },
   "dependencies": {
-    "@here-wallet/core": "^3.4.0",
     "@near-wallet-selector/core": "^8.10.2",
     "@near-wallet-selector/here-wallet": "^8.10.2",
-    "@near-wallet-selector/modal-ui": "^10.1.4",
-    "@near-wallet-selector/my-near-wallet": "^8.10.2",
-    "@near-wallet-selector/near-mobile-wallet": "^10.1.4",
     "buffer": "^6.0.3",
     "canvas-confetti": "1.9.3",
     "framer-motion": "12.28.1",
     "lucide-react": "0.562.0",
+    "near-api-js": "^4.0.4",
     "process": "^0.11.10",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-hot-toast": "2.6.0",
-    "use-sync-external-store": "^1.6.0",
-    "util": "^0.12.5",
     "zustand": "5.0.10"
   },
   "devDependencies": {
-    "@rollup/plugin-inject": "^5.0.5",
     "@vitejs/plugin-react": "4.2.1",
     "vite": "5.4.0",
     "vite-plugin-node-polyfills": "^0.25.0"
