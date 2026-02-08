@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useWalletStore } from "../../store/walletStore";
-import { apiFetch } from "../../api.js";
 import WalletPicker from "./WalletPicker";
 
 export default function WalletConnector() {
@@ -29,24 +28,6 @@ export default function WalletConnector() {
     useEffect(() => {
         restoreSession?.().catch(() => { });
     }, [restoreSession]);
-
-    useEffect(() => {
-        if (!connected || !walletAddress) return;
-
-        const token =
-            localStorage.getItem("token") ||
-            localStorage.getItem("accessToken") ||
-            localStorage.getItem("access_token") ||
-            "";
-
-        if (!token) return;
-
-        apiFetch("/api/near/link", {
-            method: "POST",
-            token,
-            body: JSON.stringify({ accountId: walletAddress }),
-        }).catch(() => { });
-    }, [connected, walletAddress]);
 
     useEffect(() => {
         return () => {
@@ -127,12 +108,18 @@ export default function WalletConnector() {
 
             {!connected ? (
                 <div style={{ display: "grid", gap: 8, justifyItems: "end", maxWidth: 360 }}>
+                    {/* Network badge */}
                     <div
                         style={{
                             padding: "6px 12px",
                             borderRadius: 8,
-                            background: isTestnet ? "rgba(251, 146, 60, 0.15)" : "rgba(34, 197, 94, 0.15)",
-                            border: `1px solid ${isTestnet ? "rgba(251, 146, 60, 0.3)" : "rgba(34, 197, 94, 0.3)"}`,
+                            background: isTestnet
+                                ? "rgba(251, 146, 60, 0.15)"
+                                : "rgba(34, 197, 94, 0.15)",
+                            border: `1px solid ${isTestnet
+                                    ? "rgba(251, 146, 60, 0.3)"
+                                    : "rgba(34, 197, 94, 0.3)"
+                                }`,
                             color: "#fff",
                             fontSize: 11,
                             fontWeight: 800,
@@ -142,6 +129,7 @@ export default function WalletConnector() {
                         {isTestnet ? "🧪 TESTNET" : "🚀 MAINNET"}
                     </div>
 
+                    {/* Connect button */}
                     <button
                         onClick={onOpenPicker}
                         disabled={loading}
@@ -159,6 +147,7 @@ export default function WalletConnector() {
                         Подключить кошелёк
                     </button>
 
+                    {/* Status */}
                     {status ? (
                         <div
                             style={{
@@ -175,6 +164,7 @@ export default function WalletConnector() {
                         </div>
                     ) : null}
 
+                    {/* Last error */}
                     {lastError ? (
                         <div
                             style={{
@@ -225,35 +215,7 @@ export default function WalletConnector() {
                         </div>
                     ) : null}
 
-                    {window.__HOT_WALLET_ERRORS__?.length > 0 ? (
-                        <div
-                            style={{
-                                maxWidth: 360,
-                                padding: "10px 12px",
-                                borderRadius: 12,
-                                background: "rgba(139, 0, 0, 0.85)",
-                                border: "1px solid rgba(255,255,255,0.12)",
-                                color: "#fff",
-                                fontSize: 11,
-                                lineHeight: 1.4,
-                            }}
-                        >
-                            <div style={{ fontWeight: 900, marginBottom: 8 }}>HOT Wallet Debug:</div>
-                            {window.__HOT_WALLET_ERRORS__.slice(-5).map((err, idx) => (
-                                <div key={idx} style={{ marginBottom: 8, opacity: 0.95 }}>
-                                    <div style={{ fontWeight: 800 }}>{err.step}</div>
-                                    <div>{err.message}</div>
-                                    {err.extra && typeof err.extra === "object" ? (
-                                        <div style={{ fontSize: 10, opacity: 0.7 }}>
-                                            {JSON.stringify(err.extra, null, 2)}
-                                        </div>
-                                    ) : null}
-                                    <div style={{ fontSize: 10, opacity: 0.7 }}>{err.time}</div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : null}
-
+                    {/* Local error */}
                     {err ? (
                         <div
                             style={{
@@ -272,12 +234,18 @@ export default function WalletConnector() {
                 </div>
             ) : (
                 <div style={{ display: "grid", gap: 8, justifyItems: "end" }}>
+                    {/* Network badge */}
                     <div
                         style={{
                             padding: "6px 12px",
                             borderRadius: 8,
-                            background: isTestnet ? "rgba(251, 146, 60, 0.15)" : "rgba(34, 197, 94, 0.15)",
-                            border: `1px solid ${isTestnet ? "rgba(251, 146, 60, 0.3)" : "rgba(34, 197, 94, 0.3)"}`,
+                            background: isTestnet
+                                ? "rgba(251, 146, 60, 0.15)"
+                                : "rgba(34, 197, 94, 0.15)",
+                            border: `1px solid ${isTestnet
+                                    ? "rgba(251, 146, 60, 0.3)"
+                                    : "rgba(34, 197, 94, 0.3)"
+                                }`,
                             color: "#fff",
                             fontSize: 11,
                             fontWeight: 800,
@@ -287,6 +255,7 @@ export default function WalletConnector() {
                         {isTestnet ? "🧪 TESTNET" : "🚀 MAINNET"}
                     </div>
 
+                    {/* Connected card */}
                     <div
                         style={{
                             display: "flex",
