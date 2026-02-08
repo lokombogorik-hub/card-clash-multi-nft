@@ -1,48 +1,63 @@
-import { HereWallet } from "@here-wallet/core";
-
-var envNetworkIdRaw = (import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet").toLowerCase();
-var networkId = envNetworkIdRaw === "testnet" ? "testnet" : "mainnet";
+var networkId =
+    (import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet").toLowerCase() === "testnet"
+        ? "testnet"
+        : "mainnet";
 
 var RPC_URL =
     import.meta.env.VITE_NEAR_RPC_URL ||
-    (networkId === "testnet" ? "https://rpc.testnet.near.org" : "https://rpc.mainnet.near.org");
+    (networkId === "testnet"
+        ? "https://rpc.testnet.near.org"
+        : "https://rpc.mainnet.near.org");
 
 var TG_BOT_ID = (import.meta.env.VITE_TG_BOT_ID || "Cardclashbot/app").trim();
 var HOT_WALLET_ID = (import.meta.env.VITE_HOT_WALLET_ID || "herewalletbot/app").trim();
 
-function tgOpen(url) {
-    var tg = window.Telegram && window.Telegram.WebApp;
-    try {
-        if (tg && tg.openTelegramLink) {
-            tg.openTelegramLink(url);
-            console.log("[HOT] openTelegramLink:", url);
-            return true;
-        }
-    } catch (e) {
-        console.warn("[HOT] openTelegramLink failed:", e.message);
-    }
-    try {
-        if (tg && tg.openLink) {
-            tg.openLink(url, { try_instant_view: false });
-            console.log("[HOT] openLink:", url);
-            return true;
-        }
-    } catch (e) {
-        console.warn("[HOT] openLink failed:", e.message);
-    }
-    window.open(url, "_blank", "noopener,noreferrer");
-    console.log("[HOT] window.open:", url);
-    return false;
+var wallet = null;
+var currentAccountId = "";
+var STORAGE_KEY = "cardclash_near_account";
+
+// Диагностика на экран
+var diagLog = [];
+function diag(msg) {
+    diagLog.push("[" + new Date().toISOString().substr(11, 8) + "] " + msg);
+    console.log("[HOT]", msg);
 }
 
-var wallet = null;
-var isConnecting = false;
+function getDiagLog() {
+    return diagLog.slice(-20).join("\n");
+}
 
-async function getWallet() {
-    if (wallet) return wallet;
+async function connectWallet() {
+    diagLog = [];
+    diag("Starting connect...");
+    diag("networkId: " + networkId);
+    diag("HOT_WALLET_ID: " + HOT_WALLET_ID);
+    diag("TG_BOT_ID: " + TG_BOT_ID);
 
-    console.log("[HOT] Initializing HereWallet...", { networkId: networkId, RPC_URL: RPC_URL });
+    var isTg = !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
+    diag("isTelegram: " + isTg);
+    diag("platform: " + (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.platform || "unknown"));
 
+    // Шаг 1: Импорт модуля
+    diag("Step 1: importing @here-wallet/core...");
+    var mod;
+    try {
+        mod = await import("@here-wallet/core");
+        diag("Import OK. Keys: " + Object.keys(mod).join(", "));
+    } catch (e) {
+        diag("Import FAILED: " + e.message);
+        throw new Error("Import failed: " + e.message + "\n\nDIAG:\n" + getDiagLog());
+    }
+
+    var HereWallet = mod.HereWallet || mod.default;
+    diag("HereWallet: " + typeof HereWallet);
+
+    if (!HereWallet) {
+        throw new Error("HereWallet not found\n\nDIAG:\n" + getDiagLog());
+    }
+
+    // Шаг 2: connect
+    diag("Step 2: HereWallet.connect()...");
     try {
         wallet = await HereWallet.connect({
             networkId: networkId,
@@ -50,147 +65,134 @@ async function getWallet() {
             telegramBotId: TG_BOT_ID,
             rpcUrl: RPC_URL,
             openUrl: function (url) {
-                console.log("[HOT] SDK openUrl callback:", url);
-                tgOpen(url);
+                diag("openUrl called: " + url.substring(0, 80) + "...");
+                try {
+                    if (isTg && window.Telegram.WebApp.openTelegramLink) {
+                        window.Telegram.WebApp.openTelegramLink(url);
+                        diag("openTelegramLink OK");
+                    } else if (isTg && window.Telegram.WebApp.openLink) {
+                        window.Telegram.WebApp.openLink(url);
+                        diag("openLink OK");
+                    } else {
+                        window.open(url, "_blank");
+                        diag("window.open OK");
+                    }
+                } catch (e2) {
+                    diag("openUrl error: " + e2.message);
+                    window.open(url, "_blank");
+                }
             },
         });
-
-        console.log("[HOT] HereWallet initialized OK");
-        return wallet;
+        diag("connect() OK");
     } catch (e) {
-        console.error("[HOT] HereWallet.connect() failed:", e.message);
-        wallet = null;
-        throw e;
+        diag("connect() FAILED: " + e.message);
+        throw new Error("connect() failed: " + e.message + "\n\nDIAG:\n" + getDiagLog());
     }
+
+    // Шаг 3: Проверяем уже авторизован
+    diag("Step 3: checking existing session...");
+    var existingId = "";
+    try {
+        if (wallet.getAccountId) {
+            existingId = await wallet.getAccountId();
+            diag("getAccountId: " + existingId);
+        }
+    } catch (e) {
+        diag("getAccountId error: " + e.message);
+    }
+
+    if (existingId) {
+        currentAccountId = String(existingId);
+        localStorage.setItem(STORAGE_KEY, currentAccountId);
+        return { accountId: currentAccountId };
+    }
+
+    // Шаг 4: signIn
+    diag("Step 4: calling signIn...");
+    var signInResult = null;
+    try {
+        signInResult = await wallet.signIn({
+            contractId: (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim() || undefined,
+        });
+        diag("signIn result: " + typeof signInResult + " = " + JSON.stringify(signInResult).substring(0, 100));
+    } catch (e) {
+        diag("signIn error: " + e.message);
+        // Не бросаем — может юзер ещё не подтвердил
+    }
+
+    // Шаг 5: Извлекаем accountId
+    var accountId = "";
+    if (typeof signInResult === "string") {
+        accountId = signInResult;
+    } else if (signInResult && typeof signInResult === "object") {
+        accountId = signInResult.accountId || signInResult.account_id || "";
+    }
+
+    if (!accountId) {
+        try {
+            if (wallet.getAccountId) {
+                accountId = await wallet.getAccountId();
+                diag("post-signIn getAccountId: " + accountId);
+            }
+        } catch (e) {
+            diag("post-signIn getAccountId error: " + e.message);
+        }
+    }
+
+    accountId = String(accountId || "").trim();
+    diag("Final accountId: " + (accountId || "(empty)"));
+
+    if (accountId) {
+        currentAccountId = accountId;
+        localStorage.setItem(STORAGE_KEY, accountId);
+    }
+
+    // Возвращаем что есть — polling в walletStore доберёт
+    return { accountId: accountId, _diag: getDiagLog() };
+}
+
+async function disconnectWallet() {
+    try {
+        if (wallet && wallet.signOut) await wallet.signOut();
+    } catch (e) { }
+    wallet = null;
+    currentAccountId = "";
+    localStorage.removeItem(STORAGE_KEY);
 }
 
 async function getSignedInAccountId() {
-    try {
-        var w = await getWallet();
+    if (currentAccountId) return currentAccountId;
 
-        if (typeof w.isSignedIn === "function") {
-            var signedIn = await w.isSignedIn();
-            if (!signedIn) return "";
-        }
+    var saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+        currentAccountId = saved;
+        return saved;
+    }
 
-        if (typeof w.getAccountId === "function") {
-            var id = await w.getAccountId();
-            if (id) return String(id);
-        }
-
-        if (typeof w.getAccounts === "function") {
-            var accounts = await w.getAccounts();
-            if (accounts && accounts.length > 0) {
-                var accId = accounts[0].accountId || accounts[0];
-                if (accId) return String(accId);
+    if (wallet && wallet.getAccountId) {
+        try {
+            var id = await wallet.getAccountId();
+            if (id) {
+                currentAccountId = String(id);
+                localStorage.setItem(STORAGE_KEY, currentAccountId);
+                return currentAccountId;
             }
-        }
-    } catch (e) {
-        console.warn("[HOT] getSignedInAccountId error:", e.message);
+        } catch (e) { }
     }
 
     return "";
 }
 
-async function connectWallet() {
-    if (isConnecting) {
-        throw new Error("Connection already in progress");
-    }
-
-    isConnecting = true;
-    console.log("[HOT] Starting connect...", { networkId: networkId });
-
-    try {
-        var w = await getWallet();
-
-        // Проверяем уже авторизован
-        var existingId = await getSignedInAccountId();
-        if (existingId) {
-            console.log("[HOT] Already signed in:", existingId);
-            isConnecting = false;
-            return { accountId: existingId };
-        }
-
-        if (typeof w.signIn !== "function") {
-            throw new Error("HOT Wallet SDK: signIn method not found");
-        }
-
-        console.log("[HOT] Calling signIn...");
-
-        var res = null;
-        try {
-            res = await w.signIn({
-                contractId: (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim() || undefined,
-            });
-        } catch (e) {
-            var msg = String(e && e.message || "").toLowerCase();
-            console.warn("[HOT] signIn error:", e.message);
-
-            if (msg.indexOf("load failed") !== -1 || msg.indexOf("user reject") !== -1) {
-                console.log("[HOT] User needs to authorize in HOT Wallet");
-                isConnecting = false;
-                return { accountId: "" };
-            }
-
-            throw e;
-        }
-
-        var accountId = "";
-        if (typeof res === "string") {
-            accountId = res;
-        } else if (res && typeof res === "object") {
-            accountId = res.accountId || res.account_id || "";
-        }
-
-        if (!accountId) {
-            // Пробуем получить после signIn
-            accountId = await getSignedInAccountId();
-        }
-
-        if (accountId) {
-            console.log("[HOT] Connected:", accountId);
-        } else {
-            console.log("[HOT] No account yet, user needs to complete auth in HOT Wallet");
-        }
-
-        isConnecting = false;
-        return { accountId: accountId };
-
-    } catch (e) {
-        isConnecting = false;
-        console.error("[HOT] Connect error:", e.message);
-        throw e;
-    }
-}
-
-async function disconnectWallet() {
-    try {
-        var w = await getWallet();
-        if (typeof w.signOut === "function") {
-            await w.signOut();
-        }
-    } catch (e) {
-        console.warn("[HOT] signOut error:", e.message);
-    }
-    wallet = null;
-    isConnecting = false;
-}
-
 async function signAndSendTransaction(params) {
-    var w = await getWallet();
-
+    if (!wallet) throw new Error("Wallet not initialized");
     var accountId = await getSignedInAccountId();
-    if (!accountId) {
-        throw new Error("Wallet not signed in");
-    }
+    if (!accountId) throw new Error("Not connected");
 
-    var result = await w.signAndSendTransaction({
+    return await wallet.signAndSendTransaction({
         signerId: accountId,
         receiverId: params.receiverId,
         actions: params.actions,
     });
-
-    return result;
 }
 
 export {
@@ -200,4 +202,5 @@ export {
     disconnectWallet,
     getSignedInAccountId,
     signAndSendTransaction,
+    getDiagLog,
 };
