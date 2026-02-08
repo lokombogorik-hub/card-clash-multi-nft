@@ -1,5 +1,3 @@
-import { HereWallet } from "@here-wallet/core";
-
 var networkId =
     (import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet").toLowerCase() === "testnet"
         ? "testnet"
@@ -11,126 +9,64 @@ var RPC_URL =
         ? "https://rpc.testnet.near.org"
         : "https://rpc.mainnet.near.org");
 
-var wallet = null;
 var currentAccountId = "";
 var STORAGE_KEY = "cardclash_near_account";
-var CONNECTING_KEY = "cardclash_connecting";
 
-async function getWallet() {
-    if (wallet) return wallet;
-
-    wallet = await HereWallet.connect({
-        networkId: networkId,
-        walletId: (import.meta.env.VITE_HOT_WALLET_ID || "herewalletbot/app").trim(),
-        telegramBotId: (import.meta.env.VITE_TG_BOT_ID || "Cardclashbot/app").trim(),
-        rpcUrl: RPC_URL,
+async function verifyAccount(accountId) {
+    var res = await fetch(RPC_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: "verify",
+            method: "query",
+            params: {
+                request_type: "view_account",
+                finality: "final",
+                account_id: accountId,
+            },
+        }),
     });
-
-    return wallet;
+    var json = await res.json();
+    return !json.error;
 }
 
-async function connectWallet() {
-    var w = await getWallet();
+async function connectWithAccountId(accountId) {
+    accountId = String(accountId || "").trim().toLowerCase();
+    if (!accountId) throw new Error("Enter your account ID");
+    if (accountId.length < 2 || accountId.length > 64) throw new Error("Invalid account ID length");
+    if (!/^[a-z0-9._-]+$/.test(accountId)) throw new Error("Invalid characters in account ID");
 
-    // Проверяем уже авторизован (после возврата из кошелька)
-    var existingId = "";
-    try {
-        if (w.getAccountId) {
-            existingId = await w.getAccountId();
-        }
-    } catch (e) { }
+    var exists = await verifyAccount(accountId);
+    if (!exists) throw new Error("Account not found on NEAR " + networkId);
 
-    if (existingId) {
-        currentAccountId = String(existingId);
-        localStorage.setItem(STORAGE_KEY, currentAccountId);
-        localStorage.removeItem(CONNECTING_KEY);
-        return { accountId: currentAccountId };
-    }
-
-    // Запоминаем что начали подключение
-    localStorage.setItem(CONNECTING_KEY, Date.now().toString());
-
-    // signIn — откроет HOT Wallet (игра закроется на время)
-    // Когда пользователь вернётся — restoreSession подхватит
-    var result = await w.signIn({
-        contractId: (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim() || undefined,
-    });
-
-    var accountId = "";
-    if (typeof result === "string") accountId = result;
-    else if (result && result.accountId) accountId = result.accountId;
-
-    if (!accountId && w.getAccountId) {
-        try { accountId = await w.getAccountId(); } catch (e) { }
-    }
-
-    accountId = String(accountId || "").trim();
-
-    if (accountId) {
-        currentAccountId = accountId;
-        localStorage.setItem(STORAGE_KEY, accountId);
-        localStorage.removeItem(CONNECTING_KEY);
-    }
-
+    currentAccountId = accountId;
+    localStorage.setItem(STORAGE_KEY, accountId);
     return { accountId: accountId };
 }
 
 async function disconnectWallet() {
-    try {
-        if (wallet && wallet.signOut) await wallet.signOut();
-    } catch (e) { }
-    wallet = null;
     currentAccountId = "";
     localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(CONNECTING_KEY);
 }
 
 async function getSignedInAccountId() {
     if (currentAccountId) return currentAccountId;
-
-    // Проверяем localStorage
     var saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-        currentAccountId = saved;
-        return saved;
-    }
-
-    // Пробуем через SDK (после возврата из кошелька)
-    try {
-        var w = await getWallet();
-        if (w.getAccountId) {
-            var id = await w.getAccountId();
-            if (id) {
-                currentAccountId = String(id);
-                localStorage.setItem(STORAGE_KEY, currentAccountId);
-                localStorage.removeItem(CONNECTING_KEY);
-                return currentAccountId;
-            }
-        }
-    } catch (e) { }
-
+    if (saved) { currentAccountId = saved; return saved; }
     return "";
 }
 
-async function signAndSendTransaction(params) {
-    if (!wallet) await getWallet();
-    if (!wallet) throw new Error("Wallet not initialized");
-    var accountId = await getSignedInAccountId();
-    if (!accountId) throw new Error("Not connected");
-
-    return await wallet.signAndSendTransaction({
-        signerId: accountId,
-        receiverId: params.receiverId,
-        actions: params.actions,
-    });
+async function signAndSendTransaction() {
+    throw new Error("Transaction signing will be available in Stage 2");
 }
 
 export {
     networkId,
     RPC_URL,
-    connectWallet,
+    connectWithAccountId,
     disconnectWallet,
     getSignedInAccountId,
     signAndSendTransaction,
-    CONNECTING_KEY,
+    verifyAccount,
 };
