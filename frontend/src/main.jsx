@@ -1,7 +1,11 @@
 import { Buffer } from "buffer";
-if (!globalThis.Buffer) globalThis.Buffer = Buffer;
-if (!globalThis.process) globalThis.process = { env: {} };
-if (!globalThis.global) globalThis.global = globalThis;
+globalThis.Buffer = Buffer;
+
+import process from "process/browser";
+globalThis.process = process;
+if (!globalThis.process.env) globalThis.process.env = {};
+
+globalThis.global = globalThis;
 
 import React from "react";
 import ReactDOM from "react-dom/client";

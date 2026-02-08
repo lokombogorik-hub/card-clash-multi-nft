@@ -3,14 +3,14 @@
 
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Card Clash</title>
-
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-    <!-- NEAR Wallet Selector UI styles -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@near-wallet-selector/modal-ui@8.9.13/styles.css" />
+    <script>
+        if (typeof globalThis.global === "undefined") globalThis.global = globalThis;
+        if (typeof globalThis.process === "undefined") globalThis.process = { env: {}, version: "", browser: true };
+        if (typeof globalThis.process.env === "undefined") globalThis.process.env = {};
+    </script>
 </head>
 
 <body>

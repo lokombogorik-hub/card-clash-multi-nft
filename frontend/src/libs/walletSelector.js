@@ -1,25 +1,25 @@
 import { setupWalletSelector } from "@near-wallet-selector/core";
 import { setupHereWallet } from "@near-wallet-selector/here-wallet";
 
-const networkId =
+var networkId =
     (import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet").toLowerCase() === "testnet"
         ? "testnet"
         : "mainnet";
 
-const RPC_URL =
+var RPC_URL =
     import.meta.env.VITE_NEAR_RPC_URL ||
     (networkId === "testnet"
         ? "https://rpc.testnet.near.org"
         : "https://rpc.mainnet.near.org");
 
-let selector = null;
-let initPromise = null;
+var selector = null;
+var initPromise = null;
 
 async function initWalletSelector() {
     if (selector) return selector;
     if (initPromise) return initPromise;
 
-    initPromise = (async () => {
+    initPromise = (async function () {
         try {
             selector = await setupWalletSelector({
                 network: networkId,
@@ -38,25 +38,25 @@ async function initWalletSelector() {
 }
 
 async function connectWallet() {
-    const sel = await initWalletSelector();
-    const wallet = await sel.wallet("here-wallet");
+    var sel = await initWalletSelector();
+    var wallet = await sel.wallet("here-wallet");
 
     if (!wallet) {
         throw new Error("HERE Wallet module not available");
     }
 
-    const accounts = await wallet.signIn({
+    var accounts = await wallet.signIn({
         permission: { receiverId: "" },
     });
 
-    let accountId = "";
+    var accountId = "";
 
     if (Array.isArray(accounts) && accounts.length > 0) {
         accountId = accounts[0].accountId || "";
     }
 
     if (!accountId) {
-        const state = sel.store.getState();
+        var state = sel.store.getState();
         if (state.accounts && state.accounts.length > 0) {
             accountId = state.accounts[0].accountId;
         }
@@ -67,13 +67,13 @@ async function connectWallet() {
     }
 
     console.log("[WS] connected:", accountId);
-    return { accountId };
+    return { accountId: accountId };
 }
 
 async function disconnectWallet() {
     try {
-        const sel = await initWalletSelector();
-        const wallet = await sel.wallet("here-wallet");
+        var sel = await initWalletSelector();
+        var wallet = await sel.wallet("here-wallet");
         await wallet.signOut();
     } catch (e) {
         console.warn("[WS] disconnect error:", e);
@@ -82,8 +82,8 @@ async function disconnectWallet() {
 
 async function getSignedInAccountId() {
     try {
-        const sel = await initWalletSelector();
-        const state = sel.store.getState();
+        var sel = await initWalletSelector();
+        var state = sel.store.getState();
         if (state.accounts && state.accounts.length > 0) {
             return state.accounts[0].accountId;
         }
@@ -93,21 +93,21 @@ async function getSignedInAccountId() {
     return "";
 }
 
-async function signAndSendTransaction({ receiverId, actions }) {
-    const sel = await initWalletSelector();
-    const wallet = await sel.wallet();
+async function signAndSendTransaction(params) {
+    var sel = await initWalletSelector();
+    var wallet = await sel.wallet();
 
     if (!wallet) throw new Error("No wallet connected");
 
-    const state = sel.store.getState();
-    const accountId = state.accounts && state.accounts[0] && state.accounts[0].accountId;
+    var state = sel.store.getState();
+    var accountId = state.accounts && state.accounts[0] && state.accounts[0].accountId;
 
     if (!accountId) throw new Error("No signed-in account");
 
-    const result = await wallet.signAndSendTransaction({
+    var result = await wallet.signAndSendTransaction({
         signerId: accountId,
-        receiverId,
-        actions,
+        receiverId: params.receiverId,
+        actions: params.actions,
     });
 
     return result;
