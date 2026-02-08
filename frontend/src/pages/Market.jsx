@@ -1,23 +1,23 @@
 import { useState } from "react";
-import { useWalletStore } from "../store/useWalletStore"; // Правильный импорт
-
+import { useWalletStore } from "../store/useWalletStore";
+import { apiFetch } from "../api";
 
 const CASES = [
     {
         id: "starter",
         name: "Starter Case",
-        price: 0.1, // NEAR (storage cost)
+        price: 0.1,
         displayPrice: "1 Card",
         image: "/ui/case-starter.png",
         rarity: "common",
-        description: "1 random Common card",
+        description: "1 random card",
         animation: "fadeIn",
         type: "single",
     },
     {
         id: "premium",
         name: "Premium Case",
-        price: 0.5, // NEAR (storage for 5 cards)
+        price: 2,
         displayPrice: "5 Cards",
         image: "/ui/case-premium.png",
         rarity: "rare",
@@ -28,18 +28,18 @@ const CASES = [
     {
         id: "legendary",
         name: "Legendary Case",
-        price: 0.5,
+        price: 5,
         displayPrice: "5 Epic Cards",
         image: "/ui/case-legendary.png",
-        rarity: "legendary",
-        description: "5 Epic cards pack",
+        rarity: "epic",
+        description: "5 Epic cards guaranteed",
         animation: "explosionReveal",
         type: "pack",
     },
     {
         id: "ultimate",
         name: "Ultimate Case",
-        price: 0.5,
+        price: 10,
         displayPrice: "5 Legendary",
         image: "/ui/case-ultimate.png",
         rarity: "legendary",
@@ -50,12 +50,22 @@ const CASES = [
 ];
 
 export default function Market() {
-    const { isAuthenticated, accountId, mintCard, mintPack, getUserNFTs } = useWalletStore();
+    const {
+        connected: isAuthenticated,
+        accountId,
+        sendNear,
+        signAndSendTransaction,
+        getUserNFTs
+    } = useWalletStore();
 
     const [buying, setBuying] = useState(null);
     const [opening, setOpening] = useState(false);
     const [revealedNFT, setRevealedNFT] = useState(null);
     const [selectedCase, setSelectedCase] = useState(null);
+
+    const token = localStorage.getItem("token") ||
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("access_token") || "";
 
     const handleBuy = async (caseData) => {
         if (!isAuthenticated || !accountId) {
@@ -63,56 +73,95 @@ export default function Market() {
             return;
         }
 
+        if (!token) {
+            alert("Telegram auth required");
+            return;
+        }
+
         setBuying(caseData.id);
 
         try {
-            let result;
+            // 1. Оплата (отправляем NEAR в treasury)
+            const { txHash } = await sendNear({
+                receiverId: "retardo-s.near",
+                amount: caseData.price.toString(),
+            });
 
-            // Минтим NFT через контракт
-            if (caseData.type === "single") {
-                result = await mintCard();
-            } else {
-                result = await mintPack();
-            }
+            // 2. Открываем кейс на бекенде (получаем зарезервированные NFT)
+            const result = await apiFetch("/api/cases/open", {
+                method: "POST",
+                token,
+                body: JSON.stringify({
+                    case_id: caseData.id,
+                    tx_hash: txHash,
+                }),
+            });
 
-            // Обновляем список NFT
-            await getUserNFTs();
-
-            // Открываем кейс с анимацией
+            // 3. Показываем анимацию открытия
             setBuying(null);
             setSelectedCase(caseData);
             setOpening(true);
 
-            // Показываем результат
+            // 4. Через 2 сек показываем результат
             setTimeout(() => {
-                const rarities = ['common', 'rare', 'epic', 'legendary'];
-                const randomRarity = caseData.rarity === 'legendary' ? 'legendary' :
-                    rarities[Math.floor(Math.random() * rarities.length)];
+                const cards = result.cards || [];
+                const firstCard = cards[0];
 
                 setRevealedNFT({
-                    name: caseData.type === "single" ?
-                        `Card #${Date.now().toString().slice(-4)}` :
-                        `Pack of 5 Cards`,
-                    image: `/cards/card${Math.floor(Math.random() * 5) + 1}.jpg`,
-                    rarity: randomRarity,
+                    name: caseData.type === "single"
+                        ? `Card #${firstCard.token_id.split('_')[1]}`
+                        : `Pack of ${cards.length} Cards`,
+                    image: `/cards/${firstCard.rarity}.jpg`,
+                    rarity: firstCard.rarity,
+                    token_id: firstCard.token_id,
+                    count: cards.length,
                 });
 
-                setTimeout(() => {
-                    setOpening(false);
-                    setRevealedNFT(null);
-                    setSelectedCase(null);
+                // 5. Через 3 сек делаем claim (nft_transfer)
+                setTimeout(async () => {
+                    try {
+                        // Для каждой карты в паке делаем claim
+                        for (const card of cards) {
+                            const claimData = await apiFetch("/api/cases/claim", {
+                                method: "POST",
+                                token,
+                                body: JSON.stringify({
+                                    reserved_token_id: card.token_id,
+                                }),
+                            });
+
+                            // Подписываем транзакцию трансфера
+                            await signAndSendTransaction(claimData.transaction);
+                        }
+
+                        // Обновляем инвентарь
+                        await getUserNFTs();
+
+                        setOpening(false);
+                        setRevealedNFT(null);
+                        setSelectedCase(null);
+
+                        alert(`✅ Получено ${cards.length} карт!`);
+                    } catch (e) {
+                        console.error("Claim error:", e);
+                        alert(`Ошибка получения NFT: ${e.message}`);
+                        setOpening(false);
+                        setRevealedNFT(null);
+                        setSelectedCase(null);
+                    }
                 }, 3000);
+
             }, 2000);
 
         } catch (e) {
             alert(`Ошибка покупки: ${e.message}`);
             setBuying(null);
+            setOpening(false);
         }
     };
 
     return (
         <div className="market-page">
-            {/* Header */}
             <div className="market-header">
                 <h2 className="market-title">
                     <span className="market-title-icon">🛒</span>
@@ -135,7 +184,6 @@ export default function Market() {
                 </div>
             )}
 
-            {/* Cases Grid */}
             <div className="market-cases-grid">
                 {CASES.map((c) => (
                     <div key={c.id} className="market-case-card">
@@ -160,20 +208,19 @@ export default function Market() {
                         <div className="market-case-name">{c.name}</div>
                         <div className="market-case-desc">{c.description}</div>
                         <div className="market-case-price">{c.displayPrice}</div>
-                        <div className="market-case-price-near">{c.price} Ⓝ (storage)</div>
+                        <div className="market-case-price-near">{c.price} Ⓝ</div>
 
                         <button
                             className="market-case-buy-btn"
                             onClick={() => handleBuy(c)}
                             disabled={!isAuthenticated || buying === c.id}
                         >
-                            {buying === c.id ? "Минтинг..." : "Купить"}
+                            {buying === c.id ? "Оплата..." : "Купить"}
                         </button>
                     </div>
                 ))}
             </div>
 
-            {/* Opening Animation */}
             {opening && selectedCase && (
                 <div className="market-opening-overlay">
                     <div className={`market-opening-container ${selectedCase.animation}`}>
@@ -186,7 +233,7 @@ export default function Market() {
                                         draggable="false"
                                     />
                                 </div>
-                                <div className="market-opening-text">Minting on blockchain...</div>
+                                <div className="market-opening-text">Opening case...</div>
                             </>
                         ) : (
                             <div className="market-revealed-nft">
@@ -202,18 +249,19 @@ export default function Market() {
                                 <div className="market-revealed-nft-rarity" data-rarity={revealedNFT.rarity}>
                                     {revealedNFT.rarity}
                                 </div>
-                                <div className="market-revealed-nft-chain">✅ Minted on NEAR</div>
+                                <div className="market-revealed-nft-chain">
+                                    ✅ Transferring {revealedNFT.count} NFT{revealedNFT.count > 1 ? 's' : ''}...
+                                </div>
                             </div>
                         )}
                     </div>
                 </div>
             )}
 
-            {/* Footer */}
             <div className="market-footer">
                 <div className="market-footer-icon">🚀</div>
                 <div className="market-footer-text">
-                    Real NFTs on NEAR blockchain • Trading coming soon!
+                    Real NFTs on NEAR blockchain • Multi-collection support!
                 </div>
             </div>
         </div>

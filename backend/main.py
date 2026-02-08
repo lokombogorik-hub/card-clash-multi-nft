@@ -15,6 +15,7 @@ from routers.mock_nfts import router as mock_nfts_router
 from routers.near import router as near_router
 from routers.matches import router as matches_router
 from routers.matchmaking import router as matchmaking_router
+from backend.routers import cases
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -42,7 +43,7 @@ app.include_router(mock_nfts_router)  # already has prefix="/api"
 app.include_router(near_router)       # prefix="/api/near"
 app.include_router(matches_router)    # prefix="/api/matches"
 app.include_router(matchmaking_router)  # prefix="/api/matchmaking"
-
+app.include_router(cases.router)
 
 @app.on_event("startup")
 async def on_startup():
