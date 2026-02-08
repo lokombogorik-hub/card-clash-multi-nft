@@ -1,22 +1,12 @@
 import { useEffect, useState } from "react";
 import {
     connectWallet,
-    connectHotWallet,
-    connectMyNearWallet,
     disconnectWallet as disconnect,
     signAndSendTransaction as signTx,
     getSignedInAccountId,
-} from "../libs/nearWallet";
-
-const LS_NEAR_ACCOUNT_ID = "cc_near_account_id";
-
-const envNetworkId = (import.meta.env.VITE_NEAR_NETWORK_ID || "").toLowerCase();
-const nearNetworkId = envNetworkId === "testnet" ? "testnet" : "mainnet";
-
-const envRpcUrl = import.meta.env.VITE_NEAR_RPC_URL || "";
-const rpcUrl =
-    envRpcUrl ||
-    (nearNetworkId === "testnet" ? "https://rpc.testnet.near.org" : "https://rpc.mainnet.near.org");
+    networkId,
+    RPC_URL,
+} from "../libs/walletSelector";
 
 const escrowContractId = (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim();
 const nftContractId = (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim();
@@ -25,7 +15,6 @@ const GAS_100_TGAS = "100000000000000";
 const GAS_150_TGAS = "150000000000000";
 const GAS_300_TGAS = "300000000000000";
 const ONE_YOCTO = "1";
-const MINT_DEPOSIT = "100000000000000000000000"; // 0.1 NEAR
 
 function yoctoToNearFloat(yoctoStr) {
     try {
@@ -41,7 +30,7 @@ function yoctoToNearFloat(yoctoStr) {
 }
 
 async function fetchNearBalance(accountId) {
-    const res = await fetch(rpcUrl, {
+    const res = await fetch(RPC_URL, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -59,85 +48,18 @@ async function fetchNearBalance(accountId) {
     return yoctoToNearFloat(json?.result?.amount || "0");
 }
 
-function isLikelyNearAccountId(s) {
-    const v = String(s || "").trim();
-    if (!v) return false;
-    if (v.length < 2 || v.length > 64) return false;
-    if (v.toLowerCase() !== v) return false;
-    if (!/^[a-z0-9._-]+$/.test(v)) return false;
-    return true;
-}
-
-function extractAccountIdFromUrl() {
-    try {
-        const u = new URL(window.location.href);
-        const cands = [
-            u.searchParams.get("account_id"),
-            u.searchParams.get("accountId"),
-            u.searchParams.get("near_account_id"),
-        ].filter(Boolean);
-
-        if (cands.length) {
-            const v = String(cands[0]).trim();
-            if (isLikelyNearAccountId(v)) return v;
-        }
-
-        const hash = (u.hash || "").replace(/^#/, "");
-        if (hash) {
-            const p = new URLSearchParams(hash);
-            const hv =
-                p.get("account_id") ||
-                p.get("accountId") ||
-                p.get("near_account_id") ||
-                "";
-            if (isLikelyNearAccountId(hv)) return hv;
-        }
-    } catch { }
-    return "";
-}
-
-function extractAccountIdFromLocalStorageScan() {
-    try {
-        for (let i = 0; i < localStorage.length; i++) {
-            const k = localStorage.key(i);
-            if (!k) continue;
-            const lk = k.toLowerCase();
-            if (!lk.includes("here") && !lk.includes("hot") && !lk.includes("wallet")) continue;
-            const val = localStorage.getItem(k);
-            if (!val) continue;
-
-            if (isLikelyNearAccountId(val)) return val;
-
-            try {
-                const j = JSON.parse(val);
-                const cand =
-                    j?.accountId ||
-                    j?.account_id ||
-                    j?.nearAccountId ||
-                    j?.near_account_id ||
-                    "";
-                if (isLikelyNearAccountId(cand)) return cand;
-            } catch { }
-        }
-    } catch { }
-    return "";
-}
-
 let state = {
     connected: false,
     walletAddress: "",
-    nearNetworkId,
-    rpcUrl,
+    nearNetworkId: networkId,
+    rpcUrl: RPC_URL,
     escrowContractId,
     nftContractId,
-
     balance: 0,
     balanceError: "",
     status: "",
-
     nfts: [],
     nftsError: "",
-
     lastError: null,
 };
 
@@ -163,24 +85,9 @@ function applyAccount(accountId) {
         lastError: null,
     });
 
-    try {
-        localStorage.setItem(LS_NEAR_ACCOUNT_ID, id);
-    } catch { }
-
     fetchNearBalance(id)
         .then((b) => setState({ balance: b, balanceError: "" }))
         .catch((e) => setState({ balance: 0, balanceError: String(e?.message || e) }));
-}
-
-function restoreFromStorage() {
-    try {
-        const id = localStorage.getItem(LS_NEAR_ACCOUNT_ID) || "";
-        if (!id) return false;
-        applyAccount(id);
-        return true;
-    } catch {
-        return false;
-    }
 }
 
 function clearStatus() {
@@ -203,51 +110,13 @@ async function signAndSendTransaction({ receiverId, actions }) {
 }
 
 async function connectHot() {
-    setState({ status: "Opening HOT Wallet…", lastError: null });
+    setState({ status: "Opening wallet selector…", lastError: null });
 
     try {
-        const { accountId } = await connectHotWallet();
+        const { accountId } = await connectWallet();
 
         if (!accountId) {
-            setState({
-                status: "✅ HOT Wallet opened. Complete login and return to game…",
-                lastError: null
-            });
-
-            // Polling для авторизации
-            let pollCount = 0;
-            const maxPolls = 120;
-
-            const pollInterval = setInterval(async () => {
-                pollCount++;
-
-                try {
-                    const id = await getSignedInAccountId();
-                    if (id) {
-                        clearInterval(pollInterval);
-                        applyAccount(id);
-                        setState({ status: "✅ Connected successfully!", lastError: null });
-                        await getUserNFTs();
-
-                        setTimeout(() => {
-                            setState({ status: "" });
-                        }, 3000);
-                    }
-                } catch (e) {
-                    console.error("Poll error:", e);
-                }
-
-                if (pollCount >= maxPolls) {
-                    clearInterval(pollInterval);
-                    if (!state.connected) {
-                        setState({
-                            status: "⏱️ Connection timeout. Please try again.",
-                            lastError: null
-                        });
-                    }
-                }
-            }, 1000);
-
+            setState({ status: "Please select wallet and sign in", lastError: null });
             return;
         }
 
@@ -256,32 +125,12 @@ async function connectHot() {
 
         await getUserNFTs();
 
-        setTimeout(() => {
-            setState({ status: "" });
-        }, 2000);
+        setTimeout(() => setState({ status: "" }), 2000);
 
     } catch (e) {
         const errMsg = e?.message || String(e);
         setState({
-            status: `HOT Connect failed: ${errMsg}`,
-            lastError: { name: e?.name || "Error", message: errMsg, stack: e?.stack || "" },
-        });
-    }
-}
-
-async function connectMyNear() {
-    setState({ status: "Opening MyNearWallet…", lastError: null });
-
-    try {
-        const { accountId } = await connectMyNearWallet();
-        if (!accountId) throw new Error("MyNearWallet не вернул accountId");
-        applyAccount(accountId);
-        setState({ status: "", lastError: null });
-        await getUserNFTs();
-    } catch (e) {
-        const errMsg = e?.message || String(e);
-        setState({
-            status: `MyNear Connect failed: ${errMsg}`,
+            status: `Connect failed: ${errMsg}`,
             lastError: { name: e?.name || "Error", message: errMsg, stack: e?.stack || "" },
         });
     }
@@ -289,7 +138,6 @@ async function connectMyNear() {
 
 async function disconnectWallet() {
     try { await disconnect(); } catch { }
-    try { localStorage.removeItem(LS_NEAR_ACCOUNT_ID); } catch { }
     setState({
         connected: false,
         walletAddress: "",
@@ -303,25 +151,6 @@ async function disconnectWallet() {
 }
 
 async function restoreSession() {
-    if (restoreFromStorage()) {
-        await getUserNFTs();
-        return;
-    }
-
-    const fromUrl = extractAccountIdFromUrl();
-    if (fromUrl) {
-        applyAccount(fromUrl);
-        await getUserNFTs();
-        return;
-    }
-
-    const fromLs = extractAccountIdFromLocalStorageScan();
-    if (fromLs) {
-        applyAccount(fromLs);
-        await getUserNFTs();
-        return;
-    }
-
     try {
         const id = await getSignedInAccountId();
         if (id) {
@@ -333,7 +162,7 @@ async function restoreSession() {
 
 async function nftTransferCall({ nftContractId, tokenId, matchId, side, playerA, playerB, receiverId }) {
     const escrowId = (receiverId || escrowContractId || "").trim();
-    if (!escrowId) throw new Error("Escrow contract id missing (VITE_NEAR_ESCROW_CONTRACT_ID)");
+    if (!escrowId) throw new Error("Escrow contract id missing");
 
     const msg = JSON.stringify({ match_id: matchId, side, player_a: playerA, player_b: playerB });
 
@@ -353,7 +182,7 @@ async function nftTransferCall({ nftContractId, tokenId, matchId, side, playerA,
 
 async function escrowClaim({ matchId, winnerAccountId, loserNftContractId, loserTokenId, receiverId }) {
     const escrowId = (receiverId || escrowContractId || "").trim();
-    if (!escrowId) throw new Error("Escrow contract id missing (VITE_NEAR_ESCROW_CONTRACT_ID)");
+    if (!escrowId) throw new Error("Escrow contract id missing");
 
     const actions = [{
         type: "FunctionCall",
@@ -374,63 +203,13 @@ async function escrowClaim({ matchId, winnerAccountId, loserNftContractId, loser
     return { outcome, txHash: extractTxHash(outcome) };
 }
 
-async function mintCard() {
-    if (!nftContractId) throw new Error("NFT contract id missing (VITE_NEAR_NFT_CONTRACT_ID)");
-    if (!state.walletAddress) throw new Error("Wallet not connected");
-
-    const tokenId = `card_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
-
-    const stats = {
-        top: Math.floor(Math.random() * 10) + 1,
-        right: Math.floor(Math.random() * 10) + 1,
-        bottom: Math.floor(Math.random() * 10) + 1,
-        left: Math.floor(Math.random() * 10) + 1,
-    };
-
-    const elements = ["Fire", "Water", "Earth", "Wind", "Ice", "Thunder", "Holy", "Poison"];
-    const element = elements[Math.floor(Math.random() * elements.length)];
-
-    const actions = [{
-        type: "FunctionCall",
-        params: {
-            methodName: "nft_mint",
-            args: {
-                token_id: tokenId,
-                receiver_id: state.walletAddress,
-                metadata: {
-                    title: `Card #${tokenId.slice(-6)}`,
-                    description: `Top:${stats.top} Right:${stats.right} Bottom:${stats.bottom} Left:${stats.left}`,
-                    media: null,
-                    extra: JSON.stringify({
-                        stats,
-                        element,
-                        rarity: ["common", "rare", "epic", "legendary"][Math.floor(Math.random() * 4)],
-                    }),
-                },
-            },
-            gas: GAS_300_TGAS,
-            deposit: MINT_DEPOSIT,
-        },
-    }];
-
-    const outcome = await signAndSendTransaction({ receiverId: nftContractId, actions });
-    await getUserNFTs();
-    return { outcome, txHash: extractTxHash(outcome), tokenId };
-}
-
-async function mintPack() {
-    const results = [];
-    for (let i = 0; i < 5; i++) results.push(await mintCard());
-    return results;
-}
-
 async function getUserNFTs() {
     const accountId = state.walletAddress;
     if (!accountId) return [];
     if (!nftContractId) return [];
 
     try {
-        const res = await fetch(rpcUrl, {
+        const res = await fetch(RPC_URL, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
@@ -502,7 +281,6 @@ export const walletStore = {
     },
 
     connectHot,
-    connectMyNear,
     disconnectWallet,
     restoreSession,
     clearStatus,
@@ -511,8 +289,6 @@ export const walletStore = {
     nftTransferCall,
     escrowClaim,
 
-    mintCard,
-    mintPack,
     getUserNFTs,
     sendNear,
 };
@@ -538,14 +314,11 @@ export function useWalletStore() {
         nftsError: snap.nftsError,
 
         connectHot: walletStore.connectHot,
-        connectMyNear: walletStore.connectMyNear,
         disconnectWallet: walletStore.disconnectWallet,
         clearStatus: walletStore.clearStatus,
         restoreSession: walletStore.restoreSession,
 
         sendNear: walletStore.sendNear,
-        mintCard: walletStore.mintCard,
-        mintPack: walletStore.mintPack,
         getUserNFTs: walletStore.getUserNFTs,
 
         signAndSendTransaction: walletStore.signAndSendTransaction,
