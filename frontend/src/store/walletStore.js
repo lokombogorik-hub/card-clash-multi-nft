@@ -6,6 +6,7 @@ import {
     getSignedInAccountId,
     networkId,
     RPC_URL,
+    CONNECTING_KEY,
 } from "../libs/walletSelector";
 
 var escrowContractId = (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim();
@@ -94,43 +95,36 @@ async function connectHot() {
         var result = await connectWallet();
         var accountId = result.accountId;
 
-        if (!accountId) {
-            setState({ status: "Please confirm in HOT Wallet, then tap Connect again", lastError: null });
+        if (accountId) {
+            applyAccount(accountId);
+            setState({ status: "✅ Connected!", lastError: null });
+            await getUserNFTs();
+            setTimeout(function () { setState({ status: "" }); }, 2000);
+        } else {
+            setState({
+                status: "Confirm in HOT Wallet, then return to the game",
+                lastError: null,
+            });
+        }
+    } catch (e) {
+        var errMsg = (e && e.message) || String(e);
+        var msg = errMsg.toLowerCase();
 
-            // Запускаем polling — проверяем каждые 2 сек не подключился ли
-            var pollCount = 0;
-            var maxPoll = 90; // 3 минуты
-            var pollTimer = setInterval(async function () {
-                pollCount++;
-                if (pollCount > maxPoll) {
-                    clearInterval(pollTimer);
-                    setState({ status: "Timeout. Please try again." });
-                    return;
-                }
-                try {
-                    var id = await getSignedInAccountId();
-                    if (id) {
-                        clearInterval(pollTimer);
-                        applyAccount(id);
-                        setState({ status: "✅ Connected!", lastError: null });
-                        await getUserNFTs();
-                        setTimeout(function () { setState({ status: "" }); }, 2000);
-                    }
-                } catch (e) { }
-            }, 2000);
-
+        // Эти ошибки нормальные — пользователь ушёл в кошелёк
+        if (msg.indexOf("load failed") !== -1 ||
+            msg.indexOf("user reject") !== -1 ||
+            msg.indexOf("cancelled") !== -1 ||
+            msg.indexOf("aborted") !== -1) {
+            setState({
+                status: "Confirm in HOT Wallet, then return to the game",
+                lastError: null,
+            });
             return;
         }
 
-        applyAccount(accountId);
-        setState({ status: "✅ Connected!", lastError: null });
-        await getUserNFTs();
-        setTimeout(function () { setState({ status: "" }); }, 2000);
-    } catch (e) {
-        var errMsg = (e && e.message) || String(e);
         console.error("[Wallet] connect failed:", e);
         setState({
-            status: "Connect failed: " + errMsg,
+            status: "Error: " + errMsg,
             lastError: { name: (e && e.name) || "Error", message: errMsg, stack: (e && e.stack) || "" },
         });
     }
@@ -149,7 +143,25 @@ async function restoreSession() {
         var id = await getSignedInAccountId();
         if (id) {
             applyAccount(id);
+            setState({ status: "✅ Wallet restored!", lastError: null });
             await getUserNFTs();
+            setTimeout(function () { setState({ status: "" }); }, 2000);
+            return;
+        }
+
+        // Если был в процессе подключения — показываем статус
+        var connecting = localStorage.getItem(CONNECTING_KEY);
+        if (connecting) {
+            var elapsed = Date.now() - parseInt(connecting);
+            // Если прошло меньше 5 минут — ещё ждём
+            if (elapsed < 300000) {
+                setState({
+                    status: "Return from HOT Wallet? Tap Connect again.",
+                    lastError: null,
+                });
+            } else {
+                localStorage.removeItem(CONNECTING_KEY);
+            }
         }
     } catch (e) { }
 }
@@ -165,16 +177,14 @@ async function nftTransferCall(params) {
     if (!escrowId) throw new Error("Escrow contract id missing");
     var msg = JSON.stringify({ match_id: params.matchId, side: params.side, player_a: params.playerA, player_b: params.playerB });
     var actions = [{ type: "FunctionCall", params: { methodName: "nft_transfer_call", args: { receiver_id: escrowId, token_id: params.tokenId, approval_id: null, memo: null, msg: msg }, gas: GAS_150_TGAS, deposit: ONE_YOCTO } }];
-    var outcome = await signAndSendTransaction({ receiverId: params.nftContractId, actions: actions });
-    return { outcome: outcome, txHash: extractTxHash(outcome) };
+    return await signAndSendTransaction({ receiverId: params.nftContractId, actions: actions });
 }
 
 async function escrowClaim(params) {
     var escrowId = (params.receiverId || escrowContractId || "").trim();
     if (!escrowId) throw new Error("Escrow contract id missing");
     var actions = [{ type: "FunctionCall", params: { methodName: "claim", args: { match_id: params.matchId, winner: params.winnerAccountId, loser_nft_contract_id: params.loserNftContractId, loser_token_id: params.loserTokenId }, gas: GAS_100_TGAS, deposit: "0" } }];
-    var outcome = await signAndSendTransaction({ receiverId: escrowId, actions: actions });
-    return { outcome: outcome, txHash: extractTxHash(outcome) };
+    return await signAndSendTransaction({ receiverId: escrowId, actions: actions });
 }
 
 async function getUserNFTs() {
@@ -207,8 +217,7 @@ async function getUserNFTs() {
 async function sendNear(params) {
     var amountYocto = (parseFloat(params.amount) * 1e24).toFixed(0);
     var actions = [{ type: "Transfer", params: { deposit: amountYocto } }];
-    var outcome = await signAndSendTransaction({ receiverId: params.receiverId, actions: actions });
-    return { outcome: outcome, txHash: extractTxHash(outcome) };
+    return await signAndSendTransaction({ receiverId: params.receiverId, actions: actions });
 }
 
 export var walletStore = {
