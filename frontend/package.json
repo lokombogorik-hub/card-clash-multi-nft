@@ -9,8 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@here-wallet/core": "1.6.6",
-    "near-api-js": "^2.1.4",
+    "@here-wallet/core": "^3.4.0",
     "buffer": "^6.0.3",
     "canvas-confetti": "1.9.3",
     "crypto-browserify": "^3.12.1",
