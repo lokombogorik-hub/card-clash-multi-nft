@@ -13,32 +13,49 @@ var wallet = null;
 var currentAccountId = "";
 var STORAGE_KEY = "cardclash_near_account";
 
-async function getWallet() {
-    if (wallet) return wallet;
+/*
+ * ПЕРЕХВАТ: заменяем openTelegramLink чтобы SDK
+ * не закрывал нашу игру, а открывал кошелёк в iframe
+ */
+function installTelegramLinkInterceptor() {
+    if (!window.Telegram || !window.Telegram.WebApp) return;
+    if (window.__hotInterceptorInstalled) return;
+    window.__hotInterceptorInstalled = true;
 
-    var mod = await import("@here-wallet/core");
-    var HereWallet = mod.HereWallet || mod.default;
+    var originalOpenTelegramLink = window.Telegram.WebApp.openTelegramLink;
 
-    if (!HereWallet) {
-        throw new Error("HereWallet not found in module");
-    }
+    window.Telegram.WebApp.openTelegramLink = function (url) {
+        console.log("[INTERCEPT] openTelegramLink called:", url);
 
-    wallet = await HereWallet.connect({
-        networkId: networkId,
-        walletId: (import.meta.env.VITE_HOT_WALLET_ID || "herewalletbot/app").trim(),
-        telegramBotId: (import.meta.env.VITE_TG_BOT_ID || "Cardclashbot/app").trim(),
-        rpcUrl: RPC_URL,
-        openUrl: function (url) {
-            // НЕ используем openTelegramLink — он закрывает игру!
-            // Вместо этого открываем в iframe поверх
-            openWalletOverlay(url);
-        },
-    });
+        // Если это ссылка на herewalletbot — открываем в iframe
+        if (url && url.indexOf("herewalletbot") !== -1) {
+            console.log("[INTERCEPT] Redirecting to iframe overlay");
+            openWalletIframe(url);
+            return;
+        }
 
-    return wallet;
+        // Остальные ссылки — как обычно
+        if (originalOpenTelegramLink) {
+            originalOpenTelegramLink.call(window.Telegram.WebApp, url);
+        }
+    };
+
+    console.log("[INTERCEPT] Telegram link interceptor installed");
 }
 
-function openWalletOverlay(url) {
+function openWalletIframe(tgUrl) {
+    // Преобразуем t.me ссылку в web URL для iframe
+    // https://t.me/herewalletbot/app?startapp=xxx -> https://tgapp.herewallet.app/?startapp=xxx
+    var webUrl = tgUrl;
+    try {
+        var parsed = new URL(tgUrl);
+        var path = parsed.pathname; // /herewalletbot/app
+        var search = parsed.search; // ?startapp=xxx
+        webUrl = "https://my.herewallet.app/" + search;
+    } catch (e) {
+        webUrl = "https://my.herewallet.app/";
+    }
+
     // Удаляем старый
     var old = document.getElementById("hot-iframe-overlay");
     if (old) old.remove();
@@ -47,55 +64,80 @@ function openWalletOverlay(url) {
     overlay.id = "hot-iframe-overlay";
     overlay.style.cssText =
         "position:fixed;inset:0;z-index:999999;" +
-        "background:rgba(0,0,0,0.9);" +
-        "display:flex;flex-direction:column;" +
-        "align-items:center;justify-content:flex-start;" +
-        "padding:0;";
+        "background:rgba(0,0,0,0.95);" +
+        "display:flex;flex-direction:column;";
 
-    // Кнопка закрыть
-    var closeBar = document.createElement("div");
-    closeBar.style.cssText =
-        "width:100%;padding:8px 16px;" +
+    // Header
+    var header = document.createElement("div");
+    header.style.cssText =
         "display:flex;justify-content:space-between;align-items:center;" +
-        "background:rgba(0,0,0,0.95);flex-shrink:0;";
+        "padding:12px 16px;background:#111;flex-shrink:0;";
 
-    var title = document.createElement("span");
-    title.style.cssText = "color:#fff;font-size:14px;font-weight:900;";
-    title.textContent = "🔥 HOT Wallet";
+    var titleEl = document.createElement("span");
+    titleEl.style.cssText = "color:#fff;font-size:15px;font-weight:900;";
+    titleEl.textContent = "🔥 HOT Wallet";
 
     var closeBtn = document.createElement("button");
-    closeBtn.textContent = "✕ Close";
+    closeBtn.textContent = "✕";
     closeBtn.style.cssText =
-        "padding:8px 16px;border-radius:10px;" +
+        "width:36px;height:36px;border-radius:10px;" +
         "border:1px solid rgba(255,255,255,0.2);" +
-        "background:rgba(255,60,60,0.2);color:#fff;" +
-        "font-size:13px;font-weight:800;cursor:pointer;";
-
+        "background:rgba(255,60,60,0.3);color:#fff;" +
+        "font-size:18px;font-weight:900;cursor:pointer;" +
+        "display:flex;align-items:center;justify-content:center;";
     closeBtn.addEventListener("click", function () {
         var el = document.getElementById("hot-iframe-overlay");
         if (el) el.remove();
     });
 
-    closeBar.appendChild(title);
-    closeBar.appendChild(closeBtn);
+    header.appendChild(titleEl);
+    header.appendChild(closeBtn);
 
-    // iframe с кошельком
+    // iframe
     var iframe = document.createElement("iframe");
-    iframe.src = url;
+    iframe.src = webUrl;
     iframe.style.cssText =
-        "flex:1;width:100%;border:none;" +
-        "background:#000;border-radius:0;";
-    iframe.setAttribute("allow", "clipboard-read; clipboard-write");
-    iframe.setAttribute("sandbox",
-        "allow-scripts allow-same-origin allow-popups " +
-        "allow-forms allow-modals allow-top-navigation");
+        "flex:1;width:100%;border:none;background:#000;";
+    iframe.setAttribute("allow",
+        "clipboard-read; clipboard-write; web-share");
 
-    overlay.appendChild(closeBar);
+    overlay.appendChild(header);
     overlay.appendChild(iframe);
     document.body.appendChild(overlay);
+
+    console.log("[INTERCEPT] iframe opened:", webUrl);
+}
+
+// Устанавливаем перехватчик сразу
+installTelegramLinkInterceptor();
+
+async function getWallet() {
+    if (wallet) return wallet;
+
+    // Убеждаемся что перехватчик на месте
+    installTelegramLinkInterceptor();
+
+    var mod = await import("@here-wallet/core");
+    var HereWallet = mod.HereWallet || mod.default;
+
+    if (!HereWallet) {
+        throw new Error("HereWallet not found");
+    }
+
+    wallet = await HereWallet.connect({
+        networkId: networkId,
+        walletId: (import.meta.env.VITE_HOT_WALLET_ID || "herewalletbot/app").trim(),
+        telegramBotId: (import.meta.env.VITE_TG_BOT_ID || "Cardclashbot/app").trim(),
+        rpcUrl: RPC_URL,
+    });
+
+    return wallet;
 }
 
 async function connectWallet() {
+    // Убеждаемся что перехватчик на месте
+    installTelegramLinkInterceptor();
+
     var w = await getWallet();
 
     // Проверяем уже авторизован
@@ -112,7 +154,8 @@ async function connectWallet() {
         return { accountId: currentAccountId };
     }
 
-    // signIn — SDK вызовет openUrl → откроется iframe поверх
+    // signIn — SDK попытается вызвать openTelegramLink
+    // но наш перехватчик откроет iframe вместо этого
     try {
         var result = await w.signIn({
             contractId: (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim() || undefined,
@@ -131,14 +174,13 @@ async function connectWallet() {
         if (accountId) {
             currentAccountId = accountId;
             localStorage.setItem(STORAGE_KEY, accountId);
-            // Закрываем iframe overlay
+            // Закрываем iframe
             var el = document.getElementById("hot-iframe-overlay");
             if (el) el.remove();
         }
 
         return { accountId: accountId };
     } catch (e) {
-        // Если ошибка но iframe открылся — пользователь ещё подтверждает
         var msg = (e && e.message || "").toLowerCase();
         if (msg.indexOf("load failed") !== -1 || msg.indexOf("user reject") !== -1) {
             return { accountId: "" };
@@ -180,6 +222,9 @@ async function getSignedInAccountId() {
 }
 
 async function signAndSendTransaction(params) {
+    // Перехватчик на месте
+    installTelegramLinkInterceptor();
+
     if (!wallet) throw new Error("Wallet not initialized");
     var accountId = await getSignedInAccountId();
     if (!accountId) throw new Error("Not connected");
