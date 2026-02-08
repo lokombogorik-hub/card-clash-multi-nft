@@ -1,3 +1,6 @@
+import { setupWalletSelector } from "@near-wallet-selector/core";
+import { setupHereWallet } from "@near-wallet-selector/here-wallet";
+
 var networkId =
     (import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet").toLowerCase() === "testnet"
         ? "testnet"
@@ -9,64 +12,159 @@ var RPC_URL =
         ? "https://rpc.testnet.near.org"
         : "https://rpc.mainnet.near.org");
 
-var currentAccountId = "";
-var STORAGE_KEY = "cardclash_near_account";
+var selector = null;
+var initPromise = null;
 
-async function verifyAccount(accountId) {
-    var res = await fetch(RPC_URL, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-            jsonrpc: "2.0",
-            id: "verify",
-            method: "query",
-            params: {
-                request_type: "view_account",
-                finality: "final",
-                account_id: accountId,
-            },
-        }),
-    });
-    var json = await res.json();
-    return !json.error;
+async function initWalletSelector() {
+    if (selector) return selector;
+    if (initPromise) return initPromise;
+
+    initPromise = (async function () {
+        try {
+            console.log("[WS] Initializing wallet selector, network:", networkId);
+
+            selector = await setupWalletSelector({
+                network: networkId,
+                modules: [
+                    setupHereWallet(),
+                ],
+            });
+
+            console.log("[WS] Wallet selector initialized OK");
+
+            // Проверяем текущее состояние
+            var state = selector.store.getState();
+            console.log("[WS] Current accounts:", state.accounts);
+
+            return selector;
+        } catch (e) {
+            console.error("[WS] Init failed:", e);
+            initPromise = null;
+            selector = null;
+            throw e;
+        }
+    })();
+
+    return initPromise;
 }
 
-async function connectWithAccountId(accountId) {
-    accountId = String(accountId || "").trim().toLowerCase();
-    if (!accountId) throw new Error("Enter your account ID");
-    if (accountId.length < 2 || accountId.length > 64) throw new Error("Invalid account ID length");
-    if (!/^[a-z0-9._-]+$/.test(accountId)) throw new Error("Invalid characters in account ID");
+async function connectWallet() {
+    var sel = await initWalletSelector();
 
-    var exists = await verifyAccount(accountId);
-    if (!exists) throw new Error("Account not found on NEAR " + networkId);
+    console.log("[WS] Getting here-wallet module...");
 
-    currentAccountId = accountId;
-    localStorage.setItem(STORAGE_KEY, accountId);
+    var wallet;
+    try {
+        wallet = await sel.wallet("here-wallet");
+    } catch (e) {
+        console.error("[WS] Failed to get here-wallet:", e);
+        throw new Error("HERE Wallet not available: " + e.message);
+    }
+
+    if (!wallet) {
+        throw new Error("HERE Wallet module not found");
+    }
+
+    console.log("[WS] HERE Wallet module loaded, calling signIn...");
+    console.log("[WS] Wallet type:", wallet.type);
+    console.log("[WS] Wallet id:", wallet.id);
+
+    // signIn БЕЗ contractId — просто авторизация
+    var accounts;
+    try {
+        accounts = await wallet.signIn({});
+    } catch (e1) {
+        console.warn("[WS] signIn({}) failed:", e1.message);
+        // Пробуем с пустым permission
+        try {
+            accounts = await wallet.signIn({ permission: "FullAccess" });
+        } catch (e2) {
+            console.warn("[WS] signIn(FullAccess) failed:", e2.message);
+            // Последняя попытка
+            try {
+                accounts = await wallet.signIn();
+            } catch (e3) {
+                console.error("[WS] All signIn attempts failed:", e3.message);
+                throw e3;
+            }
+        }
+    }
+
+    console.log("[WS] signIn result:", accounts);
+
+    var accountId = "";
+
+    if (Array.isArray(accounts) && accounts.length > 0) {
+        accountId = accounts[0].accountId || String(accounts[0]);
+    } else if (accounts && accounts.accountId) {
+        accountId = accounts.accountId;
+    } else if (typeof accounts === "string") {
+        accountId = accounts;
+    }
+
+    // Fallback: проверяем store
+    if (!accountId) {
+        var state = sel.store.getState();
+        if (state.accounts && state.accounts.length > 0) {
+            accountId = state.accounts[0].accountId;
+        }
+    }
+
+    console.log("[WS] Final accountId:", accountId);
+
+    if (!accountId) {
+        throw new Error("No account returned from wallet");
+    }
+
     return { accountId: accountId };
 }
 
 async function disconnectWallet() {
-    currentAccountId = "";
-    localStorage.removeItem(STORAGE_KEY);
+    try {
+        var sel = await initWalletSelector();
+        var wallet = await sel.wallet();
+        if (wallet) await wallet.signOut();
+    } catch (e) {
+        console.warn("[WS] disconnect error:", e);
+    }
+    selector = null;
+    initPromise = null;
 }
 
 async function getSignedInAccountId() {
-    if (currentAccountId) return currentAccountId;
-    var saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) { currentAccountId = saved; return saved; }
+    try {
+        var sel = await initWalletSelector();
+        var state = sel.store.getState();
+        if (state.accounts && state.accounts.length > 0) {
+            return state.accounts[0].accountId;
+        }
+    } catch (e) {
+        console.warn("[WS] getSignedInAccountId error:", e);
+    }
     return "";
 }
 
-async function signAndSendTransaction() {
-    throw new Error("Transaction signing will be available in Stage 2");
+async function signAndSendTransaction(params) {
+    var sel = await initWalletSelector();
+    var wallet = await sel.wallet();
+    if (!wallet) throw new Error("No wallet connected");
+
+    var state = sel.store.getState();
+    var accountId = state.accounts && state.accounts[0] && state.accounts[0].accountId;
+    if (!accountId) throw new Error("No signed-in account");
+
+    return await wallet.signAndSendTransaction({
+        signerId: accountId,
+        receiverId: params.receiverId,
+        actions: params.actions,
+    });
 }
 
 export {
     networkId,
     RPC_URL,
-    connectWithAccountId,
+    connectWallet,
     disconnectWallet,
     getSignedInAccountId,
     signAndSendTransaction,
-    verifyAccount,
 };

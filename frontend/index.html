@@ -10,6 +10,9 @@
         if (typeof globalThis.global === "undefined") globalThis.global = globalThis;
         if (typeof globalThis.process === "undefined") globalThis.process = { env: {}, version: "", browser: true };
         if (typeof globalThis.process.env === "undefined") globalThis.process.env = {};
+        if (typeof globalThis.Buffer === "undefined") {
+            try { var B = require("buffer"); globalThis.Buffer = B.Buffer; } catch (e) { }
+        }
     </script>
 </head>
 

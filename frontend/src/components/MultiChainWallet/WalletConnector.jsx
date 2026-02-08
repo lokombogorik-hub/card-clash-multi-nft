@@ -3,19 +3,14 @@ import { useWalletStore } from "../../store/walletStore";
 
 export default function WalletConnector() {
     var wallet = useWalletStore();
-    var [input, setInput] = useState("");
     var [loading, setLoading] = useState(false);
-    var [err, setErr] = useState("");
-
     var networkId = import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet";
     var isTestnet = networkId.toLowerCase() === "testnet";
 
-    useEffect(function () {
-        wallet.restoreSession();
-    }, []);
+    useEffect(function () { wallet.restoreSession(); }, []);
 
-    function haptic(kind) {
-        try { window.Telegram.WebApp.HapticFeedback.impactOccurred(kind || "light"); } catch (e) { }
+    function haptic(k) {
+        try { window.Telegram.WebApp.HapticFeedback.impactOccurred(k || "light"); } catch (e) { }
     }
 
     function fmt(a) {
@@ -24,34 +19,15 @@ export default function WalletConnector() {
     }
 
     async function onConnect() {
-        var val = input.trim();
-        if (!val) { setErr("Enter your NEAR account ID"); return; }
         haptic("light");
-        setErr("");
         setLoading(true);
-        try {
-            await wallet.connectHot(val);
-            setInput("");
-        } catch (e) {
-            setErr((e && e.message) || String(e));
-        }
+        try { await wallet.connectHot(); } catch (e) { }
         setLoading(false);
     }
-
-    function onKey(e) { if (e.key === "Enter") onConnect(); }
 
     async function onDisconnect() {
         haptic("light");
         await wallet.disconnectWallet();
-    }
-
-    function openHotWallet() {
-        haptic("light");
-        try {
-            window.Telegram.WebApp.openTelegramLink("https://t.me/herewalletbot/app");
-        } catch (e) {
-            window.open("https://t.me/herewalletbot/app", "_blank");
-        }
     }
 
     var top = "calc(var(--safe-t, env(safe-area-inset-top, 0px)) + var(--tg-top-controls, 58px) + 6px)";
@@ -64,31 +40,31 @@ export default function WalletConnector() {
                         padding: "6px 12px", borderRadius: 8,
                         background: isTestnet ? "rgba(251,146,60,0.15)" : "rgba(34,197,94,0.15)",
                         border: "1px solid " + (isTestnet ? "rgba(251,146,60,0.3)" : "rgba(34,197,94,0.3)"),
-                        color: "#fff", fontSize: 11, fontWeight: 800, textTransform: "uppercase",
+                        color: "#fff", fontSize: 11, fontWeight: 800, textTransform: "uppercase"
                     }}>
                         {isTestnet ? "🧪 TESTNET" : "🚀 MAINNET"}
                     </div>
                     <div style={{
                         display: "flex", gap: 8, alignItems: "center", padding: 10,
                         borderRadius: 16, background: "rgba(20,20,20,0.85)",
-                        border: "1px solid rgba(255,255,255,0.12)", backdropFilter: "blur(8px)",
+                        border: "1px solid rgba(255,255,255,0.12)", backdropFilter: "blur(8px)"
                     }}>
                         <div style={{
                             padding: "8px 10px", borderRadius: 10, background: "#0b0b0b",
-                            border: "1px solid rgba(255,255,255,0.12)", fontWeight: 800,
-                            color: "#fff", whiteSpace: "nowrap",
+                            border: "1px solid rgba(255,255,255,0.12)", fontWeight: 800, color: "#fff", whiteSpace: "nowrap"
                         }}>
                             {Number(wallet.balance || 0).toFixed(4)} Ⓝ
                         </div>
                         <div style={{
                             padding: "8px 10px", borderRadius: 10, background: "#113a8a",
-                            border: "1px solid rgba(255,255,255,0.12)", color: "#fff", fontFamily: "monospace",
+                            border: "1px solid rgba(255,255,255,0.12)", color: "#fff", fontFamily: "monospace"
                         }}>
                             {fmt(wallet.walletAddress)}
                         </div>
                         <button onClick={onDisconnect} style={{
-                            padding: "8px 10px", borderRadius: 10, background: "rgba(200,40,40,0.25)",
-                            border: "1px solid rgba(255,255,255,0.12)", color: "#fff", cursor: "pointer",
+                            padding: "8px 10px", borderRadius: 10,
+                            background: "rgba(200,40,40,0.25)", border: "1px solid rgba(255,255,255,0.12)",
+                            color: "#fff", cursor: "pointer"
                         }}>⎋</button>
                     </div>
                 </div>
@@ -98,83 +74,46 @@ export default function WalletConnector() {
 
     return (
         <div style={{ position: "fixed", top: top, right: 16, zIndex: 9999 }}>
-            <div style={{ display: "grid", gap: 8, justifyItems: "end", maxWidth: 310 }}>
+            <div style={{ display: "grid", gap: 8, justifyItems: "end", maxWidth: 300 }}>
                 <div style={{
                     padding: "6px 12px", borderRadius: 8,
                     background: isTestnet ? "rgba(251,146,60,0.15)" : "rgba(34,197,94,0.15)",
                     border: "1px solid " + (isTestnet ? "rgba(251,146,60,0.3)" : "rgba(34,197,94,0.3)"),
-                    color: "#fff", fontSize: 11, fontWeight: 800, textTransform: "uppercase",
+                    color: "#fff", fontSize: 11, fontWeight: 800, textTransform: "uppercase"
                 }}>
                     {isTestnet ? "🧪 TESTNET" : "🚀 MAINNET"}
                 </div>
 
-                <div style={{
-                    padding: 16, borderRadius: 16, background: "rgba(10,10,18,0.95)",
-                    border: "1px solid rgba(255,255,255,0.1)", backdropFilter: "blur(10px)",
-                    display: "grid", gap: 10, width: 295,
+                <button onClick={onConnect} disabled={loading} style={{
+                    padding: "14px 20px", borderRadius: 14,
+                    border: "1px solid rgba(255,140,0,0.4)",
+                    background: loading ? "rgba(255,140,0,0.1)" : "linear-gradient(135deg,rgba(255,140,0,0.3),rgba(255,80,0,0.2))",
+                    color: "#fff", fontSize: 16, fontWeight: 900, cursor: loading ? "default" : "pointer",
+                    opacity: loading ? 0.6 : 1, display: "flex", alignItems: "center", gap: 10, justifyContent: "center",
+                    boxShadow: "0 0 20px rgba(255,140,0,0.15)",
                 }}>
-                    <div style={{ fontSize: 15, fontWeight: 900, color: "#fff", textAlign: "center" }}>
-                        🔥 Connect Wallet
-                    </div>
+                    {loading ? "⏳ Connecting..." : "🔥 Connect HOT Wallet"}
+                </button>
 
-                    <button onClick={openHotWallet} style={{
-                        padding: "12px", borderRadius: 12,
-                        border: "1px solid rgba(255,140,0,0.3)",
-                        background: "linear-gradient(135deg,rgba(255,140,0,0.2),rgba(255,80,0,0.1))",
-                        color: "#fbbf24", fontSize: 13, fontWeight: 800, cursor: "pointer",
-                        textAlign: "center",
+                {wallet.status ? (
+                    <div style={{
+                        padding: "10px 12px", borderRadius: 12,
+                        background: "rgba(0,0,0,0.6)", border: "1px solid rgba(255,255,255,0.1)",
+                        color: "#a0d8ff", fontSize: 12, maxWidth: 280, textAlign: "right"
                     }}>
-                        📱 Open HOT Wallet to copy ID
-                    </button>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.08)" }}></div>
-                        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)" }}>paste below</span>
-                        <div style={{ flex: 1, height: 1, background: "rgba(255,255,255,0.08)" }}></div>
+                        {wallet.status}
                     </div>
+                ) : null}
 
-                    <input
-                        type="text" value={input}
-                        onChange={function (e) { setInput(e.target.value); setErr(""); }}
-                        onKeyDown={onKey}
-                        placeholder="yourname.near"
-                        autoComplete="off" autoCapitalize="none" spellCheck={false}
-                        style={{
-                            width: "100%", padding: "13px 14px", borderRadius: 12,
-                            border: "1px solid " + (err ? "rgba(255,80,80,0.5)" : "rgba(255,255,255,0.12)"),
-                            background: "rgba(0,0,0,0.5)", color: "#fff", fontSize: 16,
-                            fontFamily: "monospace", outline: "none", boxSizing: "border-box",
-                        }}
-                    />
-
-                    <button onClick={onConnect} disabled={loading || !input.trim()} style={{
-                        padding: "13px", borderRadius: 12,
-                        border: "1px solid rgba(120,200,255,0.3)",
-                        background: (loading || !input.trim())
-                            ? "rgba(120,200,255,0.05)"
-                            : "linear-gradient(135deg,rgba(37,99,235,0.4),rgba(124,58,237,0.3))",
-                        color: "#fff", fontSize: 15, fontWeight: 900, cursor: (loading || !input.trim()) ? "default" : "pointer",
-                        opacity: (loading || !input.trim()) ? 0.4 : 1,
+                {wallet.lastError ? (
+                    <div style={{
+                        padding: "10px 12px", borderRadius: 12,
+                        background: "rgba(120,20,20,0.8)", border: "1px solid rgba(255,80,80,0.3)",
+                        color: "#fca5a5", fontSize: 11, maxWidth: 280, textAlign: "right", wordBreak: "break-word"
                     }}>
-                        {loading ? "⏳ Verifying..." : "⚡ Connect"}
-                    </button>
-
-                    {err ? (
-                        <div style={{
-                            padding: "8px 10px", borderRadius: 10,
-                            background: "rgba(255,40,40,0.12)", border: "1px solid rgba(255,80,80,0.25)",
-                            color: "#fca5a5", fontSize: 12,
-                        }}>{err}</div>
-                    ) : null}
-
-                    {wallet.status ? (
-                        <div style={{
-                            padding: "8px 10px", borderRadius: 10,
-                            background: "rgba(34,197,94,0.1)", border: "1px solid rgba(34,197,94,0.25)",
-                            color: "#86efac", fontSize: 12,
-                        }}>{wallet.status}</div>
-                    ) : null}
-                </div>
+                        {wallet.lastError.message}
+                    </div>
+                ) : null}
             </div>
         </div>
     );
