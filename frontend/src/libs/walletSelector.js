@@ -11,35 +11,84 @@ var RPC_URL =
 
 var currentAccountId = "";
 var STORAGE_KEY = "cardclash_near_account";
+var PENDING_KEY = "cardclash_pending_connect";
 
-async function verifyAccount(accountId) {
-    var res = await fetch(RPC_URL, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-            jsonrpc: "2.0",
-            id: "verify",
-            method: "query",
-            params: {
-                request_type: "view_account",
-                finality: "final",
-                account_id: accountId,
-            },
-        }),
-    });
-    var json = await res.json();
-    return !json.error;
+/**
+ * При загрузке страницы — проверяем URL на callback от кошелька
+ */
+function checkCallback() {
+    try {
+        var hash = window.location.hash || "";
+        var search = window.location.search || "";
+
+        // Проверяем и hash и search параметры
+        var params = new URLSearchParams(search);
+        var hashParams = new URLSearchParams(hash.replace("#", ""));
+
+        var accountId =
+            params.get("account_id") ||
+            params.get("accountId") ||
+            hashParams.get("account_id") ||
+            hashParams.get("accountId") || "";
+
+        if (accountId) {
+            currentAccountId = accountId;
+            localStorage.setItem(STORAGE_KEY, accountId);
+            localStorage.removeItem(PENDING_KEY);
+
+            // Чистим URL
+            var cleanUrl = window.location.origin + window.location.pathname;
+            window.history.replaceState({}, "", cleanUrl);
+
+            console.log("[Wallet] Callback received, account:", accountId);
+            return accountId;
+        }
+
+        // HERE Wallet может вернуть через startapp параметр в Telegram
+        if (window.Telegram && window.Telegram.WebApp) {
+            var startParam = window.Telegram.WebApp.initDataUnsafe &&
+                window.Telegram.WebApp.initDataUnsafe.start_param;
+
+            if (startParam && startParam.indexOf("account_") === 0) {
+                accountId = startParam.replace("account_", "");
+                if (accountId) {
+                    currentAccountId = accountId;
+                    localStorage.setItem(STORAGE_KEY, accountId);
+                    localStorage.removeItem(PENDING_KEY);
+                    console.log("[Wallet] Telegram startParam account:", accountId);
+                    return accountId;
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("[Wallet] checkCallback error:", e);
+    }
+    return "";
 }
 
+// Проверяем callback при загрузке модуля
+checkCallback();
+
+/**
+ * Подключение через HOT Wallet
+ * Открывает кошелёк ПОВЕРХ игры в Telegram
+ */
 function connectWallet() {
     return new Promise(function (resolve, reject) {
+        // Сначала проверяем callback (может уже вернулись)
+        var callbackId = checkCallback();
+        if (callbackId) {
+            return resolve({ accountId: callbackId });
+        }
+
+        // Удаляем старый overlay
         var old = document.getElementById("hot-wallet-overlay");
         if (old) old.remove();
 
         var overlay = document.createElement("div");
         overlay.id = "hot-wallet-overlay";
         overlay.style.cssText =
-            "position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.8);" +
+            "position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.85);" +
             "display:flex;align-items:center;justify-content:center;padding:16px;" +
             "backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);";
 
@@ -51,48 +100,35 @@ function connectWallet() {
             "box-shadow:0 24px 80px rgba(0,0,0,0.8);color:#fff;";
 
         card.innerHTML =
-            '<div style="font-size:42px;margin-bottom:8px;">🔥</div>' +
-            '<div style="font-size:20px;font-weight:900;margin-bottom:6px;">HOT Wallet</div>' +
-            '<div style="font-size:12px;color:#a0d8ff;margin-bottom:20px;line-height:1.5;opacity:0.8;">' +
-            'Step 1: Open HOT Wallet and copy your Account ID<br>' +
-            'Step 2: Paste it below and tap Connect' +
+            '<div style="font-size:48px;margin-bottom:12px;">🔥</div>' +
+            '<div style="font-size:22px;font-weight:900;margin-bottom:8px;">Connect HOT Wallet</div>' +
+            '<div style="font-size:13px;color:#a0d8ff;margin-bottom:24px;line-height:1.5;opacity:0.8;">' +
+            'Tap the button below to open HOT Wallet.<br>Confirm the connection there.' +
             '</div>' +
 
-            '<button id="hot-open-btn" style="' +
-            'width:100%;padding:14px;border-radius:14px;margin-bottom:14px;' +
-            'border:1px solid rgba(255,140,0,0.5);cursor:pointer;' +
-            'background:linear-gradient(135deg,rgba(255,140,0,0.35),rgba(255,80,0,0.2));' +
-            'color:#fff;font-size:15px;font-weight:900;' +
-            'display:flex;align-items:center;justify-content:center;gap:8px;' +
-            '">📱 Open HOT Wallet</button>' +
+            '<div id="hot-status" style="display:none;padding:12px;border-radius:12px;' +
+            'background:rgba(120,200,255,0.1);border:1px solid rgba(120,200,255,0.25);' +
+            'color:#a0d8ff;font-size:13px;margin-bottom:16px;"></div>' +
 
-            '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">' +
-            '<div style="flex:1;height:1px;background:rgba(255,255,255,0.1);"></div>' +
-            '<div style="font-size:11px;color:rgba(255,255,255,0.3);">then paste your ID</div>' +
-            '<div style="flex:1;height:1px;background:rgba(255,255,255,0.1);"></div>' +
-            '</div>' +
-
-            '<input id="hot-input" type="text" placeholder="yourname.near" ' +
-            'autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" ' +
-            'style="width:100%;padding:14px;border-radius:12px;' +
-            'border:1px solid rgba(255,255,255,0.15);background:rgba(0,0,0,0.4);' +
-            'color:#fff;font-size:16px;font-family:monospace;outline:none;' +
-            'box-sizing:border-box;margin-bottom:12px;-webkit-appearance:none;" />' +
-
-            '<div id="hot-error" style="display:none;padding:10px;border-radius:10px;' +
+            '<div id="hot-error" style="display:none;padding:12px;border-radius:12px;' +
             'background:rgba(255,40,40,0.15);border:1px solid rgba(255,80,80,0.3);' +
-            'color:#fca5a5;font-size:12px;margin-bottom:12px;"></div>' +
-
-            '<div id="hot-status" style="display:none;padding:10px;border-radius:10px;' +
-            'background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);' +
-            'color:#86efac;font-size:12px;margin-bottom:12px;"></div>' +
+            'color:#fca5a5;font-size:12px;margin-bottom:16px;"></div>' +
 
             '<button id="hot-connect-btn" style="' +
-            'width:100%;padding:14px;border-radius:12px;' +
-            'border:1px solid rgba(120,200,255,0.4);' +
-            'background:linear-gradient(135deg,rgba(37,99,235,0.5),rgba(124,58,237,0.4));' +
-            'color:#fff;font-size:16px;font-weight:900;cursor:pointer;margin-bottom:10px;' +
-            '">⚡ Connect</button>' +
+            'width:100%;padding:16px;border-radius:14px;margin-bottom:12px;' +
+            'border:1px solid rgba(255,140,0,0.5);cursor:pointer;' +
+            'background:linear-gradient(135deg,rgba(255,140,0,0.4),rgba(255,80,0,0.25));' +
+            'color:#fff;font-size:17px;font-weight:900;' +
+            'display:flex;align-items:center;justify-content:center;gap:10px;' +
+            'box-shadow:0 0 30px rgba(255,140,0,0.2);' +
+            '">🔥 Open HOT Wallet</button>' +
+
+            '<div id="hot-waiting" style="display:none;padding:16px;text-align:center;">' +
+            '<div style="font-size:13px;color:#a0d8ff;margin-bottom:12px;">Waiting for confirmation...</div>' +
+            '<div style="width:32px;height:32px;border:3px solid rgba(120,200,255,0.2);' +
+            'border-top-color:#78c8ff;border-radius:50%;margin:0 auto;' +
+            'animation:spin 0.8s linear infinite;"></div>' +
+            '</div>' +
 
             '<button id="hot-cancel-btn" style="' +
             'width:100%;padding:12px;border-radius:12px;' +
@@ -104,16 +140,17 @@ function connectWallet() {
         overlay.appendChild(card);
         document.body.appendChild(overlay);
 
-        var input = document.getElementById("hot-input");
-        var errorDiv = document.getElementById("hot-error");
-        var statusDiv = document.getElementById("hot-status");
         var connectBtn = document.getElementById("hot-connect-btn");
         var cancelBtn = document.getElementById("hot-cancel-btn");
-        var openBtn = document.getElementById("hot-open-btn");
+        var waitingDiv = document.getElementById("hot-waiting");
+        var statusDiv = document.getElementById("hot-status");
+        var errorDiv = document.getElementById("hot-error");
 
         var settled = false;
+        var pollInterval = null;
 
         function cleanup() {
+            if (pollInterval) clearInterval(pollInterval);
             var el = document.getElementById("hot-wallet-overlay");
             if (el) el.remove();
         }
@@ -130,45 +167,87 @@ function connectWallet() {
             errorDiv.style.display = "none";
         }
 
-        function setLoading(on) {
-            connectBtn.disabled = on;
-            connectBtn.textContent = on ? "Verifying..." : "⚡ Connect";
-            connectBtn.style.opacity = on ? "0.5" : "1";
-            input.disabled = on;
-        }
-
-        // Open HOT Wallet button
-        openBtn.addEventListener("click", function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-
-            try {
-                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink) {
-                    window.Telegram.WebApp.openTelegramLink("https://t.me/herewalletbot/app");
-                } else {
-                    window.open("https://t.me/herewalletbot/app", "_blank");
-                }
-            } catch (err) {
-                window.open("https://t.me/herewalletbot/app", "_blank");
-            }
-        });
-
-        // Connect button
+        // Open HOT Wallet
         connectBtn.addEventListener("click", function (e) {
             e.preventDefault();
             e.stopPropagation();
-            doConnect();
-        });
 
-        // Enter key
-        input.addEventListener("keydown", function (e) {
-            if (e.key === "Enter") {
-                e.preventDefault();
-                doConnect();
+            // Запоминаем что ждём подключения
+            localStorage.setItem(PENDING_KEY, Date.now().toString());
+
+            // Открываем HOT Wallet в Telegram
+            var appUrl = window.location.origin + window.location.pathname;
+            var hotLink = "https://t.me/herewalletbot/app?startapp=connect_" + encodeURIComponent(appUrl);
+
+            try {
+                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openTelegramLink) {
+                    window.Telegram.WebApp.openTelegramLink(hotLink);
+                } else {
+                    window.open(hotLink, "_blank");
+                }
+            } catch (err) {
+                window.open(hotLink, "_blank");
             }
+
+            // Показываем ожидание
+            connectBtn.style.display = "none";
+            waitingDiv.style.display = "block";
+            showStatus("HOT Wallet opened. Confirm connection there, then return here.");
+
+            // Начинаем polling — проверяем вернулся ли пользователь с account_id
+            startPolling();
         });
 
-        // Cancel button
+        function startPolling() {
+            var startTime = Date.now();
+            var maxWait = 180000; // 3 минуты
+
+            pollInterval = setInterval(function () {
+                if (settled) {
+                    clearInterval(pollInterval);
+                    return;
+                }
+
+                // Таймаут
+                if (Date.now() - startTime > maxWait) {
+                    clearInterval(pollInterval);
+                    showError("Timeout. Please try again.");
+                    connectBtn.style.display = "flex";
+                    waitingDiv.style.display = "none";
+                    return;
+                }
+
+                // Проверяем callback в URL
+                var id = checkCallback();
+                if (id) {
+                    settled = true;
+                    clearInterval(pollInterval);
+                    showStatus("✅ Connected: " + id);
+                    setTimeout(function () {
+                        cleanup();
+                        resolve({ accountId: id });
+                    }, 600);
+                    return;
+                }
+
+                // Проверяем localStorage (может другая вкладка записала)
+                var saved = localStorage.getItem(STORAGE_KEY);
+                var pending = localStorage.getItem(PENDING_KEY);
+                if (saved && pending && saved !== currentAccountId) {
+                    settled = true;
+                    clearInterval(pollInterval);
+                    currentAccountId = saved;
+                    showStatus("✅ Connected: " + saved);
+                    setTimeout(function () {
+                        cleanup();
+                        resolve({ accountId: saved });
+                    }, 600);
+                    return;
+                }
+            }, 1000);
+        }
+
+        // Cancel
         cancelBtn.addEventListener("click", function (e) {
             e.preventDefault();
             e.stopPropagation();
@@ -178,72 +257,20 @@ function connectWallet() {
                 reject(new Error("Cancelled"));
             }
         });
-
-        // Click outside — НЕ закрываем (чтобы не было случайного закрытия)
-        // Убрали обработчик клика на overlay
-
-        async function doConnect() {
-            if (settled) return;
-
-            var val = input.value.trim().toLowerCase();
-
-            if (!val) {
-                showError("Please enter your NEAR account ID");
-                return;
-            }
-
-            if (val.length < 2 || val.length > 64) {
-                showError("Account ID must be 2-64 characters");
-                return;
-            }
-
-            if (!/^[a-z0-9._-]+$/.test(val)) {
-                showError("Invalid characters. Use: a-z, 0-9, . _ -");
-                return;
-            }
-
-            setLoading(true);
-            showStatus("Checking account on NEAR " + networkId + "...");
-
-            try {
-                var exists = await verifyAccount(val);
-
-                if (!exists) {
-                    showError("Account '" + val + "' not found on NEAR " + networkId + ". Check spelling.");
-                    setLoading(false);
-                    return;
-                }
-
-                currentAccountId = val;
-                localStorage.setItem(STORAGE_KEY, val);
-
-                showStatus("✅ Connected: " + val);
-                settled = true;
-
-                setTimeout(function () {
-                    cleanup();
-                    resolve({ accountId: val });
-                }, 600);
-
-            } catch (e) {
-                showError("Network error: " + ((e && e.message) || String(e)));
-                setLoading(false);
-            }
-        }
-
-        // Focus input
-        setTimeout(function () {
-            if (input) input.focus();
-        }, 200);
     });
 }
 
 async function disconnectWallet() {
     currentAccountId = "";
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(PENDING_KEY);
 }
 
 async function getSignedInAccountId() {
+    // Проверяем callback при каждом вызове
+    var callbackId = checkCallback();
+    if (callbackId) return callbackId;
+
     if (currentAccountId) return currentAccountId;
 
     var saved = localStorage.getItem(STORAGE_KEY);
@@ -256,7 +283,37 @@ async function getSignedInAccountId() {
 }
 
 async function signAndSendTransaction(params) {
-    throw new Error("Transaction signing coming soon. Account is linked for game stats.");
+    var accountId = await getSignedInAccountId();
+    if (!accountId) throw new Error("Wallet not connected");
+
+    // Для транзакций используем MyNearWallet (работает и в Telegram)
+    var baseUrl = networkId === "testnet"
+        ? "https://testnet.mynearwallet.com/sign"
+        : "https://app.mynearwallet.com/sign";
+
+    var callbackUrl = window.location.origin + window.location.pathname;
+
+    // Формируем URL для подписи
+    var txJson = JSON.stringify([{
+        receiverId: params.receiverId,
+        actions: params.actions,
+    }]);
+
+    var signUrl = baseUrl +
+        "?transactions=" + encodeURIComponent(btoa(txJson)) +
+        "&callbackUrl=" + encodeURIComponent(callbackUrl);
+
+    try {
+        if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.openLink) {
+            window.Telegram.WebApp.openLink(signUrl);
+        } else {
+            window.open(signUrl, "_blank");
+        }
+    } catch (e) {
+        window.open(signUrl, "_blank");
+    }
+
+    return { pending: true, message: "Transaction sent to wallet for signing" };
 }
 
 export {
