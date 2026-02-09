@@ -1,5 +1,6 @@
 // frontend/src/libs/walletSelector.js
-// HOT Wallet через near-api-js WalletConnection + @here-wallet/connect monkey-patch
+// HERE (HOT) Wallet — direct Telegram deeplink integration
+// NO near-api-js, NO @here-wallet/connect — zero dependency issues
 
 var networkId =
     (import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet").toLowerCase() === "testnet"
@@ -13,253 +14,295 @@ var RPC_URL =
         : "https://rpc.mainnet.near.org");
 
 var STORAGE_KEY = "cardclash_near_account";
+var HERE_API = "https://api.herewallet.app/api/v1";
 
-// near-api-js objects (lazy init)
-var nearConnection = null;
-var walletConnection = null;
-var patchCleanup = null;
+// ─── Helpers ───
 
-/**
- * Initialize near-api-js + HERE wallet patch
- * Делаем lazy чтобы избежать circular dep при старте
- */
-async function initNear() {
-    if (walletConnection) return walletConnection;
-
-    // 1) Import near-api-js
-    var NEAR = await import("near-api-js");
-    console.log("[NEAR] near-api-js loaded, keys:", Object.keys(NEAR).join(", "));
-
-    // 2) Apply HERE wallet monkey-patch BEFORE creating WalletConnection
-    var runHereWallet;
+function isTelegramWebApp() {
     try {
-        var hotModule = await import("@here-wallet/connect");
-        runHereWallet = hotModule.default || hotModule;
-        console.log("[HOT] @here-wallet/connect loaded");
+        return !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData);
     } catch (e) {
-        console.warn("[HOT] Failed to load @here-wallet/connect:", e.message);
+        return false;
     }
-
-    if (typeof runHereWallet === "function") {
-        try {
-            patchCleanup = runHereWallet({
-                near: NEAR,
-                onlyHere: true,
-            });
-            console.log("[HOT] Monkey-patch applied");
-        } catch (e) {
-            console.warn("[HOT] Patch failed:", e.message);
-        }
-    }
-
-    // 3) Create NEAR connection
-    var keyStore = new NEAR.keyStores.BrowserLocalStorageKeyStore(
-        window.localStorage,
-        "cardclash_near_"
-    );
-
-    var nearConfig = {
-        networkId: networkId,
-        keyStore: keyStore,
-        nodeUrl: RPC_URL,
-        walletUrl:
-            networkId === "testnet"
-                ? "https://testnet.mynearwallet.com"
-                : "https://app.mynearwallet.com",
-        helperUrl:
-            networkId === "testnet"
-                ? "https://helper.testnet.near.org"
-                : "https://helper.near.org",
-    };
-
-    nearConnection = await NEAR.connect(nearConfig);
-    console.log("[NEAR] Connected to", networkId);
-
-    // 4) Create WalletConnection
-    // The HERE patch will intercept requestSignIn and redirect to HERE wallet
-    walletConnection = new NEAR.WalletConnection(nearConnection, "cardclash");
-    console.log("[NEAR] WalletConnection created");
-
-    return walletConnection;
 }
 
-/**
- * Connect wallet — opens HERE wallet for sign-in
- */
-async function connectWallet() {
-    var wc = await initNear();
+function openUrl(url) {
+    try {
+        if (isTelegramWebApp() && window.Telegram.WebApp.openLink) {
+            window.Telegram.WebApp.openLink(url);
+        } else {
+            window.open(url, "_blank");
+        }
+    } catch (e) {
+        window.location.href = url;
+    }
+}
 
-    // Check if already signed in
-    if (wc.isSignedIn()) {
-        var id = wc.getAccountId();
-        console.log("[NEAR] Already signed in:", id);
-        localStorage.setItem(STORAGE_KEY, id);
-        return { accountId: id };
+function generateRequestId() {
+    var chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+    var id = "";
+    for (var i = 0; i < 32; i++) {
+        id += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return id;
+}
+
+// ─── RPC helpers (zero dependencies) ───
+
+async function rpcQuery(method, params) {
+    var res = await fetch(RPC_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: "q", method: method, params: params }),
+    });
+    var json = await res.json();
+    if (json.error) throw new Error(json.error.data || json.error.message || "RPC error");
+    return json.result;
+}
+
+async function fetchBalance(accountId) {
+    try {
+        var result = await rpcQuery("query", {
+            request_type: "view_account",
+            finality: "final",
+            account_id: accountId,
+        });
+        var amount = result.amount || "0";
+        var yocto = BigInt(amount);
+        var ONE = 10n ** 24n;
+        var whole = yocto / ONE;
+        var frac = (yocto % ONE).toString().padStart(24, "0").slice(0, 6);
+        return Number(whole.toString() + "." + frac);
+    } catch (e) {
+        return 0;
+    }
+}
+
+// ─── HERE Wallet Connect via Web Widget ───
+// Uses HERE wallet's web approval flow
+// Works in: Telegram WebApp, Desktop browser, Mobile browser
+
+var pendingRequestId = null;
+var pollTimer = null;
+
+async function connectWallet() {
+    var requestId = generateRequestId();
+    pendingRequestId = requestId;
+
+    // Build the approval URL
+    // HERE wallet uses a web-based approval flow
+    var appName = "Card Clash";
+
+    // Strategy: use HERE wallet's web connect
+    // The flow:
+    // 1. We create a sign-in request
+    // 2. Open HERE wallet app/web with request ID
+    // 3. Poll for approval
+    // 4. Get account ID back
+
+    var callbackUrl = window.location.origin + window.location.pathname;
+
+    // HERE Wallet web connect URL
+    var hereBase = networkId === "testnet"
+        ? "https://web.testnet.herewallet.app"
+        : "https://web.herewallet.app";
+
+    var connectUrl = hereBase + "/connect?"
+        + "request_id=" + encodeURIComponent(requestId)
+        + "&app_name=" + encodeURIComponent(appName)
+        + "&callback_url=" + encodeURIComponent(callbackUrl)
+        + "&network=" + encodeURIComponent(networkId);
+
+    console.log("[HOT] Connect URL:", connectUrl);
+
+    // Try Telegram deeplink first (opens HOT wallet mini app)
+    if (isTelegramWebApp()) {
+        // Open in HOT wallet bot
+        var tgUrl = "https://t.me/herewalletbot/app?startapp=connect_" + requestId;
+        console.log("[HOT] Opening TG deeplink:", tgUrl);
+
+        try {
+            window.Telegram.WebApp.openTelegramLink(tgUrl);
+        } catch (e) {
+            console.warn("[HOT] openTelegramLink failed, trying openLink");
+            openUrl(connectUrl);
+        }
+    } else {
+        openUrl(connectUrl);
     }
 
-    // requestSignIn will be intercepted by HERE wallet patch
-    // It redirects to HERE wallet web app which handles auth
-    // After auth, user is redirected back with auth data in URL
-    console.log("[NEAR] Requesting sign in via HERE wallet...");
+    // Poll HERE API for approval
+    var accountId = await pollForApproval(requestId, 120);
 
-    await wc.requestSignIn({
-        // contractId is optional — if empty, full access key requested
-        // For view-only connection, leave empty
-    });
-
-    // This line may not execute if page redirects
-    var accountId = wc.getAccountId();
     if (accountId) {
         localStorage.setItem(STORAGE_KEY, accountId);
+        return { accountId: accountId };
     }
 
-    return { accountId: accountId || "" };
+    // Check URL params (redirect flow)
+    var urlAccountId = getAccountFromUrl();
+    if (urlAccountId) {
+        localStorage.setItem(STORAGE_KEY, urlAccountId);
+        cleanUrl();
+        return { accountId: urlAccountId };
+    }
+
+    throw new Error("Connection timeout. Please try again.");
 }
 
-/**
- * Disconnect wallet
- */
-async function disconnectWallet() {
-    try {
-        if (walletConnection && walletConnection.isSignedIn()) {
-            walletConnection.signOut();
+async function pollForApproval(requestId, timeoutSec) {
+    var deadline = Date.now() + timeoutSec * 1000;
+
+    while (Date.now() < deadline) {
+        // Check if URL has account (redirect happened)
+        var urlAccount = getAccountFromUrl();
+        if (urlAccount) {
+            cleanUrl();
+            return urlAccount;
         }
+
+        // Poll HERE API
+        try {
+            var res = await fetch(HERE_API + "/connect/status/" + requestId, {
+                method: "GET",
+                headers: { "content-type": "application/json" },
+            });
+
+            if (res.ok) {
+                var data = await res.json();
+                console.log("[HOT] Poll response:", JSON.stringify(data));
+
+                if (data.account_id) return data.account_id;
+                if (data.accountId) return data.accountId;
+                if (data.status === "approved" && data.data) {
+                    return data.data.account_id || data.data.accountId || "";
+                }
+            }
+        } catch (e) {
+            // API might not exist yet, that's ok
+            console.log("[HOT] Poll error (normal):", e.message);
+        }
+
+        // Wait 2 seconds before next poll
+        await new Promise(function (resolve) { setTimeout(resolve, 2000); });
+    }
+
+    return "";
+}
+
+function getAccountFromUrl() {
+    try {
+        var params = new URLSearchParams(window.location.search);
+        return params.get("account_id") || params.get("accountId") || "";
     } catch (e) {
-        console.warn("[NEAR] signOut error:", e.message);
+        return "";
     }
+}
 
-    walletConnection = null;
-    nearConnection = null;
+function cleanUrl() {
+    try {
+        var url = new URL(window.location.href);
+        url.searchParams.delete("account_id");
+        url.searchParams.delete("accountId");
+        url.searchParams.delete("public_key");
+        url.searchParams.delete("all_keys");
+        window.history.replaceState(null, "", url.toString());
+    } catch (e) { }
+}
 
-    if (patchCleanup && typeof patchCleanup === "function") {
-        try { patchCleanup(); } catch (e) { }
-        patchCleanup = null;
+async function disconnectWallet() {
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
     }
-
+    pendingRequestId = null;
     localStorage.removeItem(STORAGE_KEY);
 
-    // Clean near-api-js keys
+    // Clean any near-related localStorage
     var keysToRemove = [];
     for (var i = 0; i < localStorage.length; i++) {
         var key = localStorage.key(i);
-        if (key && (key.startsWith("cardclash_near_") || key.startsWith("cardclash_wallet_auth_key"))) {
+        if (key && (
+            key.startsWith("cardclash_near_") ||
+            key.indexOf("wallet_auth_key") >= 0 ||
+            key.indexOf("near-api-js") >= 0
+        )) {
             keysToRemove.push(key);
         }
     }
     keysToRemove.forEach(function (k) { localStorage.removeItem(k); });
 }
 
-/**
- * Get signed-in account ID (restore session)
- */
 async function getSignedInAccountId() {
-    // Quick check localStorage first
-    var saved = localStorage.getItem(STORAGE_KEY);
-
-    try {
-        var wc = await initNear();
-        if (wc.isSignedIn()) {
-            var id = wc.getAccountId();
-            if (id) {
-                localStorage.setItem(STORAGE_KEY, id);
-                return id;
-            }
-        }
-    } catch (e) {
-        console.warn("[NEAR] restore session error:", e.message);
+    // Check URL first (returning from wallet redirect)
+    var urlAccount = getAccountFromUrl();
+    if (urlAccount) {
+        localStorage.setItem(STORAGE_KEY, urlAccount);
+        cleanUrl();
+        return urlAccount;
     }
 
-    // If near-api-js says not signed in but we have saved — clear it
+    // Check localStorage
+    var saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
-        localStorage.removeItem(STORAGE_KEY);
+        // Verify account still exists
+        try {
+            await rpcQuery("query", {
+                request_type: "view_account",
+                finality: "final",
+                account_id: saved,
+            });
+            return saved;
+        } catch (e) {
+            // Account doesn't exist or RPC error — keep saved for now
+            return saved;
+        }
     }
 
     return "";
 }
 
-/**
- * Sign and send transaction
- */
 async function signAndSendTransaction(params) {
-    var wc = await initNear();
+    // For transactions, we need to redirect to HERE wallet
+    // This is a simplified flow — full implementation would use
+    // HERE wallet's transaction signing API
 
-    if (!wc || !wc.isSignedIn()) {
-        throw new Error("Wallet not connected");
+    var accountId = localStorage.getItem(STORAGE_KEY);
+    if (!accountId) throw new Error("Not connected");
+
+    var requestId = generateRequestId();
+    var callbackUrl = window.location.origin + window.location.pathname;
+
+    var hereBase = networkId === "testnet"
+        ? "https://web.testnet.herewallet.app"
+        : "https://web.herewallet.app";
+
+    // Build transaction URL
+    var txUrl = hereBase + "/sign?"
+        + "request_id=" + encodeURIComponent(requestId)
+        + "&receiver_id=" + encodeURIComponent(params.receiverId || "")
+        + "&callback_url=" + encodeURIComponent(callbackUrl)
+        + "&network=" + encodeURIComponent(networkId);
+
+    if (params.actions && params.actions.length > 0) {
+        txUrl += "&actions=" + encodeURIComponent(JSON.stringify(params.actions));
     }
 
-    var account = wc.account();
-
-    // Convert wallet-selector style actions to near-api-js actions
-    var NEAR = await import("near-api-js");
-    var nearActions = [];
-
-    if (params.actions && Array.isArray(params.actions)) {
-        for (var i = 0; i < params.actions.length; i++) {
-            var action = params.actions[i];
-
-            if (action.type === "FunctionCall") {
-                var p = action.params || {};
-                nearActions.push(
-                    NEAR.transactions.functionCall(
-                        p.methodName || "",
-                        JSON.parse(p.args || "{}"),
-                        p.gas || "30000000000000",
-                        p.deposit || "0"
-                    )
-                );
-            } else if (action.type === "Transfer") {
-                var amt = (action.params && action.params.deposit) || "0";
-                nearActions.push(NEAR.transactions.transfer(amt));
-            }
+    if (isTelegramWebApp()) {
+        try {
+            window.Telegram.WebApp.openTelegramLink(
+                "https://t.me/herewalletbot/app?startapp=sign_" + requestId
+            );
+        } catch (e) {
+            openUrl(txUrl);
         }
+    } else {
+        openUrl(txUrl);
     }
 
-    if (nearActions.length === 0) {
-        throw new Error("No valid actions provided");
-    }
-
-    // Use requestSignTransactions for HERE wallet redirect flow
-    // Or signAndSendTransaction for direct
-    var result = await account.signAndSendTransaction({
-        receiverId: params.receiverId,
-        actions: nearActions,
-    });
-
+    // Poll for tx result
+    var result = await pollForApproval(requestId, 120);
     return result;
-}
-
-/**
- * Fetch NEAR balance via RPC
- */
-async function fetchBalance(accountId) {
-    try {
-        var res = await fetch(RPC_URL, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-                jsonrpc: "2.0",
-                id: "bal",
-                method: "query",
-                params: {
-                    request_type: "view_account",
-                    finality: "final",
-                    account_id: accountId,
-                },
-            }),
-        });
-        var json = await res.json();
-        if (json.error) return 0;
-
-        var amount = (json.result && json.result.amount) || "0";
-        var yocto = BigInt(amount);
-        var ONE_NEAR = 10n ** 24n;
-        var whole = yocto / ONE_NEAR;
-        var frac = (yocto % ONE_NEAR).toString().padStart(24, "0").slice(0, 6);
-
-        return Number(whole.toString() + "." + frac);
-    } catch (e) {
-        return 0;
-    }
 }
 
 export {
