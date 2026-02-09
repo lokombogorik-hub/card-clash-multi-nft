@@ -1,3 +1,6 @@
+// frontend/src/libs/walletSelector.js
+// HOT Wallet через near-api-js WalletConnection + @here-wallet/connect monkey-patch
+
 var networkId =
     (import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet").toLowerCase() === "testnet"
         ? "testnet"
@@ -9,209 +12,254 @@ var RPC_URL =
         ? "https://rpc.testnet.near.org"
         : "https://rpc.mainnet.near.org");
 
-var connector = null;
-var currentAccountId = "";
 var STORAGE_KEY = "cardclash_near_account";
 
-async function getConnector() {
-    if (connector) return connector;
+// near-api-js objects (lazy init)
+var nearConnection = null;
+var walletConnection = null;
+var patchCleanup = null;
 
-    var mod = await import("@here-wallet/connect");
+/**
+ * Initialize near-api-js + HERE wallet patch
+ * Делаем lazy чтобы избежать circular dep при старте
+ */
+async function initNear() {
+    if (walletConnection) return walletConnection;
 
-    console.log("[HOT] @here-wallet/connect keys:", Object.keys(mod).join(", "));
+    // 1) Import near-api-js
+    var NEAR = await import("near-api-js");
+    console.log("[NEAR] near-api-js loaded, keys:", Object.keys(NEAR).join(", "));
 
-    // Пробуем разные экспорты
-    var HereConnect = mod.HereConnect || mod.HereWallet || mod.HereProvider || mod.default || null;
-
-    if (!HereConnect) {
-        // Ищем любой класс/функцию
-        var keys = Object.keys(mod);
-        for (var i = 0; i < keys.length; i++) {
-            if (typeof mod[keys[i]] === "function") {
-                HereConnect = mod[keys[i]];
-                console.log("[HOT] Using export:", keys[i]);
-                break;
-            }
-        }
+    // 2) Apply HERE wallet monkey-patch BEFORE creating WalletConnection
+    var runHereWallet;
+    try {
+        var hotModule = await import("@here-wallet/connect");
+        runHereWallet = hotModule.default || hotModule;
+        console.log("[HOT] @here-wallet/connect loaded");
+    } catch (e) {
+        console.warn("[HOT] Failed to load @here-wallet/connect:", e.message);
     }
 
-    if (!HereConnect) {
-        throw new Error("No connect class found. Exports: " + Object.keys(mod).join(", "));
-    }
-
-    console.log("[HOT] HereConnect type:", typeof HereConnect);
-    console.log("[HOT] HereConnect name:", HereConnect.name || "anonymous");
-
-    // Пробуем инициализировать
-    // Способ 1: статический connect/create
-    if (typeof HereConnect.connect === "function") {
-        console.log("[HOT] Using HereConnect.connect()");
-        connector = await HereConnect.connect({ networkId: networkId });
-        return connector;
-    }
-
-    if (typeof HereConnect.create === "function") {
-        console.log("[HOT] Using HereConnect.create()");
-        connector = await HereConnect.create({ networkId: networkId });
-        return connector;
-    }
-
-    if (typeof HereConnect.setup === "function") {
-        console.log("[HOT] Using HereConnect.setup()");
-        connector = await HereConnect.setup({ networkId: networkId });
-        return connector;
-    }
-
-    // Способ 2: new
-    console.log("[HOT] Using new HereConnect()");
-    connector = new HereConnect({ networkId: networkId });
-
-    if (connector.init && typeof connector.init === "function") {
-        await connector.init();
-    }
-
-    console.log("[HOT] Connector created OK");
-    console.log("[HOT] Connector methods:", Object.getOwnPropertyNames(Object.getPrototypeOf(connector)).join(", "));
-
-    return connector;
-}
-
-async function connectWallet() {
-    var c = await getConnector();
-
-    console.log("[HOT] Starting connect...");
-
-    var accountId = "";
-
-    // Пробуем все варианты подключения
-    var methods = ["signIn", "requestSignIn", "connect", "login", "authenticate", "authorize"];
-
-    for (var i = 0; i < methods.length; i++) {
-        var m = methods[i];
-        if (typeof c[m] !== "function") continue;
-
-        console.log("[HOT] Trying c." + m + "()...");
+    if (typeof runHereWallet === "function") {
         try {
-            var result = await c[m]({});
-            console.log("[HOT] " + m + " result:", typeof result, result);
-
-            if (typeof result === "string") accountId = result;
-            else if (result && result.accountId) accountId = result.accountId;
-            else if (result && result.account_id) accountId = result.account_id;
-            else if (Array.isArray(result) && result.length > 0) {
-                accountId = result[0].accountId || result[0].account_id || String(result[0]);
-            }
-
-            if (accountId) break;
+            patchCleanup = runHereWallet({
+                near: NEAR,
+                onlyHere: true,
+            });
+            console.log("[HOT] Monkey-patch applied");
         } catch (e) {
-            console.warn("[HOT] " + m + " failed:", e.message);
+            console.warn("[HOT] Patch failed:", e.message);
         }
     }
 
-    // Fallback: getAccountId
-    if (!accountId && c.getAccountId) {
-        try {
-            var gid = c.getAccountId();
-            if (gid && typeof gid.then === "function") gid = await gid;
-            if (gid) accountId = String(gid);
-        } catch (e) { }
-    }
+    // 3) Create NEAR connection
+    var keyStore = new NEAR.keyStores.BrowserLocalStorageKeyStore(
+        window.localStorage,
+        "cardclash_near_"
+    );
 
-    // Fallback: accountId property
-    if (!accountId && c.accountId) accountId = String(c.accountId);
+    var nearConfig = {
+        networkId: networkId,
+        keyStore: keyStore,
+        nodeUrl: RPC_URL,
+        walletUrl:
+            networkId === "testnet"
+                ? "https://testnet.mynearwallet.com"
+                : "https://app.mynearwallet.com",
+        helperUrl:
+            networkId === "testnet"
+                ? "https://helper.testnet.near.org"
+                : "https://helper.near.org",
+    };
 
-    accountId = String(accountId || "").trim();
+    nearConnection = await NEAR.connect(nearConfig);
+    console.log("[NEAR] Connected to", networkId);
 
-    if (!accountId) {
-        throw new Error("Wallet did not return account. DIAG: connector methods = " +
-            Object.getOwnPropertyNames(Object.getPrototypeOf(c)).join(", "));
-    }
+    // 4) Create WalletConnection
+    // The HERE patch will intercept requestSignIn and redirect to HERE wallet
+    walletConnection = new NEAR.WalletConnection(nearConnection, "cardclash");
+    console.log("[NEAR] WalletConnection created");
 
-    currentAccountId = accountId;
-    localStorage.setItem(STORAGE_KEY, accountId);
-    console.log("[HOT] Connected:", accountId);
-
-    return { accountId: accountId };
+    return walletConnection;
 }
 
+/**
+ * Connect wallet — opens HERE wallet for sign-in
+ */
+async function connectWallet() {
+    var wc = await initNear();
+
+    // Check if already signed in
+    if (wc.isSignedIn()) {
+        var id = wc.getAccountId();
+        console.log("[NEAR] Already signed in:", id);
+        localStorage.setItem(STORAGE_KEY, id);
+        return { accountId: id };
+    }
+
+    // requestSignIn will be intercepted by HERE wallet patch
+    // It redirects to HERE wallet web app which handles auth
+    // After auth, user is redirected back with auth data in URL
+    console.log("[NEAR] Requesting sign in via HERE wallet...");
+
+    await wc.requestSignIn({
+        // contractId is optional — if empty, full access key requested
+        // For view-only connection, leave empty
+    });
+
+    // This line may not execute if page redirects
+    var accountId = wc.getAccountId();
+    if (accountId) {
+        localStorage.setItem(STORAGE_KEY, accountId);
+    }
+
+    return { accountId: accountId || "" };
+}
+
+/**
+ * Disconnect wallet
+ */
 async function disconnectWallet() {
     try {
-        if (connector) {
-            if (connector.signOut) await connector.signOut();
-            else if (connector.disconnect) await connector.disconnect();
-            else if (connector.logout) await connector.logout();
+        if (walletConnection && walletConnection.isSignedIn()) {
+            walletConnection.signOut();
         }
-    } catch (e) { }
-    connector = null;
-    currentAccountId = "";
-    localStorage.removeItem(STORAGE_KEY);
-}
-
-async function getSignedInAccountId() {
-    if (currentAccountId) return currentAccountId;
-
-    var saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-        currentAccountId = saved;
-        return saved;
+    } catch (e) {
+        console.warn("[NEAR] signOut error:", e.message);
     }
 
-    // Пробуем через connector
+    walletConnection = null;
+    nearConnection = null;
+
+    if (patchCleanup && typeof patchCleanup === "function") {
+        try { patchCleanup(); } catch (e) { }
+        patchCleanup = null;
+    }
+
+    localStorage.removeItem(STORAGE_KEY);
+
+    // Clean near-api-js keys
+    var keysToRemove = [];
+    for (var i = 0; i < localStorage.length; i++) {
+        var key = localStorage.key(i);
+        if (key && (key.startsWith("cardclash_near_") || key.startsWith("cardclash_wallet_auth_key"))) {
+            keysToRemove.push(key);
+        }
+    }
+    keysToRemove.forEach(function (k) { localStorage.removeItem(k); });
+}
+
+/**
+ * Get signed-in account ID (restore session)
+ */
+async function getSignedInAccountId() {
+    // Quick check localStorage first
+    var saved = localStorage.getItem(STORAGE_KEY);
+
     try {
-        var c = await getConnector();
-        if (c.getAccountId) {
-            var id = c.getAccountId();
-            if (id && typeof id.then === "function") id = await id;
+        var wc = await initNear();
+        if (wc.isSignedIn()) {
+            var id = wc.getAccountId();
             if (id) {
-                currentAccountId = String(id);
-                localStorage.setItem(STORAGE_KEY, currentAccountId);
-                return currentAccountId;
+                localStorage.setItem(STORAGE_KEY, id);
+                return id;
             }
         }
-        if (c.isSignedIn && (await c.isSignedIn())) {
-            if (c.accountId) {
-                currentAccountId = String(c.accountId);
-                localStorage.setItem(STORAGE_KEY, currentAccountId);
-                return currentAccountId;
-            }
-        }
-    } catch (e) { }
+    } catch (e) {
+        console.warn("[NEAR] restore session error:", e.message);
+    }
+
+    // If near-api-js says not signed in but we have saved — clear it
+    if (saved) {
+        localStorage.removeItem(STORAGE_KEY);
+    }
 
     return "";
 }
 
+/**
+ * Sign and send transaction
+ */
 async function signAndSendTransaction(params) {
-    var c = await getConnector();
-    if (!c) throw new Error("Wallet not initialized");
+    var wc = await initNear();
 
-    var accountId = await getSignedInAccountId();
-    if (!accountId) throw new Error("Not connected");
-
-    if (c.signAndSendTransaction) {
-        return await c.signAndSendTransaction({
-            receiverId: params.receiverId,
-            actions: params.actions,
-        });
+    if (!wc || !wc.isSignedIn()) {
+        throw new Error("Wallet not connected");
     }
 
-    throw new Error("signAndSendTransaction not available");
+    var account = wc.account();
+
+    // Convert wallet-selector style actions to near-api-js actions
+    var NEAR = await import("near-api-js");
+    var nearActions = [];
+
+    if (params.actions && Array.isArray(params.actions)) {
+        for (var i = 0; i < params.actions.length; i++) {
+            var action = params.actions[i];
+
+            if (action.type === "FunctionCall") {
+                var p = action.params || {};
+                nearActions.push(
+                    NEAR.transactions.functionCall(
+                        p.methodName || "",
+                        JSON.parse(p.args || "{}"),
+                        p.gas || "30000000000000",
+                        p.deposit || "0"
+                    )
+                );
+            } else if (action.type === "Transfer") {
+                var amt = (action.params && action.params.deposit) || "0";
+                nearActions.push(NEAR.transactions.transfer(amt));
+            }
+        }
+    }
+
+    if (nearActions.length === 0) {
+        throw new Error("No valid actions provided");
+    }
+
+    // Use requestSignTransactions for HERE wallet redirect flow
+    // Or signAndSendTransaction for direct
+    var result = await account.signAndSendTransaction({
+        receiverId: params.receiverId,
+        actions: nearActions,
+    });
+
+    return result;
 }
 
+/**
+ * Fetch NEAR balance via RPC
+ */
 async function fetchBalance(accountId) {
     try {
         var res = await fetch(RPC_URL, {
-            method: "POST", headers: { "content-type": "application/json" },
+            method: "POST",
+            headers: { "content-type": "application/json" },
             body: JSON.stringify({
-                jsonrpc: "2.0", id: "b", method: "query",
-                params: { request_type: "view_account", finality: "final", account_id: accountId }
+                jsonrpc: "2.0",
+                id: "bal",
+                method: "query",
+                params: {
+                    request_type: "view_account",
+                    finality: "final",
+                    account_id: accountId,
+                },
             }),
         });
         var json = await res.json();
         if (json.error) return 0;
-        var y = BigInt((json.result && json.result.amount) || "0");
-        var b = 10n ** 24n;
-        return Number((y / b).toString() + "." + (y % b).toString().padStart(24, "0").slice(0, 6));
-    } catch (e) { return 0; }
+
+        var amount = (json.result && json.result.amount) || "0";
+        var yocto = BigInt(amount);
+        var ONE_NEAR = 10n ** 24n;
+        var whole = yocto / ONE_NEAR;
+        var frac = (yocto % ONE_NEAR).toString().padStart(24, "0").slice(0, 6);
+
+        return Number(whole.toString() + "." + frac);
+    } catch (e) {
+        return 0;
+    }
 }
 
 export {
