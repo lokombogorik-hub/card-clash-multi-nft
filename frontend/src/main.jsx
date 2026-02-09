@@ -7,7 +7,16 @@ if (typeof window !== "undefined") {
   if (!window.Buffer) window.Buffer = _Buffer;
   if (!window.process) window.process = _process;
 }
+import process from "process";
+import { Buffer } from "buffer";
 
+globalThis.process = process;
+globalThis.Buffer = Buffer;
+
+if (typeof window !== "undefined") {
+  window.process = process;
+  window.Buffer = Buffer;
+}
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
