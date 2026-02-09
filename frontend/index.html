@@ -10,6 +10,19 @@
 
 <body>
     <div id="root"></div>
+    <script>
+        // Must run before the Vite module graph executes
+        (function () {
+            if (typeof window.process === "undefined") window.process = { env: {} };
+            if (typeof globalThis.process === "undefined") globalThis.process = window.process;
+
+            // Minimal stubs used by some libs
+            window.process.browser = true;
+            window.process.version = "v18.0.0";
+            window.process.platform = "browser";
+            window.process.nextTick = window.process.nextTick || function (cb) { Promise.resolve().then(cb); };
+        })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
 </body>
 
