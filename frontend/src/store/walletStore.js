@@ -1,28 +1,18 @@
-// frontend/src/store/walletStore.js
 import { useEffect, useState } from "react";
 import {
     connectWallet,
-    submitAccountId,
-    cancelConnect,
-    isConnectPending,
     disconnectWallet as disconnect,
     getSignedInAccountId,
     signAndSendTransaction as signTx,
     fetchBalance,
-    openHotWallet,
     networkId,
 } from "../libs/walletSelector";
 
 var API_BASE = (import.meta.env.VITE_API_BASE_URL || "").trim();
 
 var state = {
-    connected: false,
-    walletAddress: "",
-    balance: 0,
-    status: "",
-    lastError: null,
-    nfts: [],
-    showAccountInput: false,
+    connected: false, walletAddress: "", balance: 0,
+    status: "", lastError: null, nfts: [],
 };
 
 var listeners = new Set();
@@ -45,57 +35,42 @@ async function linkToBackend(id) {
 async function applyAccount(id) {
     id = String(id || "").trim();
     if (!id) return;
-    setState({ connected: true, walletAddress: id, status: "", lastError: null, showAccountInput: false });
+    setState({ connected: true, walletAddress: id, status: "", lastError: null });
     var bal = await fetchBalance(id);
     setState({ balance: bal });
     linkToBackend(id);
 }
 
 async function connectHot() {
-    // Show the account input modal
-    setState({ showAccountInput: true, status: "", lastError: null });
-
-    // Open HOT wallet so user can see/copy their address
-    openHotWallet();
-
-    // Wait for submitAccountId to be called from UI
+    setState({ status: "Opening HOT Wallet...", lastError: null });
     try {
         var result = await connectWallet();
         if (result && result.accountId) {
             await applyAccount(result.accountId);
             setState({ status: "✅ Connected!" });
             setTimeout(function () { setState({ status: "" }); }, 2000);
+        } else {
+            setState({ status: "Confirm in HOT Wallet and return to the game" });
         }
     } catch (e) {
         var msg = (e && e.message) || String(e);
-        if (msg !== "Cancelled") {
-            setState({ status: "", lastError: { name: "Error", message: msg } });
-        }
-        setState({ showAccountInput: false });
+        console.error("[Wallet] connect error:", msg);
+        setState({ status: "", lastError: { name: "Error", message: msg } });
     }
-}
-
-async function onSubmitAccount(accountId) {
-    setState({ status: "Verifying account...", lastError: null });
-    var result = await submitAccountId(accountId);
-    if (!result.success) {
-        setState({ status: "", lastError: { name: "Error", message: result.error } });
-    }
-}
-
-function onCancelConnect() {
-    cancelConnect();
-    setState({ showAccountInput: false, status: "", lastError: null });
 }
 
 async function disconnectWallet() {
     await disconnect();
-    setState({ connected: false, walletAddress: "", balance: 0, status: "", nfts: [], lastError: null, showAccountInput: false });
+    setState({ connected: false, walletAddress: "", balance: 0, status: "", nfts: [], lastError: null });
 }
 
 async function restoreSession() {
-    var id = await getSignedInAccountId();
-    if (id) await applyAccount(id);
+    try {
+        var id = await getSignedInAccountId();
+        if (id) await applyAccount(id);
+    } catch (e) {
+        console.warn("[Wallet] restore error:", e.message);
+    }
 }
 
 export var walletStore = {
@@ -104,8 +79,6 @@ export var walletStore = {
     connectHot: connectHot,
     disconnectWallet: disconnectWallet,
     restoreSession: restoreSession,
-    submitAccount: onSubmitAccount,
-    cancelConnect: onCancelConnect,
     clearStatus: function () { setState({ status: "", lastError: null }); },
     signAndSendTransaction: function (p) { return signTx(p); },
     getUserNFTs: function () { return []; },
@@ -119,21 +92,10 @@ export function useWalletStore() {
         return unsub;
     }, []);
     return {
-        connected: snap.connected,
-        accountId: snap.walletAddress,
-        walletAddress: snap.walletAddress,
-        balance: snap.balance,
-        status: snap.status,
-        lastError: snap.lastError,
-        nfts: snap.nfts,
-        showAccountInput: snap.showAccountInput,
-        connectHot: walletStore.connectHot,
-        disconnectWallet: walletStore.disconnectWallet,
-        clearStatus: walletStore.clearStatus,
-        restoreSession: walletStore.restoreSession,
-        submitAccount: walletStore.submitAccount,
-        cancelConnect: walletStore.cancelConnect,
-        getUserNFTs: walletStore.getUserNFTs,
-        signAndSendTransaction: walletStore.signAndSendTransaction,
+        connected: snap.connected, accountId: snap.walletAddress, walletAddress: snap.walletAddress,
+        balance: snap.balance, status: snap.status, lastError: snap.lastError, nfts: snap.nfts,
+        connectHot: walletStore.connectHot, disconnectWallet: walletStore.disconnectWallet,
+        clearStatus: walletStore.clearStatus, restoreSession: walletStore.restoreSession,
+        getUserNFTs: walletStore.getUserNFTs, signAndSendTransaction: walletStore.signAndSendTransaction,
     };
 }
