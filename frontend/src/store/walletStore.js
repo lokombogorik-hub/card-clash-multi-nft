@@ -42,18 +42,19 @@ async function applyAccount(id) {
 }
 
 async function connectHot() {
-    setState({ status: "Connecting…", lastError: null });
+    setState({ status: "Opening HOT Wallet...", lastError: null });
     try {
         var result = await connectWallet();
-        if (result.accountId) {
+        if (result && result.accountId) {
             await applyAccount(result.accountId);
             setState({ status: "✅ Connected!" });
             setTimeout(function () { setState({ status: "" }); }, 2000);
         } else {
-            setState({ status: "Confirm in wallet and return" });
+            setState({ status: "Confirm in HOT Wallet and return to the game" });
         }
     } catch (e) {
         var msg = (e && e.message) || String(e);
+        console.error("[Wallet] connect error:", msg);
         setState({ status: "", lastError: { name: "Error", message: msg } });
     }
 }
@@ -64,8 +65,12 @@ async function disconnectWallet() {
 }
 
 async function restoreSession() {
-    var id = await getSignedInAccountId();
-    if (id) await applyAccount(id);
+    try {
+        var id = await getSignedInAccountId();
+        if (id) await applyAccount(id);
+    } catch (e) {
+        console.warn("[Wallet] restore error:", e.message);
+    }
 }
 
 export var walletStore = {
