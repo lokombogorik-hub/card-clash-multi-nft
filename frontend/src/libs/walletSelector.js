@@ -9,168 +9,217 @@ var RPC_URL =
         ? "https://rpc.testnet.near.org"
         : "https://rpc.mainnet.near.org");
 
+var connector = null;
 var currentAccountId = "";
 var STORAGE_KEY = "cardclash_near_account";
 
-async function verifyAccount(accountId) {
-    var res = await fetch(RPC_URL, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-            jsonrpc: "2.0", id: "v", method: "query",
-            params: { request_type: "view_account", finality: "final", account_id: accountId },
-        }),
-    });
-    var json = await res.json();
-    return !json.error;
-}
+async function getConnector() {
+    if (connector) return connector;
 
-async function fetchBalance(accountId) {
-    try {
-        var res = await fetch(RPC_URL, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-                jsonrpc: "2.0", id: "b", method: "query",
-                params: { request_type: "view_account", finality: "final", account_id: accountId },
-            }),
-        });
-        var json = await res.json();
-        if (json.error) return 0;
-        var amount = (json.result && json.result.amount) || "0";
-        var yocto = BigInt(amount);
-        var base = 10n ** 24n;
-        var whole = yocto / base;
-        var frac = (yocto % base).toString().padStart(24, "0").slice(0, 6);
-        return Number(whole.toString() + "." + frac);
-    } catch (e) {
-        return 0;
-    }
-}
+    var mod = await import("@here-wallet/connect");
 
-function scanLocalStorageForHereWallet() {
-    // HOT Wallet / HERE Wallet пишет данные в localStorage
-    // Ищем ключи содержащие account info
-    var found = "";
-    try {
-        for (var i = 0; i < localStorage.length; i++) {
-            var key = localStorage.key(i);
-            if (!key) continue;
-            var kl = key.toLowerCase();
+    console.log("[HOT] @here-wallet/connect keys:", Object.keys(mod).join(", "));
 
-            // HERE Wallet хранит аккаунт в разных ключах
-            if (kl.indexOf("herewallet") !== -1 ||
-                kl.indexOf("here_wallet") !== -1 ||
-                kl.indexOf("hot_wallet") !== -1 ||
-                kl.indexOf("near_app_wallet_auth_key") !== -1 ||
-                kl.indexOf("wallet_auth_key") !== -1) {
+    // Пробуем разные экспорты
+    var HereConnect = mod.HereConnect || mod.HereWallet || mod.HereProvider || mod.default || null;
 
-                try {
-                    var val = localStorage.getItem(key);
-                    if (!val) continue;
-
-                    // Пробуем распарсить JSON
-                    var parsed = JSON.parse(val);
-
-                    // Ищем accountId в разных форматах
-                    var accId = parsed.accountId || parsed.account_id || parsed.nearAccountId || "";
-
-                    if (!accId && Array.isArray(parsed)) {
-                        for (var j = 0; j < parsed.length; j++) {
-                            if (parsed[j] && parsed[j].accountId) {
-                                accId = parsed[j].accountId;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (!accId && typeof parsed === "string" && parsed.indexOf(".") !== -1) {
-                        accId = parsed;
-                    }
-
-                    if (accId && accId.length >= 2 && accId.length <= 64) {
-                        console.log("[Wallet] Found account in localStorage key:", key, "->", accId);
-                        found = accId;
-                        break;
-                    }
-                } catch (e) {
-                    // Не JSON — пробуем как строку
-                    var raw = localStorage.getItem(key);
-                    if (raw && raw.indexOf(".near") !== -1) {
-                        found = raw.trim();
-                        break;
-                    }
-                    if (raw && raw.indexOf(".tg") !== -1) {
-                        found = raw.trim();
-                        break;
-                    }
-                }
+    if (!HereConnect) {
+        // Ищем любой класс/функцию
+        var keys = Object.keys(mod);
+        for (var i = 0; i < keys.length; i++) {
+            if (typeof mod[keys[i]] === "function") {
+                HereConnect = mod[keys[i]];
+                console.log("[HOT] Using export:", keys[i]);
+                break;
             }
         }
-    } catch (e) {
-        console.warn("[Wallet] localStorage scan error:", e);
     }
-    return found;
+
+    if (!HereConnect) {
+        throw new Error("No connect class found. Exports: " + Object.keys(mod).join(", "));
+    }
+
+    console.log("[HOT] HereConnect type:", typeof HereConnect);
+    console.log("[HOT] HereConnect name:", HereConnect.name || "anonymous");
+
+    // Пробуем инициализировать
+    // Способ 1: статический connect/create
+    if (typeof HereConnect.connect === "function") {
+        console.log("[HOT] Using HereConnect.connect()");
+        connector = await HereConnect.connect({ networkId: networkId });
+        return connector;
+    }
+
+    if (typeof HereConnect.create === "function") {
+        console.log("[HOT] Using HereConnect.create()");
+        connector = await HereConnect.create({ networkId: networkId });
+        return connector;
+    }
+
+    if (typeof HereConnect.setup === "function") {
+        console.log("[HOT] Using HereConnect.setup()");
+        connector = await HereConnect.setup({ networkId: networkId });
+        return connector;
+    }
+
+    // Способ 2: new
+    console.log("[HOT] Using new HereConnect()");
+    connector = new HereConnect({ networkId: networkId });
+
+    if (connector.init && typeof connector.init === "function") {
+        await connector.init();
+    }
+
+    console.log("[HOT] Connector created OK");
+    console.log("[HOT] Connector methods:", Object.getOwnPropertyNames(Object.getPrototypeOf(connector)).join(", "));
+
+    return connector;
 }
 
-async function connectWithAccountId(accountId) {
-    accountId = String(accountId || "").trim().toLowerCase();
-    if (!accountId) throw new Error("Enter your account ID");
-    if (accountId.length < 2 || accountId.length > 64) throw new Error("Invalid account ID");
+async function connectWallet() {
+    var c = await getConnector();
 
-    var exists = await verifyAccount(accountId);
-    if (!exists) throw new Error("Account '" + accountId + "' not found on NEAR " + networkId);
+    console.log("[HOT] Starting connect...");
+
+    var accountId = "";
+
+    // Пробуем все варианты подключения
+    var methods = ["signIn", "requestSignIn", "connect", "login", "authenticate", "authorize"];
+
+    for (var i = 0; i < methods.length; i++) {
+        var m = methods[i];
+        if (typeof c[m] !== "function") continue;
+
+        console.log("[HOT] Trying c." + m + "()...");
+        try {
+            var result = await c[m]({});
+            console.log("[HOT] " + m + " result:", typeof result, result);
+
+            if (typeof result === "string") accountId = result;
+            else if (result && result.accountId) accountId = result.accountId;
+            else if (result && result.account_id) accountId = result.account_id;
+            else if (Array.isArray(result) && result.length > 0) {
+                accountId = result[0].accountId || result[0].account_id || String(result[0]);
+            }
+
+            if (accountId) break;
+        } catch (e) {
+            console.warn("[HOT] " + m + " failed:", e.message);
+        }
+    }
+
+    // Fallback: getAccountId
+    if (!accountId && c.getAccountId) {
+        try {
+            var gid = c.getAccountId();
+            if (gid && typeof gid.then === "function") gid = await gid;
+            if (gid) accountId = String(gid);
+        } catch (e) { }
+    }
+
+    // Fallback: accountId property
+    if (!accountId && c.accountId) accountId = String(c.accountId);
+
+    accountId = String(accountId || "").trim();
+
+    if (!accountId) {
+        throw new Error("Wallet did not return account. DIAG: connector methods = " +
+            Object.getOwnPropertyNames(Object.getPrototypeOf(c)).join(", "));
+    }
 
     currentAccountId = accountId;
     localStorage.setItem(STORAGE_KEY, accountId);
+    console.log("[HOT] Connected:", accountId);
+
     return { accountId: accountId };
 }
 
-async function tryAutoConnect() {
-    // 1. Проверяем наш собственный storage
-    var saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-        currentAccountId = saved;
-        return saved;
-    }
-
-    // 2. Сканируем localStorage на данные от HERE Wallet
-    var scanned = scanLocalStorageForHereWallet();
-    if (scanned) {
-        var valid = await verifyAccount(scanned);
-        if (valid) {
-            currentAccountId = scanned;
-            localStorage.setItem(STORAGE_KEY, scanned);
-            console.log("[Wallet] Auto-connected from HERE Wallet data:", scanned);
-            return scanned;
-        }
-    }
-
-    return "";
-}
-
 async function disconnectWallet() {
+    try {
+        if (connector) {
+            if (connector.signOut) await connector.signOut();
+            else if (connector.disconnect) await connector.disconnect();
+            else if (connector.logout) await connector.logout();
+        }
+    } catch (e) { }
+    connector = null;
     currentAccountId = "";
     localStorage.removeItem(STORAGE_KEY);
 }
 
 async function getSignedInAccountId() {
     if (currentAccountId) return currentAccountId;
-    return await tryAutoConnect();
+
+    var saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+        currentAccountId = saved;
+        return saved;
+    }
+
+    // Пробуем через connector
+    try {
+        var c = await getConnector();
+        if (c.getAccountId) {
+            var id = c.getAccountId();
+            if (id && typeof id.then === "function") id = await id;
+            if (id) {
+                currentAccountId = String(id);
+                localStorage.setItem(STORAGE_KEY, currentAccountId);
+                return currentAccountId;
+            }
+        }
+        if (c.isSignedIn && (await c.isSignedIn())) {
+            if (c.accountId) {
+                currentAccountId = String(c.accountId);
+                localStorage.setItem(STORAGE_KEY, currentAccountId);
+                return currentAccountId;
+            }
+        }
+    } catch (e) { }
+
+    return "";
 }
 
-async function signAndSendTransaction() {
-    throw new Error("Transaction signing coming in Stage 2");
+async function signAndSendTransaction(params) {
+    var c = await getConnector();
+    if (!c) throw new Error("Wallet not initialized");
+
+    var accountId = await getSignedInAccountId();
+    if (!accountId) throw new Error("Not connected");
+
+    if (c.signAndSendTransaction) {
+        return await c.signAndSendTransaction({
+            receiverId: params.receiverId,
+            actions: params.actions,
+        });
+    }
+
+    throw new Error("signAndSendTransaction not available");
+}
+
+async function fetchBalance(accountId) {
+    try {
+        var res = await fetch(RPC_URL, {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                jsonrpc: "2.0", id: "b", method: "query",
+                params: { request_type: "view_account", finality: "final", account_id: accountId }
+            }),
+        });
+        var json = await res.json();
+        if (json.error) return 0;
+        var y = BigInt((json.result && json.result.amount) || "0");
+        var b = 10n ** 24n;
+        return Number((y / b).toString() + "." + (y % b).toString().padStart(24, "0").slice(0, 6));
+    } catch (e) { return 0; }
 }
 
 export {
     networkId,
     RPC_URL,
-    connectWithAccountId,
-    tryAutoConnect,
+    connectWallet,
     disconnectWallet,
     getSignedInAccountId,
     signAndSendTransaction,
-    verifyAccount,
     fetchBalance,
 };

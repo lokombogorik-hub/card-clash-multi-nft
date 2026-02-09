@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@here-wallet/connect": "^0.2.1",
     "canvas-confetti": "1.9.3",
     "framer-motion": "12.28.1",
     "lucide-react": "0.562.0",
