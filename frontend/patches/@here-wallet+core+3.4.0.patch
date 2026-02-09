@@ -1,0 +1,22 @@
+diff --git a/node_modules/@here-wallet/core/build/strategies/TelegramAppStrategy.js b/node_modules/@here-wallet/core/build/strategies/TelegramAppStrategy.js
+index eb5cbdf..94238cd 100644
+--- a/node_modules/@here-wallet/core/build/strategies/TelegramAppStrategy.js
++++ b/node_modules/@here-wallet/core/build/strategies/TelegramAppStrategy.js
+@@ -87,13 +87,15 @@ class TelegramAppStrategy extends HereStrategy_1.HereStrategy {
+         });
+     }
+     onRequested(id) {
+-        var _a, _b, _c, _d;
++        var _a, _b;
+         return __awaiter(this, void 0, void 0, function* () {
+             if (typeof window === "undefined")
+                 return;
+             id = (0, utils_1.baseEncode)(id);
+             (_b = (_a = window === null || window === void 0 ? void 0 : window.Telegram) === null || _a === void 0 ? void 0 : _a.WebApp) === null || _b === void 0 ? void 0 : _b.openTelegramLink(`https://t.me/${this.walletId}?startapp=h4n-${id}`);
+-            (_d = (_c = window === null || window === void 0 ? void 0 : window.Telegram) === null || _c === void 0 ? void 0 : _c.WebApp) === null || _d === void 0 ? void 0 : _d.close();
++            // PATCH: do NOT close WebApp after opening wallet.
++            // On many mobile Telegram clients it closes the game completely.
++            // window.Telegram?.WebApp?.close?.();
+         });
+     }
+ }

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "node node_modules/vite/bin/vite.js build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@here-wallet/core": "3.4.0",
@@ -16,17 +17,16 @@
     "borsh": "0.7.0",
     "buffer": "^6.0.3",
     "canvas-confetti": "1.9.3",
-    "crypto-browserify": "^3.12.1",
+    "crypto-browserify": "3.12.1",
     "events": "^3.3.0",
     "framer-motion": "12.28.1",
-    "inherits": "^2.0.4",
     "lucide-react": "0.562.0",
     "process": "^0.11.10",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-hot-toast": "2.6.0",
-    "readable-stream": "^3.6.2",
-    "stream-browserify": "^3.0.0",
+    "readable-stream": "3.6.2",
+    "stream-browserify": "3.0.0",
     "string_decoder": "^1.3.0",
     "util": "^0.12.5",
     "zustand": "5.0.10"
@@ -34,6 +34,7 @@
   "devDependencies": {
     "@rollup/plugin-inject": "^5.0.5",
     "@vitejs/plugin-react": "4.2.1",
+    "patch-package": "^8.0.1",
     "vite": "5.4.0"
   }
 }

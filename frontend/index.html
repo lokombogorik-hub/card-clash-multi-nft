@@ -10,21 +10,22 @@
 
 <body>
     <div id="root"></div>
+
+    <!-- IMPORTANT: must run BEFORE Vite module graph executes -->
     <script>
-        // Must run before the Vite module graph executes
         (function () {
             if (typeof window.process === "undefined") window.process = { env: {} };
             if (typeof globalThis.process === "undefined") globalThis.process = window.process;
 
-            // Minimal stubs used by some libs
+            window.process.env = window.process.env || {};
             window.process.browser = true;
             window.process.version = "v18.0.0";
             window.process.platform = "browser";
             window.process.nextTick = window.process.nextTick || function (cb) { Promise.resolve().then(cb); };
         })();
     </script>
+
     <script type="module" src="/src/main.jsx"></script>
-    <!-- BUILD-ID: 2026-02-09-2250 -->
 </body>
 
 </html>
