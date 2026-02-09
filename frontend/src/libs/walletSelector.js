@@ -1,10 +1,8 @@
 import { setupWalletSelector } from "@near-wallet-selector/core";
 import { setupHereWallet } from "@near-wallet-selector/here-wallet";
 
-const networkId =
-    (import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet").toLowerCase() === "testnet"
-        ? "testnet"
-        : "mainnet";
+const networkIdRaw = (import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet").trim().toLowerCase();
+const networkId = networkIdRaw === "testnet" ? "testnet" : "mainnet";
 
 const RPC_URL =
     import.meta.env.VITE_NEAR_RPC_URL ||
@@ -18,15 +16,13 @@ async function getSelector() {
     const botId = (import.meta.env.VITE_TG_BOT_ID || "Cardclashbot/app").trim();
     const walletId = (import.meta.env.VITE_HOT_WALLET_ID || "herewalletbot/app").trim();
 
+    console.log("[WS] init:", { networkId, RPC_URL, botId, walletId });
+
     _selectorPromise = setupWalletSelector({
         network: networkId,
         modules: [
             setupHereWallet({
-                walletOptions: {
-                    // IMPORTANT: these must be "<botname>/app"
-                    botId,
-                    walletId,
-                },
+                walletOptions: { botId, walletId },
             }),
         ],
     });
@@ -38,18 +34,16 @@ async function connectWallet() {
     const selector = await getSelector();
     const wallet = await selector.wallet("here-wallet");
 
-    // IMPORTANT:
-    // Use contractId sign-in (AddKey) instead of message signature flow.
-    // Put ANY contractId you control / plan to use. For now use your escrow or treasury.
     const contractId =
         (import.meta.env.VITE_NEAR_ALLOWED_SIGNIN_CONTRACT_ID || "").trim() ||
         (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim() ||
         "retardo-s.near";
 
-    const accounts = await wallet.signIn({
-        contractId,
-        methodNames: [], // optional
-    });
+    console.log("[WS] signIn:", { networkId, contractId });
+
+    const accounts = await wallet.signIn({ contractId, methodNames: [] });
+
+    console.log("[WS] signIn accounts:", accounts);
 
     const accountId = accounts && accounts[0] ? accounts[0].accountId : "";
     return { accountId };
@@ -64,7 +58,7 @@ async function disconnectWallet() {
 async function getSignedInAccountId() {
     const selector = await getSelector();
     const state = selector.store.getState();
-    const active = state.accounts.find((a) => a.active) || state.accounts[0];
+    const active = (state.accounts || []).find((a) => a.active) || (state.accounts || [])[0];
     return active ? active.accountId : "";
 }
 
@@ -72,12 +66,6 @@ async function signAndSendTransaction(params) {
     const selector = await getSelector();
     const wallet = await selector.wallet("here-wallet");
     return await wallet.signAndSendTransaction(params);
-}
-
-async function signAndSendTransactions(params) {
-    const selector = await getSelector();
-    const wallet = await selector.wallet("here-wallet");
-    return await wallet.signAndSendTransactions(params);
 }
 
 async function fetchBalance(accountId) {
@@ -113,6 +101,5 @@ export {
     disconnectWallet,
     getSignedInAccountId,
     signAndSendTransaction,
-    signAndSendTransactions,
     fetchBalance,
 };
