@@ -1,11 +1,9 @@
 import { HereWallet, TelegramAppStrategy, WidgetStrategy } from "@here-wallet/core";
 
-const networkIdRaw = (import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet").trim().toLowerCase();
-export const networkId = networkIdRaw === "testnet" ? "testnet" : "mainnet";
+export const networkId = "mainnet"; // FORCE MAINNET (no env ambiguity)
 
 export const RPC_URL =
-    (import.meta.env.VITE_NEAR_RPC_URL || "").trim() ||
-    (networkId === "testnet" ? "https://rpc.testnet.near.org" : "https://rpc.mainnet.near.org");
+    (import.meta.env.VITE_NEAR_RPC_URL || "").trim() || "https://rpc.mainnet.near.org";
 
 let _herePromise = null;
 
@@ -17,18 +15,37 @@ function isTelegramWebApp() {
     }
 }
 
+function getStartParam() {
+    try {
+        return (
+            window.Telegram?.WebApp?.initDataUnsafe?.start_param ||
+            window.Telegram?.WebApp?.initDataUnsafe?.startParam ||
+            ""
+        );
+    } catch {
+        return "";
+    }
+}
+
 async function getHere() {
     if (_herePromise) return _herePromise;
 
-    const botId = (import.meta.env.VITE_TG_BOT_ID || "Cardclashbot/app").trim();
-    const walletId = (import.meta.env.VITE_HOT_WALLET_ID || "herewalletbot/app").trim();
+    // IMPORTANT: bot username MUST be lowercase in tg links
+    const botId = String(import.meta.env.VITE_TG_BOT_ID || "cardclashbot/app")
+        .trim()
+        .toLowerCase();
+
+    const walletId = String(import.meta.env.VITE_HOT_WALLET_ID || "herewalletbot/app")
+        .trim()
+        .toLowerCase();
 
     _herePromise = (async () => {
-        const strategy = isTelegramWebApp()
-            ? new TelegramAppStrategy(botId, walletId)
-            : new WidgetStrategy();
+        const telegram = isTelegramWebApp();
+        const startParam = getStartParam();
 
-        console.log("[HERE] init", { networkId, RPC_URL, botId, walletId, telegram: isTelegramWebApp() });
+        console.log("[HERE] init", { networkId, RPC_URL, botId, walletId, telegram, startParam });
+
+        const strategy = telegram ? new TelegramAppStrategy(botId, walletId) : new WidgetStrategy();
 
         const here = await HereWallet.connect({
             networkId,
@@ -37,6 +54,15 @@ async function getHere() {
             walletId,
             defaultStrategy: strategy,
         });
+
+        // Log signed-in state after connect() processed possible "hot-..." return
+        try {
+            const ok = await here.isSignedIn();
+            const aid = ok ? await here.getAccountId().catch(() => "") : "";
+            console.log("[HERE] post-connect signedIn:", ok, "accountId:", aid);
+        } catch (e) {
+            console.log("[HERE] post-connect check failed:", e?.message || String(e));
+        }
 
         return here;
     })();
@@ -48,17 +74,18 @@ export async function connectWallet() {
     const here = await getHere();
 
     const contractId =
-        (import.meta.env.VITE_NEAR_ALLOWED_SIGNIN_CONTRACT_ID || "").trim() ||
-        (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim() ||
-        "retardo-s.near";
+        String(import.meta.env.VITE_NEAR_ALLOWED_SIGNIN_CONTRACT_ID || "retardo-s.near")
+            .trim()
+            .toLowerCase();
 
     console.log("[HERE] signIn", { contractId, networkId });
 
-    // IMPORTANT: this triggers TelegramAppStrategy.request() -> openTelegramLink(...)
+    // This should open HERE wallet on Telegram and come back via start_param
     const accountId = await here.signIn({ contractId, methodNames: [] });
 
-    console.log("[HERE] connected", accountId);
-    return { accountId };
+    console.log("[HERE] signIn result accountId:", accountId);
+
+    return { accountId: String(accountId || "") };
 }
 
 export async function disconnectWallet() {
