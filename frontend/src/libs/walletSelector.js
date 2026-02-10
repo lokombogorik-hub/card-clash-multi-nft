@@ -1,6 +1,5 @@
 import { HereWallet, TelegramAppStrategy, WidgetStrategy } from "@here-wallet/core";
 
-// HARD FORCE MAINNET. No env, no ambiguity.
 export const networkId = "mainnet";
 export const RPC_URL = "https://rpc.mainnet.near.org";
 
@@ -32,7 +31,7 @@ async function getHere() {
         const telegram = isTelegramWebApp();
         const startParam = getStartParam();
 
-        console.log("[HERE] init", { networkId, RPC_URL, botId, walletId, telegram, startParam });
+        console.log("[HERE] init", { networkId, botId, walletId, telegram, startParam });
 
         const strategy = telegram ? new TelegramAppStrategy(botId, walletId) : new WidgetStrategy();
 
@@ -44,6 +43,10 @@ async function getHere() {
             defaultStrategy: strategy,
         });
 
+        // After connect(), if we returned from HOT, start_param should begin with "hot"
+        const sp2 = getStartParam();
+        console.log("[HERE] after-connect startParam:", sp2);
+
         return here;
     })();
 
@@ -53,15 +56,13 @@ async function getHere() {
 export async function connectWallet() {
     const here = await getHere();
 
-    const contractId = String(
-        import.meta.env.VITE_NEAR_ALLOWED_SIGNIN_CONTRACT_ID || "retardo-s.near"
-    )
-        .trim()
-        .toLowerCase();
+    const contractId = "retardo-s.near";
 
-    console.log("[HERE] signIn", { contractId, networkId });
+    console.log("[HERE] signIn", { contractId, networkId, startParam: getStartParam() });
 
     const accountId = await here.signIn({ contractId, methodNames: [] });
+
+    console.log("[HERE] signIn result accountId:", accountId);
 
     return { accountId: String(accountId || "") };
 }
