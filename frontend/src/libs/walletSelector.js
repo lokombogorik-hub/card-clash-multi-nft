@@ -1,74 +1,91 @@
-import { setupWalletSelector } from "@near-wallet-selector/core";
-import { setupHereWallet } from "@near-wallet-selector/here-wallet";
+import { HereWallet, TelegramAppStrategy, WidgetStrategy } from "@here-wallet/core";
 
 const networkIdRaw = (import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet").trim().toLowerCase();
-const networkId = networkIdRaw === "testnet" ? "testnet" : "mainnet";
+export const networkId = networkIdRaw === "testnet" ? "testnet" : "mainnet";
 
-const RPC_URL =
-    import.meta.env.VITE_NEAR_RPC_URL ||
+export const RPC_URL =
+    (import.meta.env.VITE_NEAR_RPC_URL || "").trim() ||
     (networkId === "testnet" ? "https://rpc.testnet.near.org" : "https://rpc.mainnet.near.org");
 
-let _selectorPromise = null;
+let _herePromise = null;
 
-async function getSelector() {
-    if (_selectorPromise) return _selectorPromise;
+function isTelegramWebApp() {
+    try {
+        return !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe);
+    } catch {
+        return false;
+    }
+}
+
+async function getHere() {
+    if (_herePromise) return _herePromise;
 
     const botId = (import.meta.env.VITE_TG_BOT_ID || "Cardclashbot/app").trim();
     const walletId = (import.meta.env.VITE_HOT_WALLET_ID || "herewalletbot/app").trim();
 
-    console.log("[WS] init:", { networkId, RPC_URL, botId, walletId });
+    _herePromise = (async () => {
+        const strategy = isTelegramWebApp()
+            ? new TelegramAppStrategy(botId, walletId)
+            : new WidgetStrategy();
 
-    _selectorPromise = setupWalletSelector({
-        network: networkId,
-        modules: [
-            setupHereWallet({
-                walletOptions: { botId, walletId },
-            }),
-        ],
-    });
+        console.log("[HERE] init", { networkId, RPC_URL, botId, walletId, telegram: isTelegramWebApp() });
 
-    return _selectorPromise;
+        const here = await HereWallet.connect({
+            networkId,
+            nodeUrl: RPC_URL,
+            botId,
+            walletId,
+            defaultStrategy: strategy,
+        });
+
+        return here;
+    })();
+
+    return _herePromise;
 }
 
-async function connectWallet() {
-    const selector = await getSelector();
-    const wallet = await selector.wallet("here-wallet");
+export async function connectWallet() {
+    const here = await getHere();
 
     const contractId =
         (import.meta.env.VITE_NEAR_ALLOWED_SIGNIN_CONTRACT_ID || "").trim() ||
         (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim() ||
         "retardo-s.near";
 
-    console.log("[WS] signIn:", { networkId, contractId });
+    console.log("[HERE] signIn", { contractId, networkId });
 
-    const accounts = await wallet.signIn({ contractId, methodNames: [] });
+    // IMPORTANT: this triggers TelegramAppStrategy.request() -> openTelegramLink(...)
+    const accountId = await here.signIn({ contractId, methodNames: [] });
 
-    console.log("[WS] signIn accounts:", accounts);
-
-    const accountId = accounts && accounts[0] ? accounts[0].accountId : "";
+    console.log("[HERE] connected", accountId);
     return { accountId };
 }
 
-async function disconnectWallet() {
-    const selector = await getSelector();
-    const wallet = await selector.wallet("here-wallet");
-    await wallet.signOut();
+export async function disconnectWallet() {
+    const here = await getHere();
+    await here.signOut();
 }
 
-async function getSignedInAccountId() {
-    const selector = await getSelector();
-    const state = selector.store.getState();
-    const active = (state.accounts || []).find((a) => a.active) || (state.accounts || [])[0];
-    return active ? active.accountId : "";
+export async function getSignedInAccountId() {
+    const here = await getHere();
+    try {
+        const ok = await here.isSignedIn();
+        if (!ok) return "";
+        return await here.getAccountId();
+    } catch {
+        return "";
+    }
 }
 
-async function signAndSendTransaction(params) {
-    const selector = await getSelector();
-    const wallet = await selector.wallet("here-wallet");
-    return await wallet.signAndSendTransaction(params);
+export async function signAndSendTransaction(params) {
+    const here = await getHere();
+    return await here.signAndSendTransaction({
+        receiverId: params.receiverId,
+        actions: params.actions,
+    });
 }
 
-async function fetchBalance(accountId) {
+export async function fetchBalance(accountId) {
     try {
         const res = await fetch(RPC_URL, {
             method: "POST",
@@ -93,13 +110,3 @@ async function fetchBalance(accountId) {
         return 0;
     }
 }
-
-export {
-    networkId,
-    RPC_URL,
-    connectWallet,
-    disconnectWallet,
-    getSignedInAccountId,
-    signAndSendTransaction,
-    fetchBalance,
-};
