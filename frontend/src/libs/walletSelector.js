@@ -1,51 +1,22 @@
-import { HereWallet, TelegramAppStrategy, WidgetStrategy } from "@here-wallet/core";
+import { HereWallet, WidgetStrategy } from "@here-wallet/core";
 
 export const networkId = "mainnet";
 export const RPC_URL = "https://rpc.mainnet.near.org";
 
 let _herePromise = null;
 
-function isTelegramWebApp() {
-    try {
-        return !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe);
-    } catch {
-        return false;
-    }
-}
-
-function getStartParam() {
-    try {
-        return window.Telegram?.WebApp?.initDataUnsafe?.start_param || "";
-    } catch {
-        return "";
-    }
-}
-
 async function getHere() {
     if (_herePromise) return _herePromise;
 
-    const botId = String(import.meta.env.VITE_TG_BOT_ID || "cardclashbot/app").trim().toLowerCase();
-    const walletId = String(import.meta.env.VITE_HOT_WALLET_ID || "herewalletbot/app").trim().toLowerCase();
-
     _herePromise = (async () => {
-        const telegram = isTelegramWebApp();
-        const startParam = getStartParam();
+        console.log("[HERE] init (WidgetStrategy only)", { networkId, RPC_URL });
 
-        console.log("[HERE] init", { networkId, botId, walletId, telegram, startParam });
-
-        const strategy = telegram ? new TelegramAppStrategy(botId, walletId) : new WidgetStrategy();
-
+        // IMPORTANT: WidgetStrategy does not depend on Telegram start_param return flow
         const here = await HereWallet.connect({
             networkId,
             nodeUrl: RPC_URL,
-            botId,
-            walletId,
-            defaultStrategy: strategy,
+            defaultStrategy: new WidgetStrategy(),
         });
-
-        // After connect(), if we returned from HOT, start_param should begin with "hot"
-        const sp2 = getStartParam();
-        console.log("[HERE] after-connect startParam:", sp2);
 
         return here;
     })();
@@ -57,12 +28,10 @@ export async function connectWallet() {
     const here = await getHere();
 
     const contractId = "retardo-s.near";
-
-    console.log("[HERE] signIn", { contractId, networkId, startParam: getStartParam() });
+    console.log("[HERE] signIn (widget)", { contractId, networkId });
 
     const accountId = await here.signIn({ contractId, methodNames: [] });
-
-    console.log("[HERE] signIn result accountId:", accountId);
+    console.log("[HERE] connected", accountId);
 
     return { accountId: String(accountId || "") };
 }
