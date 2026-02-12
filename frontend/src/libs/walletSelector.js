@@ -1,6 +1,6 @@
 // frontend/src/libs/walletSelector.js — ПОЛНАЯ ЗАМЕНА
 
-import { HereWallet, WidgetStrategy } from "@here-wallet/core";
+import { HereWallet } from "@here-wallet/core";
 
 export var networkId = "mainnet";
 export var RPC_URL = "https://rpc.mainnet.near.org";
@@ -9,43 +9,63 @@ var STORAGE_KEY = "hot_wallet_account";
 var _here = null;
 var _promise = null;
 
+function isTelegram() {
+    try {
+        return !!(
+            window.Telegram &&
+            window.Telegram.WebApp &&
+            window.Telegram.WebApp.initData &&
+            window.Telegram.WebApp.initData.length > 0
+        );
+    } catch (e) {
+        return false;
+    }
+}
+
 async function getHere() {
     if (_here) return _here;
     if (_promise) return _promise;
 
     _promise = (async function () {
-        console.log("[HOT] init WidgetStrategy, network:", networkId);
+        var tg = isTelegram();
+        console.log("[HOT] init, telegram:", tg, "network:", networkId);
 
-        var here = await HereWallet.connect({
+        var opts = {
             networkId: networkId,
             nodeUrl: RPC_URL,
-            defaultStrategy: new WidgetStrategy(),
-        });
+        };
+
+        // In Telegram — do NOT set defaultStrategy
+        // Library auto-detects Telegram and uses TelegramAppStrategy
+        // In browser — also don't set, it will use WindowStrategy (popup)
+        // WidgetStrategy shows QR which we DON'T want
+
+        var here = await HereWallet.connect(opts);
 
         // ═══════════════════════════════════════════════════
-        // PATCH signIn — catch data.account_id crash
+        // PATCH: catch data.account_id crash in Telegram
         // ═══════════════════════════════════════════════════
         var origSignIn = here.signIn.bind(here);
-        here.signIn = async function (opts) {
+        here.signIn = async function (signOpts) {
             try {
-                var result = await origSignIn(opts);
+                var result = await origSignIn(signOpts);
                 var id = String(result || "");
                 if (id) localStorage.setItem(STORAGE_KEY, id);
                 return result;
             } catch (err) {
                 var msg = String(err && err.message || err);
-                console.warn("[HOT] signIn error caught:", msg);
+                console.warn("[HOT] signIn caught:", msg);
 
                 if (
                     msg.includes("account_id") ||
-                    msg.includes("undefined is not an object") ||
+                    msg.includes("undefined is not") ||
                     msg.includes("Cannot read") ||
                     msg.includes("is failed")
                 ) {
-                    await delay(1500);
+                    await new Promise(function (r) { setTimeout(r, 2000); });
 
                     try {
-                        var fid = await here.getAccountId();
+                        var fid = await origGetAccountId();
                         if (fid) {
                             localStorage.setItem(STORAGE_KEY, String(fid));
                             return String(fid);
@@ -65,18 +85,15 @@ async function getHere() {
             }
         };
 
-        // PATCH isSignedIn
         var origIsSignedIn = here.isSignedIn.bind(here);
         here.isSignedIn = async function () {
             try {
                 return await origIsSignedIn();
             } catch (err) {
-                console.warn("[HOT] isSignedIn error:", err.message);
                 return !!localStorage.getItem(STORAGE_KEY);
             }
         };
 
-        // PATCH getAccountId
         var origGetAccountId = here.getAccountId.bind(here);
         here.getAccountId = async function () {
             try {
@@ -85,14 +102,12 @@ async function getHere() {
                     localStorage.setItem(STORAGE_KEY, String(id));
                     return id;
                 }
-            } catch (err) {
-                console.warn("[HOT] getAccountId error:", err.message);
-            }
+            } catch (err) { }
             return localStorage.getItem(STORAGE_KEY) || "";
         };
 
         _here = here;
-        console.log("[HOT] ready (WidgetStrategy + patched)");
+        console.log("[HOT] ready (auto-strategy, patched)");
         return here;
     })();
 
@@ -112,7 +127,8 @@ function scanStorage() {
                     if (val && val.accountId) return val.accountId;
                     if (val && val.account_id) return val.account_id;
                 } catch (e) {
-                    if (raw && (raw.includes(".near") || raw.includes(".tg"))) return raw;
+                    var raw2 = localStorage.getItem(key);
+                    if (raw2 && (raw2.includes(".near") || raw2.includes(".tg"))) return raw2;
                 }
             }
         }
@@ -120,14 +136,9 @@ function scanStorage() {
     return "";
 }
 
-function delay(ms) {
-    return new Promise(function (r) { setTimeout(r, ms); });
-}
-
-// ─── Connect ─────────────────────────────────────────────
 export async function connectWallet() {
     var here = await getHere();
-    console.log("[HOT] signIn (widget)...");
+    console.log("[HOT] signIn...");
 
     var accountId = "";
 
@@ -147,21 +158,14 @@ export async function connectWallet() {
     if (!accountId) {
         try { accountId = String(await here.getAccountId() || ""); } catch (e) { }
     }
-    if (!accountId) {
-        accountId = localStorage.getItem(STORAGE_KEY) || "";
-    }
-    if (!accountId) {
-        accountId = scanStorage();
-    }
-    if (accountId) {
-        localStorage.setItem(STORAGE_KEY, accountId);
-    }
+    if (!accountId) accountId = localStorage.getItem(STORAGE_KEY) || "";
+    if (!accountId) accountId = scanStorage();
+    if (accountId) localStorage.setItem(STORAGE_KEY, accountId);
 
-    console.log("[HOT] connected:", accountId);
+    console.log("[HOT] final:", accountId);
     return { accountId: accountId };
 }
 
-// ─── Disconnect ──────────────────────────────────────────
 export async function disconnectWallet() {
     try {
         var here = await getHere();
@@ -172,7 +176,6 @@ export async function disconnectWallet() {
     localStorage.removeItem(STORAGE_KEY);
 }
 
-// ─── Restore ─────────────────────────────────────────────
 export async function getSignedInAccountId() {
     try {
         var here = await getHere();
@@ -209,7 +212,6 @@ async function checkAccount(id) {
     } catch { return true; }
 }
 
-// ─── Transactions ────────────────────────────────────────
 export async function signAndSendTransaction(params) {
     var here = await getHere();
     return await here.signAndSendTransaction({
@@ -228,7 +230,6 @@ export async function sendNear(opts) {
     return { txHash: extractTxHash(result), result: result };
 }
 
-// ─── Balance ─────────────────────────────────────────────
 export async function fetchBalance(accountId) {
     try {
         var res = await fetch(RPC_URL, {
