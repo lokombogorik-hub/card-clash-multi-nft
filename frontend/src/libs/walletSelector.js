@@ -1,6 +1,6 @@
 // frontend/src/libs/walletSelector.js — ПОЛНАЯ ЗАМЕНА
 
-import { HereWallet } from "@here-wallet/core";
+import { HereWallet, WidgetStrategy } from "@here-wallet/core";
 
 export var networkId = "mainnet";
 export var RPC_URL = "https://rpc.mainnet.near.org";
@@ -14,83 +14,73 @@ async function getHere() {
     if (_promise) return _promise;
 
     _promise = (async function () {
-        console.log("[HOT] init, network:", networkId);
+        console.log("[HOT] init WidgetStrategy, network:", networkId);
 
         var here = await HereWallet.connect({
             networkId: networkId,
             nodeUrl: RPC_URL,
+            defaultStrategy: new WidgetStrategy(),
         });
 
-        // ══════════════════════════════════════════════════════
-        // PATCH: wrap signIn to catch dt.account_id crash
-        // The bug is in wallet.js line 213: data.account_id
-        // where data can be undefined in Telegram WebApp
-        // ══════════════════════════════════════════════════════
-        var originalSignIn = here.signIn.bind(here);
+        // ═══════════════════════════════════════════════════
+        // PATCH signIn — catch data.account_id crash
+        // ═══════════════════════════════════════════════════
+        var origSignIn = here.signIn.bind(here);
         here.signIn = async function (opts) {
             try {
-                var result = await originalSignIn(opts);
+                var result = await origSignIn(opts);
                 var id = String(result || "");
                 if (id) localStorage.setItem(STORAGE_KEY, id);
                 return result;
             } catch (err) {
                 var msg = String(err && err.message || err);
-                console.warn("[HOT] signIn caught error:", msg);
+                console.warn("[HOT] signIn error caught:", msg);
 
-                // If it's the known crash, try to get account anyway
                 if (
                     msg.includes("account_id") ||
                     msg.includes("undefined is not an object") ||
                     msg.includes("Cannot read") ||
-                    msg.includes("null")
+                    msg.includes("is failed")
                 ) {
-                    // Wait a moment for storage to be updated by widget
                     await delay(1500);
 
-                    // Try getAccountId
                     try {
-                        var fallbackId = await here.getAccountId();
-                        if (fallbackId) {
-                            localStorage.setItem(STORAGE_KEY, String(fallbackId));
-                            return String(fallbackId);
+                        var fid = await here.getAccountId();
+                        if (fid) {
+                            localStorage.setItem(STORAGE_KEY, String(fid));
+                            return String(fid);
                         }
-                    } catch (e2) {
-                        console.warn("[HOT] getAccountId also failed:", e2.message);
-                    }
+                    } catch (e2) { }
 
-                    // Try localStorage
                     var stored = localStorage.getItem(STORAGE_KEY);
                     if (stored) return stored;
 
-                    // Try scanning HERE wallet storage keys
-                    var found = scanHereStorage();
+                    var found = scanStorage();
                     if (found) {
                         localStorage.setItem(STORAGE_KEY, found);
                         return found;
                     }
                 }
-
                 throw err;
             }
         };
 
-        // Also patch isSignedIn and getAccountId
-        var originalIsSignedIn = here.isSignedIn.bind(here);
+        // PATCH isSignedIn
+        var origIsSignedIn = here.isSignedIn.bind(here);
         here.isSignedIn = async function () {
             try {
-                return await originalIsSignedIn();
+                return await origIsSignedIn();
             } catch (err) {
                 console.warn("[HOT] isSignedIn error:", err.message);
-                // Check localStorage fallback
-                var stored = localStorage.getItem(STORAGE_KEY);
-                return !!stored;
+                return !!localStorage.getItem(STORAGE_KEY);
             }
         };
 
-        var originalGetAccountId = here.getAccountId.bind(here);
+        // PATCH getAccountId
+        var origGetAccountId = here.getAccountId.bind(here);
         here.getAccountId = async function () {
             try {
-                var id = await originalGetAccountId();
+                var id = await origGetAccountId();
                 if (id) {
                     localStorage.setItem(STORAGE_KEY, String(id));
                     return id;
@@ -102,7 +92,7 @@ async function getHere() {
         };
 
         _here = here;
-        console.log("[HOT] ready (patched)");
+        console.log("[HOT] ready (WidgetStrategy + patched)");
         return here;
     })();
 
@@ -110,28 +100,19 @@ async function getHere() {
     return _promise;
 }
 
-// ─── Scan HERE wallet localStorage keys ─────────────────
-function scanHereStorage() {
+function scanStorage() {
     try {
         var keys = Object.keys(localStorage);
         for (var i = 0; i < keys.length; i++) {
             var key = keys[i];
-            if (
-                key.includes("herewallet") ||
-                key.includes("here:") ||
-                key.includes("near:keystore") ||
-                key.includes("hot:")
-            ) {
+            if (key.includes("here") || key.includes("near:keystore") || key.includes("hot:")) {
                 try {
                     var raw = localStorage.getItem(key);
-                    // Could be JSON with account info
                     var val = JSON.parse(raw);
                     if (val && val.accountId) return val.accountId;
                     if (val && val.account_id) return val.account_id;
                 } catch (e) {
-                    // Could be plain account ID string
-                    if (raw && raw.includes(".near")) return raw;
-                    if (raw && raw.includes(".tg")) return raw;
+                    if (raw && (raw.includes(".near") || raw.includes(".tg"))) return raw;
                 }
             }
         }
@@ -146,7 +127,7 @@ function delay(ms) {
 // ─── Connect ─────────────────────────────────────────────
 export async function connectWallet() {
     var here = await getHere();
-    console.log("[HOT] signIn...");
+    console.log("[HOT] signIn (widget)...");
 
     var accountId = "";
 
@@ -155,30 +136,23 @@ export async function connectWallet() {
             contractId: "retardo-s.near",
             methodNames: [],
         });
-
         if (typeof res === "string") accountId = res;
         else if (res && typeof res === "object") {
             accountId = res.accountId || res.account_id || "";
         }
     } catch (err) {
-        console.warn("[HOT] signIn outer error:", err.message);
+        console.warn("[HOT] signIn outer:", err.message);
     }
 
-    // Final fallback
     if (!accountId) {
-        try {
-            accountId = String(await here.getAccountId() || "");
-        } catch (e) { }
+        try { accountId = String(await here.getAccountId() || ""); } catch (e) { }
     }
-
     if (!accountId) {
         accountId = localStorage.getItem(STORAGE_KEY) || "";
     }
-
     if (!accountId) {
-        accountId = scanHereStorage();
+        accountId = scanStorage();
     }
-
     if (accountId) {
         localStorage.setItem(STORAGE_KEY, accountId);
     }
@@ -200,7 +174,6 @@ export async function disconnectWallet() {
 
 // ─── Restore ─────────────────────────────────────────────
 export async function getSignedInAccountId() {
-    // Try SDK
     try {
         var here = await getHere();
         var ok = await here.isSignedIn();
@@ -209,17 +182,15 @@ export async function getSignedInAccountId() {
             if (id) return String(id);
         }
     } catch (e) {
-        console.warn("[HOT] restore SDK:", e.message);
+        console.warn("[HOT] restore:", e.message);
     }
 
-    // Fallback localStorage
     var stored = localStorage.getItem(STORAGE_KEY) || "";
     if (stored) {
         var exists = await checkAccount(stored);
         if (exists) return stored;
         localStorage.removeItem(STORAGE_KEY);
     }
-
     return "";
 }
 
