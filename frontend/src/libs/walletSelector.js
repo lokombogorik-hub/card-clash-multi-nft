@@ -1,6 +1,6 @@
 // frontend/src/libs/walletSelector.js — ПОЛНАЯ ЗАМЕНА
 
-import { HereWallet } from "@here-wallet/core";
+import { HereWallet, WidgetStrategy } from "@here-wallet/core";
 
 export var networkId = "mainnet";
 export var RPC_URL = "https://rpc.mainnet.near.org";
@@ -35,15 +35,16 @@ async function getHere() {
             nodeUrl: RPC_URL,
         };
 
-        // In Telegram — do NOT set defaultStrategy
-        // Library auto-detects Telegram and uses TelegramAppStrategy
-        // In browser — also don't set, it will use WindowStrategy (popup)
-        // WidgetStrategy shows QR which we DON'T want
+        // Telegram WebApp → WidgetStrategy (opens OVER the game)
+        // Browser → no strategy (opens popup window)
+        if (tg) {
+            opts.defaultStrategy = new WidgetStrategy();
+        }
 
         var here = await HereWallet.connect(opts);
 
         // ═══════════════════════════════════════════════════
-        // PATCH: catch data.account_id crash in Telegram
+        // PATCH signIn
         // ═══════════════════════════════════════════════════
         var origSignIn = here.signIn.bind(here);
         here.signIn = async function (signOpts) {
@@ -85,6 +86,7 @@ async function getHere() {
             }
         };
 
+        // PATCH isSignedIn
         var origIsSignedIn = here.isSignedIn.bind(here);
         here.isSignedIn = async function () {
             try {
@@ -94,6 +96,7 @@ async function getHere() {
             }
         };
 
+        // PATCH getAccountId
         var origGetAccountId = here.getAccountId.bind(here);
         here.getAccountId = async function () {
             try {
@@ -107,7 +110,7 @@ async function getHere() {
         };
 
         _here = here;
-        console.log("[HOT] ready (auto-strategy, patched)");
+        console.log("[HOT] ready, strategy:", tg ? "Widget" : "Window");
         return here;
     })();
 
