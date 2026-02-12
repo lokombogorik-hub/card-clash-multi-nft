@@ -63,6 +63,30 @@ async function applyAccount(id) {
     linkToBackend(id);
 }
 
+var _poll = null;
+
+function stopPoll() {
+    if (_poll) { clearInterval(_poll); _poll = null; }
+}
+
+function startPoll() {
+    stopPoll();
+    var n = 0;
+    _poll = setInterval(async function () {
+        n++;
+        if (n > 60) { stopPoll(); setState({ status: "" }); return; }
+        try {
+            var id = await getSignedInAccountId();
+            if (id) {
+                stopPoll();
+                await applyAccount(id);
+                setState({ status: "✅ Connected!" });
+                setTimeout(function () { setState({ status: "" }); }, 2000);
+            }
+        } catch (e) { }
+    }, 1000);
+}
+
 async function connectHot() {
     setState({ status: "Opening HOT Wallet...", lastError: null });
     try {
@@ -72,60 +96,25 @@ async function connectHot() {
             setState({ status: "✅ Connected!" });
             setTimeout(function () { setState({ status: "" }); }, 2000);
         } else {
-            setState({ status: "Confirm in HOT Wallet..." });
-            startPolling();
+            setState({ status: "Confirm in HOT Wallet and return..." });
+            startPoll();
         }
     } catch (e) {
         var msg = (e && e.message) || String(e);
+        console.error("[Wallet] error:", msg);
 
-        // Don't show dt.account_id errors to user
-        if (msg.includes("account_id") || msg.includes("undefined is not an object")) {
-            console.warn("[Wallet] Known issue, starting poll...");
-            setState({ status: "Confirm in HOT Wallet..." });
-            startPolling();
-            return;
+        // If it's the dt.account_id error — start polling instead of showing error
+        if (msg.includes("account_id") || msg.includes("undefined is not")) {
+            setState({ status: "Connecting to HOT Wallet..." });
+            startPoll();
+        } else {
+            setState({ status: "", lastError: { name: "Error", message: msg } });
         }
-
-        console.error("[Wallet] connect error:", msg);
-        setState({ status: "", lastError: { name: "Error", message: msg } });
     }
-}
-
-var _pollInterval = null;
-
-function startPolling() {
-    if (_pollInterval) return;
-    var attempts = 0;
-
-    _pollInterval = setInterval(async function () {
-        attempts++;
-        if (attempts > 60) {
-            clearInterval(_pollInterval);
-            _pollInterval = null;
-            setState({ status: "" });
-            return;
-        }
-
-        try {
-            var id = await getSignedInAccountId();
-            if (id) {
-                clearInterval(_pollInterval);
-                _pollInterval = null;
-                await applyAccount(id);
-                setState({ status: "✅ Connected!" });
-                setTimeout(function () { setState({ status: "" }); }, 2000);
-            }
-        } catch (e) {
-            // keep polling
-        }
-    }, 1000);
 }
 
 async function disconnectWallet() {
-    if (_pollInterval) {
-        clearInterval(_pollInterval);
-        _pollInterval = null;
-    }
+    stopPoll();
     try { await disconnect(); } catch (e) { }
     setState({
         connected: false, walletAddress: "", balance: 0,
@@ -145,7 +134,7 @@ async function restoreSession() {
             await applyAccount(id);
         }
     } catch (e) {
-        console.warn("[Wallet] restore error:", e.message);
+        console.warn("[Wallet] restore:", e.message);
     } finally {
         _restoring = false;
     }
