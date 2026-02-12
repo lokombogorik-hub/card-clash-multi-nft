@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@here-wallet/core": "^2.0.0",
+    "@here-wallet/core": "^3.4.0",
     "bn.js": "5.2.1",
     "borsh": "0.7.0",
     "buffer": "^6.0.3",

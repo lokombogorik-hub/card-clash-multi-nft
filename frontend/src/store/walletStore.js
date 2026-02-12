@@ -24,7 +24,7 @@ var listeners = new Set();
 
 function emit() {
     listeners.forEach(function (l) {
-        try { l(); } catch (e) { }
+        try { l(); } catch (e) { /* */ }
     });
 }
 
@@ -49,7 +49,7 @@ async function linkToBackend(id) {
             },
             body: JSON.stringify({ accountId: id }),
         });
-    } catch (e) { }
+    } catch (e) { /* */ }
 }
 
 async function applyAccount(id) {
@@ -59,32 +59,8 @@ async function applyAccount(id) {
     try {
         var bal = await fetchBalance(id);
         setState({ balance: bal });
-    } catch (e) { }
+    } catch (e) { /* */ }
     linkToBackend(id);
-}
-
-var _poll = null;
-
-function stopPoll() {
-    if (_poll) { clearInterval(_poll); _poll = null; }
-}
-
-function startPoll() {
-    stopPoll();
-    var n = 0;
-    _poll = setInterval(async function () {
-        n++;
-        if (n > 60) { stopPoll(); setState({ status: "" }); return; }
-        try {
-            var id = await getSignedInAccountId();
-            if (id) {
-                stopPoll();
-                await applyAccount(id);
-                setState({ status: "✅ Connected!" });
-                setTimeout(function () { setState({ status: "" }); }, 2000);
-            }
-        } catch (e) { }
-    }, 1000);
 }
 
 async function connectHot() {
@@ -96,26 +72,41 @@ async function connectHot() {
             setState({ status: "✅ Connected!" });
             setTimeout(function () { setState({ status: "" }); }, 2000);
         } else {
-            setState({ status: "Confirm in HOT Wallet and return..." });
-            startPoll();
+            setState({ status: "Confirm in HOT Wallet and return" });
+            // Poll for connection (user might confirm in HOT app and come back)
+            pollForConnection();
         }
     } catch (e) {
         var msg = (e && e.message) || String(e);
-        console.error("[Wallet] error:", msg);
-
-        // If it's the dt.account_id error — start polling instead of showing error
-        if (msg.includes("account_id") || msg.includes("undefined is not")) {
-            setState({ status: "Connecting to HOT Wallet..." });
-            startPoll();
-        } else {
-            setState({ status: "", lastError: { name: "Error", message: msg } });
-        }
+        console.error("[Wallet] connect error:", msg);
+        setState({ status: "", lastError: { name: "Error", message: msg } });
     }
 }
 
+// Poll in case user returns from HOT app after confirming
+function pollForConnection() {
+    var attempts = 0;
+    var interval = setInterval(async function () {
+        attempts++;
+        if (attempts > 30) { // 30 seconds max
+            clearInterval(interval);
+            setState({ status: "" });
+            return;
+        }
+        try {
+            var id = await getSignedInAccountId();
+            if (id) {
+                clearInterval(interval);
+                await applyAccount(id);
+                setState({ status: "✅ Connected!" });
+                setTimeout(function () { setState({ status: "" }); }, 2000);
+            }
+        } catch (e) { /* keep polling */ }
+    }, 1000);
+}
+
 async function disconnectWallet() {
-    stopPoll();
-    try { await disconnect(); } catch (e) { }
+    try { await disconnect(); } catch (e) { /* */ }
     setState({
         connected: false, walletAddress: "", balance: 0,
         status: "", nfts: [], lastError: null,
@@ -123,7 +114,6 @@ async function disconnectWallet() {
 }
 
 var _restoring = false;
-
 async function restoreSession() {
     if (_restoring) return;
     _restoring = true;
@@ -134,7 +124,7 @@ async function restoreSession() {
             await applyAccount(id);
         }
     } catch (e) {
-        console.warn("[Wallet] restore:", e.message);
+        console.warn("[Wallet] restore error:", e.message);
     } finally {
         _restoring = false;
     }
@@ -150,7 +140,7 @@ async function sendNear(params) {
         try {
             var bal = await fetchBalance(state.walletAddress);
             setState({ balance: bal });
-        } catch (e) { }
+        } catch (e) { /* */ }
     }
     return result;
 }
@@ -160,7 +150,7 @@ async function refreshBalance() {
     try {
         var bal = await fetchBalance(state.walletAddress);
         setState({ balance: bal });
-    } catch (e) { }
+    } catch (e) { /* */ }
 }
 
 export var walletStore = {

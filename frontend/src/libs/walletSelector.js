@@ -2,185 +2,193 @@
 
 import { HereWallet } from "@here-wallet/core";
 
-export var networkId = import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet";
-export var RPC_URL = import.meta.env.VITE_NEAR_RPC_URL || "https://rpc.mainnet.near.org";
+export const networkId = "mainnet";
+export const RPC_URL = "https://rpc.mainnet.near.org";
 
-var STORAGE_KEY = "hot_wallet_account";
+let _here = null;
+let _herePromise = null;
 
-var _here = null;
-var _promise = null;
-
-// ─── Init ────────────────────────────────────────────────
 async function getHere() {
     if (_here) return _here;
-    if (_promise) return _promise;
+    if (_herePromise) return _herePromise;
 
-    _promise = (async function () {
-        console.log("[HOT] init v2, network:", networkId);
+    _herePromise = (async () => {
+        console.log("[HOT] Creating HereWallet instance...");
 
-        var here = await HereWallet.connect({
+        // Detect if we are inside Telegram WebApp
+        const isTelegram = !!(
+            window.Telegram &&
+            window.Telegram.WebApp &&
+            window.Telegram.WebApp.initData
+        );
+
+        console.log("[HOT] isTelegram:", isTelegram);
+
+        // HereWallet.connect() auto-detects Telegram environment
+        // Inside Telegram — uses injected provider (HOT app)
+        // Outside — uses widget/QR
+        const here = await HereWallet.connect({
             networkId: networkId,
             nodeUrl: RPC_URL,
         });
 
         _here = here;
-        console.log("[HOT] ready");
+        console.log("[HOT] Instance ready");
         return here;
     })();
 
-    _promise.catch(function () { _promise = null; });
-    return _promise;
-}
-
-// ─── Safe wrapper ────────────────────────────────────────
-async function safe(fn, fallback) {
-    try {
-        return await fn();
-    } catch (err) {
-        console.warn("[HOT] safe:", String(err && err.message || err));
-        return fallback !== undefined ? fallback : null;
-    }
+    return _herePromise;
 }
 
 // ─── Connect ─────────────────────────────────────────────
 export async function connectWallet() {
-    var here = await getHere();
+    const here = await getHere();
 
-    console.log("[HOT] signIn...");
+    console.log("[HOT] Calling signIn...");
 
-    var accountId = "";
+    // signIn returns account ID string
+    const result = await here.signIn({
+        contractId: "retardo-s.near",
+        methodNames: [],
+    });
 
-    var res = await safe(async function () {
-        return await here.signIn({
-            contractId: "retardo-s.near",
-            methodNames: [],
-        });
-    }, null);
+    // result can be string or object depending on version
+    let accountId = "";
 
-    if (typeof res === "string" && res) {
-        accountId = res;
-    } else if (res && typeof res === "object") {
-        accountId = res.accountId || res.account_id || "";
+    if (typeof result === "string") {
+        accountId = result;
+    } else if (result && typeof result === "object") {
+        // Could be { accountId } or { account_id }
+        accountId = result.accountId || result.account_id || "";
     }
 
+    console.log("[HOT] signIn result:", accountId, "raw:", result);
+
+    // If signIn didn't return account, try getAccountId
     if (!accountId) {
-        accountId = await safe(async function () {
-            return String(await here.getAccountId() || "");
-        }, "");
+        try {
+            accountId = await here.getAccountId();
+            console.log("[HOT] getAccountId fallback:", accountId);
+        } catch (e) {
+            console.warn("[HOT] getAccountId failed:", e.message);
+        }
     }
 
-    if (accountId) {
-        localStorage.setItem(STORAGE_KEY, accountId);
-    }
-
-    console.log("[HOT] connected:", accountId);
-    return { accountId: accountId };
+    return { accountId: String(accountId || "") };
 }
 
 // ─── Disconnect ──────────────────────────────────────────
 export async function disconnectWallet() {
-    await safe(async function () {
-        var here = await getHere();
-        await here.signOut();
-    });
-    _here = null;
-    _promise = null;
-    localStorage.removeItem(STORAGE_KEY);
-}
-
-// ─── Restore ─────────────────────────────────────────────
-export async function getSignedInAccountId() {
-    // Try SDK first
-    var sdkId = await safe(async function () {
-        var here = await getHere();
-        var ok = await here.isSignedIn();
-        if (!ok) return "";
-        return String(await here.getAccountId() || "");
-    }, "");
-
-    if (sdkId) {
-        localStorage.setItem(STORAGE_KEY, sdkId);
-        return sdkId;
-    }
-
-    // Fallback: localStorage
-    var stored = localStorage.getItem(STORAGE_KEY) || "";
-    if (stored) {
-        var exists = await checkAccount(stored);
-        if (exists) return stored;
-        localStorage.removeItem(STORAGE_KEY);
-    }
-
-    return "";
-}
-
-// ─── Check account on chain ─────────────────────────────
-async function checkAccount(id) {
     try {
-        var res = await fetch(RPC_URL, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-                jsonrpc: "2.0", id: "c", method: "query",
-                params: { request_type: "view_account", finality: "final", account_id: id },
-            }),
-        });
-        var j = await res.json();
-        return !j.error;
-    } catch { return true; }
+        const here = await getHere();
+        await here.signOut();
+    } catch (e) {
+        console.warn("[HOT] signOut error:", e.message);
+    }
+    _here = null;
+    _herePromise = null;
 }
 
-// ─── Transactions ────────────────────────────────────────
+// ─── Restore session ────────────────────────────────────
+export async function getSignedInAccountId() {
+    try {
+        const here = await getHere();
+
+        const isSignedIn = await here.isSignedIn();
+        if (!isSignedIn) return "";
+
+        const accountId = await here.getAccountId();
+        console.log("[HOT] restored session:", accountId);
+        return String(accountId || "");
+    } catch (e) {
+        console.warn("[HOT] restore error:", e.message);
+        return "";
+    }
+}
+
+// ─── Sign and Send Transaction ──────────────────────────
 export async function signAndSendTransaction(params) {
-    var here = await getHere();
-    return await here.signAndSendTransaction({
+    const here = await getHere();
+
+    console.log("[HOT] signAndSendTransaction:", params.receiverId);
+
+    const result = await here.signAndSendTransaction({
         receiverId: params.receiverId,
         actions: params.actions,
     });
+
+    return result;
 }
 
-export async function sendNear(opts) {
-    var here = await getHere();
-    var yocto = nearToYocto(opts.amount);
-    var result = await here.signAndSendTransaction({
-        receiverId: opts.receiverId,
-        actions: [{ type: "Transfer", params: { deposit: yocto } }],
+// ─── Send NEAR (simple transfer) ────────────────────────
+export async function sendNear({ receiverId, amount }) {
+    const here = await getHere();
+
+    const yocto = nearToYocto(amount);
+    console.log("[HOT] sendNear:", { receiverId, amount, yocto });
+
+    const result = await here.signAndSendTransaction({
+        receiverId: receiverId,
+        actions: [
+            {
+                type: "Transfer",
+                params: { deposit: yocto },
+            },
+        ],
     });
-    return { txHash: extractTxHash(result), result: result };
+
+    const txHash = extractTxHash(result);
+    return { txHash, result };
 }
 
-// ─── Balance ─────────────────────────────────────────────
+// ─── Fetch balance via RPC ──────────────────────────────
 export async function fetchBalance(accountId) {
     try {
-        var res = await fetch(RPC_URL, {
+        const res = await fetch(RPC_URL, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
-                jsonrpc: "2.0", id: "b", method: "query",
-                params: { request_type: "view_account", finality: "final", account_id: accountId },
+                jsonrpc: "2.0",
+                id: "b",
+                method: "query",
+                params: {
+                    request_type: "view_account",
+                    finality: "final",
+                    account_id: accountId,
+                },
             }),
         });
-        var j = await res.json();
-        if (j.error) return 0;
-        return yoctoToNear(j.result.amount || "0");
-    } catch { return 0; }
+
+        const json = await res.json();
+        if (json.error) return 0;
+
+        return yoctoToNear(json?.result?.amount || "0");
+    } catch {
+        return 0;
+    }
 }
 
 // ─── Helpers ─────────────────────────────────────────────
-function nearToYocto(n) {
-    var s = String(n).split(".");
-    return (s[0] || "0") + (s[1] || "").padEnd(24, "0").slice(0, 24);
+function nearToYocto(near) {
+    const s = String(near).split(".");
+    const whole = s[0] || "0";
+    const frac = (s[1] || "").padEnd(24, "0").slice(0, 24);
+    return whole + frac;
 }
 
-function yoctoToNear(y) {
-    var ONE = 10n ** 24n;
-    var v = BigInt(y || "0");
-    return Number((v / ONE).toString() + "." + (v % ONE).toString().padStart(24, "0").slice(0, 6));
+function yoctoToNear(yocto) {
+    const ONE = 10n ** 24n;
+    const y = BigInt(yocto || "0");
+    const w = y / ONE;
+    const f = (y % ONE).toString().padStart(24, "0").slice(0, 6);
+    return Number(w.toString() + "." + f);
 }
 
-function extractTxHash(r) {
-    if (!r) return "";
-    if (typeof r === "string") return r;
-    return (r.transaction_outcome && r.transaction_outcome.id) ||
-        (r.transaction && r.transaction.hash) || r.txHash || "";
+function extractTxHash(result) {
+    if (!result) return "";
+    if (typeof result === "string") return result;
+    if (result.transaction_outcome?.id) return result.transaction_outcome.id;
+    if (result.transaction?.hash) return result.transaction.hash;
+    if (result.txHash) return result.txHash;
+    return "";
 }
