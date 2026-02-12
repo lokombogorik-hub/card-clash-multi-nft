@@ -11,12 +11,31 @@ var _promise = null;
 
 function isTelegram() {
     try {
-        return !!(
-            window.Telegram &&
-            window.Telegram.WebApp &&
-            window.Telegram.WebApp.initData &&
-            window.Telegram.WebApp.initData.length > 0
-        );
+        var hasTg = !!window.Telegram;
+        var hasWebApp = hasTg && !!window.Telegram.WebApp;
+        var initData = hasWebApp ? window.Telegram.WebApp.initData : "";
+        var platform = hasWebApp ? window.Telegram.WebApp.platform : "none";
+
+        console.log("[HOT] isTelegram check:", {
+            hasTg: hasTg,
+            hasWebApp: hasWebApp,
+            initDataLen: initData ? initData.length : 0,
+            platform: platform,
+        });
+
+        // Check multiple signals — not just initData
+        if (!hasWebApp) return false;
+
+        // platform !== "unknown" means we're in real Telegram app
+        if (platform && platform !== "unknown" && platform !== "none") return true;
+
+        // initData present means Telegram launched us
+        if (initData && initData.length > 0) return true;
+
+        // Check if Telegram WebView is injecting
+        if (window.TelegramWebviewProxy) return true;
+
+        return false;
     } catch (e) {
         return false;
     }
@@ -35,11 +54,10 @@ async function getHere() {
             nodeUrl: RPC_URL,
         };
 
-        // Telegram WebApp → WidgetStrategy (opens OVER the game)
-        // Browser → no strategy (opens popup window)
-        if (tg) {
-            opts.defaultStrategy = new WidgetStrategy();
-        }
+        // ALWAYS use WidgetStrategy in both environments
+        // In Telegram — it opens HOT wallet widget OVER the game
+        // In browser — we'll handle the QR issue separately
+        opts.defaultStrategy = new WidgetStrategy();
 
         var here = await HereWallet.connect(opts);
 
@@ -86,7 +104,6 @@ async function getHere() {
             }
         };
 
-        // PATCH isSignedIn
         var origIsSignedIn = here.isSignedIn.bind(here);
         here.isSignedIn = async function () {
             try {
@@ -96,7 +113,6 @@ async function getHere() {
             }
         };
 
-        // PATCH getAccountId
         var origGetAccountId = here.getAccountId.bind(here);
         here.getAccountId = async function () {
             try {
@@ -110,7 +126,7 @@ async function getHere() {
         };
 
         _here = here;
-        console.log("[HOT] ready, strategy:", tg ? "Widget" : "Window");
+        console.log("[HOT] ready, strategy: Widget");
         return here;
     })();
 
