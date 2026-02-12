@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "node node_modules/vite/bin/vite.js build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@here-wallet/core": "3.4.0",
@@ -32,6 +33,7 @@
   "devDependencies": {
     "@rollup/plugin-inject": "^5.0.5",
     "@vitejs/plugin-react": "4.2.1",
+    "patch-package": "^8.0.1",
     "vite": "5.4.0"
   }
 }
