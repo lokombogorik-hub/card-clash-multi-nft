@@ -1,107 +1,134 @@
 // frontend/src/libs/walletSelector.js — ПОЛНАЯ ЗАМЕНА
 
-import { setupWalletSelector } from "@near-wallet-selector/core";
-import { setupHereWallet } from "@near-wallet-selector/here-wallet";
+import { HereWallet } from "@here-wallet/core";
 
-export const networkId = import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet";
-export const RPC_URL = import.meta.env.VITE_NEAR_RPC_URL || "https://rpc.mainnet.near.org";
+export const networkId = "mainnet";
+export const RPC_URL = "https://rpc.mainnet.near.org";
 
-const TREASURY = "retardo-s.near";
+let _here = null;
+let _herePromise = null;
 
-// ─── Singleton ───────────────────────────────────────────
-let _selectorPromise = null;
+async function getHere() {
+    if (_here) return _here;
+    if (_herePromise) return _herePromise;
 
-function getSelector() {
-    if (_selectorPromise) return _selectorPromise;
+    _herePromise = (async () => {
+        console.log("[HOT] Creating HereWallet instance...");
 
-    console.log("[WS] init wallet-selector", { networkId });
+        // Detect if we are inside Telegram WebApp
+        const isTelegram = !!(
+            window.Telegram &&
+            window.Telegram.WebApp &&
+            window.Telegram.WebApp.initData
+        );
 
-    _selectorPromise = setupWalletSelector({
-        network: networkId,
-        modules: [setupHereWallet()],
-    }).catch((err) => {
-        console.error("[WS] init failed:", err);
-        _selectorPromise = null;
-        throw err;
-    });
+        console.log("[HOT] isTelegram:", isTelegram);
 
-    return _selectorPromise;
-}
+        // HereWallet.connect() auto-detects Telegram environment
+        // Inside Telegram — uses injected provider (HOT app)
+        // Outside — uses widget/QR
+        const here = await HereWallet.connect({
+            networkId: networkId,
+            nodeUrl: RPC_URL,
+        });
 
-// ─── Get active wallet or null ───────────────────────────
-async function getWallet() {
-    const selector = await getSelector();
-    const state = selector.store.getState();
-    if (!state.selectedWalletId) return null;
-    try {
-        return await selector.wallet(state.selectedWalletId);
-    } catch {
-        return null;
-    }
+        _here = here;
+        console.log("[HOT] Instance ready");
+        return here;
+    })();
+
+    return _herePromise;
 }
 
 // ─── Connect ─────────────────────────────────────────────
 export async function connectWallet() {
-    const selector = await getSelector();
-    const wallet = await selector.wallet("here-wallet");
+    const here = await getHere();
 
-    console.log("[WS] signIn via here-wallet...");
+    console.log("[HOT] Calling signIn...");
 
-    const accounts = await wallet.signIn({
-        contractId: TREASURY,
+    // signIn returns account ID string
+    const result = await here.signIn({
+        contractId: "retardo-s.near",
         methodNames: [],
     });
 
-    const accountId = accounts?.[0]?.accountId || "";
-    console.log("[WS] connected:", accountId);
-    return { accountId: String(accountId) };
+    // result can be string or object depending on version
+    let accountId = "";
+
+    if (typeof result === "string") {
+        accountId = result;
+    } else if (result && typeof result === "object") {
+        // Could be { accountId } or { account_id }
+        accountId = result.accountId || result.account_id || "";
+    }
+
+    console.log("[HOT] signIn result:", accountId, "raw:", result);
+
+    // If signIn didn't return account, try getAccountId
+    if (!accountId) {
+        try {
+            accountId = await here.getAccountId();
+            console.log("[HOT] getAccountId fallback:", accountId);
+        } catch (e) {
+            console.warn("[HOT] getAccountId failed:", e.message);
+        }
+    }
+
+    return { accountId: String(accountId || "") };
 }
 
 // ─── Disconnect ──────────────────────────────────────────
 export async function disconnectWallet() {
-    const wallet = await getWallet();
-    if (wallet) {
-        try {
-            await wallet.signOut();
-        } catch (e) {
-            console.warn("[WS] signOut error:", e.message);
-        }
+    try {
+        const here = await getHere();
+        await here.signOut();
+    } catch (e) {
+        console.warn("[HOT] signOut error:", e.message);
     }
+    _here = null;
+    _herePromise = null;
 }
 
-// ─── Restore ─────────────────────────────────────────────
+// ─── Restore session ────────────────────────────────────
 export async function getSignedInAccountId() {
     try {
-        const selector = await getSelector();
-        const state = selector.store.getState();
-        const acc = state.accounts?.[0];
-        return acc?.accountId || "";
-    } catch {
+        const here = await getHere();
+
+        const isSignedIn = await here.isSignedIn();
+        if (!isSignedIn) return "";
+
+        const accountId = await here.getAccountId();
+        console.log("[HOT] restored session:", accountId);
+        return String(accountId || "");
+    } catch (e) {
+        console.warn("[HOT] restore error:", e.message);
         return "";
     }
 }
 
-// ─── Sign & Send Transaction ─────────────────────────────
+// ─── Sign and Send Transaction ──────────────────────────
 export async function signAndSendTransaction(params) {
-    const wallet = await getWallet();
-    if (!wallet) throw new Error("Wallet not connected");
+    const here = await getHere();
 
-    return await wallet.signAndSendTransaction({
+    console.log("[HOT] signAndSendTransaction:", params.receiverId);
+
+    const result = await here.signAndSendTransaction({
         receiverId: params.receiverId,
         actions: params.actions,
     });
+
+    return result;
 }
 
-// ─── Send NEAR (transfer) ───────────────────────────────
+// ─── Send NEAR (simple transfer) ────────────────────────
 export async function sendNear({ receiverId, amount }) {
-    const wallet = await getWallet();
-    if (!wallet) throw new Error("Wallet not connected");
+    const here = await getHere();
 
     const yocto = nearToYocto(amount);
-    console.log("[WS] sendNear:", { receiverId, amount, yocto });
+    console.log("[HOT] sendNear:", { receiverId, amount, yocto });
 
-    const result = await wallet.signAndSendTransaction({
-        receiverId,
+    const result = await here.signAndSendTransaction({
+        receiverId: receiverId,
         actions: [
             {
                 type: "Transfer",
@@ -110,10 +137,11 @@ export async function sendNear({ receiverId, amount }) {
         ],
     });
 
-    return { txHash: extractTxHash(result), result };
+    const txHash = extractTxHash(result);
+    return { txHash, result };
 }
 
-// ─── Balance via RPC ─────────────────────────────────────
+// ─── Fetch balance via RPC ──────────────────────────────
 export async function fetchBalance(accountId) {
     try {
         const res = await fetch(RPC_URL, {
@@ -130,8 +158,10 @@ export async function fetchBalance(accountId) {
                 },
             }),
         });
+
         const json = await res.json();
         if (json.error) return 0;
+
         return yoctoToNear(json?.result?.amount || "0");
     } catch {
         return 0;

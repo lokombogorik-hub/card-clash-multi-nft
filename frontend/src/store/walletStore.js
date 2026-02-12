@@ -7,7 +7,6 @@ import {
     signAndSendTransaction as signTx,
     sendNear as sendNearTx,
     fetchBalance,
-    networkId,
 } from "../libs/walletSelector";
 
 var API_BASE = (import.meta.env.VITE_API_BASE_URL || "").trim();
@@ -22,17 +21,18 @@ var state = {
 };
 
 var listeners = new Set();
+
 function emit() {
     listeners.forEach(function (l) {
-        try { l(); } catch (e) { /* ignore */ }
+        try { l(); } catch (e) { /* */ }
     });
 }
+
 function setState(p) {
     state = Object.assign({}, state, p);
     emit();
 }
 
-// ─── Link to backend ────────────────────────────────────
 async function linkToBackend(id) {
     if (!id || !API_BASE) return;
     var token =
@@ -49,20 +49,20 @@ async function linkToBackend(id) {
             },
             body: JSON.stringify({ accountId: id }),
         });
-    } catch (e) { /* ignore */ }
+    } catch (e) { /* */ }
 }
 
-// ─── Apply connected account ────────────────────────────
 async function applyAccount(id) {
     id = String(id || "").trim();
     if (!id) return;
     setState({ connected: true, walletAddress: id, status: "", lastError: null });
-    var bal = await fetchBalance(id);
-    setState({ balance: bal });
+    try {
+        var bal = await fetchBalance(id);
+        setState({ balance: bal });
+    } catch (e) { /* */ }
     linkToBackend(id);
 }
 
-// ─── Connect ─────────────────────────────────────────────
 async function connectHot() {
     setState({ status: "Opening HOT Wallet...", lastError: null });
     try {
@@ -73,6 +73,8 @@ async function connectHot() {
             setTimeout(function () { setState({ status: "" }); }, 2000);
         } else {
             setState({ status: "Confirm in HOT Wallet and return" });
+            // Poll for connection (user might confirm in HOT app and come back)
+            pollForConnection();
         }
     } catch (e) {
         var msg = (e && e.message) || String(e);
@@ -81,16 +83,36 @@ async function connectHot() {
     }
 }
 
-// ─── Disconnect ──────────────────────────────────────────
+// Poll in case user returns from HOT app after confirming
+function pollForConnection() {
+    var attempts = 0;
+    var interval = setInterval(async function () {
+        attempts++;
+        if (attempts > 30) { // 30 seconds max
+            clearInterval(interval);
+            setState({ status: "" });
+            return;
+        }
+        try {
+            var id = await getSignedInAccountId();
+            if (id) {
+                clearInterval(interval);
+                await applyAccount(id);
+                setState({ status: "✅ Connected!" });
+                setTimeout(function () { setState({ status: "" }); }, 2000);
+            }
+        } catch (e) { /* keep polling */ }
+    }, 1000);
+}
+
 async function disconnectWallet() {
-    await disconnect();
+    try { await disconnect(); } catch (e) { /* */ }
     setState({
         connected: false, walletAddress: "", balance: 0,
         status: "", nfts: [], lastError: null,
     });
 }
 
-// ─── Restore ─────────────────────────────────────────────
 var _restoring = false;
 async function restoreSession() {
     if (_restoring) return;
@@ -108,29 +130,29 @@ async function restoreSession() {
     }
 }
 
-// ─── Send NEAR ───────────────────────────────────────────
 async function sendNear(params) {
     if (!state.connected) throw new Error("Wallet not connected");
     var result = await sendNearTx({
         receiverId: params.receiverId,
         amount: params.amount,
     });
-    // Refresh balance
     if (state.walletAddress) {
-        var bal = await fetchBalance(state.walletAddress);
-        setState({ balance: bal });
+        try {
+            var bal = await fetchBalance(state.walletAddress);
+            setState({ balance: bal });
+        } catch (e) { /* */ }
     }
     return result;
 }
 
-// ─── Refresh balance ─────────────────────────────────────
 async function refreshBalance() {
     if (!state.walletAddress) return;
-    var bal = await fetchBalance(state.walletAddress);
-    setState({ balance: bal });
+    try {
+        var bal = await fetchBalance(state.walletAddress);
+        setState({ balance: bal });
+    } catch (e) { /* */ }
 }
 
-// ─── Public store ────────────────────────────────────────
 export var walletStore = {
     getState: function () { return state; },
     subscribe: function (fn) {

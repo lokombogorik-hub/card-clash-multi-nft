@@ -24,7 +24,6 @@ export function useWalletStore() {
         status: snap.status,
         lastError: snap.lastError,
         nfts: snap.nfts,
-
         connectHot: walletStore.connectHot,
         disconnectWallet: walletStore.disconnectWallet,
         clearStatus: walletStore.clearStatus,

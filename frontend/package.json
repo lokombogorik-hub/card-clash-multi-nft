@@ -10,9 +10,7 @@
     "postinstall": "patch-package"
   },
   "dependencies": {
-    "@here-wallet/core": "3.4.0",
-    "@near-wallet-selector/core": "^10.1.4",
-    "@near-wallet-selector/here-wallet": "^10.1.4",
+    "@here-wallet/core": "^3.4.0",
     "bn.js": "5.2.1",
     "borsh": "0.7.0",
     "buffer": "^6.0.3",
