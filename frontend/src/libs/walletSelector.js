@@ -1,65 +1,119 @@
-import { HereWallet, WidgetStrategy } from "@here-wallet/core";
+// frontend/src/libs/walletSelector.js — ПОЛНАЯ ЗАМЕНА
 
-export const networkId = "mainnet";
-export const RPC_URL = "https://rpc.mainnet.near.org";
+import { setupWalletSelector } from "@near-wallet-selector/core";
+import { setupHereWallet } from "@near-wallet-selector/here-wallet";
 
-let _herePromise = null;
+export const networkId = import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet";
+export const RPC_URL = import.meta.env.VITE_NEAR_RPC_URL || "https://rpc.mainnet.near.org";
 
-async function getHere() {
-    if (_herePromise) return _herePromise;
+const TREASURY = "retardo-s.near";
 
-    _herePromise = (async () => {
-        console.log("[HERE] init (WidgetStrategy only)", { networkId, RPC_URL });
+// ─── Singleton ───────────────────────────────────────────
+let _selectorPromise = null;
 
-        // IMPORTANT: WidgetStrategy does not depend on Telegram start_param return flow
-        const here = await HereWallet.connect({
-            networkId,
-            nodeUrl: RPC_URL,
-            defaultStrategy: new WidgetStrategy(),
-        });
+function getSelector() {
+    if (_selectorPromise) return _selectorPromise;
 
-        return here;
-    })();
+    console.log("[WS] init wallet-selector", { networkId });
 
-    return _herePromise;
+    _selectorPromise = setupWalletSelector({
+        network: networkId,
+        modules: [setupHereWallet()],
+    }).catch((err) => {
+        console.error("[WS] init failed:", err);
+        _selectorPromise = null;
+        throw err;
+    });
+
+    return _selectorPromise;
 }
 
-export async function connectWallet() {
-    const here = await getHere();
-
-    const contractId = "retardo-s.near";
-    console.log("[HERE] signIn (widget)", { contractId, networkId });
-
-    const accountId = await here.signIn({ contractId, methodNames: [] });
-    console.log("[HERE] connected", accountId);
-
-    return { accountId: String(accountId || "") };
-}
-
-export async function disconnectWallet() {
-    const here = await getHere();
-    await here.signOut();
-}
-
-export async function getSignedInAccountId() {
-    const here = await getHere();
+// ─── Get active wallet or null ───────────────────────────
+async function getWallet() {
+    const selector = await getSelector();
+    const state = selector.store.getState();
+    if (!state.selectedWalletId) return null;
     try {
-        const ok = await here.isSignedIn();
-        if (!ok) return "";
-        return await here.getAccountId();
+        return await selector.wallet(state.selectedWalletId);
+    } catch {
+        return null;
+    }
+}
+
+// ─── Connect ─────────────────────────────────────────────
+export async function connectWallet() {
+    const selector = await getSelector();
+    const wallet = await selector.wallet("here-wallet");
+
+    console.log("[WS] signIn via here-wallet...");
+
+    const accounts = await wallet.signIn({
+        contractId: TREASURY,
+        methodNames: [],
+    });
+
+    const accountId = accounts?.[0]?.accountId || "";
+    console.log("[WS] connected:", accountId);
+    return { accountId: String(accountId) };
+}
+
+// ─── Disconnect ──────────────────────────────────────────
+export async function disconnectWallet() {
+    const wallet = await getWallet();
+    if (wallet) {
+        try {
+            await wallet.signOut();
+        } catch (e) {
+            console.warn("[WS] signOut error:", e.message);
+        }
+    }
+}
+
+// ─── Restore ─────────────────────────────────────────────
+export async function getSignedInAccountId() {
+    try {
+        const selector = await getSelector();
+        const state = selector.store.getState();
+        const acc = state.accounts?.[0];
+        return acc?.accountId || "";
     } catch {
         return "";
     }
 }
 
+// ─── Sign & Send Transaction ─────────────────────────────
 export async function signAndSendTransaction(params) {
-    const here = await getHere();
-    return await here.signAndSendTransaction({
+    const wallet = await getWallet();
+    if (!wallet) throw new Error("Wallet not connected");
+
+    return await wallet.signAndSendTransaction({
         receiverId: params.receiverId,
         actions: params.actions,
     });
 }
 
+// ─── Send NEAR (transfer) ───────────────────────────────
+export async function sendNear({ receiverId, amount }) {
+    const wallet = await getWallet();
+    if (!wallet) throw new Error("Wallet not connected");
+
+    const yocto = nearToYocto(amount);
+    console.log("[WS] sendNear:", { receiverId, amount, yocto });
+
+    const result = await wallet.signAndSendTransaction({
+        receiverId,
+        actions: [
+            {
+                type: "Transfer",
+                params: { deposit: yocto },
+            },
+        ],
+    });
+
+    return { txHash: extractTxHash(result), result };
+}
+
+// ─── Balance via RPC ─────────────────────────────────────
 export async function fetchBalance(accountId) {
     try {
         const res = await fetch(RPC_URL, {
@@ -69,19 +123,42 @@ export async function fetchBalance(accountId) {
                 jsonrpc: "2.0",
                 id: "b",
                 method: "query",
-                params: { request_type: "view_account", finality: "final", account_id: accountId },
+                params: {
+                    request_type: "view_account",
+                    finality: "final",
+                    account_id: accountId,
+                },
             }),
         });
-
         const json = await res.json();
         if (json.error) return 0;
-
-        const y = BigInt((json.result && json.result.amount) || "0");
-        const ONE = 10n ** 24n;
-        const whole = y / ONE;
-        const frac = (y % ONE).toString().padStart(24, "0").slice(0, 6);
-        return Number(whole.toString() + "." + frac);
+        return yoctoToNear(json?.result?.amount || "0");
     } catch {
         return 0;
     }
+}
+
+// ─── Helpers ─────────────────────────────────────────────
+function nearToYocto(near) {
+    const s = String(near).split(".");
+    const whole = s[0] || "0";
+    const frac = (s[1] || "").padEnd(24, "0").slice(0, 24);
+    return whole + frac;
+}
+
+function yoctoToNear(yocto) {
+    const ONE = 10n ** 24n;
+    const y = BigInt(yocto || "0");
+    const w = y / ONE;
+    const f = (y % ONE).toString().padStart(24, "0").slice(0, 6);
+    return Number(w.toString() + "." + f);
+}
+
+function extractTxHash(result) {
+    if (!result) return "";
+    if (typeof result === "string") return result;
+    if (result.transaction_outcome?.id) return result.transaction_outcome.id;
+    if (result.transaction?.hash) return result.transaction.hash;
+    if (result.txHash) return result.txHash;
+    return "";
 }
