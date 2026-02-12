@@ -1,4 +1,4 @@
-// frontend/src/libs/walletSelector.js — ПОЛНАЯ ЗАМЕНА
+// frontend/src/libs/walletSelector.js
 
 import { HereWallet } from "@here-wallet/core";
 
@@ -8,15 +8,30 @@ export const RPC_URL = import.meta.env.VITE_NEAR_RPC_URL || "https://rpc.mainnet
 let _here = null;
 let _promise = null;
 
+// ─── Detect Telegram ─────────────────────────────────────
+function isTelegram() {
+    try {
+        return !!(
+            window.Telegram &&
+            window.Telegram.WebApp &&
+            window.Telegram.WebApp.initData &&
+            window.Telegram.WebApp.initData.length > 0
+        );
+    } catch {
+        return false;
+    }
+}
+
+// ─── Init wallet (singleton) ─────────────────────────────
 async function getHere() {
     if (_here) return _here;
     if (_promise) return _promise;
 
     _promise = (async () => {
-        console.log("[HOT] init, network:", networkId);
+        console.log("[HOT] init, network:", networkId, "telegram:", isTelegram());
 
         try {
-            const here = await HereWallet.connect({
+            var here = await HereWallet.connect({
                 networkId: networkId,
                 nodeUrl: RPC_URL,
             });
@@ -24,7 +39,7 @@ async function getHere() {
             console.log("[HOT] instance ready");
             return here;
         } catch (err) {
-            console.error("[HOT] connect failed:", err);
+            console.error("[HOT] HereWallet.connect error:", err);
             _promise = null;
             throw err;
         }
@@ -33,17 +48,14 @@ async function getHere() {
     return _promise;
 }
 
-// ─── Safe wrapper — prevents dt.account_id crash ────────
-async function safeCall(fn) {
+// ─── Safe call — catch dt.account_id crash ──────────────
+async function safe(fn, fallback) {
     try {
         return await fn();
     } catch (err) {
-        var msg = String(err && err.message || err || "");
-        // This is the known crash — account_id on undefined
-        if (msg.includes("account_id") || msg.includes("undefined is not an object")) {
-            console.warn("[HOT] No active session (safe catch)");
-            return null;
-        }
+        var msg = String(err && err.message || err);
+        console.warn("[HOT] safe catch:", msg);
+        if (typeof fallback !== "undefined") return fallback;
         throw err;
     }
 }
@@ -56,68 +68,102 @@ export async function connectWallet() {
 
     var accountId = "";
 
-    try {
-        var result = await here.signIn({
+    // Try signIn
+    accountId = await safe(async function () {
+        var res = await here.signIn({
             contractId: "retardo-s.near",
             methodNames: [],
         });
-
-        if (typeof result === "string") {
-            accountId = result;
-        } else if (result && typeof result === "object") {
-            accountId = result.accountId || result.account_id || "";
+        // res can be string or object
+        if (typeof res === "string") return res;
+        if (res && typeof res === "object") {
+            return res.accountId || res.account_id || "";
         }
-    } catch (err) {
-        console.warn("[HOT] signIn threw:", err.message);
-        // Maybe already signed in — try to get account
-    }
+        return "";
+    }, "");
 
-    // Fallback: try getAccountId
+    // If signIn returned empty — try getAccountId
     if (!accountId) {
-        accountId = await safeCall(async function () {
-            return await here.getAccountId();
-        }) || "";
+        accountId = await safe(async function () {
+            return String(await here.getAccountId());
+        }, "");
     }
 
-    console.log("[HOT] final accountId:", accountId);
-    return { accountId: String(accountId) };
+    console.log("[HOT] connected:", accountId);
+
+    // Save to localStorage for restore
+    if (accountId) {
+        localStorage.setItem("hot_wallet_account", accountId);
+    }
+
+    return { accountId: accountId };
 }
 
 // ─── Disconnect ──────────────────────────────────────────
 export async function disconnectWallet() {
-    try {
+    await safe(async function () {
         var here = await getHere();
         await here.signOut();
-    } catch (e) {
-        console.warn("[HOT] signOut error:", e.message);
-    }
+    });
     _here = null;
     _promise = null;
+    localStorage.removeItem("hot_wallet_account");
 }
 
-// ─── Restore session (SAFE — no crash) ──────────────────
+// ─── Restore session ────────────────────────────────────
 export async function getSignedInAccountId() {
-    var here;
-    try {
-        here = await getHere();
-    } catch (e) {
-        console.warn("[HOT] getHere failed in restore:", e.message);
-        return "";
+    // Method 1: Try HERE SDK
+    var sdkAccount = await safe(async function () {
+        var here = await getHere();
+        var ok = await here.isSignedIn();
+        if (!ok) return "";
+        return String(await here.getAccountId());
+    }, "");
+
+    if (sdkAccount) {
+        localStorage.setItem("hot_wallet_account", sdkAccount);
+        return sdkAccount;
     }
 
-    // This is where dt.account_id crash happens
-    // Wrap BOTH isSignedIn and getAccountId
-    var isOk = await safeCall(async function () {
-        return await here.isSignedIn();
-    });
+    // Method 2: Fallback to localStorage
+    var stored = localStorage.getItem("hot_wallet_account") || "";
+    if (stored) {
+        // Verify it's a real account via RPC
+        var exists = await checkAccountExists(stored);
+        if (exists) {
+            console.log("[HOT] restored from localStorage:", stored);
+            return stored;
+        } else {
+            localStorage.removeItem("hot_wallet_account");
+            return "";
+        }
+    }
 
-    if (!isOk) return "";
+    return "";
+}
 
-    var accountId = await safeCall(async function () {
-        return await here.getAccountId();
-    });
-
-    return String(accountId || "");
+// ─── Check account on chain ─────────────────────────────
+async function checkAccountExists(accountId) {
+    try {
+        var res = await fetch(RPC_URL, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                jsonrpc: "2.0",
+                id: "check",
+                method: "query",
+                params: {
+                    request_type: "view_account",
+                    finality: "final",
+                    account_id: accountId,
+                },
+            }),
+        });
+        var json = await res.json();
+        return !json.error;
+    } catch {
+        return true; // on network error, trust local
+    }
 }
 
 // ─── Sign and Send Transaction ──────────────────────────
@@ -134,7 +180,7 @@ export async function sendNear(opts) {
     var here = await getHere();
     var yocto = nearToYocto(opts.amount);
 
-    console.log("[HOT] sendNear:", opts.receiverId, opts.amount, "->", yocto);
+    console.log("[HOT] sendNear:", opts.receiverId, opts.amount);
 
     var result = await here.signAndSendTransaction({
         receiverId: opts.receiverId,
@@ -147,7 +193,7 @@ export async function sendNear(opts) {
     return { txHash: extractTxHash(result), result: result };
 }
 
-// ─── Balance via RPC ─────────────────────────────────────
+// ─── Fetch balance ───────────────────────────────────────
 export async function fetchBalance(accountId) {
     try {
         var res = await fetch(RPC_URL, {
@@ -167,7 +213,7 @@ export async function fetchBalance(accountId) {
         var json = await res.json();
         if (json.error) return 0;
         return yoctoToNear(json.result.amount || "0");
-    } catch (e) {
+    } catch {
         return 0;
     }
 }
