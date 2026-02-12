@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useWalletStore } from "../../store/walletStore";
+import { useWalletStore } from "../../store/useWalletStore";
 
 export default function WalletConnector() {
     var w = useWalletStore();
