@@ -1,0 +1,63 @@
+diff --git a/node_modules/@here-wallet/core/build/strategies/TelegramAppStrategy.js b/node_modules/@here-wallet/core/build/strategies/TelegramAppStrategy.js
+index eb5cbdf..a965d61 100644
+--- a/node_modules/@here-wallet/core/build/strategies/TelegramAppStrategy.js
++++ b/node_modules/@here-wallet/core/build/strategies/TelegramAppStrategy.js
+@@ -42,14 +42,14 @@ class TelegramAppStrategy extends HereStrategy_1.HereStrategy {
+                     return;
+                 }
+                 if (data.type === "sign") {
+-                    yield this.wallet.authStorage.setKey("mainnet", data.account_id, crypto_1.KeyPairEd25519.fromRandom());
+-                    yield this.wallet.authStorage.setActiveAccount("mainnet", data.account_id);
++                    yield this.wallet.authStorage.setKey("mainnet", (data && data.account_id), crypto_1.KeyPairEd25519.fromRandom());
++                    yield this.wallet.authStorage.setActiveAccount("mainnet", (data && data.account_id));
+                 }
+                 try {
+                     const pending = JSON.parse(requestPending);
+                     if (pending.privateKey) {
+-                        yield this.wallet.authStorage.setKey("mainnet", data.account_id, crypto_1.KeyPair.fromString(pending.privateKey));
+-                        yield this.wallet.authStorage.setActiveAccount("mainnet", data.account_id);
++                        yield this.wallet.authStorage.setKey("mainnet", (data && data.account_id), crypto_1.KeyPair.fromString(pending.privateKey));
++                        yield this.wallet.authStorage.setActiveAccount("mainnet", (data && data.account_id));
+                     }
+                     const url = new URL(location.origin + (pending.callbackUrl || ""));
+                     url.searchParams.set("payload", data.result);
+@@ -93,7 +93,7 @@ class TelegramAppStrategy extends HereStrategy_1.HereStrategy {
+                 return;
+             id = (0, utils_1.baseEncode)(id);
+             (_b = (_a = window === null || window === void 0 ? void 0 : window.Telegram) === null || _a === void 0 ? void 0 : _a.WebApp) === null || _b === void 0 ? void 0 : _b.openTelegramLink(`https://t.me/${this.walletId}?startapp=h4n-${id}`);
+-            (_d = (_c = window === null || window === void 0 ? void 0 : window.Telegram) === null || _c === void 0 ? void 0 : _c.WebApp) === null || _d === void 0 ? void 0 : _d.close();
++            // close() disabled - stay in game
+         });
+     }
+ }
+diff --git a/node_modules/@here-wallet/core/build/wallet.js b/node_modules/@here-wallet/core/build/wallet.js
+index 8b59ef1..df338df 100644
+--- a/node_modules/@here-wallet/core/build/wallet.js
++++ b/node_modules/@here-wallet/core/build/wallet.js
+@@ -210,7 +210,7 @@ class HereWallet {
+                         ],
+                     },
+                 });
+-                if (data.account_id == null) {
++                if (data == null || data.account_id == null) {
+                     throw Error("Transaction is failed");
+                 }
+                 yield this.authStorage.setKey(this.networkId, data.account_id, accessKey);
+@@ -274,7 +274,7 @@ class HereWallet {
+                             selector: opts.selector || { id: signerId || activeAccount },
+                         },
+                     });
+-                    if (data.payload == null || data.account_id == null) {
++                    if (data == null || data.payload == null || data.account_id == null) {
+                         throw Error("Transaction not found, but maybe executed");
+                     }
+                     return yield this.rpc.txStatus(data.payload, data.account_id, "INCLUDED");
+@@ -438,7 +438,7 @@ class HereWallet {
+                             transactions: uncompleted.map((trx) => (Object.assign(Object.assign({}, trx), { actions: (0, utils_1.serializeActions)(trx.actions) }))),
+                         },
+                     });
+-                    if (data.payload == null || data.account_id == null) {
++                    if (data == null || data.payload == null || data.account_id == null) {
+                         throw Error("Transaction not found, but maybe executed");
+                     }
+                     const promises = data.payload.split(",").map((id) => this.rpc.txStatus(id, data.account_id, "INCLUDED"));

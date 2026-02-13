@@ -9,34 +9,26 @@ var STORAGE_KEY = "hot_wallet_account";
 var _here = null;
 var _promise = null;
 
-function isTelegram() {
-    try {
-        return !!(window.TelegramWebviewProxy) ||
-            !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData && window.Telegram.WebApp.initData.length > 0);
-    } catch (e) {
-        return false;
-    }
-}
-
 async function getHere() {
     if (_here) return _here;
     if (_promise) return _promise;
 
     _promise = (async function () {
-        var tg = isTelegram();
-        console.log("[HOT] init, isTelegram:", tg, "network:", networkId);
+        console.log("[HOT] init, network:", networkId);
 
-        // DO NOT pass defaultStrategy
-        // Library auto-detects Telegram via TelegramWebviewProxy
-        // and uses TelegramAppStrategy automatically
-        // This opens HOT wallet bot overlay, NOT QR code
+        // No defaultStrategy — library auto-detects:
+        // Telegram → TelegramAppStrategy (patched: no close())
+        // Browser → WindowStrategy (popup)
         var here = await HereWallet.connect({
             networkId: networkId,
             nodeUrl: RPC_URL,
         });
 
-        // Runtime patch for dt.account_id crash
+        // Runtime safety patches
         var origSignIn = here.signIn.bind(here);
+        var origGetAccountId = here.getAccountId.bind(here);
+        var origIsSignedIn = here.isSignedIn.bind(here);
+
         here.signIn = async function (opts) {
             try {
                 var r = await origSignIn(opts);
@@ -44,36 +36,23 @@ async function getHere() {
                 if (id) localStorage.setItem(STORAGE_KEY, String(id));
                 return r;
             } catch (err) {
-                var msg = String(err && err.message || err);
-                console.warn("[HOT] signIn caught:", msg);
-
-                // Known bug — data is null/undefined
+                console.warn("[HOT] signIn caught:", String(err && err.message || err));
                 await new Promise(function (res) { setTimeout(res, 2000); });
-
-                // Try getAccountId
                 try {
                     var fid = await origGetAccountId();
-                    if (fid) {
-                        localStorage.setItem(STORAGE_KEY, String(fid));
-                        return String(fid);
-                    }
+                    if (fid) { localStorage.setItem(STORAGE_KEY, String(fid)); return String(fid); }
                 } catch (e2) { }
-
-                // Try localStorage
                 var stored = localStorage.getItem(STORAGE_KEY);
                 if (stored) return stored;
-
                 throw err;
             }
         };
 
-        var origIsSignedIn = here.isSignedIn.bind(here);
         here.isSignedIn = async function () {
             try { return await origIsSignedIn(); }
             catch (e) { return !!localStorage.getItem(STORAGE_KEY); }
         };
 
-        var origGetAccountId = here.getAccountId.bind(here);
         here.getAccountId = async function () {
             try {
                 var id = await origGetAccountId();
@@ -83,7 +62,7 @@ async function getHere() {
         };
 
         _here = here;
-        console.log("[HOT] ready (auto-strategy)");
+        console.log("[HOT] ready");
         return here;
     })();
 
