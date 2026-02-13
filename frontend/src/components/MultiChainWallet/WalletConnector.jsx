@@ -1,3 +1,5 @@
+// frontend/src/components/MultiChainWallet/WalletConnector.jsx — ПОЛНАЯ ЗАМЕНА
+
 import React, { useEffect, useState } from "react";
 import { useWalletStore } from "../../store/useWalletStore";
 
@@ -7,7 +9,26 @@ export default function WalletConnector() {
     var nid = import.meta.env.VITE_NEAR_NETWORK_ID || "mainnet";
     var isTest = nid.toLowerCase() === "testnet";
 
-    useEffect(function () { w.restoreSession(); }, []);
+    // DEBUG: detect Telegram
+    var [debugInfo, setDebugInfo] = useState("");
+
+    useEffect(function () {
+        w.restoreSession();
+
+        // Show debug info
+        try {
+            var info = {
+                hasTg: !!window.Telegram,
+                hasWA: !!(window.Telegram && window.Telegram.WebApp),
+                initData: !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData && window.Telegram.WebApp.initData.length > 0),
+                platform: (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.platform) || "none",
+                proxy: !!window.TelegramWebviewProxy,
+            };
+            setDebugInfo(JSON.stringify(info));
+        } catch (e) {
+            setDebugInfo("error: " + e.message);
+        }
+    }, []);
 
     function haptic() { try { window.Telegram.WebApp.HapticFeedback.impactOccurred("light"); } catch (e) { } }
     function fmt(a) { return !a ? "" : a.length <= 20 ? a : a.slice(0, 10) + "…" + a.slice(-6); }
@@ -46,6 +67,12 @@ export default function WalletConnector() {
         <div style={{ position: "fixed", top: top, right: 16, zIndex: 9999 }}>
             <div style={{ display: "grid", gap: 8, justifyItems: "end", maxWidth: 300 }}>
                 <div style={badge}>{isTest ? "🧪 TESTNET" : "🚀 MAINNET"}</div>
+
+                {/* DEBUG — убери после фикса */}
+                <div style={{ padding: "6px 10px", borderRadius: 8, background: "rgba(255,255,0,0.15)", border: "1px solid rgba(255,255,0,0.3)", color: "#ff0", fontSize: 9, wordBreak: "break-all", maxWidth: 280 }}>
+                    DEBUG: {debugInfo}
+                </div>
+
                 <button onClick={onConnect} disabled={loading} style={{
                     padding: "14px 20px", borderRadius: 14,
                     border: "1px solid rgba(255,140,0,0.4)",
