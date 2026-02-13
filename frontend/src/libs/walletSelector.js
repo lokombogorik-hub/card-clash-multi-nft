@@ -16,15 +16,11 @@ async function getHere() {
     _promise = (async function () {
         console.log("[HOT] init, network:", networkId);
 
-        // No defaultStrategy — library auto-detects:
-        // Telegram → TelegramAppStrategy (patched: no close())
-        // Browser → WindowStrategy (popup)
         var here = await HereWallet.connect({
             networkId: networkId,
             nodeUrl: RPC_URL,
         });
 
-        // Runtime safety patches
         var origSignIn = here.signIn.bind(here);
         var origGetAccountId = here.getAccountId.bind(here);
         var origIsSignedIn = here.isSignedIn.bind(here);
@@ -36,14 +32,38 @@ async function getHere() {
                 if (id) localStorage.setItem(STORAGE_KEY, String(id));
                 return r;
             } catch (err) {
-                console.warn("[HOT] signIn caught:", String(err && err.message || err));
-                await new Promise(function (res) { setTimeout(res, 2000); });
+                var msg = String(err && err.message || err);
+                console.warn("[HOT] signIn caught:", msg);
+
+                // ALL known errors — try fallbacks
+                // Wait for wallet to process
+                await new Promise(function (res) { setTimeout(res, 3000); });
+
+                // Try SDK
                 try {
                     var fid = await origGetAccountId();
                     if (fid) { localStorage.setItem(STORAGE_KEY, String(fid)); return String(fid); }
-                } catch (e2) { }
+                } catch (e2) {
+                    console.warn("[HOT] getAccountId after error:", e2.message);
+                }
+
+                // Try localStorage
                 var stored = localStorage.getItem(STORAGE_KEY);
                 if (stored) return stored;
+
+                // Don't throw for known bugs — return empty, polling will catch
+                if (
+                    msg.includes("account_id") ||
+                    msg.includes("undefined") ||
+                    msg.includes("radix") ||
+                    msg.includes("Enum") ||
+                    msg.includes("Load failed") ||
+                    msg.includes("Uint8Array")
+                ) {
+                    console.warn("[HOT] Known bug, returning empty — polling will retry");
+                    return "";
+                }
+
                 throw err;
             }
         };
