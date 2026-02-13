@@ -1,6 +1,6 @@
-// frontend/src/libs/walletSelector.js — ПОЛНАЯ ЗАМЕНА
+// frontend/src/libs/walletSelector.js — ФИНАЛЬНАЯ ВЕРСИЯ
 
-import { HereWallet, WidgetStrategy } from "@here-wallet/core";
+import { HereWallet } from "@here-wallet/core";
 
 export var networkId = "mainnet";
 export var RPC_URL = "https://rpc.mainnet.near.org";
@@ -9,29 +9,13 @@ var STORAGE_KEY = "hot_wallet_account";
 var _here = null;
 var _promise = null;
 
-function detectTelegram() {
-    var result = {
-        hasTelegram: false,
-        hasWebApp: false,
-        hasInitData: false,
-        platform: "unknown",
-        hasProxy: false,
-        final: false
-    };
-
+function isTelegram() {
     try {
-        result.hasTelegram = typeof window !== "undefined" && !!window.Telegram;
-        result.hasWebApp = result.hasTelegram && !!window.Telegram.WebApp;
-        result.hasInitData = result.hasWebApp && !!window.Telegram.WebApp.initData && window.Telegram.WebApp.initData.length > 0;
-        result.platform = result.hasWebApp ? (window.Telegram.WebApp.platform || "unknown") : "none";
-        result.hasProxy = typeof window !== "undefined" && !!window.TelegramWebviewProxy;
-    } catch (e) { }
-
-    // Any of these means we're in Telegram
-    result.final = result.hasInitData || result.hasProxy || (result.platform !== "unknown" && result.platform !== "none");
-
-    console.log("[HOT] detectTelegram:", JSON.stringify(result));
-    return result.final;
+        return !!(window.TelegramWebviewProxy) ||
+            !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData && window.Telegram.WebApp.initData.length > 0);
+    } catch (e) {
+        return false;
+    }
 }
 
 async function getHere() {
@@ -39,30 +23,23 @@ async function getHere() {
     if (_promise) return _promise;
 
     _promise = (async function () {
-        var isTg = detectTelegram();
-        console.log("[HOT] init, isTelegram:", isTg, "network:", networkId);
+        var tg = isTelegram();
+        console.log("[HOT] init, isTelegram:", tg, "network:", networkId);
 
-        var opts = {
+        // DO NOT pass defaultStrategy
+        // Library auto-detects Telegram via TelegramWebviewProxy
+        // and uses TelegramAppStrategy automatically
+        // This opens HOT wallet bot overlay, NOT QR code
+        var here = await HereWallet.connect({
             networkId: networkId,
             nodeUrl: RPC_URL,
-        };
-
-        // ONLY use WidgetStrategy in Telegram (overlay)
-        // In browser — use default (popup window)
-        if (isTg) {
-            console.log("[HOT] Using WidgetStrategy (Telegram overlay)");
-            opts.defaultStrategy = new WidgetStrategy();
-        } else {
-            console.log("[HOT] Using default strategy (browser popup)");
-        }
-
-        var here = await HereWallet.connect(opts);
+        });
 
         // Runtime patch for dt.account_id crash
         var origSignIn = here.signIn.bind(here);
-        here.signIn = async function (signOpts) {
+        here.signIn = async function (opts) {
             try {
-                var r = await origSignIn(signOpts);
+                var r = await origSignIn(opts);
                 var id = typeof r === "string" ? r : (r && (r.accountId || r.account_id)) || "";
                 if (id) localStorage.setItem(STORAGE_KEY, String(id));
                 return r;
@@ -70,14 +47,19 @@ async function getHere() {
                 var msg = String(err && err.message || err);
                 console.warn("[HOT] signIn caught:", msg);
 
-                // Known Telegram bug — try fallbacks
-                await new Promise(function (resolve) { setTimeout(resolve, 2000); });
+                // Known bug — data is null/undefined
+                await new Promise(function (res) { setTimeout(res, 2000); });
 
+                // Try getAccountId
                 try {
-                    var fid = await here.getAccountId();
-                    if (fid) { localStorage.setItem(STORAGE_KEY, String(fid)); return String(fid); }
+                    var fid = await origGetAccountId();
+                    if (fid) {
+                        localStorage.setItem(STORAGE_KEY, String(fid));
+                        return String(fid);
+                    }
                 } catch (e2) { }
 
+                // Try localStorage
                 var stored = localStorage.getItem(STORAGE_KEY);
                 if (stored) return stored;
 
@@ -101,7 +83,7 @@ async function getHere() {
         };
 
         _here = here;
-        console.log("[HOT] ready");
+        console.log("[HOT] ready (auto-strategy)");
         return here;
     })();
 
