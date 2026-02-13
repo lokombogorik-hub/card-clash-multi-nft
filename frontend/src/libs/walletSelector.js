@@ -1,4 +1,4 @@
-// frontend/src/libs/walletSelector.js — КАК У FATESPARK
+// frontend/src/libs/walletSelector.js — ПОЛНАЯ ЗАМЕНА
 
 import { HereWallet, WidgetStrategy } from "@here-wallet/core";
 
@@ -9,20 +9,96 @@ var STORAGE_KEY = "hot_wallet_account";
 var _here = null;
 var _promise = null;
 
+function detectTelegram() {
+    var result = {
+        hasTelegram: false,
+        hasWebApp: false,
+        hasInitData: false,
+        platform: "unknown",
+        hasProxy: false,
+        final: false
+    };
+
+    try {
+        result.hasTelegram = typeof window !== "undefined" && !!window.Telegram;
+        result.hasWebApp = result.hasTelegram && !!window.Telegram.WebApp;
+        result.hasInitData = result.hasWebApp && !!window.Telegram.WebApp.initData && window.Telegram.WebApp.initData.length > 0;
+        result.platform = result.hasWebApp ? (window.Telegram.WebApp.platform || "unknown") : "none";
+        result.hasProxy = typeof window !== "undefined" && !!window.TelegramWebviewProxy;
+    } catch (e) { }
+
+    // Any of these means we're in Telegram
+    result.final = result.hasInitData || result.hasProxy || (result.platform !== "unknown" && result.platform !== "none");
+
+    console.log("[HOT] detectTelegram:", JSON.stringify(result));
+    return result.final;
+}
+
 async function getHere() {
     if (_here) return _here;
     if (_promise) return _promise;
 
     _promise = (async function () {
-        console.log("[HOT] init WidgetStrategy, network:", networkId);
+        var isTg = detectTelegram();
+        console.log("[HOT] init, isTelegram:", isTg, "network:", networkId);
 
-        // WidgetStrategy = opens wallet OVER the game (iframe)
-        // This is what FateSpark uses
-        var here = await HereWallet.connect({
+        var opts = {
             networkId: networkId,
             nodeUrl: RPC_URL,
-            defaultStrategy: new WidgetStrategy(),
-        });
+        };
+
+        // ONLY use WidgetStrategy in Telegram (overlay)
+        // In browser — use default (popup window)
+        if (isTg) {
+            console.log("[HOT] Using WidgetStrategy (Telegram overlay)");
+            opts.defaultStrategy = new WidgetStrategy();
+        } else {
+            console.log("[HOT] Using default strategy (browser popup)");
+        }
+
+        var here = await HereWallet.connect(opts);
+
+        // Runtime patch for dt.account_id crash
+        var origSignIn = here.signIn.bind(here);
+        here.signIn = async function (signOpts) {
+            try {
+                var r = await origSignIn(signOpts);
+                var id = typeof r === "string" ? r : (r && (r.accountId || r.account_id)) || "";
+                if (id) localStorage.setItem(STORAGE_KEY, String(id));
+                return r;
+            } catch (err) {
+                var msg = String(err && err.message || err);
+                console.warn("[HOT] signIn caught:", msg);
+
+                // Known Telegram bug — try fallbacks
+                await new Promise(function (resolve) { setTimeout(resolve, 2000); });
+
+                try {
+                    var fid = await here.getAccountId();
+                    if (fid) { localStorage.setItem(STORAGE_KEY, String(fid)); return String(fid); }
+                } catch (e2) { }
+
+                var stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) return stored;
+
+                throw err;
+            }
+        };
+
+        var origIsSignedIn = here.isSignedIn.bind(here);
+        here.isSignedIn = async function () {
+            try { return await origIsSignedIn(); }
+            catch (e) { return !!localStorage.getItem(STORAGE_KEY); }
+        };
+
+        var origGetAccountId = here.getAccountId.bind(here);
+        here.getAccountId = async function () {
+            try {
+                var id = await origGetAccountId();
+                if (id) { localStorage.setItem(STORAGE_KEY, String(id)); return id; }
+            } catch (e) { }
+            return localStorage.getItem(STORAGE_KEY) || "";
+        };
 
         _here = here;
         console.log("[HOT] ready");
@@ -33,157 +109,51 @@ async function getHere() {
     return _promise;
 }
 
-// ─── Connect ─────────────────────────────────────────────
 export async function connectWallet() {
     var here = await getHere();
-    console.log("[HOT] signIn (widget overlay)...");
-
+    console.log("[HOT] signIn...");
     var accountId = "";
 
     try {
-        var result = await here.signIn({
-            contractId: "retardo-s.near",
-            methodNames: [],
-        });
-
-        if (typeof result === "string") {
-            accountId = result;
-        } else if (result && typeof result === "object") {
-            accountId = result.accountId || result.account_id || "";
-        }
-
-        console.log("[HOT] signIn result:", accountId);
+        var res = await here.signIn({ contractId: "retardo-s.near", methodNames: [] });
+        if (typeof res === "string") accountId = res;
+        else if (res && typeof res === "object") accountId = res.accountId || res.account_id || "";
     } catch (err) {
-        var msg = String(err && err.message || err);
-        console.warn("[HOT] signIn error:", msg);
-
-        // The dt.account_id bug — wallet connected but response parsing failed
-        // Try to get account anyway
-        if (msg.includes("account_id") || msg.includes("undefined") || msg.includes("is failed")) {
-            console.log("[HOT] Known bug, trying fallbacks...");
-
-            // Wait for wallet to finish
-            await new Promise(function (r) { setTimeout(r, 2000); });
-
-            // Try getAccountId
-            try {
-                accountId = String(await here.getAccountId() || "");
-                console.log("[HOT] getAccountId after error:", accountId);
-            } catch (e2) {
-                console.warn("[HOT] getAccountId also failed:", e2.message);
-            }
-        }
+        console.warn("[HOT] signIn outer:", err.message);
     }
 
-    // Fallback: try getAccountId if still empty
     if (!accountId) {
-        try {
-            accountId = String(await here.getAccountId() || "");
-        } catch (e) { }
+        try { accountId = String(await here.getAccountId() || ""); } catch (e) { }
     }
+    if (!accountId) accountId = localStorage.getItem(STORAGE_KEY) || "";
+    if (accountId) localStorage.setItem(STORAGE_KEY, accountId);
 
-    // Fallback: scan localStorage for HERE wallet data
-    if (!accountId) {
-        accountId = findAccountInStorage();
-    }
-
-    // Save for restore
-    if (accountId) {
-        localStorage.setItem(STORAGE_KEY, accountId);
-    }
-
-    console.log("[HOT] final accountId:", accountId);
+    console.log("[HOT] final:", accountId);
     return { accountId: String(accountId || "") };
 }
 
-// ─── Disconnect ──────────────────────────────────────────
 export async function disconnectWallet() {
-    try {
-        var here = await getHere();
-        await here.signOut();
-    } catch (e) { }
+    try { var here = await getHere(); await here.signOut(); } catch (e) { }
     _here = null;
     _promise = null;
     localStorage.removeItem(STORAGE_KEY);
 }
 
-// ─── Restore session ────────────────────────────────────
 export async function getSignedInAccountId() {
-    // Method 1: SDK
     try {
         var here = await getHere();
-        var ok = false;
-        try { ok = await here.isSignedIn(); } catch (e) { }
-
+        var ok = await here.isSignedIn();
         if (ok) {
-            try {
-                var id = await here.getAccountId();
-                if (id) {
-                    localStorage.setItem(STORAGE_KEY, String(id));
-                    return String(id);
-                }
-            } catch (e) { }
-        }
-    } catch (e) {
-        console.warn("[HOT] restore SDK error:", e.message);
-    }
-
-    // Method 2: localStorage
-    var stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-        console.log("[HOT] restored from localStorage:", stored);
-        return stored;
-    }
-
-    // Method 3: scan storage
-    var found = findAccountInStorage();
-    if (found) {
-        localStorage.setItem(STORAGE_KEY, found);
-        return found;
-    }
-
-    return "";
-}
-
-// ─── Find account in HERE wallet storage ────────────────
-function findAccountInStorage() {
-    try {
-        for (var i = 0; i < localStorage.length; i++) {
-            var key = localStorage.key(i);
-            if (!key) continue;
-
-            // HERE wallet stores data with these prefixes
-            if (key.indexOf("here") !== -1 || key.indexOf("near") !== -1 || key.indexOf("hot") !== -1) {
-                var val = localStorage.getItem(key);
-                if (!val) continue;
-
-                // Direct account ID
-                if (val.indexOf(".near") !== -1 || val.indexOf(".tg") !== -1) {
-                    // Could be JSON or plain string
-                    try {
-                        var obj = JSON.parse(val);
-                        if (obj.accountId) return obj.accountId;
-                        if (obj.account_id) return obj.account_id;
-                    } catch (e) {
-                        // Plain string like "key_k1.tg"
-                        if (val.length < 100 && (val.indexOf(".tg") !== -1 || val.indexOf(".near") !== -1)) {
-                            return val;
-                        }
-                    }
-                }
-            }
+            var id = await here.getAccountId();
+            if (id) return String(id);
         }
     } catch (e) { }
-    return "";
+    return localStorage.getItem(STORAGE_KEY) || "";
 }
 
-// ─── Transactions ────────────────────────────────────────
 export async function signAndSendTransaction(params) {
     var here = await getHere();
-    return await here.signAndSendTransaction({
-        receiverId: params.receiverId,
-        actions: params.actions,
-    });
+    return await here.signAndSendTransaction({ receiverId: params.receiverId, actions: params.actions });
 }
 
 export async function sendNear(opts) {
@@ -196,7 +166,6 @@ export async function sendNear(opts) {
     return { txHash: extractTxHash(result), result: result };
 }
 
-// ─── Balance ─────────────────────────────────────────────
 export async function fetchBalance(accountId) {
     try {
         var res = await fetch(RPC_URL, {
