@@ -1,36 +1,27 @@
-// frontend/src/store/useWalletStore.js — ПОЛНАЯ ЗАМЕНА
-
-import { useEffect, useState } from "react";
+// frontend/src/store/useWalletStore.js
+import { useSyncExternalStore, useCallback } from "react";
 import { walletStore } from "./walletStore";
 
 export function useWalletStore() {
-    var ss = useState(walletStore.getState());
-    var snap = ss[0];
-    var setSnap = ss[1];
-
-    useEffect(function () {
-        var unsub = walletStore.subscribe(function () {
-            setSnap(walletStore.getState());
-        });
-        walletStore.restoreSession();
-        return unsub;
-    }, []);
+    var state = useSyncExternalStore(walletStore.subscribe, walletStore.getState);
 
     return {
-        connected: snap.connected,
-        accountId: snap.walletAddress,
-        walletAddress: snap.walletAddress,
-        balance: snap.balance,
-        status: snap.status,
-        lastError: snap.lastError,
-        nfts: snap.nfts,
+        // State
+        connected: state.connected,
+        walletAddress: state.walletAddress,
+        balance: state.balance,
+        status: state.status,
+        lastError: state.lastError,
+        nfts: state.nfts,
+
+        // Actions
         connectHot: walletStore.connectHot,
         disconnectWallet: walletStore.disconnectWallet,
-        clearStatus: walletStore.clearStatus,
         restoreSession: walletStore.restoreSession,
-        refreshBalance: walletStore.refreshBalance,
+        clearStatus: walletStore.clearStatus,
         signAndSendTransaction: walletStore.signAndSendTransaction,
         sendNear: walletStore.sendNear,
+        refreshBalance: walletStore.refreshBalance,
         getUserNFTs: walletStore.getUserNFTs,
     };
 }
