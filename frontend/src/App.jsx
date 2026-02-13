@@ -260,7 +260,36 @@ export default function App() {
         <div className="shell">
             <StormBg />
             {showWalletConnector ? <WalletConnector /> : null}
+            {showWalletConnector ? <WalletConnector /> : null}
 
+            {/* DEBUG — удалить после фикса */}
+            <div style={{
+                position: "fixed",
+                bottom: 10,
+                left: 10,
+                zIndex: 999999,
+                padding: "8px 12px",
+                borderRadius: 8,
+                background: "red",
+                color: "white",
+                fontSize: 11,
+                maxWidth: "90vw",
+                wordBreak: "break-all",
+            }}>
+                {(() => {
+                    try {
+                        var t = window.Telegram;
+                        var w = t && t.WebApp;
+                        return "TG:" + !!t
+                            + " WA:" + !!w
+                            + " ID:" + !!(w && w.initData && w.initData.length > 0)
+                            + " P:" + (w ? w.platform : "none")
+                            + " PX:" + !!window.TelegramWebviewProxy;
+                    } catch (e) {
+                        return "ERR:" + e.message;
+                    }
+                })()}
+            </div>
             <LockEscrowModal
                 open={stage2LockOpen}
                 onClose={() => setStage2LockOpen(false)}
