@@ -4,7 +4,6 @@ import { HereWallet, WidgetStrategy } from "@here-wallet/core";
 export var networkId = "mainnet";
 export var RPC_URL = "https://rpc.mainnet.near.org";
 var STORAGE_KEY = "hot_wallet_account";
-var PROXY_API = "https://h4n.app";
 
 var _here = null;
 var _promise = null;
@@ -20,32 +19,70 @@ function isTelegram() {
 }
 
 // =============================================
-// CUSTOM TELEGRAM STRATEGY
-// Opens HOT Wallet via Telegram deep-link
-// Does NOT close WebApp
+// BASE58 ENCODE (same as baseEncode from near-api-js)
 // =============================================
-function TelegramStrategy() {
-    this._resolveReject = null;
+var BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+function base58Encode(str) {
+    // Convert string to bytes
+    var bytes = new TextEncoder().encode(str);
+
+    // Convert to base58
+    var digits = [0];
+    for (var i = 0; i < bytes.length; i++) {
+        var carry = bytes[i];
+        for (var j = 0; j < digits.length; j++) {
+            carry += digits[j] << 8;
+            digits[j] = carry % 58;
+            carry = (carry / 58) | 0;
+        }
+        while (carry > 0) {
+            digits.push(carry % 58);
+            carry = (carry / 58) | 0;
+        }
+    }
+
+    // Handle leading zeros
+    var result = "";
+    for (var k = 0; k < bytes.length && bytes[k] === 0; k++) {
+        result += BASE58_ALPHABET[0];
+    }
+    for (var l = digits.length - 1; l >= 0; l--) {
+        result += BASE58_ALPHABET[digits[l]];
+    }
+
+    return result;
 }
 
-TelegramStrategy.prototype.onInitialized = function () { };
+// =============================================
+// CUSTOM TELEGRAM STRATEGY
+// =============================================
+function TelegramStrategy() {
+    this._reject = null;
+}
+
+TelegramStrategy.prototype.onInitialized = function () {
+    console.log("[TG-Strategy] Initialized");
+};
 
 TelegramStrategy.prototype.onRequested = function (id, request, reject) {
-    // id = the h4n.app request ID
-    // Open HOT Wallet with this request ID
-    var hotUrl = "https://t.me/herewalletbot/app?startapp=h4n-" + encodeURIComponent(id);
+    // id = request ID from h4n.app (e.g., "abc123xyz")
+    // Must be base58 encoded for HOT Wallet
+    var encodedId = base58Encode(id);
+    var hotUrl = "https://t.me/herewalletbot/app?startapp=h4n-" + encodedId;
 
-    console.log("[TG-Strategy] Opening HOT:", hotUrl);
+    console.log("[TG-Strategy] onRequested | raw ID:", id, "| encoded:", encodedId);
+    console.log("[TG-Strategy] Opening:", hotUrl);
+
+    this._reject = reject;
 
     try {
         window.Telegram.WebApp.openTelegramLink(hotUrl);
+        // НЕ вызываем close() — остаёмся в WebApp
     } catch (e) {
         console.warn("[TG-Strategy] openTelegramLink failed:", e.message);
-        // Fallback — open as URL
         window.open(hotUrl, "_blank");
     }
-
-    this._reject = reject;
 };
 
 TelegramStrategy.prototype.onApproving = function () {
@@ -60,7 +97,9 @@ TelegramStrategy.prototype.onFailed = function (result) {
     console.log("[TG-Strategy] Failed:", result);
 };
 
-TelegramStrategy.prototype.close = function () { };
+TelegramStrategy.prototype.close = function () {
+    console.log("[TG-Strategy] Close called");
+};
 
 // =============================================
 // GET HERE WALLET INSTANCE
