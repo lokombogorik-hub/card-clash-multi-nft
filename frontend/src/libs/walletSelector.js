@@ -4,22 +4,86 @@ import { HereWallet, WidgetStrategy } from "@here-wallet/core";
 export var networkId = "mainnet";
 export var RPC_URL = "https://rpc.mainnet.near.org";
 var STORAGE_KEY = "hot_wallet_account";
+var PROXY_API = "https://h4n.app";
 
 var _here = null;
 var _promise = null;
 
+// =============================================
+// DETECT TELEGRAM
+// =============================================
+function isTelegram() {
+    try {
+        return !!(window.Telegram && window.Telegram.WebApp &&
+            window.Telegram.WebApp.initData && window.Telegram.WebApp.initData.length > 0);
+    } catch (e) { return false; }
+}
+
+// =============================================
+// CUSTOM TELEGRAM STRATEGY
+// Opens HOT Wallet via Telegram deep-link
+// Does NOT close WebApp
+// =============================================
+function TelegramStrategy() {
+    this._resolveReject = null;
+}
+
+TelegramStrategy.prototype.onInitialized = function () { };
+
+TelegramStrategy.prototype.onRequested = function (id, request, reject) {
+    // id = the h4n.app request ID
+    // Open HOT Wallet with this request ID
+    var hotUrl = "https://t.me/herewalletbot/app?startapp=h4n-" + encodeURIComponent(id);
+
+    console.log("[TG-Strategy] Opening HOT:", hotUrl);
+
+    try {
+        window.Telegram.WebApp.openTelegramLink(hotUrl);
+    } catch (e) {
+        console.warn("[TG-Strategy] openTelegramLink failed:", e.message);
+        // Fallback — open as URL
+        window.open(hotUrl, "_blank");
+    }
+
+    this._reject = reject;
+};
+
+TelegramStrategy.prototype.onApproving = function () {
+    console.log("[TG-Strategy] Approving...");
+};
+
+TelegramStrategy.prototype.onSuccess = function (result) {
+    console.log("[TG-Strategy] Success:", result);
+};
+
+TelegramStrategy.prototype.onFailed = function (result) {
+    console.log("[TG-Strategy] Failed:", result);
+};
+
+TelegramStrategy.prototype.close = function () { };
+
+// =============================================
+// GET HERE WALLET INSTANCE
+// =============================================
 async function getHere() {
     if (_here) return _here;
     if (_promise) return _promise;
 
     _promise = (async function () {
-        console.log("[HOT] init v1.6.6 | network:", networkId);
+        var inTg = isTelegram();
+        console.log("[HOT] init v1.6.6 | TG:", inTg, "| network:", networkId);
 
         var here = new HereWallet({
             networkId: networkId,
             nodeUrl: RPC_URL,
             defaultStrategy: function () {
-                return new WidgetStrategy({ widget: "https://my.herewallet.app/connector/index.html", lazy: false });
+                if (inTg) {
+                    return new TelegramStrategy();
+                }
+                return new WidgetStrategy({
+                    widget: "https://my.herewallet.app/connector/index.html",
+                    lazy: false
+                });
             }
         });
 
@@ -32,13 +96,19 @@ async function getHere() {
     return _promise;
 }
 
+// =============================================
+// CONNECT
+// =============================================
 export async function connectWallet() {
     var here = await getHere();
     console.log("[HOT] signIn...");
     var accountId = "";
 
     try {
-        accountId = await here.signIn({ contractId: "retardo-s.near", methodNames: [] });
+        accountId = await here.signIn({
+            contractId: "retardo-s.near",
+            methodNames: []
+        });
         if (accountId) {
             localStorage.setItem(STORAGE_KEY, String(accountId));
         }
@@ -46,7 +116,7 @@ export async function connectWallet() {
         var msg = String(err && err.message || err);
         console.warn("[HOT] signIn error:", msg);
 
-        // Try fallback
+        // Try getAccountId
         try {
             accountId = await here.getAccountId();
             if (accountId) localStorage.setItem(STORAGE_KEY, String(accountId));
@@ -55,10 +125,13 @@ export async function connectWallet() {
         if (!accountId) accountId = localStorage.getItem(STORAGE_KEY) || "";
     }
 
-    console.log("[HOT] result:", accountId || "(empty)");
+    console.log("[HOT] result:", accountId || "(polling)");
     return { accountId: String(accountId || "") };
 }
 
+// =============================================
+// DISCONNECT
+// =============================================
 export async function disconnectWallet() {
     try {
         var here = await getHere();
@@ -71,6 +144,9 @@ export async function disconnectWallet() {
     localStorage.removeItem(STORAGE_KEY);
 }
 
+// =============================================
+// GET SIGNED IN
+// =============================================
 export async function getSignedInAccountId() {
     try {
         var here = await getHere();
@@ -86,6 +162,9 @@ export async function getSignedInAccountId() {
     return localStorage.getItem(STORAGE_KEY) || "";
 }
 
+// =============================================
+// TRANSACTIONS
+// =============================================
 export async function signAndSendTransaction(params) {
     var here = await getHere();
     return await here.signAndSendTransaction({
@@ -104,6 +183,9 @@ export async function sendNear(opts) {
     return { txHash: extractTxHash(result), result: result };
 }
 
+// =============================================
+// BALANCE
+// =============================================
 export async function fetchBalance(accountId) {
     try {
         var res = await fetch(RPC_URL, {
@@ -121,6 +203,9 @@ export async function fetchBalance(accountId) {
     } catch (e) { return 0; }
 }
 
+// =============================================
+// HELPERS
+// =============================================
 function nearToYocto(n) {
     var parts = String(n).split(".");
     return (parts[0] || "0") + (parts[1] || "").padEnd(24, "0").slice(0, 24);
