@@ -1,42 +1,68 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import { nodePolyfills } from "vite-plugin-node-polyfills";
 
 export default defineConfig({
-    plugins: [react()],
-    resolve: {
-        alias: {
-            // node:* imports
-            'node:crypto': 'crypto-browserify',
-            'node:stream': 'stream-browserify',
-            'node:util': 'util',
-            'node:process': 'process',
-            'node:buffer': 'buffer',
-
-            // classic imports
-            crypto: 'crypto-browserify',
-            stream: 'stream-browserify',
-            util: 'util',
-            process: 'process',
-            buffer: 'buffer',
-        },
+  plugins: [
+    react(),
+    nodePolyfills({
+      include: [
+        "buffer",
+        "stream",
+        "crypto",
+        "util",
+        "assert",
+        "process",
+        "readable-stream",
+        "string_decoder",
+        "safe-buffer",
+        "process-nextick-args",
+      ],
+      globals: {
+        Buffer: true,
+        global: true,
+        process: true,
+      },
+    }),
+  ],
+  resolve: {
+    alias: {
+      buffer: "buffer",
+      stream: "stream-browserify",
+      crypto: "crypto-browserify",
+      util: "util",
+      assert: "assert",
+      process: "process/browser",
     },
-    define: {
-        global: 'globalThis',
-        'process.env': {},
+  },
+  optimizeDeps: {
+    include: [
+      "buffer",
+      "stream-browserify",
+      "crypto-browserify",
+      "util",
+      "assert",
+      "process",
+      "readable-stream",
+      "string_decoder",
+      "safe-buffer",
+      "process-nextick-args",
+    ],
+    esbuildOptions: {
+      define: {
+        global: "globalThis",
+      },
     },
-    optimizeDeps: {
-        include: [
-            'crypto-browserify',
-            'stream-browserify',
-            'util',
-            'process',
-            'buffer',
-        ],
-        esbuildOptions: {
-            // Node.js global to browser globalThis
-            define: {
-                global: 'globalThis',
-            },
-        },
+  },
+  build: {
+    rollupOptions: {
+      external: ["fsevents"],
+      onwarn(warning, warn) {
+        if (warning.code === 'UNRESOLVED_IMPORT' && warning.message.includes('fsevents')) {
+          return;
+        }
+        warn(warning);
+      },
     },
-})
+  },
+});
