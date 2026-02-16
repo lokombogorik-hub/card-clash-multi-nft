@@ -1,6 +1,6 @@
-// frontend/src/libs/walletSelector.js — FINAL FIX для всех ошибок
+// frontend/src/libs/walletSelector.js — FIX для @here-wallet/core@2.0.2
 
-import HereWallet from "@here-wallet/core";
+import { HereWallet } from "@here-wallet/core";
 
 export var networkId = "mainnet";
 export var RPC_URL = "https://rpc.mainnet.near.org";
@@ -24,9 +24,9 @@ async function getHere() {
     _promise = (async function () {
         console.log("[HOT] Initializing on", networkId);
 
-        var here = new HereWallet({
+        // ✅ FIX: 2.0.2 uses static connect() method
+        var here = await HereWallet.connect({
             networkId: networkId,
-            nodeUrl: RPC_URL,
         });
 
         // ========== CRITICAL: Wrap ALL methods with error handling ==========
