@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../../api.js";
-import { useWalletStore } from "../../store/useWalletStore";
+import { useWalletConnect } from "../../context/WalletConnectContext";
 import { nearNftTokensForOwner } from "../../libs/nearNft.js";
 
 function getStoredToken() {
@@ -16,519 +16,221 @@ function getStoredToken() {
     }
 }
 
-function short(s) {
-    if (!s) return "";
-    if (s.length <= 14) return s;
-    return `${s.slice(0, 8)}…${s.slice(-5)}`;
-}
-
-const LS_NFT_CONTRACTS_V1 = "cc_stage2_nft_contracts_v1";
-
-function loadSavedContracts() {
-    try {
-        const raw = localStorage.getItem(LS_NFT_CONTRACTS_V1);
-        if (!raw) return [];
-        const arr = JSON.parse(raw);
-        if (!Array.isArray(arr)) return [];
-        return arr.map((x) => String(x || "").trim()).filter(Boolean).slice(0, 12);
-    } catch {
-        return [];
-    }
-}
-
-function saveContracts(list) {
-    try {
-        localStorage.setItem(LS_NFT_CONTRACTS_V1, JSON.stringify(list));
-    } catch { }
-}
-
-function normalizeMediaUrl(media) {
-    const m = String(media || "").trim();
-    if (!m) return "";
-    if (m.startsWith("ipfs://")) return `https://ipfs.io/ipfs/${m.slice("ipfs://".length)}`;
-    if (m.startsWith("ar://")) return `https://arweave.net/${m.slice("ar://".length)}`;
-    return m;
-}
-
 export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck }) {
-    const { connected, accountId, escrowContractId, nftTransferCall } = useWalletStore();
+    const { accountId, selector } = useWalletConnect();
+    const walletAddress = accountId || "";
 
-    const token = useMemo(() => getStoredToken(), []);
-    const myTgId = me?.id ? Number(me.id) : 0;
-
-    const [step, setStep] = useState(1); // 1: matchmaking, 2: pick NFTs, 3: locking
+    const [status, setStatus] = useState("idle");
+    const [error, setError] = useState("");
     const [matchId, setMatchId] = useState("");
-    const [match, setMatch] = useState(null);
-    const [joinId, setJoinId] = useState("");
 
-    const [selectedNfts, setSelectedNfts] = useState([]); // array of 5 NFT objects
-    const [busy, setBusy] = useState(false);
-    const [err, setErr] = useState("");
+    const escrowContractId = (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim();
+    const nftContractId = (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim();
 
-    // NFT picker
-    const [savedContracts, setSavedContracts] = useState(() => loadSavedContracts());
-    const [nftContractId, setNftContractId] = useState(savedContracts?.[0] || "");
-    const [nftBusy, setNftBusy] = useState(false);
-    const [nftErr, setNftErr] = useState("");
-    const [nfts, setNfts] = useState([]);
+    const deckTokenIds = useMemo(() => {
+        if (!Array.isArray(playerDeck)) return [];
+        return playerDeck.map((c) => c.token_id || c.tokenId || "").filter(Boolean);
+    }, [playerDeck]);
 
-    const refreshMatch = async (id) => {
-        const mid = (id || matchId || "").trim();
-        if (!mid) return;
-        const m = await apiFetch(`/api/matches/${mid}`, { token: token || getStoredToken() });
-        setMatch(m);
-    };
-
-    // Create match on open
     useEffect(() => {
-        if (!open) return;
-        setErr("");
-        setStep(1);
-        setSelectedNfts([]);
-
-        const run = async () => {
-            setBusy(true);
-            try {
-                const r = await apiFetch("/api/matches/create", {
-                    method: "POST",
-                    token: token || getStoredToken(),
-                    body: JSON.stringify({}),
-                });
-                setMatchId(r?.matchId || "");
-                setMatch(null);
-                if (r?.matchId) await refreshMatch(r.matchId);
-            } catch (e) {
-                setErr(String(e?.message || e));
-            } finally {
-                setBusy(false);
-            }
-        };
-
-        run();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        if (!open) {
+            setStatus("idle");
+            setError("");
+            setMatchId("");
+        }
     }, [open]);
 
-    const players = match?.players || [];
-    const mePlayer = players.find((p) => Number(p.user_id) === myTgId) || null;
-    const mySide = mePlayer?.side || "";
-    const playerA = players.find((p) => p.side === "A")?.near_account_id || "";
-    const playerB = players.find((p) => p.side === "B")?.near_account_id || "";
-    const bothPlayersReady = Boolean(playerA && playerB && players.length === 2);
+    const handleLock = async () => {
+        if (!walletAddress) {
+            setError("Wallet not connected");
+            return;
+        }
 
-    const onJoin = async () => {
-        const id = joinId.trim();
-        if (!id) return;
-        setErr("");
-        setBusy(true);
+        if (!escrowContractId || !nftContractId) {
+            setError("Escrow or NFT contract not configured");
+            return;
+        }
+
+        if (deckTokenIds.length !== 5) {
+            setError("Deck must have exactly 5 cards");
+            return;
+        }
+
+        setStatus("loading");
+        setError("");
+
         try {
-            await apiFetch(`/api/matches/${id}/join`, {
+            // 1) Check NFT ownership
+            const owned = await nearNftTokensForOwner(nftContractId, walletAddress);
+            const ownedIds = new Set(owned.map((t) => t.token_id));
+
+            const missing = deckTokenIds.filter((id) => !ownedIds.has(id));
+            if (missing.length > 0) {
+                throw new Error(`Missing NFTs: ${missing.join(", ")}`);
+            }
+
+            // 2) Create match on backend
+            const token = getStoredToken();
+            const createRes = await apiFetch("/api/matches/create", {
                 method: "POST",
-                token: token || getStoredToken(),
-            });
-            setMatchId(id);
-            await refreshMatch(id);
-        } catch (e) {
-            setErr(String(e?.message || e));
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    const onLoadNfts = async (contractIdParam) => {
-        const cid = String(contractIdParam || nftContractId || "").trim();
-        setNftErr("");
-        setNfts([]);
-
-        if (!connected || !accountId) {
-            setNftErr("Сначала подключи HOT Wallet (нужен accountId).");
-            return;
-        }
-        if (!cid) {
-            setNftErr("Укажи NFT contractId (коллекцию).");
-            return;
-        }
-
-        setNftBusy(true);
-        try {
-            const list = await nearNftTokensForOwner({
-                nftContractId: cid,
-                accountId: accountId,
-                fromIndex: "0",
-                limit: 60,
+                token,
+                body: JSON.stringify({
+                    player1_id: me?.id || null,
+                    mode: "pvp",
+                }),
             });
 
-            setNfts(
-                list.map((t) => ({
-                    contractId: cid,
-                    tokenId: t.token_id,
-                    metadata: t.metadata || null,
-                }))
-            );
+            const newMatchId = createRes?.match_id || createRes?.matchId || "";
+            if (!newMatchId) throw new Error("Backend didn't return match_id");
 
-            setSavedContracts((prev) => {
-                const next = [cid, ...(prev || [])].map((x) => String(x).trim()).filter(Boolean);
-                const uniq = [];
-                for (const x of next) if (!uniq.includes(x)) uniq.push(x);
-                const sliced = uniq.slice(0, 12);
-                saveContracts(sliced);
-                return sliced;
+            setMatchId(newMatchId);
+
+            // 3) Transfer NFTs to escrow via nft_transfer_call
+            if (!selector) throw new Error("Wallet selector not initialized");
+            const wallet = await selector.wallet();
+            if (!wallet) throw new Error("Wallet not available");
+
+            const actions = deckTokenIds.map((tokenId) => ({
+                type: "FunctionCall",
+                params: {
+                    methodName: "nft_transfer_call",
+                    args: {
+                        receiver_id: escrowContractId,
+                        token_id: tokenId,
+                        msg: JSON.stringify({ match_id: newMatchId }),
+                    },
+                    gas: "100000000000000",
+                    deposit: "1",
+                },
+            }));
+
+            await wallet.signAndSendTransaction({
+                receiverId: nftContractId,
+                actions,
             });
-        } catch (e) {
-            setNftErr(String(e?.message || e));
-        } finally {
-            setNftBusy(false);
+
+            setStatus("success");
+            setTimeout(() => {
+                onReady?.({ matchId: newMatchId });
+            }, 1000);
+        } catch (err) {
+            console.error("[LockEscrow] error:", err);
+            setError(String(err?.message || err));
+            setStatus("error");
         }
     };
-
-    const onSelectNft = (item) => {
-        const key = `${item.contractId}::${item.tokenId}`;
-
-        // Check if already selected
-        const alreadyIdx = selectedNfts.findIndex((n) => `${n.contractId}::${n.tokenId}` === key);
-
-        if (alreadyIdx !== -1) {
-            // Deselect
-            setSelectedNfts((prev) => prev.filter((_, i) => i !== alreadyIdx));
-        } else {
-            // Select (max 5)
-            if (selectedNfts.length >= 5) {
-                setErr("Максимум 5 NFT. Сначала убери одну карту.");
-                return;
-            }
-            setSelectedNfts((prev) => [...prev, item]);
-            setErr("");
-        }
-
-        try {
-            window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light");
-        } catch { }
-    };
-
-    const onRemoveNft = (idx) => {
-        setSelectedNfts((prev) => prev.filter((_, i) => i !== idx));
-    };
-
-    const canProceedToLock = bothPlayersReady && selectedNfts.length === 5;
-
-    const onLock = async () => {
-        if (!canProceedToLock) return;
-        setErr("");
-        setBusy(true);
-        setStep(3);
-
-        try {
-            for (let i = 0; i < selectedNfts.length; i++) {
-                const nft = selectedNfts[i];
-
-                const { txHash } = await nftTransferCall({
-                    nftContractId: nft.contractId.trim(),
-                    tokenId: nft.tokenId.trim(),
-                    matchId,
-                    side: mySide,
-                    playerA,
-                    playerB,
-                });
-
-                await apiFetch(`/api/matches/${matchId}/deposit`, {
-                    method: "POST",
-                    token: token || getStoredToken(),
-                    body: JSON.stringify({
-                        nft_contract_id: nft.contractId.trim(),
-                        token_id: nft.tokenId.trim(),
-                        tx_hash: txHash || null,
-                    }),
-                });
-            }
-
-            await refreshMatch(matchId);
-            onReady?.({ matchId });
-        } catch (e) {
-            setErr(String(e?.message || e));
-            setStep(2);
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    const selectedSet = useMemo(() => {
-        const s = new Set();
-        for (const n of selectedNfts) {
-            s.add(`${n.contractId}::${n.tokenId}`);
-        }
-        return s;
-    }, [selectedNfts]);
 
     if (!open) return null;
 
     return (
-        <div className="lock-escrow-modal-backdrop" onClick={onClose}>
-            <div className="lock-escrow-modal-box" onClick={(e) => e.stopPropagation()}>
-                <button className="lock-escrow-modal-close" onClick={onClose} disabled={busy}>
-                    ✕
+        <div
+            style={{
+                position: "fixed",
+                inset: 0,
+                zIndex: 99999,
+                background: "rgba(0,0,0,0.85)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 20,
+            }}
+            onClick={onClose}
+        >
+            <div
+                style={{
+                    background: "linear-gradient(145deg, #1a1a2e, #0f0f1a)",
+                    border: "1px solid rgba(255,255,255,0.15)",
+                    borderRadius: 20,
+                    padding: "28px 24px",
+                    maxWidth: 400,
+                    width: "100%",
+                    textAlign: "center",
+                }}
+                onClick={(e) => e.stopPropagation()}
+            >
+                <h3 style={{ margin: "0 0 12px", fontSize: 20, fontWeight: 900, color: "#fff" }}>
+                    Lock NFTs in Escrow
+                </h3>
+
+                {status === "idle" && (
+                    <>
+                        <p style={{ margin: "0 0 20px", fontSize: 13, opacity: 0.7, color: "#a0d8ff" }}>
+                            This will lock your 5 NFTs in the escrow contract.
+                            <br />
+                            Winner takes 1 NFT from loser.
+                        </p>
+                        <button
+                            onClick={handleLock}
+                            style={{
+                                width: "100%",
+                                padding: "14px 20px",
+                                borderRadius: 14,
+                                border: "1px solid rgba(255,140,0,0.4)",
+                                background: "linear-gradient(135deg, rgba(255,140,0,0.25), rgba(255,80,0,0.15))",
+                                color: "#fff",
+                                fontSize: 16,
+                                fontWeight: 900,
+                                cursor: "pointer",
+                            }}
+                        >
+                            🔒 Lock & Start
+                        </button>
+                    </>
+                )}
+
+                {status === "loading" && (
+                    <div style={{ padding: 20, color: "#fff" }}>
+                        <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
+                        <div>Locking NFTs...</div>
+                    </div>
+                )}
+
+                {status === "success" && (
+                    <div style={{ padding: 20, color: "#0f0" }}>
+                        <div style={{ fontSize: 32, marginBottom: 12 }}>✅</div>
+                        <div>NFTs locked! Starting match...</div>
+                    </div>
+                )}
+
+                {status === "error" && (
+                    <div style={{ padding: 20 }}>
+                        <div style={{ fontSize: 32, marginBottom: 12 }}>❌</div>
+                        <div style={{ color: "#ff6b6b", marginBottom: 20 }}>{error}</div>
+                        <button
+                            onClick={() => {
+                                setStatus("idle");
+                                setError("");
+                            }}
+                            style={{
+                                padding: "10px 20px",
+                                borderRadius: 10,
+                                border: "1px solid rgba(255,255,255,0.2)",
+                                background: "rgba(255,255,255,0.05)",
+                                color: "#fff",
+                                cursor: "pointer",
+                            }}
+                        >
+                            Retry
+                        </button>
+                    </div>
+                )}
+
+                <button
+                    onClick={onClose}
+                    style={{
+                        marginTop: 14,
+                        padding: "10px 20px",
+                        borderRadius: 10,
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        background: "rgba(255,255,255,0.05)",
+                        color: "rgba(255,255,255,0.6)",
+                        fontSize: 13,
+                        cursor: "pointer",
+                        width: "100%",
+                    }}
+                >
+                    Cancel
                 </button>
-
-                <h2 className="lock-escrow-modal-title">🔒 Stage2: Lock 5 NFTs</h2>
-
-                {/* STEP 1: Matchmaking */}
-                {step === 1 && (
-                    <div className="lock-escrow-step">
-                        <div className="lock-escrow-section">
-                            <div className="lock-escrow-section-title">📋 Match Info</div>
-                            <div className="lock-escrow-info-grid">
-                                <div className="lock-escrow-info-item">
-                                    <div className="lock-escrow-info-label">Match ID</div>
-                                    <div className="lock-escrow-info-value">{matchId ? short(matchId) : "..."}</div>
-                                </div>
-                                <div className="lock-escrow-info-item">
-                                    <div className="lock-escrow-info-label">Your Side</div>
-                                    <div className="lock-escrow-info-value">{mySide || "?"}</div>
-                                </div>
-                                <div className="lock-escrow-info-item">
-                                    <div className="lock-escrow-info-label">Player A</div>
-                                    <div className="lock-escrow-info-value">{playerA ? short(playerA) : "(waiting)"}</div>
-                                </div>
-                                <div className="lock-escrow-info-item">
-                                    <div className="lock-escrow-info-label">Player B</div>
-                                    <div className="lock-escrow-info-value">{playerB ? short(playerB) : "(waiting)"}</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {!bothPlayersReady && (
-                            <div className="lock-escrow-warning">
-                                ⚠️ Нужно 2 игрока с подключённым NEAR кошельком.
-                                <br />
-                                Скопируй Match ID и отправь другу, пусть он нажмёт <b>Join</b>.
-                            </div>
-                        )}
-
-                        <div className="lock-escrow-section">
-                            <div className="lock-escrow-section-title">👥 Join Match</div>
-                            <div className="lock-escrow-join-row">
-                                <input
-                                    value={joinId}
-                                    onChange={(e) => setJoinId(e.target.value)}
-                                    placeholder="Paste Match ID to join"
-                                    className="lock-escrow-input"
-                                />
-                                <button
-                                    onClick={onJoin}
-                                    disabled={busy || !joinId.trim()}
-                                    className="lock-escrow-btn secondary"
-                                >
-                                    Join
-                                </button>
-                            </div>
-                        </div>
-
-                        {err && <div className="lock-escrow-error">{err}</div>}
-
-                        <div className="lock-escrow-actions">
-                            <button
-                                onClick={() => refreshMatch(matchId)}
-                                disabled={busy || !matchId}
-                                className="lock-escrow-btn secondary"
-                            >
-                                Refresh Match
-                            </button>
-                            {bothPlayersReady && (
-                                <button
-                                    onClick={() => setStep(2)}
-                                    disabled={busy}
-                                    className="lock-escrow-btn primary"
-                                >
-                                    Next: Pick 5 NFTs →
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {/* STEP 2: Pick NFTs */}
-                {step === 2 && (
-                    <div className="lock-escrow-step">
-                        {/* Selected NFTs (5 slots) */}
-                        <div className="lock-escrow-section">
-                            <div className="lock-escrow-section-title">
-                                🎴 Selected NFTs ({selectedNfts.length}/5)
-                            </div>
-
-                            <div className="lock-escrow-selected-grid">
-                                {Array.from({ length: 5 }, (_, i) => {
-                                    const nft = selectedNfts[i];
-                                    if (!nft) {
-                                        return (
-                                            <div key={i} className="lock-escrow-slot empty">
-                                                <div className="lock-escrow-slot-number">#{i + 1}</div>
-                                                <div className="lock-escrow-slot-placeholder">Empty</div>
-                                            </div>
-                                        );
-                                    }
-
-                                    const media = normalizeMediaUrl(nft?.metadata?.media);
-                                    const title = String(nft?.metadata?.title || nft?.tokenId || "");
-
-                                    return (
-                                        <div key={i} className="lock-escrow-slot filled">
-                                            <button
-                                                className="lock-escrow-slot-remove"
-                                                onClick={() => onRemoveNft(i)}
-                                                title="Remove"
-                                            >
-                                                ✕
-                                            </button>
-                                            <div className="lock-escrow-slot-number">#{i + 1}</div>
-                                            <div className="lock-escrow-slot-image">
-                                                {media ? (
-                                                    <img
-                                                        src={media}
-                                                        alt={title}
-                                                        draggable="false"
-                                                        onError={(e) => {
-                                                            try {
-                                                                e.currentTarget.style.display = "none";
-                                                            } catch { }
-                                                        }}
-                                                    />
-                                                ) : (
-                                                    <div className="lock-escrow-slot-no-image">No Image</div>
-                                                )}
-                                            </div>
-                                            <div className="lock-escrow-slot-title">{title}</div>
-                                            <div className="lock-escrow-slot-id">{nft.tokenId}</div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        {/* NFT Picker */}
-                        <div className="lock-escrow-section">
-                            <div className="lock-escrow-section-title">🔍 Pick NFTs from NEAR</div>
-
-                            <div className="lock-escrow-picker-controls">
-                                <input
-                                    value={nftContractId}
-                                    onChange={(e) => setNftContractId(e.target.value)}
-                                    placeholder="NFT Contract ID (e.g. coolcats.near)"
-                                    className="lock-escrow-input"
-                                />
-                                <button
-                                    onClick={() => onLoadNfts()}
-                                    disabled={nftBusy || !String(nftContractId || "").trim()}
-                                    className="lock-escrow-btn secondary"
-                                >
-                                    {nftBusy ? "Loading..." : "Load NFTs"}
-                                </button>
-                            </div>
-
-                            {savedContracts?.length > 0 && (
-                                <div className="lock-escrow-recent">
-                                    <div className="lock-escrow-recent-label">Recent collections:</div>
-                                    <div className="lock-escrow-recent-chips">
-                                        {savedContracts.map((cid) => (
-                                            <button
-                                                key={cid}
-                                                onClick={() => {
-                                                    setNftContractId(cid);
-                                                    onLoadNfts(cid);
-                                                }}
-                                                disabled={nftBusy}
-                                                className="lock-escrow-chip"
-                                            >
-                                                {short(cid)}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {nftErr && <div className="lock-escrow-error">{nftErr}</div>}
-
-                            {nfts.length > 0 && (
-                                <div className="lock-escrow-nft-grid">
-                                    {nfts.map((nft) => {
-                                        const key = `${nft.contractId}::${nft.tokenId}`;
-                                        const isSelected = selectedSet.has(key);
-                                        const media = normalizeMediaUrl(nft?.metadata?.media);
-                                        const title = String(nft?.metadata?.title || nft?.tokenId || "");
-
-                                        return (
-                                            <button
-                                                key={key}
-                                                onClick={() => onSelectNft(nft)}
-                                                disabled={busy}
-                                                className={`lock-escrow-nft-card ${isSelected ? "selected" : ""}`}
-                                            >
-                                                <div className="lock-escrow-nft-image">
-                                                    {media ? (
-                                                        <img
-                                                            src={media}
-                                                            alt={title}
-                                                            draggable="false"
-                                                            onError={(e) => {
-                                                                try {
-                                                                    e.currentTarget.style.display = "none";
-                                                                } catch { }
-                                                            }}
-                                                        />
-                                                    ) : (
-                                                        <div className="lock-escrow-nft-no-image">No Image</div>
-                                                    )}
-                                                </div>
-                                                {isSelected && (
-                                                    <div className="lock-escrow-nft-check">✓</div>
-                                                )}
-                                                <div className="lock-escrow-nft-title">{title}</div>
-                                                <div className="lock-escrow-nft-id">{nft.tokenId}</div>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            )}
-
-                            {!nfts.length && !nftBusy && (
-                                <div className="lock-escrow-hint">
-                                    Введи Contract ID коллекции и нажми <b>Load NFTs</b>
-                                </div>
-                            )}
-                        </div>
-
-                        {err && <div className="lock-escrow-error">{err}</div>}
-
-                        <div className="lock-escrow-actions">
-                            <button
-                                onClick={() => setStep(1)}
-                                disabled={busy}
-                                className="lock-escrow-btn secondary"
-                            >
-                                ← Back to Match
-                            </button>
-                            <button
-                                onClick={onLock}
-                                disabled={!canProceedToLock || busy}
-                                className="lock-escrow-btn primary"
-                            >
-                                Lock 5 NFTs & Start Game 🔒
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {/* STEP 3: Locking */}
-                {step === 3 && (
-                    <div className="lock-escrow-step">
-                        <div className="lock-escrow-loading">
-                            <div className="lock-escrow-loading-spinner" />
-                            <div className="lock-escrow-loading-text">
-                                Locking NFTs to escrow...
-                                <br />
-                                Please confirm transactions in your NEAR wallet.
-                            </div>
-                        </div>
-                        {err && <div className="lock-escrow-error">{err}</div>}
-                    </div>
-                )}
             </div>
         </div>
     );
