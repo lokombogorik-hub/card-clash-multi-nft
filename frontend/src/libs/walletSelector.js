@@ -24,7 +24,7 @@ async function getHere() {
     _promise = (async function () {
         console.log("[HOT] Initializing on", networkId);
 
-        var here = await HereWallet.connect({
+        var here = new HereWallet({
             networkId: networkId,
             nodeUrl: RPC_URL,
         });
