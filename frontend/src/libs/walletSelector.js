@@ -1,6 +1,6 @@
 // frontend/src/libs/walletSelector.js — FINAL FIX для всех ошибок
 
-import { HereWallet } from "@here-wallet/core";
+import HereWallet from "@here-wallet/core";
 
 export var networkId = "mainnet";
 export var RPC_URL = "https://rpc.mainnet.near.org";
