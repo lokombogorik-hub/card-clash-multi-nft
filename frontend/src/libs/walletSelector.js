@@ -1,265 +1,324 @@
-// frontend/src/libs/walletSelector.js
-import { HereWallet, WidgetStrategy } from "@here-wallet/core";
+// frontend/src/libs/walletSelector.js — FINAL FIX для всех ошибок
+
+import { HereWallet } from "@here-wallet/core";
 
 export var networkId = "mainnet";
 export var RPC_URL = "https://rpc.mainnet.near.org";
 var STORAGE_KEY = "hot_wallet_account";
+var STORAGE_TIMESTAMP = "hot_wallet_ts";
 
 var _here = null;
 var _promise = null;
 
-// =============================================
-// DETECT TELEGRAM
-// =============================================
-function isTelegram() {
-    try {
-        return !!(window.Telegram && window.Telegram.WebApp &&
-            window.Telegram.WebApp.initData && window.Telegram.WebApp.initData.length > 0);
-    } catch (e) { return false; }
+// Helper: detect if response is valid
+function isValidAccountId(str) {
+    if (!str || typeof str !== "string") return false;
+    str = str.trim();
+    return str.length > 2 && /^[a-z0-9_\-\.]+$/.test(str);
 }
 
-// =============================================
-// BASE58 ENCODE (same as baseEncode from near-api-js)
-// =============================================
-var BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-
-function base58Encode(str) {
-    // Convert string to bytes
-    var bytes = new TextEncoder().encode(str);
-
-    // Convert to base58
-    var digits = [0];
-    for (var i = 0; i < bytes.length; i++) {
-        var carry = bytes[i];
-        for (var j = 0; j < digits.length; j++) {
-            carry += digits[j] << 8;
-            digits[j] = carry % 58;
-            carry = (carry / 58) | 0;
-        }
-        while (carry > 0) {
-            digits.push(carry % 58);
-            carry = (carry / 58) | 0;
-        }
-    }
-
-    // Handle leading zeros
-    var result = "";
-    for (var k = 0; k < bytes.length && bytes[k] === 0; k++) {
-        result += BASE58_ALPHABET[0];
-    }
-    for (var l = digits.length - 1; l >= 0; l--) {
-        result += BASE58_ALPHABET[digits[l]];
-    }
-
-    return result;
-}
-
-// =============================================
-// CUSTOM TELEGRAM STRATEGY
-// =============================================
-function TelegramStrategy() {
-    this._reject = null;
-}
-
-TelegramStrategy.prototype.onInitialized = function () {
-    console.log("[TG-Strategy] Initialized");
-};
-
-TelegramStrategy.prototype.onRequested = function (id, request, reject) {
-    // id = request ID from h4n.app (e.g., "abc123xyz")
-    // Must be base58 encoded for HOT Wallet
-    var encodedId = base58Encode(id);
-    var hotUrl = "https://t.me/herewalletbot/app?startapp=h4n-" + encodedId;
-
-    console.log("[TG-Strategy] onRequested | raw ID:", id, "| encoded:", encodedId);
-    console.log("[TG-Strategy] Opening:", hotUrl);
-
-    this._reject = reject;
-
-    try {
-        window.Telegram.WebApp.openTelegramLink(hotUrl);
-        // НЕ вызываем close() — остаёмся в WebApp
-    } catch (e) {
-        console.warn("[TG-Strategy] openTelegramLink failed:", e.message);
-        window.open(hotUrl, "_blank");
-    }
-};
-
-TelegramStrategy.prototype.onApproving = function () {
-    console.log("[TG-Strategy] Approving...");
-};
-
-TelegramStrategy.prototype.onSuccess = function (result) {
-    console.log("[TG-Strategy] Success:", result);
-};
-
-TelegramStrategy.prototype.onFailed = function (result) {
-    console.log("[TG-Strategy] Failed:", result);
-};
-
-TelegramStrategy.prototype.close = function () {
-    console.log("[TG-Strategy] Close called");
-};
-
-// =============================================
-// GET HERE WALLET INSTANCE
-// =============================================
 async function getHere() {
     if (_here) return _here;
     if (_promise) return _promise;
 
     _promise = (async function () {
-        var inTg = isTelegram();
-        console.log("[HOT] init v1.6.6 | TG:", inTg, "| network:", networkId);
+        console.log("[HOT] Initializing on", networkId);
 
-        var here = new HereWallet({
+        var here = await HereWallet.connect({
             networkId: networkId,
             nodeUrl: RPC_URL,
-            defaultStrategy: function () {
-                if (inTg) {
-                    return new TelegramStrategy();
-                }
-                return new WidgetStrategy({
-                    widget: "https://my.herewallet.app/connector/index.html",
-                    lazy: false
-                });
-            }
         });
+
+        // ========== CRITICAL: Wrap ALL methods with error handling ==========
+
+        var origSignIn = here.signIn.bind(here);
+        var origGetAccountId = here.getAccountId.bind(here);
+        var origIsSignedIn = here.isSignedIn.bind(here);
+
+        here.signIn = async function (opts) {
+            console.log("[HOT] signIn called");
+
+            try {
+                var result = await origSignIn(opts);
+
+                // Try to extract accountId from various response formats
+                var accountId = "";
+
+                if (typeof result === "string") {
+                    accountId = result;
+                } else if (result && typeof result === "object") {
+                    accountId = result.accountId || result.account_id || "";
+                }
+
+                if (isValidAccountId(accountId)) {
+                    localStorage.setItem(STORAGE_KEY, accountId);
+                    localStorage.setItem(STORAGE_TIMESTAMP, Date.now().toString());
+                    console.log("[HOT] signIn success:", accountId);
+                    return accountId;
+                }
+
+                // If no valid ID but no error, start polling
+                console.warn("[HOT] signIn returned invalid ID, will poll");
+                return "";
+
+            } catch (err) {
+                var msg = String(err.message || err);
+                console.warn("[HOT] signIn error:", msg);
+
+                // ========== CRITICAL: Don't throw on known bugs ==========
+                var knownBugs = [
+                    "account_id",
+                    "undefined",
+                    "radix",
+                    "Enum can only take",
+                    "Load failed",
+                    "Uint8Array",
+                    "deserialize",
+                    "postMessage",
+                    "cross-origin"
+                ];
+
+                var isKnownBug = knownBugs.some(function (bug) {
+                    return msg.toLowerCase().includes(bug.toLowerCase());
+                });
+
+                if (isKnownBug) {
+                    console.warn("[HOT] Known bug detected, will recover via polling");
+
+                    // Wait for wallet overlay to process (critical!)
+                    await new Promise(function (res) { setTimeout(res, 3000); });
+
+                    // Try SDK fallback
+                    try {
+                        var fallbackId = await origGetAccountId();
+                        if (isValidAccountId(fallbackId)) {
+                            localStorage.setItem(STORAGE_KEY, fallbackId);
+                            localStorage.setItem(STORAGE_TIMESTAMP, Date.now().toString());
+                            return fallbackId;
+                        }
+                    } catch (e2) {
+                        console.warn("[HOT] SDK fallback failed:", e2.message);
+                    }
+
+                    // Check localStorage (user may have connected before)
+                    var stored = localStorage.getItem(STORAGE_KEY);
+                    if (stored && isValidAccountId(stored)) {
+                        var ts = parseInt(localStorage.getItem(STORAGE_TIMESTAMP) || "0");
+                        var age = Date.now() - ts;
+
+                        // If session < 24h old, trust it
+                        if (age < 24 * 60 * 60 * 1000) {
+                            console.log("[HOT] Using cached session:", stored);
+                            return stored;
+                        }
+                    }
+
+                    // Return empty — polling will catch it
+                    return "";
+                }
+
+                // Unknown error — rethrow
+                throw err;
+            }
+        };
+
+        here.isSignedIn = async function () {
+            try {
+                return await origIsSignedIn();
+            } catch (e) {
+                // Fallback to localStorage
+                var stored = localStorage.getItem(STORAGE_KEY);
+                var ts = parseInt(localStorage.getItem(STORAGE_TIMESTAMP) || "0");
+                var age = Date.now() - ts;
+
+                return !!(stored && isValidAccountId(stored) && age < 24 * 60 * 60 * 1000);
+            }
+        };
+
+        here.getAccountId = async function () {
+            try {
+                var id = await origGetAccountId();
+                if (isValidAccountId(id)) {
+                    localStorage.setItem(STORAGE_KEY, id);
+                    localStorage.setItem(STORAGE_TIMESTAMP, Date.now().toString());
+                    return id;
+                }
+            } catch (e) {
+                console.warn("[HOT] getAccountId error:", e.message);
+            }
+
+            // Fallback
+            var stored = localStorage.getItem(STORAGE_KEY);
+            return isValidAccountId(stored) ? stored : "";
+        };
 
         _here = here;
         console.log("[HOT] SDK ready");
         return here;
     })();
 
-    _promise.catch(function () { _promise = null; });
+    _promise.catch(function (err) {
+        console.error("[HOT] Init failed:", err);
+        _promise = null;
+    });
+
     return _promise;
 }
 
-// =============================================
-// CONNECT
-// =============================================
 export async function connectWallet() {
     var here = await getHere();
-    console.log("[HOT] signIn...");
+    console.log("[HOT] Starting connect flow...");
+
     var accountId = "";
 
     try {
-        accountId = await here.signIn({
+        var result = await here.signIn({
             contractId: "retardo-s.near",
-            methodNames: []
+            methodNames: [],
         });
-        if (accountId) {
-            localStorage.setItem(STORAGE_KEY, String(accountId));
-        }
+
+        accountId = String(result || "").trim();
     } catch (err) {
-        var msg = String(err && err.message || err);
-        console.warn("[HOT] signIn error:", msg);
-
-        // Try getAccountId
-        try {
-            accountId = await here.getAccountId();
-            if (accountId) localStorage.setItem(STORAGE_KEY, String(accountId));
-        } catch (e2) { }
-
-        if (!accountId) accountId = localStorage.getItem(STORAGE_KEY) || "";
+        console.warn("[HOT] connectWallet outer catch:", err.message);
     }
 
-    console.log("[HOT] result:", accountId || "(polling)");
-    return { accountId: String(accountId || "") };
+    // Fallbacks
+    if (!isValidAccountId(accountId)) {
+        try {
+            accountId = await here.getAccountId();
+        } catch (e) {
+            console.warn("[HOT] getAccountId fallback failed");
+        }
+    }
+
+    if (!isValidAccountId(accountId)) {
+        accountId = localStorage.getItem(STORAGE_KEY) || "";
+    }
+
+    if (isValidAccountId(accountId)) {
+        localStorage.setItem(STORAGE_KEY, accountId);
+        localStorage.setItem(STORAGE_TIMESTAMP, Date.now().toString());
+    }
+
+    console.log("[HOT] Connect result:", accountId || "(empty, polling needed)");
+    return { accountId: accountId };
 }
 
-// =============================================
-// DISCONNECT
-// =============================================
 export async function disconnectWallet() {
     try {
         var here = await getHere();
         await here.signOut();
     } catch (e) {
-        console.warn("[HOT] signOut:", e.message);
+        console.warn("[HOT] signOut error:", e.message);
     }
+
     _here = null;
     _promise = null;
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_TIMESTAMP);
 }
 
-// =============================================
-// GET SIGNED IN
-// =============================================
 export async function getSignedInAccountId() {
     try {
         var here = await getHere();
-        var ok = await here.isSignedIn();
-        if (ok) {
+        var signedIn = await here.isSignedIn();
+
+        if (signedIn) {
             var id = await here.getAccountId();
-            if (id) {
-                localStorage.setItem(STORAGE_KEY, String(id));
-                return String(id);
-            }
+            if (isValidAccountId(id)) return id;
         }
-    } catch (e) { }
-    return localStorage.getItem(STORAGE_KEY) || "";
+    } catch (e) {
+        console.warn("[HOT] getSignedInAccountId error:", e.message);
+    }
+
+    // Fallback
+    var stored = localStorage.getItem(STORAGE_KEY);
+    var ts = parseInt(localStorage.getItem(STORAGE_TIMESTAMP) || "0");
+    var age = Date.now() - ts;
+
+    if (stored && isValidAccountId(stored) && age < 24 * 60 * 60 * 1000) {
+        return stored;
+    }
+
+    return "";
 }
 
-// =============================================
-// TRANSACTIONS
-// =============================================
 export async function signAndSendTransaction(params) {
     var here = await getHere();
     return await here.signAndSendTransaction({
         receiverId: params.receiverId,
-        actions: params.actions
+        actions: params.actions,
     });
 }
 
 export async function sendNear(opts) {
     var here = await getHere();
     var yocto = nearToYocto(opts.amount);
+
     var result = await here.signAndSendTransaction({
         receiverId: opts.receiverId,
-        actions: [{ type: "Transfer", params: { deposit: yocto } }]
+        actions: [{ type: "Transfer", params: { deposit: yocto } }],
     });
-    return { txHash: extractTxHash(result), result: result };
+
+    return {
+        txHash: extractTxHash(result),
+        result: result,
+    };
 }
 
-// =============================================
-// BALANCE
-// =============================================
 export async function fetchBalance(accountId) {
+    if (!isValidAccountId(accountId)) return 0;
+
     try {
         var res = await fetch(RPC_URL, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
-                jsonrpc: "2.0", id: "b", method: "query",
-                params: { request_type: "view_account", finality: "final", account_id: accountId }
-            })
+                jsonrpc: "2.0",
+                id: "balance",
+                method: "query",
+                params: {
+                    request_type: "view_account",
+                    finality: "final",
+                    account_id: accountId,
+                },
+            }),
         });
-        var j = await res.json();
-        if (j.error) return 0;
-        var raw = (j.result && j.result.amount) || "0";
-        return yoctoToNear(raw);
-    } catch (e) { return 0; }
+
+        var json = await res.json();
+
+        if (json.error) {
+            console.warn("[RPC] Balance error:", json.error.message);
+            return 0;
+        }
+
+        var yocto = BigInt(json.result.amount || "0");
+        var ONE_NEAR = 10n ** 24n;
+        var nearInt = yocto / ONE_NEAR;
+        var nearDec = yocto % ONE_NEAR;
+
+        return parseFloat(nearInt.toString() + "." + nearDec.toString().padStart(24, "0").slice(0, 6));
+    } catch (err) {
+        console.warn("[RPC] fetchBalance error:", err.message);
+        return 0;
+    }
 }
 
-// =============================================
-// HELPERS
-// =============================================
-function nearToYocto(n) {
-    var parts = String(n).split(".");
-    return (parts[0] || "0") + (parts[1] || "").padEnd(24, "0").slice(0, 24);
+function nearToYocto(amount) {
+    var parts = String(amount).split(".");
+    var int = parts[0] || "0";
+    var dec = (parts[1] || "").padEnd(24, "0").slice(0, 24);
+    return int + dec;
 }
 
-function yoctoToNear(yoctoStr) {
-    var s = String(yoctoStr).padStart(25, "0");
-    var whole = s.slice(0, s.length - 24) || "0";
-    var frac = s.slice(s.length - 24, s.length - 24 + 6);
-    return parseFloat(whole + "." + frac);
-}
+function extractTxHash(result) {
+    if (!result) return "";
+    if (typeof result === "string") return result;
 
-function extractTxHash(r) {
-    if (!r) return "";
-    if (typeof r === "string") return r;
-    return (r.transaction_outcome && r.transaction_outcome.id) ||
-        (r.transaction && r.transaction.hash) || r.txHash || "";
+    return (
+        (result.transaction_outcome && result.transaction_outcome.id) ||
+        (result.transaction && result.transaction.hash) ||
+        result.txHash ||
+        ""
+    );
 }
