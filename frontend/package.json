@@ -10,7 +10,7 @@
     "postinstall": "node scripts/patch-here-wallet.cjs"
   },
   "dependencies": {
-    "@here-wallet/core": "2.0.2",
+    "@here-wallet/core": "3.4.0",
     "buffer": "^6.0.3",
     "canvas-confetti": "^1.9.4",
     "crypto-browserify": "^3.12.1",
