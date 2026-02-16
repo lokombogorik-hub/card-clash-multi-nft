@@ -1,7 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
-import path from "path";
 
 export default defineConfig({
   plugins: [
@@ -37,8 +36,6 @@ export default defineConfig({
       process: "process/browser",
       path: "path-browserify",
       "node:path": "path-browserify",
-      "node:fs": path.resolve(__dirname, "./src/polyfills/empty.js"),
-      "node:fs/promises": path.resolve(__dirname, "./src/polyfills/empty.js"),
       "node:url": "url",
       "node:buffer": "buffer",
       "node:stream": "stream-browserify",
@@ -49,6 +46,7 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
+    exclude: ["fsevents"],
     include: [
       "buffer",
       "stream-browserify",
@@ -57,6 +55,7 @@ export default defineConfig({
       "assert",
       "process",
       "path-browserify",
+      "url",
       "readable-stream",
       "string_decoder",
       "safe-buffer",
@@ -69,10 +68,19 @@ export default defineConfig({
     },
   },
   build: {
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
     rollupOptions: {
       external: ["fsevents"],
       onwarn(warning, warn) {
-        if (warning.code === "UNRESOLVED_IMPORT" && warning.message.includes("fsevents")) {
+        // Ignore node: module warnings
+        if (
+          warning.code === "UNRESOLVED_IMPORT" &&
+          (warning.message.includes("fsevents") ||
+            warning.message.includes("node:fs") ||
+            warning.message.includes("node:"))
+        ) {
           return;
         }
         warn(warning);
