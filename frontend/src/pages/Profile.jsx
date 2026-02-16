@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "../api";
-import { useWalletStore } from "../store/useWalletStore";
+import { useWalletConnect } from "../context/WalletConnectContext";
 
 function readTelegramUser() {
     try {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 import { apiFetch } from "./api.js";
-import { useWalletStore } from "./store/useWalletStore";
+import { useWalletConnect } from "./context/WalletConnectContext";
 
 /* =========================
    Triple Triad (3x3) + Same/Plus/Combo + best-of-3 (to 3 wins)

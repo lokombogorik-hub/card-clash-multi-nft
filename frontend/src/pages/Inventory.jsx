@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "../api";
-import { useWalletStore } from "../store/useWalletStore"; // Правильный импорт
+import { useWalletConnect } from "../context/WalletConnectContext"; // Правильный импорт
 
 
 function nftKey(n) {

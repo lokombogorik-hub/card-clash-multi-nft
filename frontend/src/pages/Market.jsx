@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useWalletStore } from "../store/useWalletStore";
+import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
 
 const CASES = [
