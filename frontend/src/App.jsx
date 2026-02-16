@@ -8,6 +8,7 @@ import Market from "./pages/Market";
 import WalletConnector from "./components/MultiChainWallet/WalletConnector";
 import LockEscrowModal from "./components/Stage2/LockEscrowModal";
 import Matchmaking from "./components/Stage2/Matchmaking";
+import WalletConnectProvider from "./context/WalletConnectContext";
 
 function useIsLandscape() {
     const get = () =>
@@ -53,7 +54,7 @@ function getStoredToken() {
     }
 }
 
-export default function App() {
+function AppContent() {
     const [screen, setScreen] = useState("home");
     const isLandscape = useIsLandscape();
 
@@ -259,37 +260,10 @@ export default function App() {
     return (
         <div className="shell">
             <StormBg />
-            {showWalletConnector ? <WalletConnector /> : null}
-            {showWalletConnector ? <WalletConnector /> : null}
 
-            {/* DEBUG — удалить после фикса */}
-            <div style={{
-                position: "fixed",
-                bottom: 10,
-                left: 10,
-                zIndex: 999999,
-                padding: "8px 12px",
-                borderRadius: 8,
-                background: "red",
-                color: "white",
-                fontSize: 11,
-                maxWidth: "90vw",
-                wordBreak: "break-all",
-            }}>
-                {(() => {
-                    try {
-                        var t = window.Telegram;
-                        var w = t && t.WebApp;
-                        return "TG:" + !!t
-                            + " WA:" + !!w
-                            + " ID:" + !!(w && w.initData && w.initData.length > 0)
-                            + " P:" + (w ? w.platform : "none")
-                            + " PX:" + !!window.TelegramWebviewProxy;
-                    } catch (e) {
-                        return "ERR:" + e.message;
-                    }
-                })()}
-            </div>
+            {/* ✅ КРИТИЧНО: показываем ТОЛЬКО на home */}
+            {showWalletConnector && <WalletConnector />}
+
             <LockEscrowModal
                 open={stage2LockOpen}
                 onClose={() => setStage2LockOpen(false)}
@@ -402,6 +376,15 @@ export default function App() {
                 </div>
             )}
         </div>
+    );
+}
+
+// ✅ ГЛАВНЫЙ EXPORT — обёрнут в WalletConnectProvider
+export default function App() {
+    return (
+        <WalletConnectProvider>
+            <AppContent />
+        </WalletConnectProvider>
     );
 }
 
