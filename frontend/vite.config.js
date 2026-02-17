@@ -7,4 +7,9 @@ export default defineConfig({
     global: "globalThis",
     "process.env": {},
   },
+  build: {
+    commonjsOptions: {
+      ignoreDynamicRequires: true,
+    },
+  },
 });
