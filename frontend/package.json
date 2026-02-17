@@ -17,6 +17,7 @@
     "@near-wallet-selector/nightly": "^8.9.13",
     "canvas-confetti": "^1.9.3",
     "near-api-js": "^4.0.4",
+    "process": "^0.11.10",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "zustand": "^4.5.0"
