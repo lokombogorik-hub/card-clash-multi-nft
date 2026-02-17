@@ -26,8 +26,14 @@ export default defineConfig({
     },
   },
   build: {
+    commonjsOptions: {
+      transformMixedEsModules: true,
+    },
     rollupOptions: {
       external: ["fsevents"],
+      output: {
+        manualChunks: undefined,
+      },
     },
   },
 });
