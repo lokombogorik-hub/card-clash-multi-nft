@@ -7,9 +7,15 @@ export default defineConfig({
     global: "globalThis",
     "process.env": {},
   },
+  optimizeDeps: {
+    exclude: ["fsevents"],
+  },
   build: {
     commonjsOptions: {
       ignoreDynamicRequires: true,
+    },
+    rollupOptions: {
+      external: ["fsevents"],
     },
   },
 });
