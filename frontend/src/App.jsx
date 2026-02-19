@@ -70,34 +70,35 @@ function AppContent() {
     const [logoOk, setLogoOk] = useState(true);
     const bottomStackRef = useRef(null);
 
-    const debugEnabled = useMemo(() => {
-        const fromSearch = window.location.search || "";
-        const fromHash = window.location.hash || "";
-        const combined =
-            (fromSearch.startsWith("?") ? fromSearch.slice(1) : fromSearch) +
-            "&" +
-            (fromHash.startsWith("#") ? fromHash.slice(1) : fromHash);
-
-        const p = new URLSearchParams(combined);
-        const v = p.get("debug");
-        if (v == null) return false;
-
-        const vv = String(v).toLowerCase();
-        return vv !== "0" && vv !== "false";
-    }, []);
-
     const apiBase = import.meta.env.VITE_API_BASE_URL || "";
     const escrowContractId = (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim();
     const stage2Enabled = Boolean(escrowContractId);
 
     const [authState, setAuthState] = useState({
-        status: "idle",
+        status: "idle", // idle|loading|ok|err
         error: "",
     });
 
+    // ✅ Restore token for browser/dev (no Telegram initData)
+    useEffect(() => {
+        const t = getStoredToken();
+        if (t) {
+            setToken(t);
+            if (authState.status === "idle") {
+                setAuthState({ status: "ok", error: "" });
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Telegram bootstrap + auth (only when Telegram is present)
     useEffect(() => {
         const tg = window.Telegram?.WebApp;
-        if (!tg) return;
+        if (!tg) {
+            // Browser/dev mode
+            setMe(null);
+            return;
+        }
 
         tg.ready();
         tg.expand();
@@ -118,6 +119,13 @@ function AppContent() {
 
                 const initData = tg.initData || "";
                 if (!initData) {
+                    // fallback to stored token (if any)
+                    const stored = getStoredToken();
+                    if (stored) {
+                        setToken(stored);
+                        setAuthState({ status: "ok", error: "" });
+                        return;
+                    }
                     setAuthState({ status: "err", error: "tg.initData is empty" });
                     return;
                 }
@@ -126,6 +134,8 @@ function AppContent() {
                     method: "POST",
                     body: JSON.stringify({ initData }),
                 });
+
+                console.log("[Auth] response:", r);
 
                 const accessToken = r?.accessToken || r?.access_token || r?.token || null;
                 setToken(accessToken);
@@ -203,8 +213,12 @@ function AppContent() {
     const onPlay = async () => {
         requestFullscreen();
 
-        if (authState.status !== "ok") {
-            setScreen("home");
+        const t = token || getStoredToken();
+        console.log("[Play] authState:", authState.status, "token:", !!t);
+
+        // If no token — go to inventory (user must auth first in TG, or have token saved)
+        if (!t) {
+            setScreen("inventory");
             return;
         }
 
@@ -261,8 +275,8 @@ function AppContent() {
         <div className="shell">
             <StormBg />
 
-            {/* ✅ КРИТИЧНО: показываем ТОЛЬКО на home */}
-            {showWalletConnector && <WalletConnector />}
+            {/* ✅ ONLY ON HOME */}
+            {showWalletConnector ? <WalletConnector /> : null}
 
             <LockEscrowModal
                 open={stage2LockOpen}
@@ -332,7 +346,9 @@ function AppContent() {
                 )}
 
                 {screen === "market" && <Market />}
-                {screen === "inventory" && <Inventory token={token || getStoredToken()} onDeckReady={() => setScreen("home")} />}
+                {screen === "inventory" && (
+                    <Inventory token={token || getStoredToken()} onDeckReady={() => setScreen("home")} />
+                )}
                 {screen === "profile" && <Profile token={token || getStoredToken()} />}
             </div>
 
@@ -348,38 +364,32 @@ function AppContent() {
                 <BottomNav active={screen} onChange={setScreen} />
             </div>
 
-            {debugEnabled && (
+            {/* optional small debug */}
+            {authState.status !== "ok" ? (
                 <div
                     style={{
                         position: "fixed",
-                        left: 10,
+                        right: 10,
                         bottom: 10,
                         zIndex: 999999,
-                        background: "rgba(0,0,0,0.85)",
+                        background: "rgba(0,0,0,0.7)",
                         color: "#fff",
-                        padding: 10,
+                        padding: 8,
                         borderRadius: 8,
-                        width: 460,
-                        maxWidth: "95vw",
-                        fontSize: 12,
+                        fontSize: 11,
+                        maxWidth: "70vw",
+                        wordBreak: "break-word",
                     }}
                 >
-                    <div style={{ fontWeight: 700, marginBottom: 6 }}>DEBUG</div>
-                    <div>VITE_API_BASE_URL: {apiBase || "(empty!)"}</div>
-                    <div>stage2Enabled: {String(stage2Enabled)}</div>
-                    <div>escrowContractId: {escrowContractId || "(empty)"}</div>
-                    <div>
-                        token length: {(token || getStoredToken()) ? String((token || getStoredToken()).length) : 0} | auth:{" "}
-                        {authState.status}
-                    </div>
-                    {authState.error ? <div style={{ color: "#ffb3b3" }}>auth error: {authState.error}</div> : null}
+                    auth: {authState.status} {authState.error ? `| ${authState.error}` : ""} <br />
+                    api: {apiBase || "(empty)"} <br />
+                    token: {(token || getStoredToken()) ? "yes" : "no"}
                 </div>
-            )}
+            ) : null}
         </div>
     );
 }
 
-// ✅ ГЛАВНЫЙ EXPORT — обёрнут в WalletConnectProvider
 export default function App() {
     return (
         <WalletConnectProvider>

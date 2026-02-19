@@ -11,17 +11,17 @@
 <body>
     <div id="root"></div>
 
-    <!-- IMPORTANT: must run BEFORE Vite module graph executes -->
     <script>
         (function () {
-            if (typeof window.process === "undefined") window.process = { env: {} };
-            if (typeof globalThis.process === "undefined") globalThis.process = window.process;
-
-            window.process.env = window.process.env || {};
-            window.process.browser = true;
-            window.process.version = "v18.0.0";
-            window.process.platform = "browser";
-            window.process.nextTick = window.process.nextTick || function (cb) { Promise.resolve().then(cb); };
+            if (typeof window.process === "undefined") {
+                window.process = { env: {}, browser: true, version: "v18.0.0" };
+            }
+            if (typeof globalThis.process === "undefined") {
+                globalThis.process = window.process;
+            }
+            if (typeof window.global === "undefined") {
+                window.global = globalThis;
+            }
         })();
     </script>
 

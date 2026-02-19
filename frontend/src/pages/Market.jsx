@@ -55,8 +55,8 @@ export default function Market() {
         accountId,
         sendNear,
         signAndSendTransaction,
-        getUserNFTs
-    } = useWalletStore();
+        getUserNFTs,
+    } = useWalletConnect();
 
     const [buying, setBuying] = useState(null);
     const [opening, setOpening] = useState(false);

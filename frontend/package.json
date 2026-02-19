@@ -5,29 +5,30 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build --force",
-    "preview": "vite preview"
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4173"
   },
   "dependencies": {
-    "@near-wallet-selector/core": "^8.9.13",
-    "@near-wallet-selector/hot-wallet": "^8.9.13",
-    "@near-wallet-selector/meteor-wallet": "^8.9.13",
-    "@near-wallet-selector/modal-ui": "^8.9.13",
-    "@near-wallet-selector/my-near-wallet": "^8.9.13",
-    "@near-wallet-selector/nightly": "^8.9.13",
+    "@near-wallet-selector/core": "^8.10.2",
+    "@near-wallet-selector/hot-wallet": "^8.10.2",
+    "@near-wallet-selector/modal-ui": "^8.10.2",
     "canvas-confetti": "^1.9.3",
+    "buffer": "^6.0.3",
     "crypto-browserify": "^3.12.1",
     "near-api-js": "^4.0.4",
-    "path-browserify": "^1.0.1",
     "process": "^0.11.10",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "stream-browserify": "^3.0.0",
-    "zustand": "^4.5.0"
+    "stream-browserify": "^3.0.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^3.1.0",
+    "@vitejs/plugin-react": "^4.2.1",
     "rollup": "^4.57.1",
-    "vite": "^4.5.3"
+    "vite": "^5.2.0",
+    "vite-plugin-node-polyfills": "^0.25.0"
+  },
+  "optionalDependencies": {
+    "fsevents": "^2.3.3",
+    "fsevents-dummy": "npm:empty-module@^0.0.2"
   }
 }

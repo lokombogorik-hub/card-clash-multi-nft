@@ -315,7 +315,48 @@ function getFallbackEnemyDeck() {
 export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const revealTimerRef = useRef(null);
 
-    const { connected: nearConnected, accountId: nearAccountId, escrowClaim } = useWalletStore();
+    const {
+        connected: nearConnected,
+        accountId: nearAccountId,
+        signAndSendTransaction,
+    } = useWalletConnect();
+
+    // escrowClaim built on top of signAndSendTransaction
+    const escrowClaim = async ({ matchId: mId, winnerAccountId, loserNftContractId, loserTokenId }) => {
+        const escrowContractId = (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim();
+        if (!escrowContractId) throw new Error("Escrow contract not configured");
+
+        const result = await signAndSendTransaction({
+            receiverId: escrowContractId,
+            actions: [
+                {
+                    type: "FunctionCall",
+                    params: {
+                        methodName: "claim",
+                        args: {
+                            match_id: mId,
+                            winner_account_id: winnerAccountId,
+                            nft_contract_id: loserNftContractId,
+                            token_id: loserTokenId,
+                        },
+                        gas: "100000000000000",
+                        deposit: "0",
+                    },
+                },
+            ],
+        });
+
+        const txHash =
+            (result && typeof result === "object"
+                ? result.transaction_outcome?.id ||
+                result.transaction?.hash ||
+                result.txHash
+                : typeof result === "string"
+                    ? result
+                    : "") || "";
+
+        return { txHash };
+    };
 
     const [stage2Busy, setStage2Busy] = useState(false);
     const [stage2Err, setStage2Err] = useState("");

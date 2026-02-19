@@ -1,56 +1,21 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import { useEffect, useState } from "react";
 
-export default defineConfig({
-    plugins: [
-        react(),
-        nodePolyfills({
-            include: [
-                "buffer",
-                "stream",
-                "crypto",
-                "util",
-                "assert",
-                "process",
-                "readable-stream",
-                "string_decoder",
-                "safe-buffer",
-                "process-nextick-args",
-            ],
-            globals: {
-                Buffer: true,
-                global: true,
-                process: true,
-            },
-        }),
-    ],
-    resolve: {
-        alias: {
-            buffer: "buffer",
-            stream: "stream-browserify",
-            crypto: "crypto-browserify",
-            util: "util",
-            assert: "assert",
-            process: "process/browser",
-        },
-    },
-    optimizeDeps: {
-        include: [
-            "buffer",
-            "stream-browserify",
-            "crypto-browserify",
-            "util",
-            "assert",
-            "process",
-            "readable-stream",
-            "string_decoder",
-            "safe-buffer",
-            "process-nextick-args",
-        ],
-        esbuildOptions: {
-            define: {
-                global: "globalThis",
-            },
-        },
-    },
-});
+export default function useTelegram() {
+    const [isTelegram, setIsTelegram] = useState(false);
+    const [tgWebApp, setTgWebApp] = useState(null);
+
+    useEffect(() => {
+        let isReal = false;
+        if (window.Telegram && window.Telegram.WebApp) {
+            const tg = window.Telegram.WebApp;
+            isReal =
+                !!tg.initDataUnsafe &&
+                !!tg.initDataUnsafe.user &&
+                typeof tg.initDataUnsafe.user.id !== "undefined";
+            setTgWebApp(tg);
+        }
+        setIsTelegram(isReal);
+    }, []);
+
+    return { isTelegram, tgWebApp };
+}
