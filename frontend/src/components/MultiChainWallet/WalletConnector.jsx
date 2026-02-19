@@ -1,267 +1,122 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
-import useTelegram from "../hooks/useTelegram";
-import { initSelector, fetchBalance } from "../libs/walletSelector";
+import React, { useState } from "react";
+import { useWalletConnect } from "../../context/WalletConnectContext";
+import WalletPicker from "./WalletPicker";
 
-const WalletContext = createContext({
-    selector: null,
-    accountId: null,
-    balance: 0,
-    isLoading: true,
-    hasError: false,
-    connected: false,
-    connect: async () => { },
-    disconnect: async () => { },
-    refreshBalance: async () => { },
-    sendNear: async () => { },
-    signAndSendTransaction: async () => { },
-    getUserNFTs: () => [],
-});
+export default function WalletConnector() {
+    const { connected, accountId, balance, isLoading, connect, disconnect } =
+        useWalletConnect();
+    const [pickerOpen, setPickerOpen] = useState(false);
 
-export function WalletConnectProvider({ children }) {
-    const { tgWebApp } = useTelegram();
-    const [selector, setSelector] = useState(null);
-    const [accountId, setAccountId] = useState(null);
-    const [balance, setBalance] = useState(0);
-    const [isLoading, setIsLoading] = useState(true);
-    const [hasError, setHasError] = useState(false);
+    if (isLoading) {
+        return (
+            <div
+                style={{
+                    position: "fixed",
+                    top: 12,
+                    right: 12,
+                    zIndex: 9999,
+                    padding: "8px 14px",
+                    borderRadius: 12,
+                    background: "rgba(0,0,0,0.6)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    color: "rgba(255,255,255,0.6)",
+                    fontSize: 12,
+                }}
+            >
+                Loading wallet...
+            </div>
+        );
+    }
 
-    const unsubscribeRef = useRef(null);
-
-    // Link NEAR account to backend
-    const linkToBackend = async (nearAccountId) => {
-        if (!nearAccountId) return;
-        const token =
-            localStorage.getItem("token") ||
-            localStorage.getItem("accessToken") ||
-            localStorage.getItem("access_token") ||
-            "";
-        if (!token) return;
-        const apiBase = (import.meta.env.VITE_API_BASE_URL || "").trim();
-        if (!apiBase) return;
-        try {
-            await fetch(apiBase + "/api/near/link", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: "Bearer " + token,
-                },
-                body: JSON.stringify({ accountId: nearAccountId }),
-            });
-        } catch (e) {
-            console.warn("[wallet] linkToBackend error:", e);
-        }
-    };
-
-    // Update balance
-    const refreshBalanceFor = async (id) => {
-        if (!id) return;
-        try {
-            const bal = await fetchBalance(id);
-            setBalance(bal);
-        } catch {
-            // ignore
-        }
-    };
-
-    // Init wallet selector
-    useEffect(() => {
-        let cancelled = false;
-
-        async function bootstrap() {
-            setIsLoading(true);
-            setHasError(false);
-
-            try {
-                const sel = await initSelector({
-                    miniApp: !!tgWebApp,
-                    telegramInitData: tgWebApp?.initData || "",
-                });
-                if (cancelled) return;
-
-                setSelector(sel);
-
-                // Hydrate active account from store
-                try {
-                    const state = sel.store.getState();
-                    const active = state.accounts?.find((a) => a.active);
-                    const id = active?.accountId || null;
-                    setAccountId(id);
-                    if (id) {
-                        refreshBalanceFor(id);
-                        linkToBackend(id);
-                    }
-                } catch (e) {
-                    console.warn("[wallet] store hydrate error:", e);
-                    setAccountId(null);
-                }
-
-                // Subscribe to store changes
-                try {
-                    unsubscribeRef.current?.();
-                } catch { }
-
-                unsubscribeRef.current = sel.store.observable.subscribe((nextState) => {
-                    const active = nextState.accounts?.find((a) => a.active);
-                    const id = active?.accountId || null;
-                    setAccountId(id);
-                    if (id) {
-                        refreshBalanceFor(id);
-                        linkToBackend(id);
-                    } else {
-                        setBalance(0);
-                    }
-                });
-
-                setHasError(false);
-            } catch (e) {
-                console.warn("[wallet] init error:", e);
-                if (!cancelled) {
-                    setHasError(true);
-                    setSelector(null);
-                    setAccountId(null);
-                }
-            } finally {
-                if (!cancelled) setIsLoading(false);
-            }
-        }
-
-        bootstrap();
-
-        return () => {
-            cancelled = true;
-            try {
-                unsubscribeRef.current?.();
-            } catch { }
-            unsubscribeRef.current = null;
-        };
-    }, [tgWebApp]);
-
-    // Connect
-    const connect = async () => {
-        if (!selector) throw new Error("Wallet selector not initialized");
-        try {
-            const w = await selector.wallet("hot-wallet");
-            await w.signIn({
-                contractId: "retardo-s.near",
-                methodNames: [],
-            });
-            // subscription will update accountId automatically
-        } catch (e) {
-            console.error("[wallet] connect error:", e);
-            throw e;
-        }
-    };
-
-    // Disconnect
-    const disconnect = async () => {
-        if (!selector) return;
-        try {
-            const state = selector.store.getState();
-            const activeWalletId = state.selectedWalletId;
-            if (!activeWalletId) return;
-            const w = await selector.wallet(activeWalletId);
-            await w.signOut();
-        } catch (e) {
-            console.error("[wallet] disconnect error:", e);
-        }
-    };
-
-    // Send NEAR
-    const sendNear = async ({ receiverId, amount }) => {
-        if (!selector || !accountId) throw new Error("Wallet not connected");
-        const w = await selector.wallet("hot-wallet");
-
-        // Convert NEAR to yoctoNEAR
-        const parts = String(amount).split(".");
-        const yocto =
-            (parts[0] || "0") +
-            (parts[1] || "").padEnd(24, "0").slice(0, 24);
-
-        const result = await w.signAndSendTransaction({
-            receiverId,
-            actions: [
-                {
-                    type: "FunctionCall",
-                    params: {
-                        methodName: "transfer",
-                        args: {},
-                        gas: "30000000000000",
-                        deposit: yocto,
-                    },
-                },
-            ],
-        });
-
-        // Refresh balance after transfer
-        setTimeout(() => refreshBalanceFor(accountId), 2000);
-
-        // Extract txHash
-        const txHash =
-            (result && typeof result === "object"
-                ? result.transaction_outcome?.id ||
-                result.transaction?.hash ||
-                result.txHash
-                : typeof result === "string"
-                    ? result
-                    : "") || "";
-
-        return { txHash, result };
-    };
-
-    // Sign and send arbitrary transaction
-    const signAndSendTransaction = async (params) => {
-        if (!selector || !accountId) throw new Error("Wallet not connected");
-        const w = await selector.wallet("hot-wallet");
-        return await w.signAndSendTransaction({
-            receiverId: params.receiverId,
-            actions: params.actions,
-        });
-    };
-
-    // Refresh balance
-    const refreshBalance = async () => {
-        if (accountId) await refreshBalanceFor(accountId);
-    };
-
-    // Expose connect on window for legacy compatibility
-    useEffect(() => {
-        window.showWalletSelector = connect;
-        window.disconnectWallet = disconnect;
-        return () => {
-            try {
-                delete window.showWalletSelector;
-                delete window.disconnectWallet;
-            } catch {
-                window.showWalletSelector = undefined;
-                window.disconnectWallet = undefined;
-            }
-        };
-    }, [selector]);
+    if (connected && accountId) {
+        return (
+            <div
+                style={{
+                    position: "fixed",
+                    top: 12,
+                    right: 12,
+                    zIndex: 9999,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "8px 14px",
+                    borderRadius: 14,
+                    background: "rgba(0,0,0,0.65)",
+                    border: "1px solid rgba(120,200,255,0.25)",
+                    backdropFilter: "blur(10px)",
+                    WebkitBackdropFilter: "blur(10px)",
+                }}
+            >
+                <div style={{ fontSize: 12, color: "#78c8ff", fontWeight: 700 }}>
+                    {accountId.length > 20
+                        ? accountId.slice(0, 10) + "..." + accountId.slice(-6)
+                        : accountId}
+                </div>
+                <div
+                    style={{
+                        fontSize: 11,
+                        color: "rgba(255,255,255,0.7)",
+                        fontWeight: 600,
+                    }}
+                >
+                    {Number(balance).toFixed(2)} Ⓝ
+                </div>
+                <button
+                    onClick={disconnect}
+                    style={{
+                        padding: "4px 10px",
+                        borderRadius: 8,
+                        border: "1px solid rgba(255,80,80,0.3)",
+                        background: "rgba(255,80,80,0.15)",
+                        color: "#ff6b6b",
+                        fontSize: 11,
+                        cursor: "pointer",
+                    }}
+                >
+                    ✕
+                </button>
+            </div>
+        );
+    }
 
     return (
-        <WalletContext.Provider
-            value={{
-                selector,
-                accountId,
-                balance,
-                isLoading,
-                hasError,
-                connected: !!accountId,
-                connect,
-                disconnect,
-                refreshBalance,
-                sendNear,
-                signAndSendTransaction,
-                getUserNFTs: () => [],
-            }}
-        >
-            {children}
-        </WalletContext.Provider>
+        <>
+            <button
+                onClick={() => setPickerOpen(true)}
+                style={{
+                    position: "fixed",
+                    top: 12,
+                    right: 12,
+                    zIndex: 9999,
+                    padding: "10px 18px",
+                    borderRadius: 14,
+                    border: "1px solid rgba(255,140,0,0.4)",
+                    background:
+                        "linear-gradient(135deg, rgba(255,140,0,0.25), rgba(255,80,0,0.15))",
+                    color: "#fff",
+                    fontSize: 13,
+                    fontWeight: 900,
+                    cursor: "pointer",
+                    backdropFilter: "blur(10px)",
+                    WebkitBackdropFilter: "blur(10px)",
+                    boxShadow: "0 0 20px rgba(255,140,0,0.15)",
+                }}
+            >
+                🔥 Connect
+            </button>
+
+            <WalletPicker
+                open={pickerOpen}
+                onClose={() => setPickerOpen(false)}
+                onHot={async () => {
+                    setPickerOpen(false);
+                    try {
+                        await connect();
+                    } catch (e) {
+                        console.error("Connect failed:", e);
+                    }
+                }}
+            />
+        </>
     );
 }
-
-export function useWalletConnect() {
-    return useContext(WalletContext);
-}
-
-export default WalletConnectProvider;
