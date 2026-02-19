@@ -13,14 +13,12 @@
 
     <script>
         (function () {
+            if (typeof window.global === "undefined") window.global = globalThis;
             if (typeof window.process === "undefined") {
                 window.process = { env: {}, browser: true, version: "v18.0.0" };
             }
             if (typeof globalThis.process === "undefined") {
                 globalThis.process = window.process;
-            }
-            if (typeof window.global === "undefined") {
-                window.global = globalThis;
             }
         })();
     </script>
