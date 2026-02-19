@@ -1,6 +1,5 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import path from "path";
 
 export default defineConfig({
   plugins: [react()],
@@ -9,7 +8,7 @@ export default defineConfig({
       crypto: "crypto-browserify",
       stream: "stream-browserify",
       buffer: "buffer",
-      process: "process/browser",
+      process: "process",
     },
   },
   define: {
