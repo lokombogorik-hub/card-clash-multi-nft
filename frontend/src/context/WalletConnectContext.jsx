@@ -1,97 +1,310 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import React, {
+    createContext,
+    useContext,
+    useEffect,
+    useRef,
+    useState,
+} from "react";
 import useTelegram from "../hooks/useTelegram";
 import { initSelector, fetchBalance } from "../libs/walletSelector";
 
-const WalletContext = createContext({
-    selector: null, accountId: null, balance: 0, isLoading: true,
-    connected: false, connect: async () => { }, disconnect: async () => { },
-    sendNear: async () => { }, signAndSendTransaction: async () => { }
+var WalletContext = createContext({
+    selector: null,
+    accountId: null,
+    balance: 0,
+    isLoading: true,
+    hasError: false,
+    connected: false,
+    connect: async function () { },
+    disconnect: async function () { },
+    refreshBalance: async function () { },
+    sendNear: async function () { },
+    signAndSendTransaction: async function () { },
+    getUserNFTs: function () {
+        return [];
+    },
 });
 
 export function WalletConnectProvider({ children }) {
-    const { tgWebApp } = useTelegram();
-    const [selector, setSelector] = useState(null);
-    const [accountId, setAccountId] = useState(null);
-    const [balance, setBalance] = useState(0);
-    const [isLoading, setIsLoading] = useState(true);
-    const unsubscribeRef = useRef(null);
+    var { tgWebApp } = useTelegram();
+    var [selector, setSelector] = useState(null);
+    var [accountId, setAccountId] = useState(null);
+    var [balance, setBalance] = useState(0);
+    var [isLoading, setIsLoading] = useState(true);
+    var [hasError, setHasError] = useState(false);
 
-    const refreshBalanceFor = async (id) => {
-        if (!id) return;
-        const bal = await fetchBalance(id);
-        setBalance(bal);
+    var unsubscribeRef = useRef(null);
+
+    var linkToBackend = async function (nearAccountId) {
+        if (!nearAccountId) return;
+        var t =
+            localStorage.getItem("token") ||
+            localStorage.getItem("accessToken") ||
+            localStorage.getItem("access_token") ||
+            "";
+        if (!t) return;
+        var apiBase = (import.meta.env.VITE_API_BASE_URL || "").trim();
+        if (!apiBase) return;
+        try {
+            await fetch(apiBase + "/api/near/link", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: "Bearer " + t,
+                },
+                body: JSON.stringify({ accountId: nearAccountId }),
+            });
+        } catch (e) {
+            console.warn("[wallet] linkToBackend error:", e);
+        }
     };
 
-    useEffect(() => {
-        let cancelled = false;
+    var refreshBalanceFor = async function (id) {
+        if (!id) return;
+        try {
+            var bal = await fetchBalance(id);
+            setBalance(bal);
+        } catch (e) {
+            // ignore
+        }
+    };
+
+    useEffect(function () {
+        var cancelled = false;
+
         async function bootstrap() {
             setIsLoading(true);
+            setHasError(false);
+
             try {
-                const sel = await initSelector({
-                    miniApp: !!(window.Telegram && window.Telegram.WebApp.initData),
-                    telegramInitData: window.Telegram?.WebApp?.initData || "",
+                // Detect Telegram environment
+                var isMiniApp = false;
+                var initData = "";
+
+                try {
+                    if (
+                        window.Telegram &&
+                        window.Telegram.WebApp &&
+                        window.Telegram.WebApp.initData
+                    ) {
+                        isMiniApp = true;
+                        initData = window.Telegram.WebApp.initData;
+                    }
+                } catch (e) {
+                    // ignore
+                }
+
+                console.log(
+                    "[wallet] init, miniApp:",
+                    isMiniApp,
+                    "initData length:",
+                    initData.length
+                );
+
+                var sel = await initSelector({
+                    miniApp: isMiniApp,
+                    telegramInitData: initData,
                 });
+
                 if (cancelled) return;
+
                 setSelector(sel);
 
-                const state = sel.store.getState();
-                const active = state.accounts?.find((a) => a.active);
-                const id = active?.accountId || null;
-                setAccountId(id);
-                if (id) refreshBalanceFor(id);
+                // Hydrate active account
+                try {
+                    var state = sel.store.getState();
+                    var active = state.accounts
+                        ? state.accounts.find(function (a) {
+                            return a.active;
+                        })
+                        : null;
+                    var id = active ? active.accountId : null;
+                    setAccountId(id || null);
+                    if (id) {
+                        refreshBalanceFor(id);
+                        linkToBackend(id);
+                    }
+                } catch (e) {
+                    console.warn("[wallet] store hydrate error:", e);
+                    setAccountId(null);
+                }
 
-                unsubscribeRef.current = sel.store.observable.subscribe((nextState) => {
-                    const act = nextState.accounts?.find((a) => a.active);
-                    const newId = act?.accountId || null;
-                    setAccountId(newId);
-                    if (newId) refreshBalanceFor(newId);
-                });
+                // Subscribe to store changes
+                try {
+                    if (unsubscribeRef.current) unsubscribeRef.current();
+                } catch (e) { }
+
+                unsubscribeRef.current = sel.store.observable.subscribe(
+                    function (nextState) {
+                        var act = nextState.accounts
+                            ? nextState.accounts.find(function (a) {
+                                return a.active;
+                            })
+                            : null;
+                        var newId = act ? act.accountId : null;
+                        setAccountId(newId || null);
+                        if (newId) {
+                            refreshBalanceFor(newId);
+                            linkToBackend(newId);
+                        } else {
+                            setBalance(0);
+                        }
+                    }
+                );
+
+                setHasError(false);
             } catch (e) {
-                console.error("Selector init error", e);
+                console.warn("[wallet] init error:", e);
+                if (!cancelled) {
+                    setHasError(true);
+                    setSelector(null);
+                    setAccountId(null);
+                }
             } finally {
                 if (!cancelled) setIsLoading(false);
             }
         }
+
         bootstrap();
-        return () => { cancelled = true; unsubscribeRef.current?.(); };
+
+        return function () {
+            cancelled = true;
+            try {
+                if (unsubscribeRef.current) unsubscribeRef.current();
+            } catch (e) { }
+            unsubscribeRef.current = null;
+        };
     }, []);
 
-    const connect = async () => {
-        if (!selector) return;
-        const wallet = await selector.wallet("hot-wallet");
-        await wallet.signIn({ contractId: "retardo-s.near" });
+    var connect = async function () {
+        if (!selector) throw new Error("Wallet selector not initialized");
+        try {
+            var w = await selector.wallet("hot-wallet");
+            await w.signIn({
+                contractId: "retardo-s.near",
+                methodNames: [],
+            });
+        } catch (e) {
+            console.error("[wallet] connect error:", e);
+            throw e;
+        }
     };
 
-    const disconnect = async () => {
+    var disconnect = async function () {
         if (!selector) return;
-        const wallet = await selector.wallet();
-        await wallet.signOut();
+        try {
+            var state = selector.store.getState();
+            var activeWalletId = state.selectedWalletId;
+            if (!activeWalletId) return;
+            var w = await selector.wallet(activeWalletId);
+            await w.signOut();
+        } catch (e) {
+            console.error("[wallet] disconnect error:", e);
+        }
     };
 
-    const sendNear = async ({ receiverId, amount }) => {
-        const wallet = await selector.wallet("hot-wallet");
-        const parts = String(amount).split(".");
-        const yocto = (parts[0] || "0") + (parts[1] || "").padEnd(24, "0").slice(0, 24);
-        const result = await wallet.signAndSendTransaction({
-            receiverId,
-            actions: [{ type: "FunctionCall", params: { methodName: "transfer", args: {}, gas: "30000000000000", deposit: yocto } }]
+    var sendNear = async function (params) {
+        if (!selector || !accountId)
+            throw new Error("Wallet not connected");
+        var w = await selector.wallet("hot-wallet");
+
+        var parts = String(params.amount).split(".");
+        var yocto =
+            (parts[0] || "0") +
+            (parts[1] || "").padEnd(24, "0").slice(0, 24);
+
+        var result = await w.signAndSendTransaction({
+            receiverId: params.receiverId,
+            actions: [
+                {
+                    type: "FunctionCall",
+                    params: {
+                        methodName: "transfer",
+                        args: {},
+                        gas: "30000000000000",
+                        deposit: yocto,
+                    },
+                },
+            ],
         });
-        return { txHash: result?.transaction?.hash || "" };
+
+        setTimeout(function () {
+            refreshBalanceFor(accountId);
+        }, 2000);
+
+        var txHash = "";
+        if (result && typeof result === "object") {
+            txHash =
+                (result.transaction_outcome &&
+                    result.transaction_outcome.id) ||
+                (result.transaction && result.transaction.hash) ||
+                result.txHash ||
+                "";
+        } else if (typeof result === "string") {
+            txHash = result;
+        }
+
+        return { txHash: txHash, result: result };
     };
+
+    var signAndSendTransaction = async function (params) {
+        if (!selector || !accountId)
+            throw new Error("Wallet not connected");
+        var w = await selector.wallet("hot-wallet");
+        return await w.signAndSendTransaction({
+            receiverId: params.receiverId,
+            actions: params.actions,
+        });
+    };
+
+    var refreshBalance = async function () {
+        if (accountId) await refreshBalanceFor(accountId);
+    };
+
+    // Legacy window functions
+    useEffect(
+        function () {
+            window.showWalletSelector = connect;
+            window.disconnectWallet = disconnect;
+            return function () {
+                try {
+                    delete window.showWalletSelector;
+                    delete window.disconnectWallet;
+                } catch (e) {
+                    window.showWalletSelector = undefined;
+                    window.disconnectWallet = undefined;
+                }
+            };
+        },
+        [selector]
+    );
 
     return (
-        <WalletContext.Provider value={{
-            selector, accountId, balance, isLoading, connected: !!accountId,
-            connect, disconnect, sendNear,
-            signAndSendTransaction: async (p) => {
-                const w = await selector.wallet();
-                return await w.signAndSendTransaction(p);
-            }
-        }}>
+        <WalletContext.Provider
+            value={{
+                selector: selector,
+                accountId: accountId,
+                balance: balance,
+                isLoading: isLoading,
+                hasError: hasError,
+                connected: !!accountId,
+                connect: connect,
+                disconnect: disconnect,
+                refreshBalance: refreshBalance,
+                sendNear: sendNear,
+                signAndSendTransaction: signAndSendTransaction,
+                getUserNFTs: function () {
+                    return [];
+                },
+            }}
+        >
             {children}
         </WalletContext.Provider>
     );
 }
 
-export const useWalletConnect = () => useContext(WalletContext);
+export function useWalletConnect() {
+    return useContext(WalletContext);
+}
+
 export default WalletConnectProvider;

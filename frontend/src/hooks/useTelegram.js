@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 
 export default function useTelegram() {
-    const [isTelegram, setIsTelegram] = useState(false);
-    const [tgWebApp, setTgWebApp] = useState(null);
+    var [isTelegram, setIsTelegram] = useState(false);
+    var [tgWebApp, setTgWebApp] = useState(null);
 
-    useEffect(() => {
-        let isReal = false;
+    useEffect(function () {
+        var isReal = false;
         if (window.Telegram && window.Telegram.WebApp) {
-            const tg = window.Telegram.WebApp;
+            var tg = window.Telegram.WebApp;
             isReal =
                 !!tg.initDataUnsafe &&
                 !!tg.initDataUnsafe.user &&
@@ -17,5 +17,5 @@ export default function useTelegram() {
         setIsTelegram(isReal);
     }, []);
 
-    return { isTelegram, tgWebApp };
+    return { isTelegram: isTelegram, tgWebApp: tgWebApp };
 }
