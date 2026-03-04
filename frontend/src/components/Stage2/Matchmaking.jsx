@@ -1,27 +1,89 @@
-import { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { apiFetch } from "../../api";
+
+function getStoredToken() {
+    try {
+        return localStorage.getItem("token") || localStorage.getItem("accessToken") || localStorage.getItem("access_token") || "";
+    } catch (e) { return ""; }
+}
 
 export default function Matchmaking({ me, onBack, onMatched }) {
-    const [mode, setMode] = useState(null); // "ai" | "pvp"
-    const [searching, setSearching] = useState(false);
+    var [searching, setSearching] = useState(false);
+    var [searchMode, setSearchMode] = useState(null);
+    var pollRef = useRef(null);
 
-    const handleAI = () => {
-        setMode("ai");
-        setSearching(true);
-        setTimeout(() => {
-            setSearching(false);
-            onMatched({ matchId: "", mode: "ai" }); // AI = no matchId
-        }, 800);
+    var stopSearch = function () {
+        if (pollRef.current) {
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+        }
+        setSearching(false);
+        setSearchMode(null);
+
+        var token = getStoredToken();
+        if (token) {
+            apiFetch("/api/matchmaking/leave_queue", { method: "POST", token: token }).catch(function () { });
+        }
     };
 
-    const handlePvP = () => {
-        setMode("pvp");
+    useEffect(function () {
+        return function () {
+            if (pollRef.current) clearInterval(pollRef.current);
+        };
+    }, []);
+
+    var startAI = function () {
+        try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("medium"); } catch (e) { }
+        onMatched({ mode: "ai", matchId: "" });
+    };
+
+    var startPvP = async function () {
+        var token = getStoredToken();
+        if (!token) {
+            alert("Нужна авторизация Telegram");
+            return;
+        }
+
+        try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("medium"); } catch (e) { }
+
         setSearching(true);
-        // TODO: integrate backend matchmaking
-        setTimeout(() => {
+        setSearchMode("pvp");
+
+        try {
+            var res = await apiFetch("/api/matchmaking/join_queue", {
+                method: "POST",
+                token: token,
+                body: JSON.stringify({ max_elo_diff: 300 }),
+            });
+
+            if (res.opponent_id && res.match_id) {
+                stopSearch();
+                onMatched({ mode: "pvp", matchId: res.match_id });
+                return;
+            }
+
+            // Poll for match
+            pollRef.current = setInterval(async function () {
+                try {
+                    var r = await apiFetch("/api/matchmaking/join_queue", {
+                        method: "POST",
+                        token: token,
+                        body: JSON.stringify({ max_elo_diff: 500 }),
+                    });
+                    if (r.opponent_id && r.match_id) {
+                        stopSearch();
+                        onMatched({ mode: "pvp", matchId: r.match_id });
+                    }
+                } catch (e) {
+                    // keep polling
+                }
+            }, 3000);
+
+        } catch (e) {
             setSearching(false);
-            alert("PvP matchmaking coming soon!");
-            setMode(null);
-        }, 2000);
+            setSearchMode(null);
+            alert("Matchmaking error: " + (e.message || e));
+        }
     };
 
     if (searching) {
@@ -30,9 +92,9 @@ export default function Matchmaking({ me, onBack, onMatched }) {
                 <div className="matchmaking-searching">
                     <div className="matchmaking-spinner" />
                     <div className="matchmaking-searching-text">
-                        {mode === "ai" ? "Preparing AI opponent..." : "Searching for player..."}
+                        {searchMode === "pvp" ? "Searching for opponent..." : "Starting..."}
                     </div>
-                    <button className="matchmaking-cancel-btn" onClick={() => { setSearching(false); setMode(null); }}>
+                    <button className="matchmaking-cancel-btn" onClick={stopSearch}>
                         Cancel
                     </button>
                 </div>
@@ -42,47 +104,34 @@ export default function Matchmaking({ me, onBack, onMatched }) {
 
     return (
         <div className="matchmaking-page">
-            {/* Header */}
             <div className="matchmaking-header">
-                <button className="matchmaking-back-btn" onClick={onBack}>
-                    ← Back
-                </button>
+                <button className="matchmaking-back-btn" onClick={onBack}>← Back</button>
                 <h2 className="matchmaking-title">
                     <span className="matchmaking-title-icon">⚔️</span>
-                    Choose Game Mode
+                    Choose Mode
                 </h2>
             </div>
 
-            {/* Mode Cards */}
             <div className="matchmaking-modes">
-                {/* AI Mode */}
-                <button className="matchmaking-mode-card ai" onClick={handleAI}>
+                <div className="matchmaking-mode-card ai" onClick={startAI}>
                     <div className="matchmaking-mode-icon">🤖</div>
                     <div className="matchmaking-mode-name">vs AI</div>
-                    <div className="matchmaking-mode-desc">
-                        Practice against BunnyBot
-                    </div>
-                    <div className="matchmaking-mode-badge">Free Play</div>
-                </button>
+                    <div className="matchmaking-mode-desc">Play against BunnyBot AI opponent. Perfect for practice!</div>
+                    <div className="matchmaking-mode-badge">Available</div>
+                </div>
 
-                {/* PvP Mode */}
-                <button className="matchmaking-mode-card pvp" onClick={handlePvP}>
-                    <div className="matchmaking-mode-icon">👥</div>
+                <div className="matchmaking-mode-card pvp" onClick={startPvP}>
+                    <div className="matchmaking-mode-icon">⚔️</div>
                     <div className="matchmaking-mode-name">PvP</div>
-                    <div className="matchmaking-mode-desc">
-                        Battle real players for NFTs
-                    </div>
-                    <div className="matchmaking-mode-badge coming-soon">Coming Soon</div>
-                </button>
+                    <div className="matchmaking-mode-desc">Battle real players! Winner takes 1 NFT from loser.</div>
+                    <div className="matchmaking-mode-badge">Live</div>
+                </div>
             </div>
 
-            {/* Info */}
             <div className="matchmaking-info">
-                <div className="matchmaking-info-icon">ℹ️</div>
+                <div className="matchmaking-info-icon">💡</div>
                 <div className="matchmaking-info-text">
-                    <strong>AI mode:</strong> Play offline, pick 1 card from BunnyBot after win (off-chain).
-                    <br />
-                    <strong>PvP mode:</strong> Both players lock 5 NFTs. Winner takes 1 NFT from loser (on-chain via NEAR escrow).
+                    AI mode: play offline against bot. PvP: matchmaking finds opponent by ELO rating. Make sure you have 5 cards in your deck!
                 </div>
             </div>
         </div>
