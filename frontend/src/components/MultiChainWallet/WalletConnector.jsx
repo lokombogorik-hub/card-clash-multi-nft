@@ -6,10 +6,12 @@ export default function WalletConnector() {
     var { connected, accountId, balance, isLoading, connect, disconnect } = useWalletConnect();
     var [pickerOpen, setPickerOpen] = useState(false);
 
+    var topPos = "calc(env(safe-area-inset-top, 0px) + 12px)";
+
     if (isLoading) {
         return (
             <div style={{
-                position: "fixed", top: 58, right: 12, zIndex: 9999,
+                position: "fixed", top: topPos, right: 12, zIndex: 9999,
                 padding: "8px 14px", borderRadius: 12,
                 background: "rgba(0,0,0,0.6)", border: "1px solid rgba(255,255,255,0.1)",
                 color: "rgba(255,255,255,0.6)", fontSize: 12,
@@ -22,7 +24,7 @@ export default function WalletConnector() {
     if (connected && accountId) {
         return (
             <div style={{
-                position: "fixed", top: 58, right: 12, zIndex: 9999,
+                position: "fixed", top: topPos, right: 12, zIndex: 9999,
                 display: "flex", alignItems: "center", gap: 10,
                 padding: "8px 14px", borderRadius: 14,
                 background: "rgba(0,0,0,0.65)", border: "1px solid rgba(120,200,255,0.25)",
@@ -48,7 +50,7 @@ export default function WalletConnector() {
     return (
         <>
             <button onClick={function () { setPickerOpen(true); }} style={{
-                position: "fixed", top: 58, right: 12, zIndex: 9999,
+                position: "fixed", top: topPos, right: 12, zIndex: 9999,
                 padding: "10px 18px", borderRadius: 14,
                 border: "1px solid rgba(255,140,0,0.4)",
                 background: "linear-gradient(135deg, rgba(255,140,0,0.25), rgba(255,80,0,0.15))",

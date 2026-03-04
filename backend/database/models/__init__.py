@@ -1,12 +1,10 @@
-from .base import Base
-from .user import User
-from .match import Match, MatchPlayer, MatchDeposit, MatchClaim
+from sqlalchemy.orm import DeclarativeBase
 
-__all__ = [
-    "Base",
-    "User",
-    "Match",
-    "MatchPlayer",
-    "MatchDeposit",
-    "MatchClaim",
-]
+
+class Base(DeclarativeBase):
+    pass
+
+
+from database.models.user import User
+
+__all__ = ["Base", "User"]

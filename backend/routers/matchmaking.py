@@ -10,7 +10,6 @@ from api.users import get_current_user
 
 router = APIRouter(prefix="/api/matchmaking", tags=["matchmaking"])
 
-# in-memory очередь (на Railway будет сбрасываться при рестарте/масштабировании — ок для демо)
 matchmaking_queue = {}
 
 
@@ -31,7 +30,6 @@ async def join_queue(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # если уже в очереди — перезаписываем
     if current_user.id in matchmaking_queue:
         del matchmaking_queue[current_user.id]
 
@@ -39,7 +37,6 @@ async def join_queue(
     best_match_user_id = None
     min_diff = int(request.max_elo_diff or 200)
 
-    # ищем ближайшего по elo
     for user_id, data in list(matchmaking_queue.items()):
         elo_diff = abs(int(data.get("elo", 0)) - user_elo)
         if elo_diff <= min_diff:
@@ -48,12 +45,10 @@ async def join_queue(
 
     if best_match_user_id is not None:
         opponent_id = best_match_user_id
-        # убираем оппонента из очереди
         matchmaking_queue.pop(opponent_id, None)
 
         opponent = await db.get(User, opponent_id)
 
-        # оппонент мог быть удалён/не найден — тогда просто ставим пользователя в очередь
         if opponent is None:
             matchmaking_queue[current_user.id] = {"elo": user_elo, "timestamp": time.time()}
             return {"status": "waiting", "queue_size": len(matchmaking_queue)}
@@ -67,7 +62,6 @@ async def join_queue(
             match_id=match_id,
         )
 
-    # не нашли — добавляем в очередь
     matchmaking_queue[current_user.id] = {"elo": user_elo, "timestamp": time.time()}
     return {"status": "waiting", "queue_size": len(matchmaking_queue)}
 

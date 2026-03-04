@@ -1,59 +1,62 @@
-from __future__ import annotations
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+import jwt
+import os
 
-import logging
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-
-from jose import jwt, JWTError
-
-from utils.config import settings
-from database.session import get_session
+from database.session import get_db
 from database.models.user import User
 
-logger = logging.getLogger(__name__)
 router = APIRouter(tags=["users"])
-bearer = HTTPBearer(auto_error=False)
+
+JWT_SECRET = os.getenv("JWT_SECRET", "cardclash-secret-key-change-me")
+JWT_ALGORITHM = "HS256"
 
 
-async def get_current_user(
-    creds: HTTPAuthorizationCredentials = Depends(bearer),
-) -> User:
-    if not creds or not creds.credentials:
-        raise HTTPException(status_code=401, detail="Missing Bearer token")
+async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)) -> User:
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        raise HTTPException(401, "Missing token")
 
-    token = creds.credentials
+    token = auth[7:]
     try:
-        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALG])
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except jwt.PyJWTError:
+        raise HTTPException(401, "Invalid token")
 
-    sub = payload.get("sub")
-    if not sub:
-        raise HTTPException(status_code=401, detail="Invalid token: sub missing")
+    user_id = payload.get("user_id") or payload.get("sub")
+    if not user_id:
+        raise HTTPException(401, "Invalid token payload")
 
-    tg_id = int(sub)
+    result = await db.execute(select(User).where(User.id == int(user_id)))
+    user = result.scalar_one_or_none()
 
-    try:
-        async for session in get_session():
-            u = await session.get(User, tg_id)
-            if u is None:
-                u = User(id=tg_id, username=f"tg_{tg_id}")
-                session.add(u)
-                await session.commit()
-            return u
-    except Exception:
-        logger.exception("DB error in get_current_user, falling back to in-memory user")
+    if not user:
+        raise HTTPException(404, "User not found")
 
-    return User(id=tg_id, username=f"tg_{tg_id}")
+    return user
 
 
 @router.get("/users/me")
-async def users_me(user: User = Depends(get_current_user)):
+async def get_me(current_user: User = Depends(get_current_user)):
     return {
-        "id": int(user.id),
-        "username": user.username,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-        "photo_url": user.photo_url,
-        "near_account_id": user.near_account_id,
+        "id": current_user.id,
+        "username": getattr(current_user, "username", None),
+        "first_name": getattr(current_user, "first_name", None),
+        "last_name": getattr(current_user, "last_name", None),
+        "near_account_id": getattr(current_user, "near_account_id", None),
+        "total_matches": getattr(current_user, "total_matches", 0) or 0,
+        "wins": getattr(current_user, "wins", 0) or 0,
+        "losses": getattr(current_user, "losses", 0) or 0,
+        "elo_rating": getattr(current_user, "elo_rating", 1000) or 1000,
+        "nfts_count": getattr(current_user, "nfts_count", 0) or 0,
     }
+
+
+@router.post("/users/update_stats")
+async def update_stats(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Called after match to increment stats - will be called from match finish"""
+    return {"status": "ok"}
