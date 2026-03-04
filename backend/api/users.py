@@ -21,7 +21,7 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
     token = auth[7:]
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-    except jwt.PyJWTError:
+    except Exception:
         raise HTTPException(401, "Invalid token")
 
     user_id = payload.get("user_id") or payload.get("sub")
@@ -51,12 +51,3 @@ async def get_me(current_user: User = Depends(get_current_user)):
         "elo_rating": getattr(current_user, "elo_rating", 1000) or 1000,
         "nfts_count": getattr(current_user, "nfts_count", 0) or 0,
     }
-
-
-@router.post("/users/update_stats")
-async def update_stats(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """Called after match to increment stats - will be called from match finish"""
-    return {"status": "ok"}
