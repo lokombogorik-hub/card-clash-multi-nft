@@ -10,171 +10,121 @@ var CASES = [
 ];
 
 export default function Market() {
-    var { connected, accountId, sendNear, signAndSendTransaction } = useWalletConnect();
-
+    var { connected, accountId, balance, sendNear } = useWalletConnect();
     var [buying, setBuying] = useState(null);
-    var [opening, setOpening] = useState(false);
-    var [revealedCards, setRevealedCards] = useState(null);
-    var [claimStatus, setClaimStatus] = useState("");
+    var [result, setResult] = useState(null);
 
-    var token = localStorage.getItem("token") || localStorage.getItem("accessToken") || localStorage.getItem("access_token") || "";
+    var token = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
 
     var handleBuy = async function (caseData) {
         if (!connected || !accountId) {
-            alert("Подключи HOT Wallet на главной странице!");
+            alert("Подключи HOT Wallet!");
             return;
         }
-        if (!token) {
-            alert("Telegram auth required");
+
+        if (balance < caseData.price) {
+            alert("Недостаточно NEAR! Нужно " + caseData.price + " Ⓝ");
             return;
         }
 
         setBuying(caseData.id);
+        setResult(null);
 
         try {
             // 1. Payment
             var payResult = await sendNear({
                 receiverId: "retardo-s.near",
-                amount: caseData.price.toString(),
+                amount: caseData.price,
             });
+
+            if (!payResult.txHash) {
+                throw new Error("Transaction failed - no txHash");
+            }
 
             // 2. Open case on backend
-            var result = await apiFetch("/api/cases/open", {
+            var openResult = await apiFetch("/api/cases/open", {
                 method: "POST",
                 token: token,
-                body: JSON.stringify({
-                    case_id: caseData.id,
-                    tx_hash: payResult.txHash || "",
-                }),
+                body: JSON.stringify({ case_id: caseData.id, tx_hash: payResult.txHash }),
             });
 
-            setBuying(null);
-            var cards = result.cards || [];
-            setOpening(true);
-            setRevealedCards(null);
-
-            // 3. Show animation then reveal
-            setTimeout(function () {
-                setRevealedCards(cards);
-                setClaimStatus("claiming");
-
-                // 4. Claim each card
-                (async function () {
-                    try {
-                        for (var i = 0; i < cards.length; i++) {
-                            var card = cards[i];
-                            var claimData = await apiFetch("/api/cases/claim", {
-                                method: "POST",
-                                token: token,
-                                body: JSON.stringify({ reserved_token_id: card.token_id }),
-                            });
-                            if (claimData.transaction) {
-                                await signAndSendTransaction(claimData.transaction);
-                            }
-                        }
-                        setClaimStatus("done");
-                        setTimeout(function () {
-                            setOpening(false);
-                            setRevealedCards(null);
-                            setClaimStatus("");
-                        }, 2000);
-                    } catch (e) {
-                        console.error("Claim error:", e);
-                        setClaimStatus("error: " + (e.message || e));
-                    }
-                })();
-            }, 2000);
+            setResult({
+                success: true,
+                cards: openResult.cards || [],
+                message: "Получено " + (openResult.cards?.length || 0) + " карт!",
+            });
 
         } catch (e) {
-            alert("Ошибка покупки: " + (e.message || e));
+            console.error("Buy error:", e);
+            setResult({ success: false, message: "Ошибка: " + (e.message || e) });
+        } finally {
             setBuying(null);
-            setOpening(false);
         }
     };
 
     return (
         <div className="market-page">
             <div className="market-header">
-                <h2 className="market-title">
-                    <span className="market-title-icon">🛒</span>
-                    NFT Market
-                </h2>
-                <div className="market-subtitle">Buy cases to get NFT cards on NEAR blockchain</div>
+                <h2 className="market-title"><span className="market-title-icon">🛒</span>NFT Market</h2>
+                <div className="market-subtitle">Buy cases to get NFT cards</div>
             </div>
 
-            {!connected && (
-                <div className="market-warning">⚠️ Подключи HOT Wallet на главной странице, чтобы покупать кейсы</div>
+            {!connected && <div className="market-warning">⚠️ Подключи HOT Wallet чтобы покупать</div>}
+
+            {connected && (
+                <div style={{ textAlign: "center", marginBottom: 20, padding: 12, background: "rgba(120,200,255,0.1)", borderRadius: 12 }}>
+                    <div style={{ fontSize: 13, color: "#78c8ff" }}>💰 Баланс: {Number(balance).toFixed(2)} Ⓝ</div>
+                </div>
+            )}
+
+            {result && (
+                <div style={{
+                    textAlign: "center", marginBottom: 20, padding: 16,
+                    background: result.success ? "rgba(34,197,94,0.15)" : "rgba(255,80,80,0.15)",
+                    border: "1px solid " + (result.success ? "rgba(34,197,94,0.4)" : "rgba(255,80,80,0.4)"),
+                    borderRadius: 12
+                }}>
+                    <div style={{ fontSize: 15, fontWeight: 900, color: result.success ? "#22c55e" : "#ff6b6b" }}>
+                        {result.success ? "✅ " : "❌ "}{result.message}
+                    </div>
+                    {result.cards && result.cards.length > 0 && (
+                        <div style={{ marginTop: 10, display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+                            {result.cards.map(function (c, i) {
+                                return <div key={i} style={{ padding: "4px 10px", borderRadius: 8, background: "rgba(0,0,0,0.3)", fontSize: 11, color: "#a0d8ff" }}>
+                                    {c.rarity} #{c.token_id}
+                                </div>;
+                            })}
+                        </div>
+                    )}
+                </div>
             )}
 
             <div className="market-cases-grid">
                 {CASES.map(function (c) {
+                    var canBuy = connected && balance >= c.price;
                     return (
                         <div key={c.id} className="market-case-card">
                             <div className="market-case-image">
                                 <img src={c.image} alt={c.name} draggable="false" loading="lazy"
-                                    onError={function (e) { try { e.currentTarget.src = "/cards/card.jpg"; } catch (err) { } }} />
+                                    onError={function (e) { e.currentTarget.src = "/cards/card.jpg"; }} />
                             </div>
                             <div className="market-case-rarity-badge" data-rarity={c.rarity}>{c.rarity}</div>
                             <div className="market-case-name">{c.name}</div>
                             <div className="market-case-desc">{c.description}</div>
-                            <div className="market-case-price">{c.displayPrice} • {c.price} Ⓝ</div>
+                            <div className="market-case-price">{c.price} Ⓝ</div>
                             <button className="market-case-buy-btn" onClick={function () { handleBuy(c); }}
-                                disabled={!connected || buying === c.id}>
-                                {buying === c.id ? "Paying..." : "Buy"}
+                                disabled={!canBuy || buying === c.id}
+                                style={{ opacity: canBuy ? 1 : 0.5 }}>
+                                {buying === c.id ? "⏳ Paying..." : canBuy ? "Buy" : "Need " + c.price + " Ⓝ"}
                             </button>
                         </div>
                     );
                 })}
             </div>
 
-            {opening && (
-                <div style={{
-                    position: "fixed", inset: 0, zIndex: 99999,
-                    background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
-                }}>
-                    <div style={{
-                        background: "linear-gradient(145deg, #1a1a2e, #0f0f1a)",
-                        border: "1px solid rgba(255,255,255,0.15)", borderRadius: 20,
-                        padding: "28px 24px", maxWidth: 400, width: "100%", textAlign: "center",
-                    }}>
-                        {!revealedCards ? (
-                            <>
-                                <div style={{ fontSize: 48, marginBottom: 16 }}>🎁</div>
-                                <div style={{ color: "#fff", fontSize: 18, fontWeight: 900 }}>Opening case...</div>
-                            </>
-                        ) : (
-                            <>
-                                <div style={{ fontSize: 48, marginBottom: 16 }}>🎴</div>
-                                <div style={{ color: "#fff", fontSize: 18, fontWeight: 900, marginBottom: 12 }}>
-                                    {revealedCards.length} Card{revealedCards.length > 1 ? "s" : ""} Received!
-                                </div>
-                                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", marginBottom: 16 }}>
-                                    {revealedCards.map(function (card, i) {
-                                        return (
-                                            <div key={i} style={{
-                                                padding: "8px 12px", borderRadius: 10,
-                                                background: "rgba(120,200,255,0.1)", border: "1px solid rgba(120,200,255,0.3)",
-                                                color: "#78c8ff", fontSize: 12, fontFamily: "monospace",
-                                            }}>
-                                                {card.rarity} • {card.token_id}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                                <div style={{ color: claimStatus.startsWith("error") ? "#ff6b6b" : "#a0d8ff", fontSize: 13 }}>
-                                    {claimStatus === "claiming" ? "Transferring NFTs to your wallet..." :
-                                        claimStatus === "done" ? "✅ All NFTs transferred!" :
-                                            claimStatus}
-                                </div>
-                            </>
-                        )}
-                    </div>
-                </div>
-            )}
-
             <div className="market-footer">
-                <div className="market-footer-icon">🚀</div>
-                <div className="market-footer-text">Real NFTs on NEAR blockchain</div>
+                <div className="market-footer-icon">💎</div>
+                <div className="market-footer-text">Cards will appear in your Inventory after purchase</div>
             </div>
         </div>
     );
