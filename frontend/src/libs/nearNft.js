@@ -1,173 +1,139 @@
 var RPC_URL = "https://rpc.mainnet.near.org";
 
 function toBase64(str) {
-    try {
-        return btoa(unescape(encodeURIComponent(str)));
-    } catch (e) {
-        return btoa(str);
-    }
+    try { return btoa(unescape(encodeURIComponent(str))); }
+    catch (e) { return btoa(str); }
 }
 
 function fixIpfs(url) {
     if (!url) return "";
     if (typeof url !== "string") return "";
-    if (url.startsWith("ipfs://")) {
-        return "https://ipfs.io/ipfs/" + url.slice(7);
-    }
-    return url;
+    var s = url.trim();
+    if (s.startsWith("ipfs://")) return "https://ipfs.near.social/ipfs/" + s.slice(7);
+    if (s.startsWith("ar://")) return "https://arweave.net/" + s.slice(5);
+    return s;
 }
 
-function makeFullUrl(path, baseUri) {
+function joinUrl(base, path) {
     if (!path) return "";
-    path = fixIpfs(String(path));
-    if (path.startsWith("http://") || path.startsWith("https://") || path.startsWith("data:")) {
-        return path;
-    }
-    if (baseUri) {
-        var base = fixIpfs(String(baseUri));
-        if (base && !base.endsWith("/")) base += "/";
-        return base + path.replace(/^\//, "");
-    }
-    return path;
+    var p = fixIpfs(String(path).trim());
+    if (p.startsWith("http://") || p.startsWith("https://") || p.startsWith("data:") || p.startsWith("blob:")) return p;
+    if (!base) return p;
+    var b = fixIpfs(String(base).trim());
+    if (!b) return p;
+    if (!b.endsWith("/")) b += "/";
+    return b + p.replace(/^\//, "");
 }
 
-async function fetchJson(url) {
+async function fetchJsonSafe(url) {
     if (!url) return null;
     try {
-        var r = await fetch(url);
+        var r = await fetch(url, { method: "GET" });
         if (!r.ok) return null;
-        return await r.json();
-    } catch (e) {
-        return null;
-    }
+        var text = await r.text();
+        try { return JSON.parse(text); }
+        catch (e) { return null; }
+    } catch (e) { return null; }
 }
 
-export async function nearNftTokensForOwner(contractId, accountId, limit) {
-    limit = limit || 200;
-    var allTokens = [];
-    var fromIndex = 0;
-    var maxPages = 20;
+async function rpcCall(contractId, method, args) {
+    var res = await fetch(RPC_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+            jsonrpc: "2.0", id: "q", method: "query",
+            params: {
+                request_type: "call_function", finality: "final",
+                account_id: contractId, method_name: method,
+                args_base64: toBase64(JSON.stringify(args || {})),
+            },
+        }),
+    });
+    var j = await res.json();
+    if (j.error) throw new Error(j.error.message || "RPC error");
+    if (!j.result || !j.result.result) throw new Error("Empty RPC result");
+    return JSON.parse(new TextDecoder().decode(new Uint8Array(j.result.result)));
+}
 
-    for (var page = 0; page < maxPages; page++) {
+export async function nearNftTokensForOwner(contractId, accountId) {
+    // 1. Get contract metadata for base_uri
+    var contractBaseUri = "";
+    try {
+        var meta = await rpcCall(contractId, "nft_metadata", {});
+        contractBaseUri = meta.base_uri || "";
+        console.log("[nearNft] contract:", contractId, "base_uri:", contractBaseUri, "name:", meta.name);
+    } catch (e) {
+        console.warn("[nearNft] nft_metadata failed:", e.message);
+    }
+
+    // 2. Paginate nft_tokens_for_owner
+    var all = [];
+    var pageSize = 50;
+    for (var page = 0; page < 20; page++) {
         try {
-            var res = await fetch(RPC_URL, {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({
-                    jsonrpc: "2.0",
-                    id: "nft_" + page,
-                    method: "query",
-                    params: {
-                        request_type: "call_function",
-                        finality: "final",
-                        account_id: contractId,
-                        method_name: "nft_tokens_for_owner",
-                        args_base64: toBase64(JSON.stringify({
-                            account_id: accountId,
-                            from_index: String(fromIndex),
-                            limit: limit,
-                        })),
-                    },
-                }),
+            var batch = await rpcCall(contractId, "nft_tokens_for_owner", {
+                account_id: accountId,
+                from_index: String(all.length),
+                limit: pageSize,
             });
-
-            var j = await res.json();
-            if (j.error || !j.result || !j.result.result) break;
-
-            var decoded = new TextDecoder().decode(new Uint8Array(j.result.result));
-            var batch = JSON.parse(decoded);
-
             if (!Array.isArray(batch) || batch.length === 0) break;
-
-            allTokens = allTokens.concat(batch);
-            fromIndex += batch.length;
-
-            if (batch.length < limit) break;
+            all = all.concat(batch);
+            if (batch.length < pageSize) break;
         } catch (e) {
-            console.error("[nearNft] page " + page + " error:", e);
+            console.warn("[nearNft] page", page, "error:", e.message);
             break;
         }
     }
 
-    console.log("[nearNft] total raw tokens:", allTokens.length);
+    console.log("[nearNft] raw tokens:", all.length);
 
-    // Now get base_uri from contract metadata
-    var contractBaseUri = "";
-    try {
-        var metaRes = await fetch(RPC_URL, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-                jsonrpc: "2.0",
-                id: "meta",
-                method: "query",
-                params: {
-                    request_type: "call_function",
-                    finality: "final",
-                    account_id: contractId,
-                    method_name: "nft_metadata",
-                    args_base64: toBase64("{}"),
-                },
-            }),
-        });
-        var metaJ = await metaRes.json();
-        if (metaJ.result && metaJ.result.result) {
-            var metaDecoded = new TextDecoder().decode(new Uint8Array(metaJ.result.result));
-            var contractMeta = JSON.parse(metaDecoded);
-            contractBaseUri = contractMeta.base_uri || "";
-            console.log("[nearNft] contract base_uri:", contractBaseUri);
-        }
-    } catch (e) {
-        console.warn("[nearNft] nft_metadata error:", e);
-    }
-
-    // Process each token: resolve image
+    // 3. Resolve each token's image
     var results = [];
-
-    for (var i = 0; i < allTokens.length; i++) {
-        var t = allTokens[i];
+    for (var i = 0; i < all.length; i++) {
+        var t = all[i];
         var md = t.metadata || {};
         var baseUri = md.base_uri || contractBaseUri || "";
-        var media = "";
         var title = md.title || "";
         var description = md.description || "";
+        var media = "";
         var extra = md.extra || null;
 
-        // 1) Try direct media field
-        media = makeFullUrl(md.media || "", baseUri);
+        // Try media directly
+        if (md.media) {
+            media = joinUrl(baseUri, md.media);
+        }
 
-        // 2) If no media, try reference JSON
+        // If no media, try reference JSON
         if (!media && md.reference) {
-            var refUrl = makeFullUrl(md.reference, baseUri);
-            console.log("[nearNft] fetching reference for token " + t.token_id + ":", refUrl);
-            var refJson = await fetchJson(refUrl);
-
+            var refUrl = joinUrl(baseUri, md.reference);
+            var refJson = await fetchJsonSafe(refUrl);
             if (refJson) {
-                media = makeFullUrl(refJson.media || refJson.image || refJson.icon || "", baseUri);
-                if (!title && refJson.title) title = refJson.title;
-                if (!title && refJson.name) title = refJson.name;
+                if (refJson.media) media = joinUrl(baseUri, refJson.media);
+                else if (refJson.image) media = joinUrl(baseUri, refJson.image);
+                else if (refJson.animation_url) media = joinUrl(baseUri, refJson.animation_url);
+                if (!title && (refJson.title || refJson.name)) title = refJson.title || refJson.name;
                 if (!description && refJson.description) description = refJson.description;
                 if (!extra && refJson.extra) extra = refJson.extra;
             }
         }
 
-        // 3) If still no media, try Mintbase/NEAR convention
+        // Last resort: try base_uri/token_id (some contracts store like this)
         if (!media && baseUri) {
-            media = makeFullUrl(t.token_id, baseUri);
+            media = joinUrl(baseUri, t.token_id);
+        }
+
+        if (media) {
+            console.log("[nearNft] token", t.token_id, "image:", media.substring(0, 80));
+        } else {
+            console.warn("[nearNft] token", t.token_id, "NO IMAGE FOUND, md:", JSON.stringify(md).substring(0, 200));
         }
 
         results.push({
             token_id: t.token_id,
             owner_id: t.owner_id,
-            metadata: {
-                title: title || "Card #" + t.token_id,
-                description: description,
-                media: media,
-                extra: extra,
-            },
+            metadata: { title: title || ("Card #" + t.token_id), description: description, media: media, extra: extra },
         });
     }
 
-    console.log("[nearNft] processed tokens:", results.length);
     return results;
 }
