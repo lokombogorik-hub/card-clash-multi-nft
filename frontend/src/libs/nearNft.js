@@ -1,42 +1,40 @@
 var RPC_URL = "https://rpc.mainnet.near.org";
 
-function toBase64(str) {
+function toB64(str) {
     try { return btoa(unescape(encodeURIComponent(str))); }
     catch (e) { return btoa(str); }
 }
 
-function fixIpfs(url) {
+function fixProto(url) {
     if (!url) return "";
-    if (typeof url !== "string") return "";
-    var s = url.trim();
+    var s = String(url).trim();
     if (s.startsWith("ipfs://")) return "https://ipfs.near.social/ipfs/" + s.slice(7);
     if (s.startsWith("ar://")) return "https://arweave.net/" + s.slice(5);
     return s;
 }
 
-function joinUrl(base, path) {
+function join(base, path) {
     if (!path) return "";
-    var p = fixIpfs(String(path).trim());
-    if (p.startsWith("http://") || p.startsWith("https://") || p.startsWith("data:") || p.startsWith("blob:")) return p;
+    var p = fixProto(String(path).trim());
+    if (!p) return "";
+    if (p.startsWith("http") || p.startsWith("data:") || p.startsWith("blob:")) return p;
     if (!base) return p;
-    var b = fixIpfs(String(base).trim());
+    var b = fixProto(String(base).trim());
     if (!b) return p;
     if (!b.endsWith("/")) b += "/";
     return b + p.replace(/^\//, "");
 }
 
-async function fetchJsonSafe(url) {
+async function getJson(url) {
     if (!url) return null;
     try {
-        var r = await fetch(url, { method: "GET" });
+        var r = await fetch(url);
         if (!r.ok) return null;
-        var text = await r.text();
-        try { return JSON.parse(text); }
-        catch (e) { return null; }
+        return await r.json();
     } catch (e) { return null; }
 }
 
-async function rpcCall(contractId, method, args) {
+async function rpc(contractId, method, args) {
     var res = await fetch(RPC_URL, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -45,95 +43,104 @@ async function rpcCall(contractId, method, args) {
             params: {
                 request_type: "call_function", finality: "final",
                 account_id: contractId, method_name: method,
-                args_base64: toBase64(JSON.stringify(args || {})),
+                args_base64: toB64(JSON.stringify(args || {})),
             },
         }),
     });
     var j = await res.json();
-    if (j.error) throw new Error(j.error.message || "RPC error");
-    if (!j.result || !j.result.result) throw new Error("Empty RPC result");
+    if (j.error) throw new Error(j.error.message || "RPC err");
     return JSON.parse(new TextDecoder().decode(new Uint8Array(j.result.result)));
 }
 
 export async function nearNftTokensForOwner(contractId, accountId) {
-    // 1. Get contract metadata for base_uri
-    var contractBaseUri = "";
+    var debugLog = [];
+
+    // 1) Contract metadata
+    var cBaseUri = "";
+    var cIcon = "";
     try {
-        var meta = await rpcCall(contractId, "nft_metadata", {});
-        contractBaseUri = meta.base_uri || "";
-        console.log("[nearNft] contract:", contractId, "base_uri:", contractBaseUri, "name:", meta.name);
+        var cm = await rpc(contractId, "nft_metadata", {});
+        cBaseUri = cm.base_uri || "";
+        cIcon = cm.icon || "";
+        debugLog.push("contract_base_uri=" + (cBaseUri || "(empty)"));
+        debugLog.push("contract_name=" + (cm.name || "?"));
     } catch (e) {
-        console.warn("[nearNft] nft_metadata failed:", e.message);
+        debugLog.push("nft_metadata_error=" + e.message);
     }
 
-    // 2. Paginate nft_tokens_for_owner
+    // 2) Paginate
     var all = [];
-    var pageSize = 50;
-    for (var page = 0; page < 20; page++) {
+    for (var pg = 0; pg < 30; pg++) {
         try {
-            var batch = await rpcCall(contractId, "nft_tokens_for_owner", {
+            var batch = await rpc(contractId, "nft_tokens_for_owner", {
                 account_id: accountId,
                 from_index: String(all.length),
-                limit: pageSize,
+                limit: 50,
             });
             if (!Array.isArray(batch) || batch.length === 0) break;
             all = all.concat(batch);
-            if (batch.length < pageSize) break;
-        } catch (e) {
-            console.warn("[nearNft] page", page, "error:", e.message);
-            break;
-        }
+            if (batch.length < 50) break;
+        } catch (e) { break; }
     }
+    debugLog.push("total_tokens=" + all.length);
 
-    console.log("[nearNft] raw tokens:", all.length);
-
-    // 3. Resolve each token's image
-    var results = [];
+    // 3) Process each
+    var out = [];
     for (var i = 0; i < all.length; i++) {
         var t = all[i];
         var md = t.metadata || {};
-        var baseUri = md.base_uri || contractBaseUri || "";
-        var title = md.title || "";
-        var description = md.description || "";
+        var bUri = md.base_uri || cBaseUri || "";
+
         var media = "";
+        var title = md.title || md.name || "";
+        var desc = md.description || "";
         var extra = md.extra || null;
 
-        // Try media directly
-        if (md.media) {
-            media = joinUrl(baseUri, md.media);
+        // Debug: log raw metadata for first 3 tokens
+        if (i < 3) {
+            debugLog.push("token_" + t.token_id + "_raw=" + JSON.stringify(md).substring(0, 300));
         }
 
-        // If no media, try reference JSON
+        // A) Direct media
+        if (md.media) {
+            media = join(bUri, md.media);
+        }
+
+        // B) Reference JSON
         if (!media && md.reference) {
-            var refUrl = joinUrl(baseUri, md.reference);
-            var refJson = await fetchJsonSafe(refUrl);
-            if (refJson) {
-                if (refJson.media) media = joinUrl(baseUri, refJson.media);
-                else if (refJson.image) media = joinUrl(baseUri, refJson.image);
-                else if (refJson.animation_url) media = joinUrl(baseUri, refJson.animation_url);
-                if (!title && (refJson.title || refJson.name)) title = refJson.title || refJson.name;
-                if (!description && refJson.description) description = refJson.description;
-                if (!extra && refJson.extra) extra = refJson.extra;
+            var refUrl = join(bUri, md.reference);
+            if (i < 3) debugLog.push("token_" + t.token_id + "_refUrl=" + refUrl);
+            var rj = await getJson(refUrl);
+            if (rj) {
+                media = join(bUri, rj.media || rj.image || rj.animation_url || rj.icon || "");
+                if (!title) title = rj.title || rj.name || "";
+                if (!desc) desc = rj.description || "";
+                if (!extra) extra = rj.extra || null;
+                if (i < 3) debugLog.push("token_" + t.token_id + "_refMedia=" + (media || "(empty)"));
+            } else {
+                if (i < 3) debugLog.push("token_" + t.token_id + "_refFailed");
             }
         }
 
-        // Last resort: try base_uri/token_id (some contracts store like this)
-        if (!media && baseUri) {
-            media = joinUrl(baseUri, t.token_id);
+        // C) Fallback: contract icon
+        if (!media && cIcon && cIcon.startsWith("data:")) {
+            media = cIcon;
         }
 
-        if (media) {
-            console.log("[nearNft] token", t.token_id, "image:", media.substring(0, 80));
-        } else {
-            console.warn("[nearNft] token", t.token_id, "NO IMAGE FOUND, md:", JSON.stringify(md).substring(0, 200));
+        // D) Fallback: base_uri + token_id
+        if (!media && bUri) {
+            media = join(bUri, t.token_id);
         }
 
-        results.push({
+        out.push({
             token_id: t.token_id,
             owner_id: t.owner_id,
-            metadata: { title: title || ("Card #" + t.token_id), description: description, media: media, extra: extra },
+            metadata: { title: title || ("Card #" + t.token_id), description: desc, media: media, extra: extra },
         });
     }
 
-    return results;
+    // Store debug for display
+    out._debug = debugLog;
+
+    return out;
 }

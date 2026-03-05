@@ -15,30 +15,22 @@ var ELEM_ICON = { Earth: "🪨", Fire: "🔥", Water: "💧", Poison: "☠️", 
 function getRarityFromTokenId(tokenId, totalSupply) {
     totalSupply = totalSupply || 10000;
     var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
-    var percent = (num / totalSupply) * 100;
-    if (percent <= 25) return { key: "legendary", border: "#7c3aed", glow: "rgba(124,58,237,0.60)", min: 4, max: 9 };
-    if (percent <= 50) return { key: "epic", border: "#a78bfa", glow: "rgba(167,139,250,0.55)", min: 3, max: 9 };
-    if (percent <= 75) return { key: "rare", border: "#f97316", glow: "rgba(249,115,22,0.55)", min: 2, max: 8 };
+    var pct = (num / totalSupply) * 100;
+    if (pct <= 25) return { key: "legendary", border: "#7c3aed", glow: "rgba(124,58,237,0.60)", min: 4, max: 9 };
+    if (pct <= 50) return { key: "epic", border: "#a78bfa", glow: "rgba(167,139,250,0.55)", min: 3, max: 9 };
+    if (pct <= 75) return { key: "rare", border: "#f97316", glow: "rgba(249,115,22,0.55)", min: 2, max: 8 };
     return { key: "common", border: "#22c55e", glow: "rgba(34,197,94,0.50)", min: 1, max: 7 };
 }
 
-function generateStats(tokenId, rarity) {
+function genStats(tokenId, r) {
     var seed = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
-    var min = rarity.min;
-    var max = rarity.max;
-    var rnd = function () {
-        seed = (seed * 9301 + 49297) % 233280;
-        return min + Math.floor((seed / 233280) * (max - min + 1));
-    };
-    return { top: rnd(), right: rnd(), bottom: rnd(), left: rnd() };
+    var rnd = function (lo, hi) { seed = (seed * 9301 + 49297) % 233280; return lo + Math.floor((seed / 233280) * (hi - lo + 1)); };
+    return { top: rnd(r.min, r.max), right: rnd(r.min, r.max), bottom: rnd(r.min, r.max), left: rnd(r.min, r.max) };
 }
 
-function safeJsonParse(s) {
-    try {
-        if (!s) return null;
-        if (typeof s === "object") return s;
-        return JSON.parse(String(s));
-    } catch (e) { return null; }
+function safeParse(s) {
+    try { if (!s) return null; if (typeof s === "object") return s; return JSON.parse(String(s)); }
+    catch (e) { return null; }
 }
 
 export default function Inventory({ token, onDeckReady }) {
@@ -52,6 +44,7 @@ export default function Inventory({ token, onDeckReady }) {
     var [error, setError] = useState("");
     var [saving, setSaving] = useState(false);
     var [source, setSource] = useState("");
+    var [debug, setDebug] = useState([]);
 
     var nftContractId = (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim();
 
@@ -70,55 +63,47 @@ export default function Inventory({ token, onDeckReady }) {
             setLoading(true);
             setError("");
             setSource("");
+            setDebug([]);
 
             try {
                 try {
-                    var deckRes = await apiFetch("/api/decks/active", { token: token });
-                    if (alive && deckRes && Array.isArray(deckRes.cards)) {
-                        setSelected(new Set(deckRes.cards.slice(0, 5)));
-                    }
+                    var dk = await apiFetch("/api/decks/active", { token: token });
+                    if (alive && dk && Array.isArray(dk.cards)) setSelected(new Set(dk.cards.slice(0, 5)));
                 } catch (e) { }
                 if (!alive) return;
 
                 var items = [];
 
                 if (connected && accountId && nftContractId) {
-                    console.log("[Inventory] Loading from chain:", nftContractId, accountId);
                     try {
                         var tokens = await nearNftTokensForOwner(nftContractId, accountId);
-                        console.log("[Inventory] Got", tokens.length, "tokens");
+                        var dbg = tokens._debug || [];
+                        setDebug(dbg);
 
                         items = tokens.map(function (t) {
-                            var extra = safeJsonParse(t.metadata ? t.metadata.extra : null);
-                            var rarity = getRarityFromTokenId(t.token_id, 10000);
-                            var stats = (extra && extra.stats && extra.stats.top != null) ? extra.stats : generateStats(t.token_id, rarity);
-                            var imageUrl = (t.metadata && t.metadata.media) ? t.metadata.media : "";
-
+                            var extra = safeParse(t.metadata ? t.metadata.extra : null);
+                            var r = getRarityFromTokenId(t.token_id, 10000);
+                            var st = (extra && extra.stats && extra.stats.top != null) ? extra.stats : genStats(t.token_id, r);
                             return {
                                 key: "near:" + nftContractId + ":" + t.token_id,
-                                chain: "near",
-                                contractId: nftContractId,
-                                tokenId: t.token_id,
-                                token_id: t.token_id,
-                                name: (t.metadata && t.metadata.title) ? t.metadata.title : "Card #" + t.token_id,
-                                imageUrl: imageUrl,
-                                stats: stats,
-                                element: (extra && extra.element) ? extra.element : null,
-                                rarity: rarity,
+                                chain: "near", contractId: nftContractId,
+                                tokenId: t.token_id, token_id: t.token_id,
+                                name: (t.metadata && t.metadata.title) || ("Card #" + t.token_id),
+                                imageUrl: (t.metadata && t.metadata.media) || "",
+                                stats: st, element: (extra && extra.element) || null, rarity: r,
                             };
                         });
-
-                        setSource(items.length > 0 ? "✅ Blockchain (" + items.length + " NFTs)" : "⚠️ 0 NFTs found");
+                        setSource(items.length > 0 ? "✅ Blockchain (" + items.length + ")" : "⚠️ 0 NFTs");
                     } catch (e) {
-                        console.error("[Inventory] Chain error:", e);
                         setSource("❌ " + (e.message || e));
+                        setDebug(["error: " + (e.message || e)]);
                     }
                 }
 
                 if (items.length === 0 && !connected) {
                     try {
-                        var mockRes = await apiFetch("/api/nfts/my", { token: token });
-                        items = Array.isArray(mockRes.items) ? mockRes.items : [];
+                        var mock = await apiFetch("/api/nfts/my", { token: token });
+                        items = Array.isArray(mock.items) ? mock.items : [];
                         if (items.length > 0) setSource("Demo cards");
                     } catch (e) { }
                 }
@@ -127,7 +112,7 @@ export default function Inventory({ token, onDeckReady }) {
                 setNfts(items);
             } catch (e) {
                 if (!alive) return;
-                setError(e.message || "Failed to load");
+                setError(e.message || "Error");
             } finally {
                 if (alive) setLoading(false);
             }
@@ -139,16 +124,11 @@ export default function Inventory({ token, onDeckReady }) {
     var toggle = function (k) {
         setSelected(function (prev) {
             var next = new Set(prev);
-            if (next.has(k)) { next.delete(k); }
-            else {
-                if (next.size >= 5) return next;
-                next.add(k);
-            }
+            if (next.has(k)) next.delete(k);
+            else { if (next.size >= 5) return next; next.add(k); }
             return next;
         });
     };
-
-    var clear = function () { setSelected(new Set()); };
 
     var saveDeck = async function () {
         if (selected.size !== 5) return;
@@ -157,22 +137,16 @@ export default function Inventory({ token, onDeckReady }) {
             await apiFetch("/api/decks/active", { token: token, method: "PUT", body: JSON.stringify({ cards: selectedArr }) });
             setSaving(false);
             onDeckReady?.();
-        } catch (e) {
-            setError(e.message || "Save failed");
-            setSaving(false);
-        }
+        } catch (e) { setError(e.message || "Save failed"); setSaving(false); }
     };
 
-    var onCardPointerDown = function (e) {
-        var el = e.currentTarget;
-        var rect = el.getBoundingClientRect();
+    var onPD = function (e) {
+        var el = e.currentTarget, rect = el.getBoundingClientRect();
         var cx = (e.clientX !== undefined ? e.clientX : rect.left + rect.width / 2) - rect.left;
         var cy = (e.clientY !== undefined ? e.clientY : rect.top + rect.height / 2) - rect.top;
         el.style.setProperty("--px", Math.max(0, Math.min(100, (cx / rect.width) * 100)) + "%");
         el.style.setProperty("--py", Math.max(0, Math.min(100, (cy / rect.height) * 100)) + "%");
-        el.classList.remove("is-tapping");
-        void el.offsetWidth;
-        el.classList.add("is-tapping");
+        el.classList.remove("is-tapping"); void el.offsetWidth; el.classList.add("is-tapping");
         setTimeout(function () { el.classList.remove("is-tapping"); }, 520);
     };
 
@@ -180,7 +154,7 @@ export default function Inventory({ token, onDeckReady }) {
         <div className="page inventory-page">
             <div className="inv-header">
                 <h2 className="inv-title"><span className="inv-title-icon">🎴</span>Deck Builder</h2>
-                <div className="inv-subtitle">Выбери 5 карт для боя • {selected.size}/5</div>
+                <div className="inv-subtitle">Выбери 5 карт • {selected.size}/5</div>
             </div>
 
             {connected && accountId ? (
@@ -191,15 +165,29 @@ export default function Inventory({ token, onDeckReady }) {
                 </div>
             ) : null}
 
+            {/* DEBUG: показываем что вернул RPC — УБРАТЬ ПОСЛЕ ОТЛАДКИ */}
+            {debug.length > 0 && (
+                <div style={{ margin: "10px 0", padding: 10, background: "rgba(0,0,0,0.5)", borderRadius: 10, fontSize: 10, color: "#aaa", maxHeight: 200, overflow: "auto", wordBreak: "break-all" }}>
+                    <div style={{ fontWeight: 900, marginBottom: 4, color: "#ff0" }}>DEBUG (remove after fix):</div>
+                    {debug.map(function (d, i) { return <div key={i}>{d}</div>; })}
+                    {nfts.length > 0 && nfts.slice(0, 3).map(function (n, i) {
+                        return <div key={"img" + i} style={{ marginTop: 4 }}>
+                            <span style={{ color: "#78c8ff" }}>token {n.tokenId} imageUrl: </span>
+                            <span style={{ color: n.imageUrl ? "#0f0" : "#f00" }}>{n.imageUrl || "(EMPTY)"}</span>
+                        </div>;
+                    })}
+                </div>
+            )}
+
             {error && <div className="inv-error">⚠️ {error}</div>}
             {!token && <div className="inv-loading"><div className="inv-loading-spinner" /><div>Ожидание авторизации…</div></div>}
-            {loading && <div className="inv-loading"><div className="inv-loading-spinner" /><div>Загрузка NFT из {nftContractId || "backend"}…</div></div>}
+            {loading && <div className="inv-loading"><div className="inv-loading-spinner" /><div>Загрузка NFT…</div></div>}
 
             {!loading && nfts.length === 0 && token && (
                 <div className="inv-empty">
                     <div className="inv-empty-icon">📭</div>
                     <div className="inv-empty-title">Нет NFT карт</div>
-                    <div className="inv-empty-text">{connected ? "NFT не найдены в " + (nftContractId || "кошельке") : "Подключи кошелёк на главной"}</div>
+                    <div className="inv-empty-text">{connected ? "NFT не найдены в " + (nftContractId || "кошельке") : "Подключи кошелёк"}</div>
                 </div>
             )}
 
@@ -211,13 +199,11 @@ export default function Inventory({ token, onDeckReady }) {
                         var pickNo = orderMap.get(k) || 0;
                         var stats = n.stats || { top: 5, right: 5, bottom: 5, left: 5 };
                         var element = n.element || null;
-                        var r = n.rarity || getRarityFromTokenId(n.tokenId || n.token_id, 10000);
+                        var r = n.rarity || getRarityFromTokenId(n.tokenId, 10000);
 
                         return (
-                            <button key={k} type="button" onPointerDown={onCardPointerDown}
-                                onClick={function () { toggle(k); }}
-                                className={"inv-card-game" + (isSel ? " is-selected" : "")}
-                                title={k + " [" + r.key + "]"}
+                            <button key={k} type="button" onPointerDown={onPD} onClick={function () { toggle(k); }}
+                                className={"inv-card-game" + (isSel ? " is-selected" : "")} title={k + " [" + r.key + "]"}
                                 style={{ "--i": idx, "--rank": r.border, "--rankGlow": r.glow }}>
                                 <div className="inv-card-art-full">
                                     <img src={n.imageUrl || "/cards/card.jpg"} alt={n.name || ""} draggable="false" loading="lazy"
@@ -229,9 +215,7 @@ export default function Inventory({ token, onDeckReady }) {
                                 <span className="inv-tt-num left">{stats.left}</span>
                                 <span className="inv-tt-num right">{stats.right}</span>
                                 <span className="inv-tt-num bottom">{stats.bottom}</span>
-                                {isSel ? (
-                                    <div className="inv-pick-badge"><div className="inv-pick-badge-inner"><div className="inv-pick-check">✓</div><div className="inv-pick-no">{pickNo}</div></div></div>
-                                ) : null}
+                                {isSel ? (<div className="inv-pick-badge"><div className="inv-pick-badge-inner"><div className="inv-pick-check">✓</div><div className="inv-pick-no">{pickNo}</div></div></div>) : null}
                             </button>
                         );
                     })}
@@ -240,10 +224,8 @@ export default function Inventory({ token, onDeckReady }) {
 
             {nfts.length > 0 && (
                 <div className="inv-actions">
-                    <button className="inv-btn inv-btn-secondary" onClick={clear} disabled={!selected.size || saving}>Очистить ({selected.size})</button>
-                    <button className="inv-btn inv-btn-primary" disabled={selected.size !== 5 || saving} onClick={saveDeck}>
-                        {saving ? "Сохранение..." : "Сохранить (" + selected.size + "/5)"}
-                    </button>
+                    <button className="inv-btn inv-btn-secondary" onClick={function () { setSelected(new Set()); }} disabled={!selected.size || saving}>Очистить ({selected.size})</button>
+                    <button className="inv-btn inv-btn-primary" disabled={selected.size !== 5 || saving} onClick={saveDeck}>{saving ? "Сохранение..." : "Сохранить (" + selected.size + "/5)"}</button>
                 </div>
             )}
 
