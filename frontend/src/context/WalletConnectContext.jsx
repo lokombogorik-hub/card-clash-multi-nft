@@ -99,23 +99,38 @@ export function WalletConnectProvider({ children }) {
 
     var sendNear = async function (params) {
         if (!selector || !accountId) throw new Error("Wallet not connected");
+
         var w = await selector.wallet("hot-wallet");
 
-        // Convert NEAR to yoctoNEAR
-        var amountStr = String(params.amount);
-        var parts = amountStr.split(".");
-        var whole = parts[0] || "0";
-        var frac = (parts[1] || "").padEnd(24, "0").slice(0, 24);
-        var yocto = whole + frac;
+        // Convert NEAR to yoctoNEAR (1 NEAR = 10^24 yoctoNEAR)
+        var amount = parseFloat(params.amount) || 0;
+        var yoctoStr = "";
 
-        // Simple transfer action
+        if (amount > 0) {
+            // Multiply by 10^24
+            var wholePart = Math.floor(amount);
+            var fracPart = amount - wholePart;
+
+            var wholeYocto = BigInt(wholePart) * BigInt("1000000000000000000000000");
+            var fracYocto = BigInt(Math.round(fracPart * 1e24));
+            var totalYocto = wholeYocto + fracYocto;
+
+            yoctoStr = totalYocto.toString();
+        } else {
+            yoctoStr = "0";
+        }
+
+        console.log("[sendNear] amount:", amount, "yocto:", yoctoStr, "to:", params.receiverId);
+
         var result = await w.signAndSendTransaction({
             receiverId: params.receiverId,
             actions: [{
                 type: "Transfer",
-                params: { deposit: yocto }
+                params: { deposit: yoctoStr }
             }]
         });
+
+        console.log("[sendNear] result:", result);
 
         setTimeout(function () { refreshBalanceFor(accountId); }, 2000);
 
@@ -126,6 +141,7 @@ export function WalletConnectProvider({ children }) {
             else if (result.transaction) txHash = result.transaction.hash;
             else if (result.txHash) txHash = result.txHash;
         }
+
         return { txHash: txHash, result: result };
     };
 

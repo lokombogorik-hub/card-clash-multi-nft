@@ -96,27 +96,6 @@ button {
     --stage-w: calc((var(--edge-inset) * 2) + (var(--side-w) * 2) + var(--board-w) + (var(--gap) * 2));
 }
 
-/* Safe area fix for mobile */
-@supports (padding-top: env(safe-area-inset-top)) {
-    :root {
-        --safe-top: env(safe-area-inset-top, 0px);
-    }
-}
-
-.wallet-connector-wrap {
-    position: fixed;
-    top: calc(var(--safe-top, 0px) + 12px);
-    right: 12px;
-    z-index: 9999;
-}
-
-@media (max-width: 768px) {
-    .wallet-connector-wrap {
-        top: calc(var(--safe-top, 0px) + 8px);
-        right: 8px;
-    }
-}
-
 @media (hover: none) and (pointer: coarse),
 (max-height: 520px) and (orientation: landscape) {
     :root {
@@ -151,9 +130,10 @@ button {
     position: relative;
     z-index: 1;
     height: 100%;
-    padding-top: calc(var(--safe-t) + 8px);
+    padding-top: calc(var(--safe-t) + 60px);
     padding-bottom: calc(var(--safe-b) + var(--bottom-stack-h) + 18px);
-
+    padding-left: var(--ui-pad);
+    padding-right: var(--ui-pad);
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
@@ -161,8 +141,11 @@ button {
 
 .home-center {
     height: 100%;
-    display: grid;
-    place-items: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding-top: 20px;
 }
 
 .play-logo {
