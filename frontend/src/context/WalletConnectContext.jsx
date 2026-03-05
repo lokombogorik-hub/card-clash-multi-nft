@@ -9,36 +9,36 @@ var WalletContext = createContext({
 });
 
 export function WalletConnectProvider({ children }) {
-    var { tgWebApp } = useTelegram();
+    var tgHook = useTelegram();
     var [selector, setSelector] = useState(null);
     var [accountId, setAccountId] = useState(null);
     var [balance, setBalance] = useState(0);
     var [isLoading, setIsLoading] = useState(true);
-    var unsubscribeRef = useRef(null);
+    var unsubRef = useRef(null);
 
-    var linkToBackend = async function (nearAccountId) {
-        if (!nearAccountId) return;
+    var linkToBackend = async function (id) {
+        if (!id) return;
         var t = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
         if (!t) return;
-        var apiBase = (import.meta.env.VITE_API_BASE_URL || "").trim();
-        if (!apiBase) return;
+        var base = (import.meta.env.VITE_API_BASE_URL || "").trim();
+        if (!base) return;
         try {
-            await fetch(apiBase + "/api/near/link", {
+            await fetch(base + "/api/near/link", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: "Bearer " + t },
-                body: JSON.stringify({ accountId: nearAccountId }),
+                body: JSON.stringify({ accountId: id }),
             });
         } catch (e) { }
     };
 
-    var refreshBalanceFor = async function (id) {
+    var refreshBal = async function (id) {
         if (!id) return;
-        try { var bal = await fetchBalance(id); setBalance(bal); } catch (e) { }
+        try { var b = await fetchBalance(id); setBalance(b); } catch (e) { }
     };
 
     useEffect(function () {
         var cancelled = false;
-        async function bootstrap() {
+        (async function () {
             setIsLoading(true);
             try {
                 var isMiniApp = false;
@@ -55,33 +55,33 @@ export function WalletConnectProvider({ children }) {
                 setSelector(sel);
 
                 try {
-                    var state = sel.store.getState();
-                    var active = state.accounts ? state.accounts.find(function (a) { return a.active; }) : null;
-                    var id = active ? active.accountId : null;
+                    var st = sel.store.getState();
+                    var act = st.accounts ? st.accounts.find(function (a) { return a.active; }) : null;
+                    var id = act ? act.accountId : null;
                     setAccountId(id || null);
-                    if (id) { refreshBalanceFor(id); linkToBackend(id); }
+                    if (id) { refreshBal(id); linkToBackend(id); }
                 } catch (e) { setAccountId(null); }
 
-                try { if (unsubscribeRef.current) unsubscribeRef.current(); } catch (e) { }
-                unsubscribeRef.current = sel.store.observable.subscribe(function (nextState) {
-                    var act = nextState.accounts ? nextState.accounts.find(function (a) { return a.active; }) : null;
-                    var newId = act ? act.accountId : null;
-                    setAccountId(newId || null);
-                    if (newId) { refreshBalanceFor(newId); linkToBackend(newId); }
+                try { if (unsubRef.current) unsubRef.current(); } catch (e) { }
+                unsubRef.current = sel.store.observable.subscribe(function (ns) {
+                    var a = ns.accounts ? ns.accounts.find(function (x) { return x.active; }) : null;
+                    var nid = a ? a.accountId : null;
+                    setAccountId(nid || null);
+                    if (nid) { refreshBal(nid); linkToBackend(nid); }
                     else { setBalance(0); }
                 });
             } catch (e) {
+                console.error("[wallet] init error:", e);
                 if (!cancelled) { setSelector(null); setAccountId(null); }
             } finally {
                 if (!cancelled) setIsLoading(false);
             }
-        }
-        bootstrap();
-        return function () { cancelled = true; try { if (unsubscribeRef.current) unsubscribeRef.current(); } catch (e) { } };
+        })();
+        return function () { cancelled = true; try { if (unsubRef.current) unsubRef.current(); } catch (e) { } };
     }, []);
 
     var connect = async function () {
-        if (!selector) throw new Error("Wallet selector not initialized");
+        if (!selector) throw new Error("Wallet not ready");
         var w = await selector.wallet("hot-wallet");
         await w.signIn({ contractId: "retardo-s.near", methodNames: [] });
     };
@@ -89,51 +89,30 @@ export function WalletConnectProvider({ children }) {
     var disconnect = async function () {
         if (!selector) return;
         try {
-            var state = selector.store.getState();
-            var activeWalletId = state.selectedWalletId;
-            if (!activeWalletId) return;
-            var w = await selector.wallet(activeWalletId);
+            var st = selector.store.getState();
+            var wid = st.selectedWalletId;
+            if (!wid) return;
+            var w = await selector.wallet(wid);
             await w.signOut();
         } catch (e) { }
     };
 
     var sendNear = async function (params) {
         if (!selector || !accountId) throw new Error("Wallet not connected");
-
         var w = await selector.wallet("hot-wallet");
-
-        // Convert NEAR to yoctoNEAR (1 NEAR = 10^24 yoctoNEAR)
         var amount = parseFloat(params.amount) || 0;
-        var yoctoStr = "";
-
+        var yocto = "0";
         if (amount > 0) {
-            // Multiply by 10^24
-            var wholePart = Math.floor(amount);
-            var fracPart = amount - wholePart;
-
-            var wholeYocto = BigInt(wholePart) * BigInt("1000000000000000000000000");
-            var fracYocto = BigInt(Math.round(fracPart * 1e24));
-            var totalYocto = wholeYocto + fracYocto;
-
-            yoctoStr = totalYocto.toString();
-        } else {
-            yoctoStr = "0";
+            var whole = BigInt(Math.floor(amount));
+            var frac = BigInt(Math.round((amount - Math.floor(amount)) * 1e24));
+            yocto = (whole * BigInt("1000000000000000000000000") + frac).toString();
         }
-
-        console.log("[sendNear] amount:", amount, "yocto:", yoctoStr, "to:", params.receiverId);
-
+        console.log("[sendNear]", amount, "NEAR =", yocto, "yocto, to:", params.receiverId);
         var result = await w.signAndSendTransaction({
             receiverId: params.receiverId,
-            actions: [{
-                type: "Transfer",
-                params: { deposit: yoctoStr }
-            }]
+            actions: [{ type: "Transfer", params: { deposit: yocto } }],
         });
-
-        console.log("[sendNear] result:", result);
-
-        setTimeout(function () { refreshBalanceFor(accountId); }, 2000);
-
+        setTimeout(function () { refreshBal(accountId); }, 2000);
         var txHash = "";
         if (result) {
             if (typeof result === "string") txHash = result;
@@ -141,7 +120,6 @@ export function WalletConnectProvider({ children }) {
             else if (result.transaction) txHash = result.transaction.hash;
             else if (result.txHash) txHash = result.txHash;
         }
-
         return { txHash: txHash, result: result };
     };
 

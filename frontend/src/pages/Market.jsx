@@ -10,52 +10,35 @@ var CASES = [
 ];
 
 export default function Market() {
-    var { connected, accountId, balance, sendNear } = useWalletConnect();
+    var ctx = useWalletConnect();
+    var connected = ctx.connected;
+    var accountId = ctx.accountId;
+    var balance = ctx.balance;
+    var sendNear = ctx.sendNear;
+
     var [buying, setBuying] = useState(null);
     var [result, setResult] = useState(null);
 
     var token = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
 
-    var handleBuy = async function (caseData) {
-        if (!connected || !accountId) {
-            alert("Подключи HOT Wallet!");
-            return;
-        }
+    var handleBuy = async function (c) {
+        if (!connected || !accountId) { alert("Подключи HOT Wallet!"); return; }
+        if (balance < c.price) { alert("Недостаточно NEAR! Нужно " + c.price + " Ⓝ, у тебя " + Number(balance).toFixed(2)); return; }
 
-        if (balance < caseData.price) {
-            alert("Недостаточно NEAR! Нужно " + caseData.price + " Ⓝ");
-            return;
-        }
-
-        setBuying(caseData.id);
+        setBuying(c.id);
         setResult(null);
 
         try {
-            // 1. Payment
-            var payResult = await sendNear({
-                receiverId: "retardo-s.near",
-                amount: caseData.price,
+            var pay = await sendNear({ receiverId: "retardo-s.near", amount: c.price });
+            if (!pay.txHash) throw new Error("Транзакция не прошла");
+
+            var open = await apiFetch("/api/cases/open", {
+                method: "POST", token: token,
+                body: JSON.stringify({ case_id: c.id, tx_hash: pay.txHash }),
             });
 
-            if (!payResult.txHash) {
-                throw new Error("Transaction failed - no txHash");
-            }
-
-            // 2. Open case on backend
-            var openResult = await apiFetch("/api/cases/open", {
-                method: "POST",
-                token: token,
-                body: JSON.stringify({ case_id: caseData.id, tx_hash: payResult.txHash }),
-            });
-
-            setResult({
-                success: true,
-                cards: openResult.cards || [],
-                message: "Получено " + (openResult.cards?.length || 0) + " карт!",
-            });
-
+            setResult({ success: true, cards: open.cards || [], message: "Получено " + (open.cards?.length || 0) + " карт!" });
         } catch (e) {
-            console.error("Buy error:", e);
             setResult({ success: false, message: "Ошибка: " + (e.message || e) });
         } finally {
             setBuying(null);
@@ -72,26 +55,25 @@ export default function Market() {
             {!connected && <div className="market-warning">⚠️ Подключи HOT Wallet чтобы покупать</div>}
 
             {connected && (
-                <div style={{ textAlign: "center", marginBottom: 20, padding: 12, background: "rgba(120,200,255,0.1)", borderRadius: 12 }}>
-                    <div style={{ fontSize: 13, color: "#78c8ff" }}>💰 Баланс: {Number(balance).toFixed(2)} Ⓝ</div>
+                <div style={{ textAlign: "center", marginBottom: 20, padding: 12, background: "rgba(120,200,255,0.1)", borderRadius: 12, border: "1px solid rgba(120,200,255,0.2)" }}>
+                    <div style={{ fontSize: 13, color: "#78c8ff" }}>💰 Баланс: {Number(balance).toFixed(4)} Ⓝ</div>
                 </div>
             )}
 
             {result && (
                 <div style={{
                     textAlign: "center", marginBottom: 20, padding: 16,
-                    background: result.success ? "rgba(34,197,94,0.15)" : "rgba(255,80,80,0.15)",
-                    border: "1px solid " + (result.success ? "rgba(34,197,94,0.4)" : "rgba(255,80,80,0.4)"),
-                    borderRadius: 12
+                    background: result.success ? "rgba(34,197,94,0.12)" : "rgba(255,80,80,0.12)",
+                    border: "1px solid " + (result.success ? "rgba(34,197,94,0.35)" : "rgba(255,80,80,0.35)"), borderRadius: 12,
                 }}>
                     <div style={{ fontSize: 15, fontWeight: 900, color: result.success ? "#22c55e" : "#ff6b6b" }}>
                         {result.success ? "✅ " : "❌ "}{result.message}
                     </div>
                     {result.cards && result.cards.length > 0 && (
                         <div style={{ marginTop: 10, display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-                            {result.cards.map(function (c, i) {
+                            {result.cards.map(function (card, i) {
                                 return <div key={i} style={{ padding: "4px 10px", borderRadius: 8, background: "rgba(0,0,0,0.3)", fontSize: 11, color: "#a0d8ff" }}>
-                                    {c.rarity} #{c.token_id}
+                                    {card.rarity} • {card.token_id}
                                 </div>;
                             })}
                         </div>
@@ -112,7 +94,8 @@ export default function Market() {
                             <div className="market-case-name">{c.name}</div>
                             <div className="market-case-desc">{c.description}</div>
                             <div className="market-case-price">{c.price} Ⓝ</div>
-                            <button className="market-case-buy-btn" onClick={function () { handleBuy(c); }}
+                            <button className="market-case-buy-btn"
+                                onClick={function () { handleBuy(c); }}
                                 disabled={!canBuy || buying === c.id}
                                 style={{ opacity: canBuy ? 1 : 0.5 }}>
                                 {buying === c.id ? "⏳ Paying..." : canBuy ? "Buy" : "Need " + c.price + " Ⓝ"}
