@@ -26,13 +26,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
+
 @app.get("/")
 def read_root():
     return {"status": "ok", "service": "Card Clash API"}
+
 
 app.include_router(auth_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
@@ -41,6 +44,7 @@ app.include_router(near_router)
 app.include_router(matches_router)
 app.include_router(matchmaking_router)
 app.include_router(cases_router)
+
 
 @app.on_event("startup")
 async def on_startup():

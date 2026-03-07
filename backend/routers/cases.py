@@ -39,6 +39,7 @@ async def open_case(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
 ):
+    # Validate case_id
     if data.case_id == "starter":
         card_count = 1
         target_rarity = "mixed"
@@ -53,6 +54,11 @@ async def open_case(
         target_rarity = "legendary"
     else:
         raise HTTPException(400, "Unknown case_id")
+
+    # TODO: Validate tx_hash on-chain (check transfer to treasury)
+    # For now we accept any non-empty tx_hash
+    if not data.tx_hash or len(data.tx_hash) < 5:
+        raise HTTPException(400, "Invalid tx_hash")
 
     collection = COLLECTIONS["cardclash"]
     reserved_tokens = []
@@ -88,6 +94,7 @@ async def open_case(
     return {
         "cards": reserved_tokens,
         "collection": "cardclash",
+        "tx_hash": data.tx_hash,
         "ready_for_claim": True,
     }
 

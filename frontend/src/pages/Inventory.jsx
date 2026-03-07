@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { apiFetch } from "../api";
 import { useWalletConnect } from "../context/WalletConnectContext";
-import { nearNftTokensForOwner } from "../libs/nearNft";
+import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl } from "../libs/nearNft";
 
 function nftKey(n) {
     if (n.key) return n.key;
@@ -31,6 +31,47 @@ function genStats(tokenId, r) {
 function safeParse(s) {
     try { if (!s) return null; if (typeof s === "object") return s; return JSON.parse(String(s)); }
     catch (e) { return null; }
+}
+
+function NftImage({ src, alt }) {
+    var [currentSrc, setCurrentSrc] = useState(src || "");
+    var [gatewayIdx, setGatewayIdx] = useState(0);
+    var [failed, setFailed] = useState(false);
+
+    useEffect(function () {
+        setCurrentSrc(src || "");
+        setGatewayIdx(0);
+        setFailed(false);
+    }, [src]);
+
+    var handleError = useCallback(function () {
+        if (!src) { setFailed(true); return; }
+
+        if (isIpfsUrl(src)) {
+            var nextIdx = gatewayIdx + 1;
+            if (nextIdx < 5) {
+                setGatewayIdx(nextIdx);
+                setCurrentSrc(ipfsGatewayUrl(src, nextIdx));
+                return;
+            }
+        }
+
+        setFailed(true);
+    }, [src, gatewayIdx]);
+
+    if (failed || !currentSrc) {
+        return <img src="/cards/card.jpg" alt={alt || ""} draggable="false" loading="lazy" />;
+    }
+
+    return (
+        <img
+            src={currentSrc}
+            alt={alt || ""}
+            draggable="false"
+            loading="lazy"
+            onError={handleError}
+        />
+    );
 }
 
 export default function Inventory({ token, onDeckReady }) {
@@ -93,7 +134,7 @@ export default function Inventory({ token, onDeckReady }) {
                                 stats: st, element: (extra && extra.element) || null, rarity: r,
                             };
                         });
-                        setSource(items.length > 0 ? "✅ Blockchain (" + items.length + ")" : "⚠️ 0 NFTs");
+                        setSource(items.length > 0 ? "✅ Blockchain (" + items.length + ")" : "⚠️ 0 NFTs on-chain");
                     } catch (e) {
                         setSource("❌ " + (e.message || e));
                         setDebug(["error: " + (e.message || e)]);
@@ -165,7 +206,6 @@ export default function Inventory({ token, onDeckReady }) {
                 </div>
             ) : null}
 
-            {/* DEBUG: показываем что вернул RPC — УБРАТЬ ПОСЛЕ ОТЛАДКИ */}
             {debug.length > 0 && (
                 <div style={{ margin: "10px 0", padding: 10, background: "rgba(0,0,0,0.5)", borderRadius: 10, fontSize: 10, color: "#aaa", maxHeight: 200, overflow: "auto", wordBreak: "break-all" }}>
                     <div style={{ fontWeight: 900, marginBottom: 4, color: "#ff0" }}>DEBUG (remove after fix):</div>
@@ -206,8 +246,7 @@ export default function Inventory({ token, onDeckReady }) {
                                 className={"inv-card-game" + (isSel ? " is-selected" : "")} title={k + " [" + r.key + "]"}
                                 style={{ "--i": idx, "--rank": r.border, "--rankGlow": r.glow }}>
                                 <div className="inv-card-art-full">
-                                    <img src={n.imageUrl || "/cards/card.jpg"} alt={n.name || ""} draggable="false" loading="lazy"
-                                        onError={function (e) { e.currentTarget.src = "/cards/card.jpg"; }} />
+                                    <NftImage src={n.imageUrl} alt={n.name || ""} />
                                 </div>
                                 {element && <div className="inv-card-elem-pill" title={element}><span className="inv-card-elem-ic">{ELEM_ICON[element] || element}</span></div>}
                                 <div className="inv-tt-badge" />

@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-import jwt
 import os
 
 from database.session import get_db
@@ -13,16 +12,32 @@ JWT_SECRET = os.getenv("JWT_SECRET", "cardclash-secret-key-change-me")
 JWT_ALGORITHM = "HS256"
 
 
+def _decode_token(token_str: str) -> dict:
+    """Try PyJWT first (import jwt), fallback to python-jose."""
+    # PyJWT
+    try:
+        import jwt as pyjwt
+        return pyjwt.decode(token_str, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except Exception:
+        pass
+
+    # python-jose
+    try:
+        from jose import jwt as jose_jwt
+        return jose_jwt.decode(token_str, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except Exception:
+        pass
+
+    raise HTTPException(401, "Invalid token (decode failed)")
+
+
 async def get_current_user(request: Request, db: AsyncSession = Depends(get_db)) -> User:
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         raise HTTPException(401, "Missing token")
 
     token = auth[7:]
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-    except Exception:
-        raise HTTPException(401, "Invalid token")
+    payload = _decode_token(token)
 
     user_id = payload.get("user_id") or payload.get("sub")
     if not user_id:

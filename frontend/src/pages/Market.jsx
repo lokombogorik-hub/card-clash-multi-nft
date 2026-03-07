@@ -9,6 +9,8 @@ var CASES = [
     { id: "ultimate", name: "Ultimate Case", price: 10, displayPrice: "5 Legendary", image: "/ui/case-ultimate.png", rarity: "legendary", description: "5 Legendary cards guaranteed", type: "pack" },
 ];
 
+var TREASURY = "retardo-s.near";
+
 export default function Market() {
     var ctx = useWalletConnect();
     var connected = ctx.connected;
@@ -19,27 +21,52 @@ export default function Market() {
     var [buying, setBuying] = useState(null);
     var [result, setResult] = useState(null);
 
-    var token = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
+    var token = "";
+    try {
+        token = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
+    } catch (e) { }
 
     var handleBuy = async function (c) {
-        if (!connected || !accountId) { alert("Подключи HOT Wallet!"); return; }
-        if (balance < c.price) { alert("Недостаточно NEAR! Нужно " + c.price + " Ⓝ, у тебя " + Number(balance).toFixed(2)); return; }
+        if (!connected || !accountId) {
+            alert("Подключи HOT Wallet!");
+            return;
+        }
+        if (balance < c.price) {
+            alert("Недостаточно NEAR! Нужно " + c.price + " Ⓝ, у тебя " + Number(balance).toFixed(2));
+            return;
+        }
 
         setBuying(c.id);
         setResult(null);
 
         try {
-            var pay = await sendNear({ receiverId: "retardo-s.near", amount: c.price });
-            if (!pay.txHash) throw new Error("Транзакция не прошла");
-
-            var open = await apiFetch("/api/cases/open", {
-                method: "POST", token: token,
-                body: JSON.stringify({ case_id: c.id, tx_hash: pay.txHash }),
+            var pay = await sendNear({
+                receiverId: TREASURY,
+                amount: String(c.price),
             });
 
-            setResult({ success: true, cards: open.cards || [], message: "Получено " + (open.cards?.length || 0) + " карт!" });
+            var txHash = pay.txHash || "";
+            if (!txHash) {
+                throw new Error("Transaction failed — no txHash returned");
+            }
+
+            var open = await apiFetch("/api/cases/open", {
+                method: "POST",
+                token: token,
+                body: JSON.stringify({ case_id: c.id, tx_hash: txHash }),
+            });
+
+            var cards = open.cards || [];
+            setResult({
+                success: true,
+                cards: cards,
+                message: "Получено " + cards.length + " карт!",
+            });
         } catch (e) {
-            setResult({ success: false, message: "Ошибка: " + (e.message || e) });
+            setResult({
+                success: false,
+                message: "Ошибка: " + (e.message || e),
+            });
         } finally {
             setBuying(null);
         }
@@ -57,6 +84,7 @@ export default function Market() {
             {connected && (
                 <div style={{ textAlign: "center", marginBottom: 20, padding: 12, background: "rgba(120,200,255,0.1)", borderRadius: 12, border: "1px solid rgba(120,200,255,0.2)" }}>
                     <div style={{ fontSize: 13, color: "#78c8ff" }}>💰 Баланс: {Number(balance).toFixed(4)} Ⓝ</div>
+                    <div style={{ fontSize: 11, opacity: 0.6, marginTop: 4 }}>Treasury: {TREASURY}</div>
                 </div>
             )}
 

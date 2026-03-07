@@ -12,6 +12,9 @@ export default function Matchmaking({ me, onBack, onMatched }) {
     var [searchMode, setSearchMode] = useState(null);
     var pollRef = useRef(null);
 
+    var escrowContractId = (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim();
+    var stage2Enabled = Boolean(escrowContractId);
+
     var stopSearch = function () {
         if (pollRef.current) {
             clearInterval(pollRef.current);
@@ -62,7 +65,6 @@ export default function Matchmaking({ me, onBack, onMatched }) {
                 return;
             }
 
-            // Poll for match
             pollRef.current = setInterval(async function () {
                 try {
                     var r = await apiFetch("/api/matchmaking/join_queue", {
@@ -120,18 +122,26 @@ export default function Matchmaking({ me, onBack, onMatched }) {
                     <div className="matchmaking-mode-badge">Available</div>
                 </div>
 
-                <div className="matchmaking-mode-card pvp" onClick={startPvP}>
+                <div className={"matchmaking-mode-card pvp" + (!stage2Enabled ? " pvp-no-escrow" : "")} onClick={startPvP}>
                     <div className="matchmaking-mode-icon">⚔️</div>
                     <div className="matchmaking-mode-name">PvP</div>
-                    <div className="matchmaking-mode-desc">Battle real players! Winner takes 1 NFT from loser.</div>
-                    <div className="matchmaking-mode-badge">Live</div>
+                    <div className="matchmaking-mode-desc">
+                        {stage2Enabled
+                            ? "Battle real players! Winner takes 1 NFT from loser (on-chain escrow)."
+                            : "Battle real players! (Off-chain mode — escrow not deployed yet)"}
+                    </div>
+                    <div className="matchmaking-mode-badge">
+                        {stage2Enabled ? "Live" : "Beta"}
+                    </div>
                 </div>
             </div>
 
             <div className="matchmaking-info">
                 <div className="matchmaking-info-icon">💡</div>
                 <div className="matchmaking-info-text">
-                    AI mode: play offline against bot. PvP: matchmaking finds opponent by ELO rating. Make sure you have 5 cards in your deck!
+                    AI mode: play offline against bot. PvP: matchmaking finds opponent by ELO rating.
+                    {!stage2Enabled && " ⚠️ Escrow contract not deployed — PvP runs without NFT lock."}
+                    {" "}Make sure you have 5 cards in your deck!
                 </div>
             </div>
         </div>

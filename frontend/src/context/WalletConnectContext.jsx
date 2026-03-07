@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
-import useTelegram from "../hooks/useTelegram";
 import { initSelector, fetchBalance } from "../libs/walletSelector";
 
 var WalletContext = createContext({
@@ -9,7 +8,6 @@ var WalletContext = createContext({
 });
 
 export function WalletConnectProvider({ children }) {
-    var tgHook = useTelegram();
     var [selector, setSelector] = useState(null);
     var [accountId, setAccountId] = useState(null);
     var [balance, setBalance] = useState(0);
@@ -18,9 +16,11 @@ export function WalletConnectProvider({ children }) {
 
     var linkToBackend = async function (id) {
         if (!id) return;
-        var t = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
+        var t = "";
+        try { t = localStorage.getItem("token") || localStorage.getItem("accessToken") || ""; } catch (e) { }
         if (!t) return;
-        var base = (import.meta.env.VITE_API_BASE_URL || "").trim();
+        var base = "";
+        try { base = (import.meta.env.VITE_API_BASE_URL || "").trim(); } catch (e) { }
         if (!base) return;
         try {
             await fetch(base + "/api/near/link", {
@@ -103,9 +103,13 @@ export function WalletConnectProvider({ children }) {
         var amount = parseFloat(params.amount) || 0;
         var yocto = "0";
         if (amount > 0) {
-            var whole = BigInt(Math.floor(amount));
-            var frac = BigInt(Math.round((amount - Math.floor(amount)) * 1e24));
-            yocto = (whole * BigInt("1000000000000000000000000") + frac).toString();
+            var nearStr = amount.toFixed(24);
+            var parts = nearStr.split(".");
+            var wholePart = parts[0] || "0";
+            var fracPart = (parts[1] || "").padEnd(24, "0").substring(0, 24);
+            var wholeYocto = BigInt(wholePart) * BigInt("1000000000000000000000000");
+            var fracYocto = BigInt(fracPart);
+            yocto = (wholeYocto + fracYocto).toString();
         }
         console.log("[sendNear]", amount, "NEAR =", yocto, "yocto, to:", params.receiverId);
         var result = await w.signAndSendTransaction({

@@ -1,5 +1,13 @@
 var RPC_URL = "https://rpc.mainnet.near.org";
 
+var IPFS_GATEWAYS = [
+    "https://ipfs.near.social/ipfs/",
+    "https://cloudflare-ipfs.com/ipfs/",
+    "https://gateway.pinata.cloud/ipfs/",
+    "https://w3s.link/ipfs/",
+    "https://dweb.link/ipfs/",
+];
+
 function toB64(str) {
     try { return btoa(unescape(encodeURIComponent(str))); }
     catch (e) { return btoa(str); }
@@ -8,7 +16,7 @@ function toB64(str) {
 function fixProto(url) {
     if (!url) return "";
     var s = String(url).trim();
-    if (s.startsWith("ipfs://")) return "https://ipfs.near.social/ipfs/" + s.slice(7);
+    if (s.startsWith("ipfs://")) return IPFS_GATEWAYS[0] + s.slice(7);
     if (s.startsWith("ar://")) return "https://arweave.net/" + s.slice(5);
     return s;
 }
@@ -52,10 +60,63 @@ async function rpc(contractId, method, args) {
     return JSON.parse(new TextDecoder().decode(new Uint8Array(j.result.result)));
 }
 
+export function ipfsGatewayUrl(originalUrl, gatewayIndex) {
+    if (!originalUrl) return "";
+    var s = String(originalUrl).trim();
+    var cid = "";
+    var path = "";
+
+    if (s.startsWith("ipfs://")) {
+        var rest = s.slice(7);
+        var slashIdx = rest.indexOf("/");
+        if (slashIdx >= 0) {
+            cid = rest.substring(0, slashIdx);
+            path = rest.substring(slashIdx);
+        } else {
+            cid = rest;
+        }
+    } else {
+        for (var i = 0; i < IPFS_GATEWAYS.length; i++) {
+            if (s.includes("/ipfs/")) {
+                var parts = s.split("/ipfs/");
+                var afterIpfs = parts[parts.length - 1];
+                var slashIdx2 = afterIpfs.indexOf("/");
+                if (slashIdx2 >= 0) {
+                    cid = afterIpfs.substring(0, slashIdx2);
+                    path = afterIpfs.substring(slashIdx2);
+                } else {
+                    cid = afterIpfs;
+                }
+                break;
+            }
+        }
+        if (!cid && s.includes(".ipfs.")) {
+            var match = s.match(/https?:\/\/([^.]+)\.ipfs\.[^/]+(\/.*)?/);
+            if (match) {
+                cid = match[1];
+                path = match[2] || "";
+            }
+        }
+    }
+
+    if (!cid) return s;
+
+    var gi = (gatewayIndex || 0) % IPFS_GATEWAYS.length;
+    return IPFS_GATEWAYS[gi] + cid + path;
+}
+
+export function isIpfsUrl(url) {
+    if (!url) return false;
+    var s = String(url);
+    if (s.startsWith("ipfs://")) return true;
+    if (s.includes("/ipfs/")) return true;
+    if (s.includes(".ipfs.")) return true;
+    return false;
+}
+
 export async function nearNftTokensForOwner(contractId, accountId) {
     var debugLog = [];
 
-    // 1) Contract metadata
     var cBaseUri = "";
     var cIcon = "";
     try {
@@ -68,23 +129,24 @@ export async function nearNftTokensForOwner(contractId, accountId) {
         debugLog.push("nft_metadata_error=" + e.message);
     }
 
-    // 2) Paginate
     var all = [];
-    for (var pg = 0; pg < 30; pg++) {
+    for (var pg = 0; pg < 50; pg++) {
         try {
             var batch = await rpc(contractId, "nft_tokens_for_owner", {
                 account_id: accountId,
                 from_index: String(all.length),
-                limit: 50,
+                limit: 100,
             });
             if (!Array.isArray(batch) || batch.length === 0) break;
             all = all.concat(batch);
-            if (batch.length < 50) break;
-        } catch (e) { break; }
+            if (batch.length < 100) break;
+        } catch (e) {
+            debugLog.push("pagination_error_pg" + pg + "=" + e.message);
+            break;
+        }
     }
     debugLog.push("total_tokens=" + all.length);
 
-    // 3) Process each
     var out = [];
     for (var i = 0; i < all.length; i++) {
         var t = all[i];
@@ -96,17 +158,14 @@ export async function nearNftTokensForOwner(contractId, accountId) {
         var desc = md.description || "";
         var extra = md.extra || null;
 
-        // Debug: log raw metadata for first 3 tokens
         if (i < 3) {
             debugLog.push("token_" + t.token_id + "_raw=" + JSON.stringify(md).substring(0, 300));
         }
 
-        // A) Direct media
         if (md.media) {
             media = join(bUri, md.media);
         }
 
-        // B) Reference JSON
         if (!media && md.reference) {
             var refUrl = join(bUri, md.reference);
             if (i < 3) debugLog.push("token_" + t.token_id + "_refUrl=" + refUrl);
@@ -122,12 +181,10 @@ export async function nearNftTokensForOwner(contractId, accountId) {
             }
         }
 
-        // C) Fallback: contract icon
         if (!media && cIcon && cIcon.startsWith("data:")) {
             media = cIcon;
         }
 
-        // D) Fallback: base_uri + token_id
         if (!media && bUri) {
             media = join(bUri, t.token_id);
         }
@@ -139,8 +196,6 @@ export async function nearNftTokensForOwner(contractId, accountId) {
         });
     }
 
-    // Store debug for display
     out._debug = debugLog;
-
     return out;
 }
