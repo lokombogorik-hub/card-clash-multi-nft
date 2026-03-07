@@ -1,11 +1,11 @@
 var RPC_URL = "https://rpc.mainnet.near.org";
 
 var IPFS_GATEWAYS = [
-    "https://ipfs.near.social/ipfs/",
-    "https://cloudflare-ipfs.com/ipfs/",
-    "https://gateway.pinata.cloud/ipfs/",
-    "https://w3s.link/ipfs/",
-    "https://dweb.link/ipfs/",
+    function (cid, path) { return "https://" + cid + ".ipfs.w3s.link" + path; },
+    function (cid, path) { return "https://ipfs.near.social/ipfs/" + cid + path; },
+    function (cid, path) { return "https://cloudflare-ipfs.com/ipfs/" + cid + path; },
+    function (cid, path) { return "https://" + cid + ".ipfs.dweb.link" + path; },
+    function (cid, path) { return "https://gateway.pinata.cloud/ipfs/" + cid + path; },
 ];
 
 function toB64(str) {
@@ -16,7 +16,7 @@ function toB64(str) {
 function fixProto(url) {
     if (!url) return "";
     var s = String(url).trim();
-    if (s.startsWith("ipfs://")) return IPFS_GATEWAYS[0] + s.slice(7);
+    if (s.startsWith("ipfs://")) return "https://ipfs.near.social/ipfs/" + s.slice(7);
     if (s.startsWith("ar://")) return "https://arweave.net/" + s.slice(5);
     return s;
 }
@@ -60,58 +60,52 @@ async function rpc(contractId, method, args) {
     return JSON.parse(new TextDecoder().decode(new Uint8Array(j.result.result)));
 }
 
-export function ipfsGatewayUrl(originalUrl, gatewayIndex) {
-    if (!originalUrl) return "";
-    var s = String(originalUrl).trim();
-    var cid = "";
-    var path = "";
+/**
+ * Extract CID and path from any IPFS URL format:
+ *   ipfs://CID/path
+ *   https://CID.ipfs.w3s.link/path        (subdomain)
+ *   https://gateway.com/ipfs/CID/path      (path-based)
+ * Returns { cid, path } or null
+ */
+export function parseIpfs(url) {
+    if (!url) return null;
+    var s = String(url).trim();
 
+    // ipfs:// protocol
     if (s.startsWith("ipfs://")) {
         var rest = s.slice(7);
-        var slashIdx = rest.indexOf("/");
-        if (slashIdx >= 0) {
-            cid = rest.substring(0, slashIdx);
-            path = rest.substring(slashIdx);
-        } else {
-            cid = rest;
-        }
-    } else {
-        for (var i = 0; i < IPFS_GATEWAYS.length; i++) {
-            if (s.includes("/ipfs/")) {
-                var parts = s.split("/ipfs/");
-                var afterIpfs = parts[parts.length - 1];
-                var slashIdx2 = afterIpfs.indexOf("/");
-                if (slashIdx2 >= 0) {
-                    cid = afterIpfs.substring(0, slashIdx2);
-                    path = afterIpfs.substring(slashIdx2);
-                } else {
-                    cid = afterIpfs;
-                }
-                break;
-            }
-        }
-        if (!cid && s.includes(".ipfs.")) {
-            var match = s.match(/https?:\/\/([^.]+)\.ipfs\.[^/]+(\/.*)?/);
-            if (match) {
-                cid = match[1];
-                path = match[2] || "";
-            }
-        }
+        var idx = rest.indexOf("/");
+        if (idx >= 0) return { cid: rest.substring(0, idx), path: rest.substring(idx) };
+        return { cid: rest, path: "" };
     }
 
-    if (!cid) return s;
+    // subdomain: https://CID.ipfs.GATEWAY/path
+    var subMatch = s.match(/^https?:\/\/([a-zA-Z0-9]+)\.ipfs\.[^/]+(\/.*)?$/);
+    if (subMatch) {
+        return { cid: subMatch[1], path: subMatch[2] || "" };
+    }
 
-    var gi = (gatewayIndex || 0) % IPFS_GATEWAYS.length;
-    return IPFS_GATEWAYS[gi] + cid + path;
+    // path-based: https://gateway/ipfs/CID/path
+    var pathMatch = s.match(/\/ipfs\/([a-zA-Z0-9]+)(\/.*)?/);
+    if (pathMatch) {
+        return { cid: pathMatch[1], path: pathMatch[2] || "" };
+    }
+
+    return null;
 }
 
 export function isIpfsUrl(url) {
-    if (!url) return false;
-    var s = String(url);
-    if (s.startsWith("ipfs://")) return true;
-    if (s.includes("/ipfs/")) return true;
-    if (s.includes(".ipfs.")) return true;
-    return false;
+    return parseIpfs(url) !== null;
+}
+
+/**
+ * Build alternative IPFS URL using gateway at index
+ */
+export function ipfsGatewayUrl(originalUrl, gatewayIndex) {
+    var parsed = parseIpfs(originalUrl);
+    if (!parsed) return originalUrl || "";
+    var gi = (gatewayIndex || 0) % IPFS_GATEWAYS.length;
+    return IPFS_GATEWAYS[gi](parsed.cid, parsed.path);
 }
 
 export async function nearNftTokensForOwner(contractId, accountId) {

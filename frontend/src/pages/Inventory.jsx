@@ -34,30 +34,32 @@ function safeParse(s) {
 }
 
 function NftImage({ src, alt }) {
-    var [currentSrc, setCurrentSrc] = useState(src || "");
-    var [gatewayIdx, setGatewayIdx] = useState(0);
+    var [gwIdx, setGwIdx] = useState(-1);
     var [failed, setFailed] = useState(false);
 
+    var currentSrc = useMemo(function () {
+        if (!src) return "";
+        if (gwIdx < 0) return src;
+        if (!isIpfsUrl(src)) return src;
+        return ipfsGatewayUrl(src, gwIdx);
+    }, [src, gwIdx]);
+
     useEffect(function () {
-        setCurrentSrc(src || "");
-        setGatewayIdx(0);
+        setGwIdx(-1);
         setFailed(false);
     }, [src]);
 
     var handleError = useCallback(function () {
         if (!src) { setFailed(true); return; }
-
         if (isIpfsUrl(src)) {
-            var nextIdx = gatewayIdx + 1;
-            if (nextIdx < 5) {
-                setGatewayIdx(nextIdx);
-                setCurrentSrc(ipfsGatewayUrl(src, nextIdx));
+            var next = gwIdx + 1;
+            if (next < 5) {
+                setGwIdx(next);
                 return;
             }
         }
-
         setFailed(true);
-    }, [src, gatewayIdx]);
+    }, [src, gwIdx]);
 
     if (failed || !currentSrc) {
         return <img src="/cards/card.jpg" alt={alt || ""} draggable="false" loading="lazy" />;
