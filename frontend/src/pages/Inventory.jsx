@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { apiFetch } from "../api";
 import { useWalletConnect } from "../context/WalletConnectContext";
-import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, parseIpfs } from "../libs/nearNft";
+import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, proxyImageUrl, GATEWAY_COUNT } from "../libs/nearNft";
 
 function nftKey(n) {
     if (n.key) return n.key;
@@ -11,8 +11,6 @@ function nftKey(n) {
 }
 
 var ELEM_ICON = { Earth: "🪨", Fire: "🔥", Water: "💧", Poison: "☠️", Holy: "✨", Thunder: "⚡", Wind: "🌪️", Ice: "❄️" };
-
-var IPFS_GATEWAYS_COUNT = 8; // must match nearNft.js IPFS_GATEWAYS.length
 
 function getRarityFromTokenId(tokenId, totalSupply) {
     totalSupply = totalSupply || 10000;
@@ -36,61 +34,61 @@ function safeParse(s) {
 }
 
 /**
- * NftImage component with IPFS gateway fallback rotation
- * - Tries original URL first
- * - On error, rotates through IPFS gateways if URL is IPFS
- * - Falls back to placeholder only after all gateways exhausted
+ * NftImage — tries the proxied URL first (which is most likely to work),
+ * then on error tries direct IPFS gateways, then shows placeholder.
  */
-function NftImage({ src, alt }) {
-    var [gwIdx, setGwIdx] = useState(-1);
-    var [failed, setFailed] = useState(false);
+function NftImage({ src, originalSrc, alt }) {
+    var [stage, setStage] = useState(0);
+    // stage 0 = try src (proxy URL)
+    // stage 1..N = try direct IPFS gateways using originalSrc
+    // stage -1 = all failed, show placeholder
     var [loaded, setLoaded] = useState(false);
-    var retryTimerRef = useRef(null);
+    var timerRef = useRef(null);
 
     var currentSrc = useMemo(function () {
-        if (!src) return "";
-        if (gwIdx < 0) return src;
-        if (!isIpfsUrl(src)) return src;
-        return ipfsGatewayUrl(src, gwIdx);
-    }, [src, gwIdx]);
+        if (stage === 0) return src || "";
+        if (stage === -1) return "";
+        if (!originalSrc || !isIpfsUrl(originalSrc)) return "";
+        var gwIdx = stage - 1;
+        if (gwIdx >= GATEWAY_COUNT) return "";
+        return ipfsGatewayUrl(originalSrc, gwIdx);
+    }, [src, originalSrc, stage]);
 
     useEffect(function () {
-        setGwIdx(-1);
-        setFailed(false);
+        setStage(0);
         setLoaded(false);
-        if (retryTimerRef.current) {
-            clearTimeout(retryTimerRef.current);
-            retryTimerRef.current = null;
-        }
+        if (timerRef.current) clearTimeout(timerRef.current);
     }, [src]);
 
-    // Cleanup timer on unmount
     useEffect(function () {
-        return function () {
-            if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-        };
+        return function () { if (timerRef.current) clearTimeout(timerRef.current); };
     }, []);
 
     var handleError = useCallback(function () {
-        if (!src) { setFailed(true); return; }
-        if (isIpfsUrl(src)) {
-            var next = gwIdx + 1;
-            if (next < IPFS_GATEWAYS_COUNT) {
-                // Small delay between retries to avoid hammering
-                retryTimerRef.current = setTimeout(function () {
-                    setGwIdx(next);
-                }, 200);
-                return;
+        if (stage === 0) {
+            // Proxy failed — try direct gateways if originalSrc is IPFS
+            if (originalSrc && isIpfsUrl(originalSrc)) {
+                timerRef.current = setTimeout(function () { setStage(1); }, 100);
+            } else {
+                setStage(-1);
+            }
+            return;
+        }
+        if (stage >= 1) {
+            var nextGw = stage; // stage 1 = gw 0, stage 2 = gw 1, ...
+            if (nextGw < GATEWAY_COUNT) {
+                timerRef.current = setTimeout(function () { setStage(nextGw + 1); }, 200);
+            } else {
+                setStage(-1);
             }
         }
-        setFailed(true);
-    }, [src, gwIdx]);
+    }, [stage, originalSrc]);
 
     var handleLoad = useCallback(function () {
         setLoaded(true);
     }, []);
 
-    if (failed || !currentSrc) {
+    if (stage === -1 || !currentSrc) {
         return (
             <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(30,20,50,0.8)", borderRadius: 8 }}>
                 <span style={{ fontSize: 32 }}>🎴</span>
@@ -110,6 +108,7 @@ function NftImage({ src, alt }) {
                 alt={alt || ""}
                 draggable="false"
                 loading="lazy"
+                crossOrigin="anonymous"
                 onError={handleError}
                 onLoad={handleLoad}
                 style={{ opacity: loaded ? 1 : 0, transition: "opacity 0.3s" }}
@@ -152,7 +151,6 @@ export default function Inventory({ token, onDeckReady }) {
             setDebug([]);
 
             try {
-                // Load saved deck
                 try {
                     var dk = await apiFetch("/api/decks/active", { token: token });
                     if (alive && dk && Array.isArray(dk.cards)) setSelected(new Set(dk.cards.slice(0, 5)));
@@ -177,6 +175,7 @@ export default function Inventory({ token, onDeckReady }) {
                                 tokenId: t.token_id, token_id: t.token_id,
                                 name: (t.metadata && t.metadata.title) || ("Card #" + t.token_id),
                                 imageUrl: (t.metadata && t.metadata.media) || "",
+                                originalImageUrl: (t.metadata && t.metadata.originalMedia) || "",
                                 stats: st, element: (extra && extra.element) || null, rarity: r,
                             };
                         });
@@ -266,8 +265,9 @@ export default function Inventory({ token, onDeckReady }) {
                             {debug.map(function (d, i) { return <div key={i}>{d}</div>; })}
                             {nfts.length > 0 && nfts.slice(0, 5).map(function (n, i) {
                                 return <div key={"img" + i} style={{ marginTop: 4 }}>
-                                    <span style={{ color: "#78c8ff" }}>token {n.tokenId} imageUrl: </span>
-                                    <span style={{ color: n.imageUrl ? "#0f0" : "#f00" }}>{n.imageUrl || "(EMPTY)"}</span>
+                                    <span style={{ color: "#78c8ff" }}>token {n.tokenId}: </span>
+                                    <span style={{ color: "#0f0" }}>{n.imageUrl ? "proxied" : "(EMPTY)"}</span>
+                                    {n.originalImageUrl && <span style={{ color: "#aaa" }}> orig={n.originalImageUrl.substring(0, 80)}</span>}
                                 </div>;
                             })}
                         </div>
@@ -302,7 +302,7 @@ export default function Inventory({ token, onDeckReady }) {
                                 className={"inv-card-game" + (isSel ? " is-selected" : "")} title={k + " [" + r.key + "]"}
                                 style={{ "--i": idx, "--rank": r.border, "--rankGlow": r.glow }}>
                                 <div className="inv-card-art-full">
-                                    <NftImage src={n.imageUrl} alt={n.name || ""} />
+                                    <NftImage src={n.imageUrl} originalSrc={n.originalImageUrl} alt={n.name || ""} />
                                 </div>
                                 {element && <div className="inv-card-elem-pill" title={element}><span className="inv-card-elem-ic">{ELEM_ICON[element] || element}</span></div>}
                                 <div className="inv-tt-badge" />

@@ -1,5 +1,7 @@
 var RPC_URL = "https://rpc.mainnet.near.org";
 
+var API_BASE = (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_BASE_URL) || "";
+
 var IPFS_GATEWAYS = [
     function (cid, path) { return "https://ipfs.near.social/ipfs/" + cid + path; },
     function (cid, path) { return "https://cloudflare-ipfs.com/ipfs/" + cid + path; },
@@ -10,6 +12,8 @@ var IPFS_GATEWAYS = [
     function (cid, path) { return "https://w3s.link/ipfs/" + cid + path; },
     function (cid, path) { return "https://ipfs.io/ipfs/" + cid + path; },
 ];
+
+export var GATEWAY_COUNT = IPFS_GATEWAYS.length;
 
 function toB64(str) {
     try { return btoa(unescape(encodeURIComponent(str))); }
@@ -63,20 +67,10 @@ async function rpc(contractId, method, args) {
     return JSON.parse(new TextDecoder().decode(new Uint8Array(j.result.result)));
 }
 
-/**
- * Parse any IPFS URL format into { cid, path }
- *
- *   ipfs://CID/path
- *   https://CID.ipfs.w3s.link/path          (subdomain)
- *   https://gateway.com/ipfs/CID/path        (path-based)
- *
- * CIDv1 (bafy...) can be 59 chars, CIDv0 (Qm...) 46 chars — regex must allow long alphanumeric+digit strings
- */
 export function parseIpfs(url) {
     if (!url) return null;
     var s = String(url).trim();
 
-    // ipfs:// protocol
     if (s.startsWith("ipfs://")) {
         var rest = s.slice(7);
         var idx = rest.indexOf("/");
@@ -84,14 +78,11 @@ export function parseIpfs(url) {
         return { cid: rest, path: "" };
     }
 
-    // subdomain: https://CID.ipfs.GATEWAY/path
-    // CIDv1 base32 is [a-z2-7]{59}, but be generous with pattern
-    var subMatch = s.match(/^https?:\/\/([a-zA-Z0-9]{20,}?)\.ipfs\.[^/]+(\/.*)?$/);
+    var subMatch = s.match(/^https?:\/\/([a-zA-Z0-9]{20,})\.ipfs\.[^/]+(\/.*)?$/);
     if (subMatch) {
         return { cid: subMatch[1], path: subMatch[2] || "" };
     }
 
-    // path-based: https://gateway/ipfs/CID/path
     var pathMatch = s.match(/\/ipfs\/([a-zA-Z0-9]{20,})(\/.*)?/);
     if (pathMatch) {
         return { cid: pathMatch[1], path: pathMatch[2] || "" };
@@ -104,9 +95,6 @@ export function isIpfsUrl(url) {
     return parseIpfs(url) !== null;
 }
 
-/**
- * Build alternative IPFS URL using gateway at index
- */
 export function ipfsGatewayUrl(originalUrl, gatewayIndex) {
     var parsed = parseIpfs(originalUrl);
     if (!parsed) return originalUrl || "";
@@ -115,44 +103,13 @@ export function ipfsGatewayUrl(originalUrl, gatewayIndex) {
 }
 
 /**
- * Check if a URL is reachable (HEAD request with timeout)
+ * Build a proxy URL through our backend.
+ * This avoids CORS/gateway issues in Telegram WebView.
  */
-async function probeUrl(url, timeoutMs) {
-    try {
-        var controller = new AbortController();
-        var timer = setTimeout(function () { controller.abort(); }, timeoutMs || 6000);
-        var r = await fetch(url, { method: "HEAD", signal: controller.signal, mode: "no-cors" });
-        clearTimeout(timer);
-        // no-cors gives opaque response (status 0), that's OK — it means the server responded
-        return true;
-    } catch (e) {
-        return false;
-    }
-}
-
-/**
- * Given an original IPFS media URL, find the first working gateway URL.
- * Returns the working URL or the original if all fail.
- */
-export async function findWorkingIpfsUrl(originalUrl) {
+export function proxyImageUrl(originalUrl) {
     if (!originalUrl) return "";
-    var parsed = parseIpfs(originalUrl);
-    if (!parsed) return originalUrl;
-
-    // Try original first
-    var origOk = await probeUrl(originalUrl, 5000);
-    if (origOk) return originalUrl;
-
-    // Try each gateway
-    for (var i = 0; i < IPFS_GATEWAYS.length; i++) {
-        var candidate = IPFS_GATEWAYS[i](parsed.cid, parsed.path);
-        if (candidate === originalUrl) continue;
-        var ok = await probeUrl(candidate, 5000);
-        if (ok) return candidate;
-    }
-
-    // Fallback: return the first path-based gateway (most reliable pattern)
-    return IPFS_GATEWAYS[0](parsed.cid, parsed.path);
+    if (!API_BASE) return originalUrl;
+    return API_BASE + "/api/proxy/image?url=" + encodeURIComponent(originalUrl);
 }
 
 export async function nearNftTokensForOwner(contractId, accountId) {
@@ -170,12 +127,9 @@ export async function nearNftTokensForOwner(contractId, accountId) {
         debugLog.push("nft_metadata_error=" + e.message);
     }
 
-    // Pagination: some contracts want from_index as number, some as string
-    // Try both approaches
     var all = [];
     var useNumericIndex = false;
 
-    // First attempt with string index (NEP-171 standard)
     try {
         var firstBatch = await rpc(contractId, "nft_tokens_for_owner", {
             account_id: accountId,
@@ -188,7 +142,6 @@ export async function nearNftTokensForOwner(contractId, accountId) {
         }
     } catch (e) {
         debugLog.push("string_idx_error=" + e.message);
-        // Try numeric index
         useNumericIndex = true;
         try {
             var firstBatch2 = await rpc(contractId, "nft_tokens_for_owner", {
@@ -205,7 +158,6 @@ export async function nearNftTokensForOwner(contractId, accountId) {
         }
     }
 
-    // Continue pagination if we got exactly 100
     if (all.length === 100) {
         for (var pg = 1; pg < 50; pg++) {
             try {
@@ -225,7 +177,6 @@ export async function nearNftTokensForOwner(contractId, accountId) {
         }
     }
 
-    // Also try without from_index at all (some contracts don't support it)
     if (all.length === 0) {
         try {
             var noIdx = await rpc(contractId, "nft_tokens_for_owner", {
@@ -241,7 +192,6 @@ export async function nearNftTokensForOwner(contractId, accountId) {
         }
     }
 
-    // Dedup by token_id just in case
     var seen = {};
     var deduped = [];
     for (var d = 0; d < all.length; d++) {
@@ -253,17 +203,12 @@ export async function nearNftTokensForOwner(contractId, accountId) {
     }
     all = deduped;
 
-    debugLog.push("total_tokens=" + all.length);
-
-    // Also try nft_supply_for_owner to know expected count
     try {
         var supply = await rpc(contractId, "nft_supply_for_owner", { account_id: accountId });
         var expectedCount = parseInt(supply, 10) || 0;
         debugLog.push("expected_supply=" + expectedCount);
         if (expectedCount > all.length) {
             debugLog.push("WARNING: expected " + expectedCount + " but got " + all.length);
-
-            // Try fetching with larger limit and no from_index
             if (expectedCount <= 500) {
                 try {
                     var bigBatch = await rpc(contractId, "nft_tokens_for_owner", {
@@ -283,6 +228,8 @@ export async function nearNftTokensForOwner(contractId, accountId) {
         debugLog.push("supply_check_error=" + e.message);
     }
 
+    debugLog.push("total_tokens=" + all.length);
+
     var out = [];
     for (var i = 0; i < all.length; i++) {
         var t = all[i];
@@ -298,12 +245,10 @@ export async function nearNftTokensForOwner(contractId, accountId) {
             debugLog.push("token_" + t.token_id + "_raw=" + JSON.stringify(md).substring(0, 300));
         }
 
-        // 1. Direct media field
         if (md.media) {
             media = join(bUri, md.media);
         }
 
-        // 2. If no media, try reference JSON
         if (!media && md.reference) {
             var refUrl = join(bUri, md.reference);
             if (i < 5) debugLog.push("token_" + t.token_id + "_refUrl=" + refUrl);
@@ -319,21 +264,25 @@ export async function nearNftTokensForOwner(contractId, accountId) {
             }
         }
 
-        // 3. Contract icon as last resort
         if (!media && cIcon && cIcon.startsWith("data:")) {
             media = cIcon;
         }
 
-        // 4. If base_uri exists, try CID/token_id pattern
         if (!media && bUri) {
             media = join(bUri, t.token_id);
         }
 
-        // 5. For IPFS URLs, rewrite to most reliable gateway immediately
-        if (media && isIpfsUrl(media)) {
+        // Store the original media URL for debug, then build proxy URL
+        var originalMedia = media;
+
+        // Always proxy IPFS images through backend to avoid TG WebView CORS issues
+        if (media && API_BASE) {
+            media = proxyImageUrl(originalMedia);
+            if (i < 5) debugLog.push("token_" + t.token_id + "_proxied=" + media);
+        } else if (media && isIpfsUrl(media)) {
+            // No API_BASE available, at least rewrite to best gateway
             var parsed = parseIpfs(media);
             if (parsed) {
-                // Use ipfs.near.social as primary — it's most reliable in NEAR ecosystem
                 media = IPFS_GATEWAYS[0](parsed.cid, parsed.path);
                 if (i < 5) debugLog.push("token_" + t.token_id + "_rewritten=" + media);
             }
@@ -342,7 +291,13 @@ export async function nearNftTokensForOwner(contractId, accountId) {
         out.push({
             token_id: t.token_id,
             owner_id: t.owner_id,
-            metadata: { title: title || ("Card #" + t.token_id), description: desc, media: media, extra: extra },
+            metadata: {
+                title: title || ("Card #" + t.token_id),
+                description: desc,
+                media: media,
+                originalMedia: originalMedia,
+                extra: extra,
+            },
         });
     }
 
