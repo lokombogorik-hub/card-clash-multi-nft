@@ -33,16 +33,10 @@ function safeParse(s) {
     catch (e) { return null; }
 }
 
-/**
- * NftImage — tries the proxied URL first (which is most likely to work),
- * then on error tries direct IPFS gateways, then shows placeholder.
- */
-function NftImage({ src, originalSrc, alt }) {
+function NftImage({ src, originalSrc, alt, tokenId }) {
     var [stage, setStage] = useState(0);
-    // stage 0 = try src (proxy URL)
-    // stage 1..N = try direct IPFS gateways using originalSrc
-    // stage -1 = all failed, show placeholder
     var [loaded, setLoaded] = useState(false);
+    var [errorMsg, setErrorMsg] = useState("");
     var timerRef = useRef(null);
 
     var currentSrc = useMemo(function () {
@@ -57,6 +51,7 @@ function NftImage({ src, originalSrc, alt }) {
     useEffect(function () {
         setStage(0);
         setLoaded(false);
+        setErrorMsg("");
         if (timerRef.current) clearTimeout(timerRef.current);
     }, [src]);
 
@@ -64,9 +59,12 @@ function NftImage({ src, originalSrc, alt }) {
         return function () { if (timerRef.current) clearTimeout(timerRef.current); };
     }, []);
 
-    var handleError = useCallback(function () {
+    var handleError = useCallback(function (e) {
+        var msg = "stage" + stage + " failed";
+        console.error("NftImage error", tokenId, msg, currentSrc);
+        setErrorMsg(msg);
+
         if (stage === 0) {
-            // Proxy failed — try direct gateways if originalSrc is IPFS
             if (originalSrc && isIpfsUrl(originalSrc)) {
                 timerRef.current = setTimeout(function () { setStage(1); }, 100);
             } else {
@@ -75,23 +73,26 @@ function NftImage({ src, originalSrc, alt }) {
             return;
         }
         if (stage >= 1) {
-            var nextGw = stage; // stage 1 = gw 0, stage 2 = gw 1, ...
+            var nextGw = stage;
             if (nextGw < GATEWAY_COUNT) {
                 timerRef.current = setTimeout(function () { setStage(nextGw + 1); }, 200);
             } else {
                 setStage(-1);
             }
         }
-    }, [stage, originalSrc]);
+    }, [stage, originalSrc, currentSrc, tokenId]);
 
     var handleLoad = useCallback(function () {
+        console.log("NftImage loaded", tokenId, currentSrc);
         setLoaded(true);
-    }, []);
+        setErrorMsg("");
+    }, [tokenId, currentSrc]);
 
     if (stage === -1 || !currentSrc) {
         return (
-            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(30,20,50,0.8)", borderRadius: 8 }}>
-                <span style={{ fontSize: 32 }}>🎴</span>
+            <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(30,20,50,0.8)", borderRadius: 8, padding: 4 }}>
+                <span style={{ fontSize: 24 }}>🎴</span>
+                <span style={{ fontSize: 8, color: "#f66", marginTop: 2 }}>{errorMsg || "failed"}</span>
             </div>
         );
     }
@@ -99,19 +100,19 @@ function NftImage({ src, originalSrc, alt }) {
     return (
         <>
             {!loaded && (
-                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(30,20,50,0.6)", borderRadius: 8, zIndex: 1 }}>
+                <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(30,20,50,0.6)", borderRadius: 8, zIndex: 1 }}>
                     <div className="inv-loading-spinner" style={{ width: 24, height: 24 }} />
+                    <span style={{ fontSize: 8, color: "#aaa", marginTop: 4 }}>stage {stage}</span>
                 </div>
             )}
             <img
                 src={currentSrc}
                 alt={alt || ""}
                 draggable="false"
-                loading="lazy"
-                crossOrigin="anonymous"
+                loading="eager"
                 onError={handleError}
                 onLoad={handleLoad}
-                style={{ opacity: loaded ? 1 : 0, transition: "opacity 0.3s" }}
+                style={{ opacity: loaded ? 1 : 0, transition: "opacity 0.3s", width: "100%", height: "100%", objectFit: "cover" }}
             />
         </>
     );
@@ -129,7 +130,7 @@ export default function Inventory({ token, onDeckReady }) {
     var [saving, setSaving] = useState(false);
     var [source, setSource] = useState("");
     var [debug, setDebug] = useState([]);
-    var [showDebug, setShowDebug] = useState(false);
+    var [showDebug, setShowDebug] = useState(true);
 
     var nftContractId = (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim();
 
@@ -261,15 +262,20 @@ export default function Inventory({ token, onDeckReady }) {
                         {showDebug ? "Hide" : "Show"} Debug ({debug.length} lines)
                     </button>
                     {showDebug && (
-                        <div style={{ marginTop: 6, padding: 10, background: "rgba(0,0,0,0.5)", borderRadius: 10, fontSize: 10, color: "#aaa", maxHeight: 200, overflow: "auto", wordBreak: "break-all" }}>
+                        <div style={{ marginTop: 6, padding: 10, background: "rgba(0,0,0,0.5)", borderRadius: 10, fontSize: 10, color: "#aaa", maxHeight: 300, overflow: "auto", wordBreak: "break-all" }}>
                             {debug.map(function (d, i) { return <div key={i}>{d}</div>; })}
-                            {nfts.length > 0 && nfts.slice(0, 5).map(function (n, i) {
-                                return <div key={"img" + i} style={{ marginTop: 4 }}>
-                                    <span style={{ color: "#78c8ff" }}>token {n.tokenId}: </span>
-                                    <span style={{ color: "#0f0" }}>{n.imageUrl ? "proxied" : "(EMPTY)"}</span>
-                                    {n.originalImageUrl && <span style={{ color: "#aaa" }}> orig={n.originalImageUrl.substring(0, 80)}</span>}
-                                </div>;
-                            })}
+                            <div style={{ marginTop: 8, borderTop: "1px solid #444", paddingTop: 8 }}>
+                                <div style={{ color: "#ff0", marginBottom: 4 }}>NFT URLs:</div>
+                                {nfts.map(function (n, i) {
+                                    return (
+                                        <div key={"url" + i} style={{ marginTop: 6, padding: 6, background: "rgba(255,255,255,0.05)", borderRadius: 4 }}>
+                                            <div style={{ color: "#78c8ff" }}>Token {n.tokenId}:</div>
+                                            <div style={{ color: "#0f0", fontSize: 9, marginTop: 2 }}>proxy: {n.imageUrl || "(empty)"}</div>
+                                            <div style={{ color: "#f90", fontSize: 9, marginTop: 2 }}>orig: {n.originalImageUrl || "(empty)"}</div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
                     )}
                 </div>
@@ -302,7 +308,12 @@ export default function Inventory({ token, onDeckReady }) {
                                 className={"inv-card-game" + (isSel ? " is-selected" : "")} title={k + " [" + r.key + "]"}
                                 style={{ "--i": idx, "--rank": r.border, "--rankGlow": r.glow }}>
                                 <div className="inv-card-art-full">
-                                    <NftImage src={n.imageUrl} originalSrc={n.originalImageUrl} alt={n.name || ""} />
+                                    <NftImage
+                                        src={n.imageUrl}
+                                        originalSrc={n.originalImageUrl}
+                                        alt={n.name || ""}
+                                        tokenId={n.tokenId}
+                                    />
                                 </div>
                                 {element && <div className="inv-card-elem-pill" title={element}><span className="inv-card-elem-ic">{ELEM_ICON[element] || element}</span></div>}
                                 <div className="inv-tt-badge" />
