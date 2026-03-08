@@ -104,12 +104,13 @@ export function ipfsGatewayUrl(originalUrl, gatewayIndex) {
 
 /**
  * Build a proxy URL through our backend.
- * This avoids CORS/gateway issues in Telegram WebView.
+ * NO URL encoding - pass URL as-is for Telegram WebView compatibility.
  */
 export function proxyImageUrl(originalUrl) {
     if (!originalUrl) return "";
     if (!API_BASE) return originalUrl;
-    return API_BASE + "/api/proxy/image?url=" + encodeURIComponent(originalUrl);
+    // Don't use encodeURIComponent - it breaks in Telegram WebView
+    return API_BASE + "/api/proxy/image?url=" + originalUrl;
 }
 
 export async function nearNftTokensForOwner(contractId, accountId) {
@@ -272,15 +273,13 @@ export async function nearNftTokensForOwner(contractId, accountId) {
             media = join(bUri, t.token_id);
         }
 
-        // Store the original media URL for debug, then build proxy URL
         var originalMedia = media;
 
-        // Always proxy IPFS images through backend to avoid TG WebView CORS issues
+        // Build proxy URL without encoding
         if (media && API_BASE) {
             media = proxyImageUrl(originalMedia);
             if (i < 5) debugLog.push("token_" + t.token_id + "_proxied=" + media);
         } else if (media && isIpfsUrl(media)) {
-            // No API_BASE available, at least rewrite to best gateway
             var parsed = parseIpfs(media);
             if (parsed) {
                 media = IPFS_GATEWAYS[0](parsed.cid, parsed.path);
