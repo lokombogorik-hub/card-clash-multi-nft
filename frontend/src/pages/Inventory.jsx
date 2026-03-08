@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { apiFetch } from "../api";
 import { useWalletConnect } from "../context/WalletConnectContext";
-import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl } from "../libs/nearNft";
+import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, parseIpfs } from "../libs/nearNft";
 
 function nftKey(n) {
     if (n.key) return n.key;
@@ -11,6 +11,8 @@ function nftKey(n) {
 }
 
 var ELEM_ICON = { Earth: "🪨", Fire: "🔥", Water: "💧", Poison: "☠️", Holy: "✨", Thunder: "⚡", Wind: "🌪️", Ice: "❄️" };
+
+var IPFS_GATEWAYS_COUNT = 8; // must match nearNft.js IPFS_GATEWAYS.length
 
 function getRarityFromTokenId(tokenId, totalSupply) {
     totalSupply = totalSupply || 10000;
@@ -33,9 +35,17 @@ function safeParse(s) {
     catch (e) { return null; }
 }
 
+/**
+ * NftImage component with IPFS gateway fallback rotation
+ * - Tries original URL first
+ * - On error, rotates through IPFS gateways if URL is IPFS
+ * - Falls back to placeholder only after all gateways exhausted
+ */
 function NftImage({ src, alt }) {
     var [gwIdx, setGwIdx] = useState(-1);
     var [failed, setFailed] = useState(false);
+    var [loaded, setLoaded] = useState(false);
+    var retryTimerRef = useRef(null);
 
     var currentSrc = useMemo(function () {
         if (!src) return "";
@@ -47,32 +57,64 @@ function NftImage({ src, alt }) {
     useEffect(function () {
         setGwIdx(-1);
         setFailed(false);
+        setLoaded(false);
+        if (retryTimerRef.current) {
+            clearTimeout(retryTimerRef.current);
+            retryTimerRef.current = null;
+        }
     }, [src]);
+
+    // Cleanup timer on unmount
+    useEffect(function () {
+        return function () {
+            if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+        };
+    }, []);
 
     var handleError = useCallback(function () {
         if (!src) { setFailed(true); return; }
         if (isIpfsUrl(src)) {
             var next = gwIdx + 1;
-            if (next < 5) {
-                setGwIdx(next);
+            if (next < IPFS_GATEWAYS_COUNT) {
+                // Small delay between retries to avoid hammering
+                retryTimerRef.current = setTimeout(function () {
+                    setGwIdx(next);
+                }, 200);
                 return;
             }
         }
         setFailed(true);
     }, [src, gwIdx]);
 
+    var handleLoad = useCallback(function () {
+        setLoaded(true);
+    }, []);
+
     if (failed || !currentSrc) {
-        return <img src="/cards/card.jpg" alt={alt || ""} draggable="false" loading="lazy" />;
+        return (
+            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(30,20,50,0.8)", borderRadius: 8 }}>
+                <span style={{ fontSize: 32 }}>🎴</span>
+            </div>
+        );
     }
 
     return (
-        <img
-            src={currentSrc}
-            alt={alt || ""}
-            draggable="false"
-            loading="lazy"
-            onError={handleError}
-        />
+        <>
+            {!loaded && (
+                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(30,20,50,0.6)", borderRadius: 8, zIndex: 1 }}>
+                    <div className="inv-loading-spinner" style={{ width: 24, height: 24 }} />
+                </div>
+            )}
+            <img
+                src={currentSrc}
+                alt={alt || ""}
+                draggable="false"
+                loading="lazy"
+                onError={handleError}
+                onLoad={handleLoad}
+                style={{ opacity: loaded ? 1 : 0, transition: "opacity 0.3s" }}
+            />
+        </>
     );
 }
 
@@ -88,6 +130,7 @@ export default function Inventory({ token, onDeckReady }) {
     var [saving, setSaving] = useState(false);
     var [source, setSource] = useState("");
     var [debug, setDebug] = useState([]);
+    var [showDebug, setShowDebug] = useState(false);
 
     var nftContractId = (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim();
 
@@ -109,6 +152,7 @@ export default function Inventory({ token, onDeckReady }) {
             setDebug([]);
 
             try {
+                // Load saved deck
                 try {
                     var dk = await apiFetch("/api/decks/active", { token: token });
                     if (alive && dk && Array.isArray(dk.cards)) setSelected(new Set(dk.cards.slice(0, 5)));
@@ -121,7 +165,7 @@ export default function Inventory({ token, onDeckReady }) {
                     try {
                         var tokens = await nearNftTokensForOwner(nftContractId, accountId);
                         var dbg = tokens._debug || [];
-                        setDebug(dbg);
+                        if (alive) setDebug(dbg);
 
                         items = tokens.map(function (t) {
                             var extra = safeParse(t.metadata ? t.metadata.extra : null);
@@ -136,10 +180,10 @@ export default function Inventory({ token, onDeckReady }) {
                                 stats: st, element: (extra && extra.element) || null, rarity: r,
                             };
                         });
-                        setSource(items.length > 0 ? "✅ Blockchain (" + items.length + ")" : "⚠️ 0 NFTs on-chain");
+                        setSource(items.length > 0 ? "✅ Blockchain (" + items.length + " NFTs)" : "⚠️ 0 NFTs on-chain for " + accountId);
                     } catch (e) {
                         setSource("❌ " + (e.message || e));
-                        setDebug(["error: " + (e.message || e)]);
+                        setDebug(function (prev) { return prev.concat(["load_error: " + (e.message || e)]); });
                     }
                 }
 
@@ -209,15 +253,25 @@ export default function Inventory({ token, onDeckReady }) {
             ) : null}
 
             {debug.length > 0 && (
-                <div style={{ margin: "10px 0", padding: 10, background: "rgba(0,0,0,0.5)", borderRadius: 10, fontSize: 10, color: "#aaa", maxHeight: 200, overflow: "auto", wordBreak: "break-all" }}>
-                    <div style={{ fontWeight: 900, marginBottom: 4, color: "#ff0" }}>DEBUG (remove after fix):</div>
-                    {debug.map(function (d, i) { return <div key={i}>{d}</div>; })}
-                    {nfts.length > 0 && nfts.slice(0, 3).map(function (n, i) {
-                        return <div key={"img" + i} style={{ marginTop: 4 }}>
-                            <span style={{ color: "#78c8ff" }}>token {n.tokenId} imageUrl: </span>
-                            <span style={{ color: n.imageUrl ? "#0f0" : "#f00" }}>{n.imageUrl || "(EMPTY)"}</span>
-                        </div>;
-                    })}
+                <div style={{ margin: "10px 0" }}>
+                    <button
+                        type="button"
+                        onClick={function () { setShowDebug(function (v) { return !v; }); }}
+                        style={{ background: "rgba(255,255,0,0.15)", border: "1px solid rgba(255,255,0,0.3)", borderRadius: 8, padding: "4px 12px", color: "#ff0", fontSize: 11, cursor: "pointer" }}
+                    >
+                        {showDebug ? "Hide" : "Show"} Debug ({debug.length} lines)
+                    </button>
+                    {showDebug && (
+                        <div style={{ marginTop: 6, padding: 10, background: "rgba(0,0,0,0.5)", borderRadius: 10, fontSize: 10, color: "#aaa", maxHeight: 200, overflow: "auto", wordBreak: "break-all" }}>
+                            {debug.map(function (d, i) { return <div key={i}>{d}</div>; })}
+                            {nfts.length > 0 && nfts.slice(0, 5).map(function (n, i) {
+                                return <div key={"img" + i} style={{ marginTop: 4 }}>
+                                    <span style={{ color: "#78c8ff" }}>token {n.tokenId} imageUrl: </span>
+                                    <span style={{ color: n.imageUrl ? "#0f0" : "#f00" }}>{n.imageUrl || "(EMPTY)"}</span>
+                                </div>;
+                            })}
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -229,7 +283,7 @@ export default function Inventory({ token, onDeckReady }) {
                 <div className="inv-empty">
                     <div className="inv-empty-icon">📭</div>
                     <div className="inv-empty-title">Нет NFT карт</div>
-                    <div className="inv-empty-text">{connected ? "NFT не найдены в " + (nftContractId || "кошельке") : "Подключи кошелёк"}</div>
+                    <div className="inv-empty-text">{connected ? "NFT не найдены в " + (nftContractId || "кошельке") + " для " + accountId : "Подключи кошелёк на Home"}</div>
                 </div>
             )}
 

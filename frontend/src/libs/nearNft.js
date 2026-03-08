@@ -1,11 +1,14 @@
 var RPC_URL = "https://rpc.mainnet.near.org";
 
 var IPFS_GATEWAYS = [
-    function (cid, path) { return "https://" + cid + ".ipfs.w3s.link" + path; },
     function (cid, path) { return "https://ipfs.near.social/ipfs/" + cid + path; },
     function (cid, path) { return "https://cloudflare-ipfs.com/ipfs/" + cid + path; },
+    function (cid, path) { return "https://nftstorage.link/ipfs/" + cid + path; },
     function (cid, path) { return "https://" + cid + ".ipfs.dweb.link" + path; },
     function (cid, path) { return "https://gateway.pinata.cloud/ipfs/" + cid + path; },
+    function (cid, path) { return "https://" + cid + ".ipfs.w3s.link" + path; },
+    function (cid, path) { return "https://w3s.link/ipfs/" + cid + path; },
+    function (cid, path) { return "https://ipfs.io/ipfs/" + cid + path; },
 ];
 
 function toB64(str) {
@@ -61,11 +64,13 @@ async function rpc(contractId, method, args) {
 }
 
 /**
- * Extract CID and path from any IPFS URL format:
+ * Parse any IPFS URL format into { cid, path }
+ *
  *   ipfs://CID/path
- *   https://CID.ipfs.w3s.link/path        (subdomain)
- *   https://gateway.com/ipfs/CID/path      (path-based)
- * Returns { cid, path } or null
+ *   https://CID.ipfs.w3s.link/path          (subdomain)
+ *   https://gateway.com/ipfs/CID/path        (path-based)
+ *
+ * CIDv1 (bafy...) can be 59 chars, CIDv0 (Qm...) 46 chars — regex must allow long alphanumeric+digit strings
  */
 export function parseIpfs(url) {
     if (!url) return null;
@@ -80,13 +85,14 @@ export function parseIpfs(url) {
     }
 
     // subdomain: https://CID.ipfs.GATEWAY/path
-    var subMatch = s.match(/^https?:\/\/([a-zA-Z0-9]+)\.ipfs\.[^/]+(\/.*)?$/);
+    // CIDv1 base32 is [a-z2-7]{59}, but be generous with pattern
+    var subMatch = s.match(/^https?:\/\/([a-zA-Z0-9]{20,}?)\.ipfs\.[^/]+(\/.*)?$/);
     if (subMatch) {
         return { cid: subMatch[1], path: subMatch[2] || "" };
     }
 
     // path-based: https://gateway/ipfs/CID/path
-    var pathMatch = s.match(/\/ipfs\/([a-zA-Z0-9]+)(\/.*)?/);
+    var pathMatch = s.match(/\/ipfs\/([a-zA-Z0-9]{20,})(\/.*)?/);
     if (pathMatch) {
         return { cid: pathMatch[1], path: pathMatch[2] || "" };
     }
@@ -108,6 +114,47 @@ export function ipfsGatewayUrl(originalUrl, gatewayIndex) {
     return IPFS_GATEWAYS[gi](parsed.cid, parsed.path);
 }
 
+/**
+ * Check if a URL is reachable (HEAD request with timeout)
+ */
+async function probeUrl(url, timeoutMs) {
+    try {
+        var controller = new AbortController();
+        var timer = setTimeout(function () { controller.abort(); }, timeoutMs || 6000);
+        var r = await fetch(url, { method: "HEAD", signal: controller.signal, mode: "no-cors" });
+        clearTimeout(timer);
+        // no-cors gives opaque response (status 0), that's OK — it means the server responded
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+/**
+ * Given an original IPFS media URL, find the first working gateway URL.
+ * Returns the working URL or the original if all fail.
+ */
+export async function findWorkingIpfsUrl(originalUrl) {
+    if (!originalUrl) return "";
+    var parsed = parseIpfs(originalUrl);
+    if (!parsed) return originalUrl;
+
+    // Try original first
+    var origOk = await probeUrl(originalUrl, 5000);
+    if (origOk) return originalUrl;
+
+    // Try each gateway
+    for (var i = 0; i < IPFS_GATEWAYS.length; i++) {
+        var candidate = IPFS_GATEWAYS[i](parsed.cid, parsed.path);
+        if (candidate === originalUrl) continue;
+        var ok = await probeUrl(candidate, 5000);
+        if (ok) return candidate;
+    }
+
+    // Fallback: return the first path-based gateway (most reliable pattern)
+    return IPFS_GATEWAYS[0](parsed.cid, parsed.path);
+}
+
 export async function nearNftTokensForOwner(contractId, accountId) {
     var debugLog = [];
 
@@ -123,23 +170,118 @@ export async function nearNftTokensForOwner(contractId, accountId) {
         debugLog.push("nft_metadata_error=" + e.message);
     }
 
+    // Pagination: some contracts want from_index as number, some as string
+    // Try both approaches
     var all = [];
-    for (var pg = 0; pg < 50; pg++) {
+    var useNumericIndex = false;
+
+    // First attempt with string index (NEP-171 standard)
+    try {
+        var firstBatch = await rpc(contractId, "nft_tokens_for_owner", {
+            account_id: accountId,
+            from_index: "0",
+            limit: 100,
+        });
+        if (Array.isArray(firstBatch)) {
+            all = firstBatch;
+            debugLog.push("first_batch_string_idx=" + firstBatch.length);
+        }
+    } catch (e) {
+        debugLog.push("string_idx_error=" + e.message);
+        // Try numeric index
+        useNumericIndex = true;
         try {
-            var batch = await rpc(contractId, "nft_tokens_for_owner", {
+            var firstBatch2 = await rpc(contractId, "nft_tokens_for_owner", {
                 account_id: accountId,
-                from_index: String(all.length),
+                from_index: 0,
                 limit: 100,
             });
-            if (!Array.isArray(batch) || batch.length === 0) break;
-            all = all.concat(batch);
-            if (batch.length < 100) break;
-        } catch (e) {
-            debugLog.push("pagination_error_pg" + pg + "=" + e.message);
-            break;
+            if (Array.isArray(firstBatch2)) {
+                all = firstBatch2;
+                debugLog.push("first_batch_numeric_idx=" + firstBatch2.length);
+            }
+        } catch (e2) {
+            debugLog.push("numeric_idx_error=" + e2.message);
         }
     }
+
+    // Continue pagination if we got exactly 100
+    if (all.length === 100) {
+        for (var pg = 1; pg < 50; pg++) {
+            try {
+                var fromIdx = useNumericIndex ? all.length : String(all.length);
+                var batch = await rpc(contractId, "nft_tokens_for_owner", {
+                    account_id: accountId,
+                    from_index: fromIdx,
+                    limit: 100,
+                });
+                if (!Array.isArray(batch) || batch.length === 0) break;
+                all = all.concat(batch);
+                if (batch.length < 100) break;
+            } catch (e) {
+                debugLog.push("pagination_error_pg" + pg + "=" + e.message);
+                break;
+            }
+        }
+    }
+
+    // Also try without from_index at all (some contracts don't support it)
+    if (all.length === 0) {
+        try {
+            var noIdx = await rpc(contractId, "nft_tokens_for_owner", {
+                account_id: accountId,
+                limit: 500,
+            });
+            if (Array.isArray(noIdx) && noIdx.length > 0) {
+                all = noIdx;
+                debugLog.push("no_index_fallback=" + noIdx.length);
+            }
+        } catch (e) {
+            debugLog.push("no_index_error=" + e.message);
+        }
+    }
+
+    // Dedup by token_id just in case
+    var seen = {};
+    var deduped = [];
+    for (var d = 0; d < all.length; d++) {
+        var tid = all[d].token_id;
+        if (!seen[tid]) {
+            seen[tid] = true;
+            deduped.push(all[d]);
+        }
+    }
+    all = deduped;
+
     debugLog.push("total_tokens=" + all.length);
+
+    // Also try nft_supply_for_owner to know expected count
+    try {
+        var supply = await rpc(contractId, "nft_supply_for_owner", { account_id: accountId });
+        var expectedCount = parseInt(supply, 10) || 0;
+        debugLog.push("expected_supply=" + expectedCount);
+        if (expectedCount > all.length) {
+            debugLog.push("WARNING: expected " + expectedCount + " but got " + all.length);
+
+            // Try fetching with larger limit and no from_index
+            if (expectedCount <= 500) {
+                try {
+                    var bigBatch = await rpc(contractId, "nft_tokens_for_owner", {
+                        account_id: accountId,
+                        limit: expectedCount + 10,
+                    });
+                    if (Array.isArray(bigBatch) && bigBatch.length > all.length) {
+                        all = bigBatch;
+                        debugLog.push("big_batch_retry=" + bigBatch.length);
+                    }
+                } catch (e) {
+                    debugLog.push("big_batch_error=" + e.message);
+                }
+            }
+        }
+    } catch (e) {
+        debugLog.push("supply_check_error=" + e.message);
+    }
 
     var out = [];
     for (var i = 0; i < all.length; i++) {
@@ -152,35 +294,49 @@ export async function nearNftTokensForOwner(contractId, accountId) {
         var desc = md.description || "";
         var extra = md.extra || null;
 
-        if (i < 3) {
+        if (i < 5) {
             debugLog.push("token_" + t.token_id + "_raw=" + JSON.stringify(md).substring(0, 300));
         }
 
+        // 1. Direct media field
         if (md.media) {
             media = join(bUri, md.media);
         }
 
+        // 2. If no media, try reference JSON
         if (!media && md.reference) {
             var refUrl = join(bUri, md.reference);
-            if (i < 3) debugLog.push("token_" + t.token_id + "_refUrl=" + refUrl);
+            if (i < 5) debugLog.push("token_" + t.token_id + "_refUrl=" + refUrl);
             var rj = await getJson(refUrl);
             if (rj) {
                 media = join(bUri, rj.media || rj.image || rj.animation_url || rj.icon || "");
                 if (!title) title = rj.title || rj.name || "";
                 if (!desc) desc = rj.description || "";
                 if (!extra) extra = rj.extra || null;
-                if (i < 3) debugLog.push("token_" + t.token_id + "_refMedia=" + (media || "(empty)"));
+                if (i < 5) debugLog.push("token_" + t.token_id + "_refMedia=" + (media || "(empty)"));
             } else {
-                if (i < 3) debugLog.push("token_" + t.token_id + "_refFailed");
+                if (i < 5) debugLog.push("token_" + t.token_id + "_refFailed");
             }
         }
 
+        // 3. Contract icon as last resort
         if (!media && cIcon && cIcon.startsWith("data:")) {
             media = cIcon;
         }
 
+        // 4. If base_uri exists, try CID/token_id pattern
         if (!media && bUri) {
             media = join(bUri, t.token_id);
+        }
+
+        // 5. For IPFS URLs, rewrite to most reliable gateway immediately
+        if (media && isIpfsUrl(media)) {
+            var parsed = parseIpfs(media);
+            if (parsed) {
+                // Use ipfs.near.social as primary — it's most reliable in NEAR ecosystem
+                media = IPFS_GATEWAYS[0](parsed.cid, parsed.path);
+                if (i < 5) debugLog.push("token_" + t.token_id + "_rewritten=" + media);
+            }
         }
 
         out.push({
