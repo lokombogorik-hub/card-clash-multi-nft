@@ -1,29 +1,23 @@
 from fastapi import APIRouter, Query
 from fastapi.responses import Response
 import httpx
+import re
 
 router = APIRouter(prefix="/api/proxy", tags=["proxy"])
 
-ALLOWED_HOSTS = [
-    "ipfs.near.social",
-    "cloudflare-ipfs.com",
-    "nftstorage.link",
-    "ipfs.io",
-    "w3s.link",
-    "gateway.pinata.cloud",
-    "arweave.net",
-    "dweb.link",
-]
-
+# Gateways to try if original fails (path-based format)
 IPFS_GATEWAYS = [
+    "https://{cid}.ipfs.w3s.link{path}",
+    "https://w3s.link/ipfs/{cid}{path}",
+    "https://{cid}.ipfs.dweb.link{path}",
+    "https://dweb.link/ipfs/{cid}{path}",
+    "https://ipfs.io/ipfs/{cid}{path}",
+    "https://gateway.pinata.cloud/ipfs/{cid}{path}",
+    "https://nftstorage.link/ipfs/{cid}{path}",
     "https://ipfs.near.social/ipfs/{cid}{path}",
     "https://cloudflare-ipfs.com/ipfs/{cid}{path}",
-    "https://nftstorage.link/ipfs/{cid}{path}",
-    "https://ipfs.io/ipfs/{cid}{path}",
-    "https://w3s.link/ipfs/{cid}{path}",
 ]
 
-import re
 
 def parse_ipfs_url(url: str):
     """Extract CID and path from various IPFS URL formats."""
@@ -54,37 +48,43 @@ def parse_ipfs_url(url: str):
 @router.get("/image")
 async def proxy_image(url: str = Query(..., description="Original image URL")):
     """
-    Proxy an image URL. If it's an IPFS URL and the original gateway fails,
-    automatically try alternative gateways.
+    Proxy an image URL. Tries original URL first, then alternative IPFS gateways.
     """
     cid, path = parse_ipfs_url(url)
 
     urls_to_try = []
 
-    if cid:
-        # Build list of gateway URLs to try
-        for gw in IPFS_GATEWAYS:
-            urls_to_try.append(gw.format(cid=cid, path=path or ""))
-    else:
-        urls_to_try.append(url)
+    # ALWAYS try original URL first - it might work!
+    urls_to_try.append(url)
 
-    async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
+    # If it's an IPFS URL, add alternative gateways
+    if cid:
+        for gw in IPFS_GATEWAYS:
+            candidate = gw.format(cid=cid, path=path or "")
+            if candidate != url and candidate not in urls_to_try:
+                urls_to_try.append(candidate)
+
+    async with httpx.AsyncClient(follow_redirects=True, timeout=20.0) as client:
         for attempt_url in urls_to_try:
             try:
                 resp = await client.get(attempt_url, headers={
-                    "User-Agent": "CardClash-Proxy/1.0",
-                    "Accept": "image/*,*/*",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Referer": "https://near.org/",
                 })
                 if resp.status_code == 200:
                     content_type = resp.headers.get("content-type", "image/png")
-                    return Response(
-                        content=resp.content,
-                        media_type=content_type,
-                        headers={
-                            "Cache-Control": "public, max-age=86400",
-                            "Access-Control-Allow-Origin": "*",
-                        },
-                    )
+                    # Make sure it's actually an image
+                    if "image" in content_type or "octet-stream" in content_type:
+                        return Response(
+                            content=resp.content,
+                            media_type=content_type,
+                            headers={
+                                "Cache-Control": "public, max-age=86400",
+                                "Access-Control-Allow-Origin": "*",
+                            },
+                        )
             except Exception:
                 continue
 
