@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { apiFetch } from "../api";
 import { useWalletConnect } from "../context/WalletConnectContext";
-import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, proxyImageUrl, GATEWAY_COUNT } from "../libs/nearNft";
+import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from "../libs/nearNft";
 
 function nftKey(n) {
     if (n.key) return n.key;
@@ -61,7 +61,6 @@ function NftImage({ src, originalSrc, alt, tokenId }) {
 
     var handleError = useCallback(function (e) {
         var msg = "stage" + stage + " failed";
-        console.error("NftImage error", tokenId, msg, currentSrc);
         setErrorMsg(msg);
 
         if (stage === 0) {
@@ -80,13 +79,12 @@ function NftImage({ src, originalSrc, alt, tokenId }) {
                 setStage(-1);
             }
         }
-    }, [stage, originalSrc, currentSrc, tokenId]);
+    }, [stage, originalSrc]);
 
     var handleLoad = useCallback(function () {
-        console.log("NftImage loaded", tokenId, currentSrc);
         setLoaded(true);
         setErrorMsg("");
-    }, [tokenId, currentSrc]);
+    }, []);
 
     if (stage === -1 || !currentSrc) {
         return (
@@ -102,7 +100,6 @@ function NftImage({ src, originalSrc, alt, tokenId }) {
             {!loaded && (
                 <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(30,20,50,0.6)", borderRadius: 8, zIndex: 1 }}>
                     <div className="inv-loading-spinner" style={{ width: 24, height: 24 }} />
-                    <span style={{ fontSize: 8, color: "#aaa", marginTop: 4 }}>stage {stage}</span>
                 </div>
             )}
             <img
@@ -129,8 +126,6 @@ export default function Inventory({ token, onDeckReady }) {
     var [error, setError] = useState("");
     var [saving, setSaving] = useState(false);
     var [source, setSource] = useState("");
-    var [debug, setDebug] = useState([]);
-    var [showDebug, setShowDebug] = useState(true);
 
     var nftContractId = (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim();
 
@@ -141,6 +136,13 @@ export default function Inventory({ token, onDeckReady }) {
         return m;
     }, [selectedArr]);
 
+    // Get full NFT objects for selected cards
+    var selectedNfts = useMemo(function () {
+        return selectedArr.map(function (key) {
+            return nfts.find(function (n) { return nftKey(n) === key; });
+        }).filter(Boolean);
+    }, [selectedArr, nfts]);
+
     useEffect(function () {
         if (!token) return;
         var alive = true;
@@ -149,22 +151,14 @@ export default function Inventory({ token, onDeckReady }) {
             setLoading(true);
             setError("");
             setSource("");
-            setDebug([]);
+            setSelected(new Set());
 
             try {
-                try {
-                    var dk = await apiFetch("/api/decks/active", { token: token });
-                    if (alive && dk && Array.isArray(dk.cards)) setSelected(new Set(dk.cards.slice(0, 5)));
-                } catch (e) { }
-                if (!alive) return;
-
                 var items = [];
 
                 if (connected && accountId && nftContractId) {
                     try {
                         var tokens = await nearNftTokensForOwner(nftContractId, accountId);
-                        var dbg = tokens._debug || [];
-                        if (alive) setDebug(dbg);
 
                         items = tokens.map(function (t) {
                             var extra = safeParse(t.metadata ? t.metadata.extra : null);
@@ -177,22 +171,21 @@ export default function Inventory({ token, onDeckReady }) {
                                 name: (t.metadata && t.metadata.title) || ("Card #" + t.token_id),
                                 imageUrl: (t.metadata && t.metadata.media) || "",
                                 originalImageUrl: (t.metadata && t.metadata.originalMedia) || "",
-                                stats: st, element: (extra && extra.element) || null, rarity: r,
+                                stats: st,
+                                element: (extra && extra.element) || null,
+                                rarity: r,
+                                rank: r.key,
+                                rankLabel: r.key[0].toUpperCase(),
                             };
                         });
-                        setSource(items.length > 0 ? "✅ Blockchain (" + items.length + " NFTs)" : "⚠️ 0 NFTs on-chain for " + accountId);
+                        setSource(items.length > 0 ? "✅ " + items.length + " NFTs" : "⚠️ 0 NFTs");
                     } catch (e) {
                         setSource("❌ " + (e.message || e));
-                        setDebug(function (prev) { return prev.concat(["load_error: " + (e.message || e)]); });
                     }
                 }
 
                 if (items.length === 0 && !connected) {
-                    try {
-                        var mock = await apiFetch("/api/nfts/my", { token: token });
-                        items = Array.isArray(mock.items) ? mock.items : [];
-                        if (items.length > 0) setSource("Demo cards");
-                    } catch (e) { }
+                    setSource("Подключи кошелёк для загрузки NFT");
                 }
 
                 if (!alive) return;
@@ -219,12 +212,24 @@ export default function Inventory({ token, onDeckReady }) {
 
     var saveDeck = async function () {
         if (selected.size !== 5) return;
+        if (selectedNfts.length !== 5) return;
+
         setSaving(true);
+        setError("");
         try {
-            await apiFetch("/api/decks/active", { token: token, method: "PUT", body: JSON.stringify({ cards: selectedArr }) });
+            // Save card keys to backend
+            await apiFetch("/api/decks/active", {
+                token: token,
+                method: "PUT",
+                body: JSON.stringify({ cards: selectedArr })
+            });
             setSaving(false);
-            onDeckReady?.();
-        } catch (e) { setError(e.message || "Save failed"); setSaving(false); }
+            // Pass full NFT data to App for the game
+            onDeckReady?.(selectedNfts);
+        } catch (e) {
+            setError(e.message || "Save failed");
+            setSaving(false);
+        }
     };
 
     var onPD = function (e) {
@@ -240,44 +245,18 @@ export default function Inventory({ token, onDeckReady }) {
     return (
         <div className="page inventory-page">
             <div className="inv-header">
-                <h2 className="inv-title"><span className="inv-title-icon">🎴</span>Deck Builder</h2>
-                <div className="inv-subtitle">Выбери 5 карт • {selected.size}/5</div>
+                <h2 className="inv-title"><span className="inv-title-icon">🎴</span>Выбери колоду</h2>
+                <div className="inv-subtitle">Выбери 5 карт для игры • {selected.size}/5</div>
             </div>
 
             {connected && accountId ? (
                 <div className="inv-info-box">
                     <div className="inv-info-label">🔗 {accountId.length > 20 ? accountId.slice(0, 10) + "…" + accountId.slice(-6) : accountId}</div>
-                    {nftContractId && <div className="inv-info-value">Collection: {nftContractId}</div>}
                     {source && <div className="inv-info-value" style={{ marginTop: 4, color: source.startsWith("✅") ? "#22c55e" : source.startsWith("❌") ? "#ff6b6b" : "#f59e0b" }}>{source}</div>}
                 </div>
-            ) : null}
-
-            {debug.length > 0 && (
-                <div style={{ margin: "10px 0" }}>
-                    <button
-                        type="button"
-                        onClick={function () { setShowDebug(function (v) { return !v; }); }}
-                        style={{ background: "rgba(255,255,0,0.15)", border: "1px solid rgba(255,255,0,0.3)", borderRadius: 8, padding: "4px 12px", color: "#ff0", fontSize: 11, cursor: "pointer" }}
-                    >
-                        {showDebug ? "Hide" : "Show"} Debug ({debug.length} lines)
-                    </button>
-                    {showDebug && (
-                        <div style={{ marginTop: 6, padding: 10, background: "rgba(0,0,0,0.5)", borderRadius: 10, fontSize: 10, color: "#aaa", maxHeight: 300, overflow: "auto", wordBreak: "break-all" }}>
-                            {debug.map(function (d, i) { return <div key={i}>{d}</div>; })}
-                            <div style={{ marginTop: 8, borderTop: "1px solid #444", paddingTop: 8 }}>
-                                <div style={{ color: "#ff0", marginBottom: 4 }}>NFT URLs:</div>
-                                {nfts.map(function (n, i) {
-                                    return (
-                                        <div key={"url" + i} style={{ marginTop: 6, padding: 6, background: "rgba(255,255,255,0.05)", borderRadius: 4 }}>
-                                            <div style={{ color: "#78c8ff" }}>Token {n.tokenId}:</div>
-                                            <div style={{ color: "#0f0", fontSize: 9, marginTop: 2 }}>proxy: {n.imageUrl || "(empty)"}</div>
-                                            <div style={{ color: "#f90", fontSize: 9, marginTop: 2 }}>orig: {n.originalImageUrl || "(empty)"}</div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
+            ) : (
+                <div className="inv-info-box">
+                    <div className="inv-info-label" style={{ color: "#f59e0b" }}>⚠️ Подключи кошелёк на главной</div>
                 </div>
             )}
 
@@ -289,7 +268,7 @@ export default function Inventory({ token, onDeckReady }) {
                 <div className="inv-empty">
                     <div className="inv-empty-icon">📭</div>
                     <div className="inv-empty-title">Нет NFT карт</div>
-                    <div className="inv-empty-text">{connected ? "NFT не найдены в " + (nftContractId || "кошельке") + " для " + accountId : "Подключи кошелёк на Home"}</div>
+                    <div className="inv-empty-text">{connected ? "NFT не найдены для " + accountId : "Подключи кошелёк на главной странице"}</div>
                 </div>
             )}
 
@@ -305,7 +284,7 @@ export default function Inventory({ token, onDeckReady }) {
 
                         return (
                             <button key={k} type="button" onPointerDown={onPD} onClick={function () { toggle(k); }}
-                                className={"inv-card-game" + (isSel ? " is-selected" : "")} title={k + " [" + r.key + "]"}
+                                className={"inv-card-game" + (isSel ? " is-selected" : "")} title={n.name}
                                 style={{ "--i": idx, "--rank": r.border, "--rankGlow": r.glow }}>
                                 <div className="inv-card-art-full">
                                     <NftImage
@@ -330,12 +309,14 @@ export default function Inventory({ token, onDeckReady }) {
 
             {nfts.length > 0 && (
                 <div className="inv-actions">
-                    <button className="inv-btn inv-btn-secondary" onClick={function () { setSelected(new Set()); }} disabled={!selected.size || saving}>Очистить ({selected.size})</button>
-                    <button className="inv-btn inv-btn-primary" disabled={selected.size !== 5 || saving} onClick={saveDeck}>{saving ? "Сохранение..." : "Сохранить (" + selected.size + "/5)"}</button>
+                    <button className="inv-btn inv-btn-secondary" onClick={function () { setSelected(new Set()); }} disabled={!selected.size || saving}>
+                        Сбросить
+                    </button>
+                    <button className="inv-btn inv-btn-primary" disabled={selected.size !== 5 || saving} onClick={saveDeck}>
+                        {saving ? "Сохранение..." : selected.size === 5 ? "Играть! →" : "Выбери " + (5 - selected.size) + " карт"}
+                    </button>
                 </div>
             )}
-
-            {nfts.length > 0 && selected.size === 5 ? <div className="inv-hint">✅ Колода готова!</div> : null}
         </div>
     );
 }

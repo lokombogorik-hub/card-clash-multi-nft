@@ -144,24 +144,16 @@ function AppContent() {
         try { if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.(); } catch (e) { }
     };
 
-    var loadActiveDeck = async function () {
-        var t = token || getStoredToken();
-        if (!t) return null;
-        try {
-            var r = await apiFetch("/api/decks/active/full", { token: t });
-            var cards = Array.isArray(r) ? r : Array.isArray(r?.cards) ? r.cards : null;
-            if (Array.isArray(cards) && cards.length === 5) return cards;
-            return null;
-        } catch (e) { return null; }
-    };
-
     var onPlay = async function () {
         requestFullscreen();
-        var t = token || getStoredToken();
-        if (!t) { setScreen("inventory"); return; }
-        var deck = await loadActiveDeck();
-        if (!deck) { setScreen("inventory"); return; }
-        setPlayerDeck(deck);
+        setScreen("inventory");
+    };
+
+    // Called when deck is saved in Inventory - receives full NFT data
+    var onDeckReady = function (selectedNfts) {
+        if (Array.isArray(selectedNfts) && selectedNfts.length === 5) {
+            setPlayerDeck(selectedNfts);
+        }
         setScreen("matchmaking");
     };
 
@@ -184,7 +176,7 @@ function AppContent() {
             <div className="shell">
                 <StormBg />
                 <div className={"game-host" + (showRotate ? " is-hidden" : "")}>
-                    {playerDeck ? (
+                    {playerDeck && playerDeck.length === 5 ? (
                         <Game onExit={onExitGame} me={me} playerDeck={playerDeck} matchId={stage2MatchId} mode={gameMode} />
                     ) : (
                         <div style={{ color: "#fff", padding: 20 }}>Loading deck...</div>
@@ -235,9 +227,16 @@ function AppContent() {
                 {screen === "matchmaking" && (
                     <Matchmaking
                         me={me}
-                        onBack={function () { setScreen("home"); }}
+                        onBack={function () { setScreen("inventory"); }}
                         onMatched={function (data) {
                             setGameMode(data.mode || "ai");
+
+                            if (!playerDeck || playerDeck.length !== 5) {
+                                alert("Колода не выбрана. Вернись в инвентарь.");
+                                setScreen("inventory");
+                                return;
+                            }
+
                             if (data.mode === "ai") {
                                 setStage2MatchId("");
                                 setScreen("game");
@@ -255,7 +254,7 @@ function AppContent() {
                 )}
 
                 {screen === "market" && <Market />}
-                {screen === "inventory" && <Inventory token={token || getStoredToken()} onDeckReady={function () { setScreen("home"); }} />}
+                {screen === "inventory" && <Inventory token={token || getStoredToken()} onDeckReady={onDeckReady} />}
                 {screen === "profile" && <Profile token={token || getStoredToken()} me={me} />}
             </div>
 
@@ -265,17 +264,6 @@ function AppContent() {
                 )}
                 <BottomNav active={screen} onChange={setScreen} />
             </div>
-
-            {authState.status !== "ok" ? (
-                <div style={{
-                    position: "fixed", right: 10, bottom: 10, zIndex: 999999,
-                    background: "rgba(0,0,0,0.7)", color: "#fff", padding: 8, borderRadius: 8, fontSize: 11, maxWidth: "70vw", wordBreak: "break-word",
-                }}>
-                    auth: {authState.status} {authState.error ? "| " + authState.error : ""}<br />
-                    api: {apiBase || "(empty)"}<br />
-                    token: {(token || getStoredToken()) ? "yes" : "no"}
-                </div>
-            ) : null}
         </div>
     );
 }
@@ -322,7 +310,7 @@ function BottomNav({ active, onChange }) {
     var items = [
         { key: "home", label: "Главная", icon: <HomeIcon /> },
         { key: "market", label: "Маркет", icon: <GemIcon /> },
-        { key: "inventory", label: "Инвентарь", icon: <BagIcon /> },
+        { key: "inventory", label: "Колода", icon: <BagIcon /> },
         { key: "profile", label: "Профиль", icon: <UserIcon /> },
     ];
     return (
