@@ -14,6 +14,7 @@ from routers.matches import router as matches_router
 from routers.matchmaking import router as matchmaking_router
 from routers.cases import router as cases_router
 from routers.proxy import router as proxy_router
+from routers.decks import router as decks_router
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ app.include_router(matches_router)
 app.include_router(matchmaking_router)
 app.include_router(cases_router)
 app.include_router(proxy_router)
+app.include_router(decks_router)
 
 
 @app.on_event("startup")
