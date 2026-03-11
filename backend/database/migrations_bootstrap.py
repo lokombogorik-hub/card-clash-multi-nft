@@ -11,6 +11,7 @@ async def ensure_users_columns(engine):
         return
 
     columns_to_add = [
+        ("photo_url", "VARCHAR(500)", "NULL"),
         ("near_account_id", "VARCHAR(255)", "NULL"),
         ("total_matches", "INTEGER", "0"),
         ("wins", "INTEGER", "0"),
