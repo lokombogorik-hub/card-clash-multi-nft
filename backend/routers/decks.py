@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
-import json
 
 router = APIRouter(prefix="/api/decks", tags=["decks"])
 
@@ -17,36 +16,50 @@ class DeckResponse(BaseModel):
     cards: List[str]
 
 
-def get_user_id_from_token(authorization: str) -> str:
-    """Extract user ID from JWT token (simplified)"""
+def get_user_id_from_token(authorization: Optional[str]) -> str:
+    """Extract user ID from token (simplified)"""
     if not authorization:
-        raise HTTPException(status_code=401, detail="No token")
-    # For now just use token as user id key
-    # In production, decode JWT properly
-    return authorization.replace("Bearer ", "")[:32]
+        return "anonymous"
+    # Remove "Bearer " prefix if present
+    token = authorization.replace("Bearer ", "").strip()
+    if not token:
+        return "anonymous"
+    # Use first 32 chars as user key
+    return token[:32]
 
 
-@router.get("/active", response_model=DeckResponse)
+@router.get("/active")
 async def get_active_deck(authorization: Optional[str] = Header(None)):
     """Get user's active deck"""
     try:
-        user_id = get_user_id_from_token(authorization or "")
+        user_id = get_user_id_from_token(authorization)
         deck = user_decks.get(user_id, {"cards": []})
-        return DeckResponse(cards=deck.get("cards", []))
-    except:
-        return DeckResponse(cards=[])
+        return {"cards": deck.get("cards", [])}
+    except Exception as e:
+        return {"cards": [], "error": str(e)}
 
 
-@router.put("/active", response_model=DeckResponse)
+@router.put("/active")
 async def save_active_deck(
         deck: DeckRequest,
         authorization: Optional[str] = Header(None)
 ):
     """Save user's active deck (5 cards)"""
-    user_id = get_user_id_from_token(authorization or "anonymous")
+    try:
+        user_id = get_user_id_from_token(authorization)
 
-    if len(deck.cards) != 5:
-        raise HTTPException(status_code=400, detail="Deck must have exactly 5 cards")
+        if len(deck.cards) != 5:
+            raise HTTPException(status_code=400, detail="Deck must have exactly 5 cards")
 
-    user_decks[user_id] = {"cards": deck.cards}
-    return DeckResponse(cards=deck.cards)
+        user_decks[user_id] = {"cards": deck.cards}
+        return {"cards": deck.cards, "status": "saved"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.options("/active")
+async def options_active_deck():
+    """Handle CORS preflight"""
+    return {"status": "ok"}
