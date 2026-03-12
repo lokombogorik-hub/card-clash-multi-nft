@@ -6,18 +6,19 @@
  * Простой детерминированный хеш из строки
  */
 export function hashString(str) {
+    if (!str) return 0;
     let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-        const char = str.charCodeAt(i);
+    const s = String(str);
+    for (let i = 0; i < s.length; i++) {
+        const char = s.charCodeAt(i);
         hash = ((hash << 5) - hash) + char;
-        hash = hash & hash; // Convert to 32bit integer
+        hash = hash & hash;
     }
     return Math.abs(hash);
 }
 
 /**
  * Извлекает числовой ID из token_id
- * Например: "token-123" -> 123, "456" -> 456
  */
 export function extractNumericId(tokenId) {
     if (!tokenId) return 0;
@@ -28,7 +29,6 @@ export function extractNumericId(tokenId) {
 
 /**
  * Определяет rarity по token_id детерминированно
- * 0-25% -> legendary, 25-50% -> epic, 50-75% -> rare, 75-100% -> common
  */
 export function getRarityFromTokenId(tokenId, totalSupply = 1000) {
     const numId = extractNumericId(tokenId);
@@ -46,137 +46,152 @@ export function getRarityFromTokenId(tokenId, totalSupply = 1000) {
  */
 export function getStatMultiplier(rarity) {
     switch (rarity) {
-        case 'legendary': return { base: 70, variance: 25 };
-        case 'epic': return { base: 55, variance: 20 };
-        case 'rare': return { base: 40, variance: 15 };
+        case 'legendary': return { base: 7, variance: 3 };
+        case 'epic': return { base: 5, variance: 4 };
+        case 'rare': return { base: 3, variance: 4 };
         case 'common':
-        default: return { base: 25, variance: 15 };
+        default: return { base: 1, variance: 5 };
     }
 }
 
 /**
- * Генерирует детерминированные статы по token_id
+ * Генерирует детерминированные статы по token_id (1-10 scale for TT)
  */
 export function generateStats(tokenId) {
-    const numId = extractNumericId(tokenId);
     const rarity = getRarityFromTokenId(tokenId);
     const { base, variance } = getStatMultiplier(rarity);
 
-    // Детерминированные вариации на основе token_id
-    const hash1 = hashString(tokenId + '_attack');
-    const hash2 = hashString(tokenId + '_defense');
-    const hash3 = hashString(tokenId + '_speed');
-
-    const attack = base + (hash1 % variance);
-    const defense = base + (hash2 % variance);
-    const speed = base + (hash3 % variance);
+    const hash1 = hashString(tokenId + '_top');
+    const hash2 = hashString(tokenId + '_right');
+    const hash3 = hashString(tokenId + '_bottom');
+    const hash4 = hashString(tokenId + '_left');
 
     return {
-        attack: Math.min(99, Math.max(1, attack)),
-        defense: Math.min(99, Math.max(1, defense)),
-        speed: Math.min(99, Math.max(1, speed))
+        top: Math.min(10, Math.max(1, base + (hash1 % variance))),
+        right: Math.min(10, Math.max(1, base + (hash2 % variance))),
+        bottom: Math.min(10, Math.max(1, base + (hash3 % variance))),
+        left: Math.min(10, Math.max(1, base + (hash4 % variance))),
     };
 }
 
 /**
  * Список стихий
  */
-export const ELEMENTS = ['fire', 'water', 'earth', 'air', 'lightning'];
+export const ELEMENTS = ['Earth', 'Fire', 'Water', 'Poison', 'Holy', 'Thunder', 'Wind', 'Ice'];
 
 /**
  * Генерирует детерминированную стихию по token_id
  */
 export function generateElement(tokenId) {
     const hash = hashString(tokenId + '_element');
+    // ~70% chance to have element
+    if ((hash % 100) > 70) return null;
     return ELEMENTS[hash % ELEMENTS.length];
 }
 
 /**
- * Возвращает emoji для стихии
+ * Emoji для стихии
  */
+export const ELEM_ICON = {
+    Earth: '🪨',
+    Fire: '🔥',
+    Water: '💧',
+    Poison: '☠️',
+    Holy: '✨',
+    Thunder: '⚡',
+    Wind: '🌪️',
+    Ice: '❄️',
+};
+
 export function getElementEmoji(element) {
-    switch (element) {
-        case 'fire': return '🔥';
-        case 'water': return '💧';
-        case 'earth': return '🪨';
-        case 'air': return '💨';
-        case 'lightning': return '⚡';
-        default: return '✨';
-    }
+    return ELEM_ICON[element] || '';
 }
 
 /**
- * Возвращает цвет для стихии
+ * Цвет для стихии
  */
 export function getElementColor(element) {
     switch (element) {
-        case 'fire': return '#ff6b35';
-        case 'water': return '#4dabf7';
-        case 'earth': return '#8b7355';
-        case 'air': return '#a0d8ef';
-        case 'lightning': return '#ffd43b';
+        case 'Fire': return '#ff6b35';
+        case 'Water': return '#4dabf7';
+        case 'Earth': return '#8b7355';
+        case 'Wind': return '#a0d8ef';
+        case 'Thunder': return '#ffd43b';
+        case 'Ice': return '#74c0fc';
+        case 'Poison': return '#9c36b5';
+        case 'Holy': return '#fff3bf';
         default: return '#888888';
     }
 }
 
 /**
- * Возвращает CSS класс для рамки по rarity
+ * Rank label
  */
-export function getRarityClass(rarity) {
+export function getRankLabel(rarity) {
     switch (rarity) {
-        case 'legendary': return 'card-legendary';
-        case 'epic': return 'card-epic';
-        case 'rare': return 'card-rare';
+        case 'legendary': return 'L';
+        case 'epic': return 'E';
+        case 'rare': return 'R';
         case 'common':
-        default: return 'card-common';
+        default: return 'C';
     }
 }
 
 /**
- * Конвертирует NFT объект в игровую карту
- * Это ГЛАВНАЯ функция — использовать везде!
+ * Конвертирует NFT объект в игровую карту (TT format)
  */
-export function nftToCard(nft) {
+export function nftToCard(nft, idx = 0) {
     if (!nft) return null;
 
-    const tokenId = nft.token_id || nft.tokenId || `unknown_${Date.now()}`;
+    const tokenId = nft.token_id || nft.tokenId || nft.id || `nft_${idx}_${Date.now()}`;
     const metadata = nft.metadata || {};
 
-    // Пробуем взять stats из metadata.extra
-    let stats = null;
+    // Пробуем взять stats/element из metadata.extra или nft напрямую
+    let values = null;
     let element = null;
 
+    // Check nft direct properties first
+    if (nft.values && typeof nft.values === 'object') {
+        values = nft.values;
+    }
+    if (nft.element) {
+        element = nft.element;
+    }
+
+    // Then check metadata.extra
     if (metadata.extra) {
         try {
             const extra = typeof metadata.extra === 'string'
                 ? JSON.parse(metadata.extra)
                 : metadata.extra;
-            if (extra.stats) stats = extra.stats;
+            if (extra.values) values = extra.values;
+            if (extra.stats) values = extra.stats;
             if (extra.element) element = extra.element;
         } catch (e) {
-            // ignore parse errors
+            // ignore
         }
     }
 
-    // Если нет в metadata — генерируем детерминированно
-    if (!stats) {
-        stats = generateStats(tokenId);
+    // Generate deterministically if not found
+    if (!values) {
+        values = generateStats(tokenId);
     }
-    if (!element) {
+    if (element === null || element === undefined) {
         element = generateElement(tokenId);
     }
 
-    const rarity = getRarityFromTokenId(tokenId);
+    const rarity = nft.rarity || nft.rank || getRarityFromTokenId(tokenId);
+    const rankLabel = getRankLabel(rarity);
 
-    // Формируем URL картинки
-    let imageUrl = metadata.media || metadata.image || '';
+    // Image URL
+    let imageUrl = nft.imageUrl || nft.image || metadata.media || metadata.image || '';
 
-    // Проксируем IPFS и Arweave через backend
+    // Proxy IPFS/Arweave
     if (imageUrl) {
         if (imageUrl.startsWith('ipfs://')) {
             const cid = imageUrl.replace('ipfs://', '');
             imageUrl = `/api/proxy/image?url=${encodeURIComponent(`https://ipfs.io/ipfs/${cid}`)}`;
-        } else if (imageUrl.includes('arweave.net') || imageUrl.includes('ipfs')) {
+        } else if (imageUrl.includes('arweave.net') || imageUrl.includes('ipfs.io')) {
             imageUrl = `/api/proxy/image?url=${encodeURIComponent(imageUrl)}`;
         }
     }
@@ -184,64 +199,39 @@ export function nftToCard(nft) {
     return {
         id: tokenId,
         token_id: tokenId,
-        name: metadata.title || metadata.name || `Card #${tokenId}`,
+        owner: nft.owner || 'player',
+        name: metadata.title || metadata.name || nft.name || `Card #${tokenId}`,
+        imageUrl: imageUrl,
         image: imageUrl,
-        description: metadata.description || '',
-        rarity,
-        element,
-        stats,
-        attack: stats.attack,
-        defense: stats.defense,
-        speed: stats.speed,
-        // Сохраняем оригинальные данные NFT
+        values: values,
+        rarity: rarity,
+        rank: rarity,
+        rankLabel: rankLabel,
+        element: element,
+        placeKey: 0,
+        captureKey: 0,
         contract_id: nft.contract_id || nft.contractId,
-        owner_id: nft.owner_id || nft.ownerId,
-        metadata
+        nftData: nft,
     };
 }
 
 /**
  * Конвертирует массив NFT в массив карт
  */
-export function nftsToCards(nfts) {
+export function nftsToCards(nfts, owner = 'player') {
     if (!Array.isArray(nfts)) return [];
-    return nfts.map(nft => nftToCard(nft)).filter(Boolean);
+    return nfts
+        .map((nft, idx) => {
+            const card = nftToCard(nft, idx);
+            if (card) card.owner = owner;
+            return card;
+        })
+        .filter(Boolean);
 }
 
 /**
- * Сравнение карт для боя
- * Возвращает: 1 = card1 wins, -1 = card2 wins, 0 = draw
+ * Клонирует колоду для руки игрока
  */
-export function compareCards(card1, card2, attribute) {
-    const val1 = card1[attribute] || card1.stats?.[attribute] || 0;
-    const val2 = card2[attribute] || card2.stats?.[attribute] || 0;
-
-    // Элементальные бонусы
-    const elementBonus1 = getElementBonus(card1.element, card2.element);
-    const elementBonus2 = getElementBonus(card2.element, card1.element);
-
-    const final1 = val1 + elementBonus1;
-    const final2 = val2 + elementBonus2;
-
-    if (final1 > final2) return 1;
-    if (final2 > final1) return -1;
-    return 0;
-}
-
-/**
- * Бонус стихии в бою
- */
-export function getElementBonus(attackerElement, defenderElement) {
-    const advantages = {
-        fire: 'air',      // огонь > воздух
-        water: 'fire',    // вода > огонь
-        earth: 'lightning', // земля > молния
-        air: 'earth',     // воздух > земля
-        lightning: 'water'  // молния > вода
-    };
-
-    if (advantages[attackerElement] === defenderElement) {
-        return 10; // бонус за преимущество
-    }
-    return 0;
+export function cloneDeckToHand(deck, owner) {
+    return deck.map((c) => ({ ...c, owner, placeKey: 0, captureKey: 0 }));
 }
