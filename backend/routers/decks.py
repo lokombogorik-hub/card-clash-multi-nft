@@ -1,5 +1,5 @@
 # backend/routers/decks.py
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Header
 from pydantic import BaseModel
 from typing import List, Optional, Any, Dict
 from datetime import datetime
@@ -8,21 +8,6 @@ router = APIRouter(prefix="/api/decks", tags=["decks"])
 
 # In-memory storage fallback
 _decks_storage: Dict[str, Dict] = {}
-_ai_deck_cache: List[Dict] = []
-
-
-class CardData(BaseModel):
-    id: str
-    token_id: Optional[str] = None
-    name: Optional[str] = None
-    image: Optional[str] = None
-    imageUrl: Optional[str] = None
-    rarity: Optional[str] = None
-    rank: Optional[str] = None
-    rankLabel: Optional[str] = None
-    element: Optional[str] = None
-    values: Optional[Dict[str, int]] = None
-    contract_id: Optional[str] = None
 
 
 class DeckSaveRequest(BaseModel):
@@ -37,30 +22,30 @@ class DeckResponse(BaseModel):
 
 
 def get_user_id_from_token(authorization: str = None) -> str:
-    """Extract user ID from token - simplified version"""
+    """Extract user ID from JWT token"""
     if not authorization:
-        return "anonymous"
+        return "default_user"
 
-    # Try to decode JWT
     try:
         from utils.security import decode_access_token
         token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
         payload = decode_access_token(token)
         if payload:
-            return str(payload.get("sub") or payload.get("user_id") or payload.get("telegram_id") or "anonymous")
-    except Exception:
-        pass
+            user_id = payload.get("sub") or payload.get("user_id") or payload.get("telegram_id")
+            if user_id:
+                return str(user_id)
+    except Exception as e:
+        print(f"[Decks] Token decode error: {e}")
 
-    return "anonymous"
+    return "default_user"
 
 
 @router.post("/save", response_model=dict)
 async def save_deck(
         request: DeckSaveRequest,
-        authorization: str = None
+        authorization: str = Header(None)
 ):
     """Сохраняет колоду пользователя"""
-    from fastapi import Header
 
     if len(request.cards) != 5:
         raise HTTPException(
@@ -68,8 +53,7 @@ async def save_deck(
             detail="Deck must contain exactly 5 cards"
         )
 
-    # Get user_id from header or use anonymous
-    user_id = "default_user"
+    user_id = get_user_id_from_token(authorization)
 
     deck_data = {
         "user_id": user_id,
@@ -78,24 +62,31 @@ async def save_deck(
         "updated_at": datetime.utcnow().isoformat()
     }
 
-    # Store in memory
+    # Store under user_id
     _decks_storage[user_id] = deck_data
 
+    # Also store under "default_user" as fallback
+    _decks_storage["default_user"] = deck_data
+
     print(f"[Decks] Saved deck for user {user_id}: {request.cards}")
+    print(f"[Decks] Storage keys: {list(_decks_storage.keys())}")
 
     return {
         "success": True,
         "message": "Deck saved successfully",
-        "cards": request.cards
+        "cards": request.cards,
+        "user_id": user_id
     }
 
 
 @router.get("/my", response_model=DeckResponse)
-async def get_my_deck():
+async def get_my_deck(authorization: str = Header(None)):
     """Получает колоду текущего пользователя"""
-    user_id = "default_user"
 
-    deck = _decks_storage.get(user_id)
+    user_id = get_user_id_from_token(authorization)
+
+    # Try user-specific first, then default
+    deck = _decks_storage.get(user_id) or _decks_storage.get("default_user")
 
     if not deck:
         return DeckResponse(cards=[], full_cards=None, updated_at=None)
@@ -108,11 +99,13 @@ async def get_my_deck():
 
 
 @router.get("/active/full")
-async def get_active_deck_full():
+async def get_active_deck_full(authorization: str = Header(None)):
     """Получает полную активную колоду с данными карт"""
-    user_id = "default_user"
 
-    deck = _decks_storage.get(user_id)
+    user_id = get_user_id_from_token(authorization)
+
+    # Try user-specific first, then default
+    deck = _decks_storage.get(user_id) or _decks_storage.get("default_user")
 
     if not deck or not deck.get("full_cards"):
         raise HTTPException(
@@ -131,12 +124,11 @@ async def get_ai_opponent_deck():
     """Возвращает колоду AI оппонента"""
     import random
 
-    # Generate deterministic AI deck
     ai_cards = []
     elements = ["Earth", "Fire", "Water", "Poison", "Holy", "Thunder", "Wind", "Ice", None]
 
     for i in range(5):
-        seed = 42 + i  # Deterministic seed
+        seed = 42 + i
         random.seed(seed)
 
         rarity = random.choice(["common", "common", "rare", "rare", "epic"])
@@ -170,19 +162,30 @@ async def get_ai_opponent_deck():
         }
         ai_cards.append(card)
 
-    # Reset random seed
     random.seed()
-
     return ai_cards
 
 
 @router.delete("/clear")
-async def clear_deck():
+async def clear_deck(authorization: str = Header(None)):
     """Очищает колоду пользователя"""
-    user_id = "default_user"
 
+    user_id = get_user_id_from_token(authorization)
+
+    deleted = False
     if user_id in _decks_storage:
         del _decks_storage[user_id]
-        return {"success": True, "deleted": True}
+        deleted = True
 
-    return {"success": True, "deleted": False}
+    return {"success": True, "deleted": deleted}
+
+
+# Debug endpoint
+@router.get("/debug/all")
+async def debug_all_decks():
+    """Debug: показать все сохранённые колоды"""
+    return {
+        "storage_keys": list(_decks_storage.keys()),
+        "decks_count": len(_decks_storage),
+        "decks": {k: {"cards": v.get("cards", []), "user_id": v.get("user_id")} for k, v in _decks_storage.items()}
+    }
