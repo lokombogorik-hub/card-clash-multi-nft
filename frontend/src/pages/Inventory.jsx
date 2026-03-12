@@ -77,19 +77,15 @@ function safeParse(s) {
     }
 }
 
-// Global cache for NFTs
 var nftCache = {
     accountId: null,
     items: [],
     timestamp: 0
 };
 
-// Global image cache to prevent reload
 var imageCache = new Map();
 
-// ============ MEMOIZED NftImage — prevents re-render issues ============
 var NftImage = memo(function NftImage({ src, originalSrc, alt, cacheKey }) {
-    // Use cache key to store/retrieve loaded state
     var cached = imageCache.get(cacheKey);
 
     var [stage, setStage] = useState(cached ? cached.stage : 0);
@@ -106,7 +102,6 @@ var NftImage = memo(function NftImage({ src, originalSrc, alt, cacheKey }) {
         };
     }, []);
 
-    // If we have cached successful load, use it
     useEffect(function () {
         if (cached && cached.loaded && cached.finalSrc) {
             setStage(cached.stage);
@@ -127,7 +122,6 @@ var NftImage = memo(function NftImage({ src, originalSrc, alt, cacheKey }) {
 
     var handleError = useCallback(function () {
         if (!mountedRef.current) return;
-
         if (stage === 0) {
             if (originalSrc && isIpfsUrl(originalSrc)) {
                 timerRef.current = setTimeout(function () {
@@ -155,7 +149,6 @@ var NftImage = memo(function NftImage({ src, originalSrc, alt, cacheKey }) {
         var loadedUrl = e.target.src;
         setLoaded(true);
         setFinalSrc(loadedUrl);
-        // Cache successful load
         imageCache.set(cacheKey, { stage: stage, loaded: true, finalSrc: loadedUrl });
     }, [cacheKey, stage]);
 
@@ -211,7 +204,6 @@ var NftImage = memo(function NftImage({ src, originalSrc, alt, cacheKey }) {
     );
 });
 
-// ============ MEMOIZED Card Component ============
 var InventoryCard = memo(function InventoryCard({
     nft,
     isSelected,
@@ -241,6 +233,11 @@ var InventoryCard = memo(function InventoryCard({
         onToggle(k);
     }, [onToggle, k]);
 
+    // Размеры ромба относительно ширины карты
+    // Ромб: 28% ширины карты, квадратный
+    // Центр ромба: left 6% + 14% = 20% от левого края
+    // Числа позиционируются относительно центра ромба
+
     return (
         <button
             key={k}
@@ -265,7 +262,7 @@ var InventoryCard = memo(function InventoryCard({
                 />
             </div>
 
-            {/* Element pill — top right, high z-index */}
+            {/* Element pill — top right */}
             {element && (
                 <div
                     className="inv-card-elem-pill"
@@ -298,93 +295,106 @@ var InventoryCard = memo(function InventoryCard({
                 </div>
             )}
 
-            {/* TT Badge (diamond) — centered positioning */}
+            {/* TT Badge Container — содержит ромб и все 4 числа */}
             <div
-                className="inv-tt-badge"
+                className="inv-tt-container"
                 style={{
                     position: "absolute",
-                    top: "6%",
-                    left: "6%",
-                    width: "32%",
-                    height: 0,
-                    paddingBottom: "32%",
-                    background: "rgba(0,0,0,0.8)",
-                    transform: "rotate(45deg)",
-                    borderRadius: 3,
+                    top: 6,
+                    left: 6,
+                    // Размер контейнера = размер ромба (квадрат)
+                    width: "clamp(32px, 28%, 48px)",
+                    height: "clamp(32px, 28%, 48px)",
                     zIndex: 10,
                     pointerEvents: "none"
                 }}
-            />
+            >
+                {/* Ромб (повёрнутый квадрат) */}
+                <div
+                    className="inv-tt-badge"
+                    style={{
+                        position: "absolute",
+                        inset: 0,
+                        background: "rgba(0,0,0,0.85)",
+                        transform: "rotate(45deg)",
+                        borderRadius: 4,
+                        border: "1px solid rgba(255,255,255,0.15)"
+                    }}
+                />
 
-            {/* TT Numbers — positioned relative to badge center */}
-            <span
-                className="inv-tt-num top"
-                style={{
-                    position: "absolute",
-                    top: "5%",
-                    left: "22%",
-                    zIndex: 15,
-                    fontSize: "clamp(9px, 2.5vw, 13px)",
-                    fontWeight: 900,
-                    color: "#fff",
-                    textShadow: "0 2px 6px rgba(0,0,0,0.95)",
-                    lineHeight: 1,
-                    pointerEvents: "none"
-                }}
-            >
-                {stats.top}
-            </span>
-            <span
-                className="inv-tt-num left"
-                style={{
-                    position: "absolute",
-                    top: "18%",
-                    left: "8%",
-                    zIndex: 15,
-                    fontSize: "clamp(9px, 2.5vw, 13px)",
-                    fontWeight: 900,
-                    color: "#fff",
-                    textShadow: "0 2px 6px rgba(0,0,0,0.95)",
-                    lineHeight: 1,
-                    pointerEvents: "none"
-                }}
-            >
-                {stats.left}
-            </span>
-            <span
-                className="inv-tt-num right"
-                style={{
-                    position: "absolute",
-                    top: "18%",
-                    left: "36%",
-                    zIndex: 15,
-                    fontSize: "clamp(9px, 2.5vw, 13px)",
-                    fontWeight: 900,
-                    color: "#fff",
-                    textShadow: "0 2px 6px rgba(0,0,0,0.95)",
-                    lineHeight: 1,
-                    pointerEvents: "none"
-                }}
-            >
-                {stats.right}
-            </span>
-            <span
-                className="inv-tt-num bottom"
-                style={{
-                    position: "absolute",
-                    top: "31%",
-                    left: "22%",
-                    zIndex: 15,
-                    fontSize: "clamp(9px, 2.5vw, 13px)",
-                    fontWeight: 900,
-                    color: "#fff",
-                    textShadow: "0 2px 6px rgba(0,0,0,0.95)",
-                    lineHeight: 1,
-                    pointerEvents: "none"
-                }}
-            >
-                {stats.bottom}
-            </span>
+                {/* Числа — позиционируются относительно центра контейнера */}
+                {/* TOP — сверху по центру */}
+                <span
+                    style={{
+                        position: "absolute",
+                        top: "2%",
+                        left: "50%",
+                        transform: "translateX(-50%)",
+                        zIndex: 15,
+                        fontSize: "clamp(8px, 1.8vw, 11px)",
+                        fontWeight: 900,
+                        color: "#fff",
+                        textShadow: "0 1px 3px rgba(0,0,0,1)",
+                        lineHeight: 1
+                    }}
+                >
+                    {stats.top}
+                </span>
+
+                {/* LEFT — слева по центру */}
+                <span
+                    style={{
+                        position: "absolute",
+                        top: "50%",
+                        left: "2%",
+                        transform: "translateY(-50%)",
+                        zIndex: 15,
+                        fontSize: "clamp(8px, 1.8vw, 11px)",
+                        fontWeight: 900,
+                        color: "#fff",
+                        textShadow: "0 1px 3px rgba(0,0,0,1)",
+                        lineHeight: 1
+                    }}
+                >
+                    {stats.left}
+                </span>
+
+                {/* RIGHT — справа по центру */}
+                <span
+                    style={{
+                        position: "absolute",
+                        top: "50%",
+                        right: "2%",
+                        transform: "translateY(-50%)",
+                        zIndex: 15,
+                        fontSize: "clamp(8px, 1.8vw, 11px)",
+                        fontWeight: 900,
+                        color: "#fff",
+                        textShadow: "0 1px 3px rgba(0,0,0,1)",
+                        lineHeight: 1
+                    }}
+                >
+                    {stats.right}
+                </span>
+
+                {/* BOTTOM — снизу по центру */}
+                <span
+                    style={{
+                        position: "absolute",
+                        bottom: "2%",
+                        left: "50%",
+                        transform: "translateX(-50%)",
+                        zIndex: 15,
+                        fontSize: "clamp(8px, 1.8vw, 11px)",
+                        fontWeight: 900,
+                        color: "#fff",
+                        textShadow: "0 1px 3px rgba(0,0,0,1)",
+                        lineHeight: 1
+                    }}
+                >
+                    {stats.bottom}
+                </span>
+            </div>
 
             {/* Pick badge */}
             {isSelected && (
@@ -394,67 +404,54 @@ var InventoryCard = memo(function InventoryCard({
                         position: "absolute",
                         right: 6,
                         bottom: 6,
-                        width: 36,
-                        height: 36,
+                        width: "clamp(28px, 22%, 40px)",
+                        height: "clamp(28px, 22%, 40px)",
                         borderRadius: 999,
                         zIndex: 25,
                         padding: 0,
                         display: "grid",
                         placeItems: "center",
                         background: "conic-gradient(from 90deg, rgba(120,200,255,1), rgba(255,61,242,0.75), rgba(120,200,255,1))",
-                        boxShadow: "0 0 20px rgba(120,200,255,0.5)"
+                        boxShadow: "0 0 16px rgba(120,200,255,0.5)"
                     }}
                 >
                     <div
-                        className="inv-pick-badge-inner"
                         style={{
-                            width: "100%",
-                            height: "100%",
-                            borderRadius: 999,
-                            display: "grid",
-                            placeItems: "center",
-                            position: "relative"
-                        }}
-                    >
-                        <div style={{
                             position: "absolute",
                             inset: 2,
                             borderRadius: 999,
-                            background: "rgba(0,0,0,0.7)",
+                            background: "rgba(0,0,0,0.75)",
                             border: "1px solid rgba(255,255,255,0.2)"
-                        }} />
-                        <div
-                            className="inv-pick-check"
-                            style={{
-                                position: "relative",
-                                zIndex: 1,
-                                fontWeight: 1000,
-                                fontSize: 14,
-                                lineHeight: 1,
-                                color: "#fff",
-                                textShadow: "0 2px 8px rgba(0,0,0,0.9)",
-                                transform: "translateY(-1px)"
-                            }}
-                        >
-                            ✓
-                        </div>
-                        <div
-                            className="inv-pick-no"
-                            style={{
-                                position: "absolute",
-                                bottom: 4,
-                                left: "50%",
-                                transform: "translateX(-50%)",
-                                zIndex: 1,
-                                fontWeight: 900,
-                                fontSize: 10,
-                                lineHeight: 1,
-                                color: "rgba(255,255,255,0.95)",
-                                textShadow: "0 2px 8px rgba(0,0,0,0.9)"
-                            }}
-                        >
-                            {pickNo}
-                        </div>
+                        }}
+                    />
+                    <div
+                        style={{
+                            position: "relative",
+                            zIndex: 1,
+                            fontWeight: 1000,
+                            fontSize: "clamp(10px, 2vw, 14px)",
+                            lineHeight: 1,
+                            color: "#fff",
+                            textShadow: "0 2px 6px rgba(0,0,0,0.9)"
+                        }}
+                    >
+                        ✓
+                    </div>
+                    <div
+                        style={{
+                            position: "absolute",
+                            bottom: "15%",
+                            left: "50%",
+                            transform: "translateX(-50%)",
+                            zIndex: 1,
+                            fontWeight: 900,
+                            fontSize: "clamp(7px, 1.5vw, 10px)",
+                            lineHeight: 1,
+                            color: "rgba(255,255,255,0.95)",
+                            textShadow: "0 1px 4px rgba(0,0,0,0.9)"
+                        }}
+                    >
+                        {pickNo}
                     </div>
                 </div>
             )}
@@ -493,11 +490,10 @@ export default function Inventory({ token, onDeckReady }) {
     useEffect(function () {
         if (!token) return;
 
-        // Check cache first
         var now = Date.now();
         var cacheValid = nftCache.accountId === accountId &&
             nftCache.items.length > 0 &&
-            (now - nftCache.timestamp) < 60000; // 1 minute cache
+            (now - nftCache.timestamp) < 60000;
 
         if (cacheValid) {
             setNfts(nftCache.items);
@@ -546,7 +542,6 @@ export default function Inventory({ token, onDeckReady }) {
                             };
                         });
 
-                        // Update cache
                         nftCache.accountId = accountId;
                         nftCache.items = items;
                         nftCache.timestamp = Date.now();
