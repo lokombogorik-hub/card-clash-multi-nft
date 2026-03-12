@@ -282,11 +282,11 @@ function cloneDeckToHand(deck, owner) {
 
 function nftToCard(nft, idx) {
     return {
-        id: nft.key || nft.tokenId || `nft_${idx}`,
+        id: nft.id || nft.key || nft.tokenId || nft.token_id || `nft_${idx}`,
         owner: "player",
-        values: nft.stats || { top: 5, right: 5, bottom: 5, left: 5 },
-        imageUrl: nft.imageUrl || ART[0],
-        rank: nft.rank || "common",
+        values: nft.values || nft.stats || { top: 5, right: 5, bottom: 5, left: 5 },
+        imageUrl: nft.imageUrl || nft.image || ART[0],
+        rank: nft.rank || nft.rarity || "common",
         rankLabel: nft.rankLabel || "C",
         element: nft.element || null,
         placeKey: 0,
@@ -312,14 +312,39 @@ function getFallbackEnemyDeck() {
     return Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`));
 }
 
+function getWsUrl(matchId) {
+    const apiUrl = import.meta.env.VITE_API_URL || "";
+    // Convert http(s) to ws(s)
+    let wsBase = apiUrl.replace(/^http/, "ws");
+    if (!wsBase) {
+        // Fallback: use current host
+        const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+        wsBase = `${proto}//${window.location.host}`;
+    }
+    return `${wsBase}/ws/match/${matchId}`;
+}
+
 export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const revealTimerRef = useRef(null);
+    const wsRef = useRef(null);
+    const pingIntervalRef = useRef(null);
 
     const {
         connected: nearConnected,
         accountId: nearAccountId,
         signAndSendTransaction,
     } = useWalletConnect();
+
+    // PvP WebSocket state
+    const [wsConnected, setWsConnected] = useState(false);
+    const [wsError, setWsError] = useState("");
+    const [pvpState, setPvpState] = useState(null);
+    const [myRole, setMyRole] = useState(null); // "player1" or "player2"
+    const [opponentConnected, setOpponentConnected] = useState(false);
+    const [waitingForOpponent, setWaitingForOpponent] = useState(false);
+    const [reconnectDeadline, setReconnectDeadline] = useState(null);
+
+    const isPvP = mode === "pvp" && Boolean(matchId);
 
     // escrowClaim built on top of signAndSendTransaction
     const escrowClaim = async ({ matchId: mId, winnerAccountId, loserNftContractId, loserTokenId }) => {
@@ -406,6 +431,241 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
     const deckOk = Array.isArray(playerDeck) && playerDeck.length === 5;
 
+    // ==================== PvP WebSocket Logic ====================
+
+    useEffect(() => {
+        if (!isPvP || !matchId) return;
+
+        const token = getStoredToken();
+        if (!token) {
+            setWsError("No auth token");
+            return;
+        }
+
+        const wsUrl = getWsUrl(matchId);
+        console.log("[WS] Connecting to:", wsUrl);
+
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+
+        ws.onopen = () => {
+            console.log("[WS] Connected, sending auth...");
+            ws.send(JSON.stringify({ type: "auth", token }));
+        };
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                console.log("[WS] Message:", data.type, data);
+
+                switch (data.type) {
+                    case "connected":
+                        setWsConnected(true);
+                        setMyRole(data.you_are);
+                        setWaitingForOpponent(true);
+                        break;
+
+                    case "player_connected":
+                        setOpponentConnected(true);
+                        setWaitingForOpponent(false);
+                        setReconnectDeadline(null);
+                        break;
+
+                    case "player_disconnected":
+                        setOpponentConnected(false);
+                        if (data.reconnect_deadline) {
+                            setReconnectDeadline(new Date(data.reconnect_deadline));
+                        }
+                        break;
+
+                    case "game_start":
+                        setWaitingForOpponent(false);
+                        setOpponentConnected(true);
+                        break;
+
+                    case "game_state":
+                        handleGameState(data);
+                        break;
+
+                    case "card_played":
+                        handleCardPlayed(data);
+                        break;
+
+                    case "turn_change":
+                        handleTurnChange(data);
+                        break;
+
+                    case "game_over":
+                        handleGameOver(data);
+                        break;
+
+                    case "error":
+                        console.error("[WS] Error:", data.message);
+                        setWsError(data.message);
+                        break;
+
+                    case "pong":
+                        // Heartbeat response
+                        break;
+                }
+            } catch (e) {
+                console.error("[WS] Parse error:", e);
+            }
+        };
+
+        ws.onerror = (error) => {
+            console.error("[WS] Error:", error);
+            setWsError("Connection error");
+        };
+
+        ws.onclose = () => {
+            console.log("[WS] Disconnected");
+            setWsConnected(false);
+        };
+
+        // Ping interval to keep connection alive
+        pingIntervalRef.current = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "ping" }));
+            }
+        }, 25000);
+
+        return () => {
+            if (pingIntervalRef.current) {
+                clearInterval(pingIntervalRef.current);
+            }
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.close();
+            }
+        };
+    }, [isPvP, matchId]);
+
+    const handleGameState = (data) => {
+        const state = data.state;
+        setPvpState(state);
+
+        // Update board
+        if (state.board) {
+            const newBoard = state.board.map((cell, idx) => {
+                if (!cell) return null;
+                return {
+                    ...cell,
+                    owner: cell.owner === state.player1_id ? "player" : "enemy",
+                    placeKey: boardRef.current[idx]?.placeKey || 0,
+                    captureKey: boardRef.current[idx]?.captureKey || 0,
+                };
+            });
+            setBoard(newBoard);
+        }
+
+        // Update board elements
+        if (state.board_elements) {
+            setBoardElems(state.board_elements);
+        }
+
+        // Update turn
+        const isMyTurn = state.current_turn === (myRole === "player1" ? state.player1_id : state.player2_id);
+        setTurn(isMyTurn ? "player" : "enemy");
+
+        // Update hand
+        if (data.your_hand) {
+            const myHand = data.your_hand.map((card, idx) => ({
+                ...nftToCard(card, idx),
+                owner: "player",
+            }));
+            setHands(h => ({ ...h, player: myHand }));
+        }
+
+        // Update status
+        if (state.status === "finished") {
+            setMatchOver(true);
+            setRoundOver(true);
+            const iWon = state.winner === (myRole === "player1" ? state.player1_id : state.player2_id);
+            setRoundWinner(iWon ? "player" : "enemy");
+        }
+
+        setLoadingEnemyDeck(false);
+    };
+
+    const handleCardPlayed = (data) => {
+        const { cell_index, card, captured, player_id } = data;
+
+        // Determine owner
+        const isMyCard = (myRole === "player1" && player_id === pvpState?.player1_id) ||
+            (myRole === "player2" && player_id === pvpState?.player2_id);
+        const owner = isMyCard ? "player" : "enemy";
+
+        // Update board
+        setBoard(prev => {
+            const next = [...prev];
+            next[cell_index] = {
+                ...nftToCard(card, 0),
+                owner,
+                placeKey: Date.now(),
+            };
+
+            // Handle captures
+            if (captured && captured.length > 0) {
+                for (const idx of captured) {
+                    if (next[idx]) {
+                        next[idx] = {
+                            ...next[idx],
+                            owner,
+                            captureKey: Date.now(),
+                        };
+                    }
+                }
+            }
+
+            return next;
+        });
+
+        // Remove card from appropriate hand
+        if (isMyCard) {
+            setHands(h => ({
+                ...h,
+                player: h.player.filter(c => c.id !== card.id),
+            }));
+        }
+
+        haptic("medium");
+    };
+
+    const handleTurnChange = (data) => {
+        const isMyTurn = data.current_turn === (myRole === "player1" ? pvpState?.player1_id : pvpState?.player2_id);
+        setTurn(isMyTurn ? "player" : "enemy");
+    };
+
+    const handleGameOver = (data) => {
+        setMatchOver(true);
+        setRoundOver(true);
+
+        const myPlayerId = myRole === "player1" ? pvpState?.player1_id : pvpState?.player2_id;
+        const iWon = data.winner === myPlayerId;
+        setRoundWinner(iWon ? "player" : "enemy");
+
+        if (iWon) {
+            confetti({ zIndex: 99999, particleCount: 50, spread: 80, origin: { y: 0.4 } });
+        }
+    };
+
+    const sendPvPMove = (cardIndex, cellIndex) => {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+            console.error("[WS] Not connected");
+            return false;
+        }
+
+        wsRef.current.send(JSON.stringify({
+            type: "play_card",
+            card_index: cardIndex,
+            cell_index: cellIndex,
+        }));
+
+        return true;
+    };
+
+    // ==================== End PvP WebSocket Logic ====================
+
     const refreshStage2Match = async () => {
         if (!isStage2) return;
         try {
@@ -420,10 +680,15 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
     useEffect(() => {
         refreshStage2Match();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [matchId, isStage2]);
 
+    // Load AI deck (only for AI mode)
     useEffect(() => {
+        if (isPvP) {
+            // PvP: deck comes from WebSocket
+            return;
+        }
+
         let alive = true;
 
         (async () => {
@@ -449,23 +714,26 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         return () => {
             alive = false;
         };
-    }, []);
+    }, [isPvP]);
 
     useEffect(() => {
         if (!deckOk) return;
+        if (isPvP) return; // PvP handles hands via WebSocket
+
         setHands((h) => ({
             ...h,
             player: cloneDeckToHand(playerDeck.map((n, idx) => nftToCard(n, idx)), "player"),
         }));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [playerDeck]);
+    }, [playerDeck, isPvP]);
 
     useEffect(() => {
+        if (isPvP) return; // PvP handles hands via WebSocket
+
         setHands((h) => ({
             ...h,
             enemy: cloneDeckToHand(enemyDeck, "enemy"),
         }));
-    }, [enemyDeck]);
+    }, [enemyDeck, isPvP]);
 
     const haptic = (kind = "light") => {
         try {
@@ -492,6 +760,8 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     };
 
     const startRound = ({ keepSeries = true, enemyDeckOverride = null } = {}) => {
+        if (isPvP) return; // PvP doesn't support local round reset
+
         const ed = enemyDeckOverride || enemyDeck;
 
         setBoard(Array(9).fill(null));
@@ -527,6 +797,12 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     };
 
     const resetMatch = () => {
+        if (isPvP) {
+            // For PvP, just exit
+            onExit();
+            return;
+        }
+
         const newEnemy = Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${Date.now()}_${i}`));
         setEnemyDeck(newEnemy);
         setTimeout(() => startRound({ keepSeries: false, enemyDeckOverride: newEnemy }), 0);
@@ -546,22 +822,34 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const myName = getPlayerName(me);
     const myAvatar = getPlayerAvatarUrl(me);
 
-    const enemyName = "BunnyBot";
+    const enemyName = isPvP ? "Opponent" : "BunnyBot";
     const enemyAvatar = "/ui/avatar-enemy.png?v=1";
 
-    const canUseMagic = turn === "player" && !roundOver && !matchOver;
+    const canUseMagic = turn === "player" && !roundOver && !matchOver && !isPvP;
 
-    const placeCard = (i) => {
+    const placeCard = (cellIdx) => {
         if (roundOver || matchOver) return;
         if (turn !== "player") return;
         if (!selected) return;
-        if (board[i]) return;
-        if (frozen[i] > 0) return;
+        if (board[cellIdx]) return;
+        if (frozen[cellIdx] > 0) return;
 
+        if (isPvP) {
+            // PvP: send move via WebSocket
+            const cardIndex = hands.player.findIndex(c => c.id === selected.id);
+            if (cardIndex === -1) return;
+
+            if (sendPvPMove(cardIndex, cellIdx)) {
+                setSelected(null);
+            }
+            return;
+        }
+
+        // AI mode: local logic
         const next = [...board];
-        next[i] = { ...selected, owner: "player", placeKey: (selected.placeKey || 0) + 1 };
+        next[cellIdx] = { ...selected, owner: "player", placeKey: (selected.placeKey || 0) + 1 };
 
-        const { flippedSpecial } = resolvePlacementTT(i, next, boardElems);
+        const { flippedSpecial } = resolvePlacementTT(cellIdx, next, boardElems);
         resolveCombo(flippedSpecial, next, boardElems);
 
         setBoard(next);
@@ -576,7 +864,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const onCellClick = (i) => {
         if (roundOver || matchOver) return;
 
-        if (spellMode === "freeze") {
+        if (spellMode === "freeze" && !isPvP) {
             if (turn !== "player") return;
             if (playerSpells.freeze <= 0) return;
             if (board[i]) return;
@@ -629,7 +917,9 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         setTurn("enemy");
     };
 
+    // AI enemy turn (only for AI mode)
     useEffect(() => {
+        if (isPvP) return; // PvP is handled by server
         if (turn !== "enemy" || roundOver || matchOver) return;
 
         const t = setTimeout(() => {
@@ -670,9 +960,11 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             clearTimeout(t);
             clearTimeout(safety);
         };
-    }, [turn, roundOver, matchOver]);
+    }, [turn, roundOver, matchOver, isPvP]);
 
+    // Check round/match end (AI mode only)
     useEffect(() => {
+        if (isPvP) return; // PvP handles this via WebSocket
         if (roundOver || matchOver) return;
         if (board.some((c) => c === null)) return;
 
@@ -690,9 +982,10 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             if (w === "enemy") next.enemy += 1;
             return next;
         });
-    }, [board, roundOver, matchOver]);
+    }, [board, roundOver, matchOver, isPvP]);
 
     useEffect(() => {
+        if (isPvP) return;
         if (matchOver) return;
         if (series.player >= MATCH_WINS_TARGET || series.enemy >= MATCH_WINS_TARGET) {
             setMatchOver(true);
@@ -700,8 +993,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             setClaimDone(false);
             if (isStage2) refreshStage2Match();
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [series, matchOver, isStage2]);
+    }, [series, matchOver, isStage2, isPvP]);
 
     useEffect(() => {
         if (!roundOver) return;
@@ -715,6 +1007,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     }, [roundOver, roundWinner]);
 
     const onNextRound = () => {
+        if (isPvP) return;
         setRoundNo((r) => r + 1);
         startRound({ keepSeries: true });
     };
@@ -725,7 +1018,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const loserSide = matchWinner === "player" ? "enemy" : matchWinner === "enemy" ? "player" : null;
     const winnerSide = matchWinner;
 
-    const playerDeckCards = useMemo(() => playerDeck.map((n, idx) => nftToCard(n, idx)), [playerDeck]);
+    const playerDeckCards = useMemo(() => (playerDeck || []).map((n, idx) => nftToCard(n, idx)), [playerDeck]);
     const loserDeck = loserSide === "enemy" ? enemyDeck : loserSide === "player" ? playerDeckCards : [];
 
     const stage2OpponentDeposits = useMemo(() => {
@@ -807,6 +1100,71 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         }
     };
 
+    // PvP: Show waiting/connecting screen
+    if (isPvP && (!wsConnected || waitingForOpponent)) {
+        return (
+            <div className="game-root">
+                <div className="game-ui tt-layout">
+                    <button className="exit" onClick={onExit}>← Меню</button>
+                    <div className="game-over">
+                        <div className="game-over-box" style={{ minWidth: 320 }}>
+                            {wsError ? (
+                                <>
+                                    <h2 style={{ margin: 0, color: "#ff6b6b" }}>Connection Error</h2>
+                                    <div style={{ marginTop: 10, fontSize: 13 }}>{wsError}</div>
+                                    <button onClick={onExit} style={{ marginTop: 16 }}>← Back</button>
+                                </>
+                            ) : !wsConnected ? (
+                                <>
+                                    <h2 style={{ margin: 0 }}>Connecting...</h2>
+                                    <div style={{ marginTop: 10, opacity: 0.8, fontSize: 13 }}>
+                                        Establishing connection to match server
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <h2 style={{ margin: 0 }}>Waiting for opponent...</h2>
+                                    <div style={{ marginTop: 10, opacity: 0.8, fontSize: 13 }}>
+                                        You are {myRole === "player1" ? "Player 1" : "Player 2"}
+                                    </div>
+                                    <div style={{ marginTop: 6, opacity: 0.7, fontSize: 12 }}>
+                                        Match ID: {matchId?.slice(0, 8)}...
+                                    </div>
+                                    <button onClick={onExit} style={{ marginTop: 16 }}>Cancel</button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // PvP: Opponent disconnected
+    if (isPvP && reconnectDeadline && !opponentConnected) {
+        const remainingMs = reconnectDeadline.getTime() - Date.now();
+        const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
+
+        return (
+            <div className="game-root">
+                <div className="game-ui tt-layout">
+                    <button className="exit" onClick={onExit}>← Меню</button>
+                    <div className="game-over">
+                        <div className="game-over-box" style={{ minWidth: 320 }}>
+                            <h2 style={{ margin: 0, color: "#ffd43b" }}>Opponent Disconnected</h2>
+                            <div style={{ marginTop: 10, opacity: 0.9, fontSize: 14 }}>
+                                Waiting for reconnect: {Math.floor(remainingSec / 60)}:{(remainingSec % 60).toString().padStart(2, '0')}
+                            </div>
+                            <div style={{ marginTop: 8, opacity: 0.7, fontSize: 12 }}>
+                                If they don't return, you win!
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="game-root">
             <div className="game-ui tt-layout">
@@ -829,30 +1187,52 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                             {boardScore.blue} 🟦
                         </div>
 
+                        {/* PvP indicator */}
+                        {isPvP && (
+                            <div style={{
+                                position: "absolute",
+                                top: 12,
+                                left: "50%",
+                                transform: "translateX(-50%)",
+                                background: "rgba(255,61,242,0.2)",
+                                border: "1px solid rgba(255,61,242,0.5)",
+                                borderRadius: 8,
+                                padding: "4px 12px",
+                                fontSize: 11,
+                                fontWeight: 900,
+                                color: "#fff",
+                                zIndex: 200,
+                            }}>
+                                ⚔️ PvP {turn === "player" ? "YOUR TURN" : "OPPONENT'S TURN"}
+                            </div>
+                        )}
+
                         <PlayerBadge side="enemy" name={enemyName} avatarUrl={enemyAvatar} active={turn === "enemy"} />
                         <PlayerBadge side="player" name={myName} avatarUrl={myAvatar} active={turn === "player"} />
 
                         <div className="hand left">
                             <div className="hand-grid">
-                                {hands.enemy.map((c, i) => {
+                                {(isPvP ? Array(pvpState?.player2_hand_count || 0).fill(null) : hands.enemy).map((c, i) => {
                                     const { col, row } = posForHandIndex(i);
-                                    const isRevealed = enemyRevealId === c.id;
+                                    const isRevealed = !isPvP && enemyRevealId === c?.id;
                                     return (
-                                        <div key={c.id} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
+                                        <div key={c?.id || `enemy_${i}`} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
                                             {isRevealed ? <Card card={c} disabled /> : <Card hidden />}
                                         </div>
                                     );
                                 })}
                             </div>
 
-                            <div className="magic-column enemy" aria-hidden="true">
-                                <button className="magic-btn freeze" disabled title="Enemy magic (soon)">
-                                    <span className="magic-ic">❄</span>
-                                </button>
-                                <button className="magic-btn reveal" disabled title="Enemy magic (soon)">
-                                    <span className="magic-ic">👁</span>
-                                </button>
-                            </div>
+                            {!isPvP && (
+                                <div className="magic-column enemy" aria-hidden="true">
+                                    <button className="magic-btn freeze" disabled title="Enemy magic (soon)">
+                                        <span className="magic-ic">❄</span>
+                                    </button>
+                                    <button className="magic-btn reveal" disabled title="Enemy magic (soon)">
+                                        <span className="magic-ic">👁</span>
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         <div className="center-col">
@@ -864,7 +1244,8 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                         !matchOver &&
                                         !cell &&
                                         !isFrozen &&
-                                        ((spellMode === "freeze" && turn === "player") || (spellMode == null && selected));
+                                        turn === "player" &&
+                                        ((spellMode === "freeze" && !isPvP) || (spellMode == null && selected));
 
                                     const elem = boardElems[i];
 
@@ -896,7 +1277,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                             <Card
                                                 card={c}
                                                 selected={selected?.id === c.id}
-                                                disabled={roundOver || matchOver || turn !== "player" || spellMode === "freeze"}
+                                                disabled={roundOver || matchOver || turn !== "player" || (spellMode === "freeze" && !isPvP)}
                                                 onClick={() => setSelected((prev) => (prev?.id === c.id ? null : c))}
                                             />
                                         </div>
@@ -904,30 +1285,32 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                 })}
                             </div>
 
-                            <div className="magic-column player">
-                                <button
-                                    className={`magic-btn freeze ${spellMode === "freeze" ? "active" : ""}`}
-                                    onClick={onMagicFreeze}
-                                    disabled={!canUseMagic || playerSpells.freeze <= 0}
-                                    title="Freeze (house rule)"
-                                >
-                                    <span className="magic-ic">❄</span>
-                                    <span className="magic-count">{playerSpells.freeze}</span>
-                                </button>
+                            {!isPvP && (
+                                <div className="magic-column player">
+                                    <button
+                                        className={`magic-btn freeze ${spellMode === "freeze" ? "active" : ""}`}
+                                        onClick={onMagicFreeze}
+                                        disabled={!canUseMagic || playerSpells.freeze <= 0}
+                                        title="Freeze (house rule)"
+                                    >
+                                        <span className="magic-ic">❄</span>
+                                        <span className="magic-count">{playerSpells.freeze}</span>
+                                    </button>
 
-                                <button
-                                    className="magic-btn reveal"
-                                    onClick={onMagicReveal}
-                                    disabled={!canUseMagic || playerSpells.reveal <= 0}
-                                    title="Reveal (house rule)"
-                                >
-                                    <span className="magic-ic">👁</span>
-                                    <span className="magic-count">{playerSpells.reveal}</span>
-                                </button>
-                            </div>
+                                    <button
+                                        className="magic-btn reveal"
+                                        onClick={onMagicReveal}
+                                        disabled={!canUseMagic || playerSpells.reveal <= 0}
+                                        title="Reveal (house rule)"
+                                    >
+                                        <span className="magic-ic">👁</span>
+                                        <span className="magic-count">{playerSpells.reveal}</span>
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
-                        {loadingEnemyDeck ? (
+                        {loadingEnemyDeck && !isPvP ? (
                             <div className="game-over">
                                 <div className="game-over-box" style={{ minWidth: 320 }}>
                                     <h2 style={{ margin: 0 }}>Загрузка соперника…</h2>
@@ -943,17 +1326,23 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                 <div className="game-over-box" style={{ minWidth: 320 }}>
                                     <h2 style={{ marginBottom: 8 }}>
                                         {matchOver
-                                            ? matchWinner === "player"
-                                                ? "Матч выигран"
-                                                : "Матч проигран"
+                                            ? (isPvP ? (roundWinner === "player" ? "You Win!" : "You Lose!") : (matchWinner === "player" ? "Матч выигран" : "Матч проигран"))
                                             : roundWinner === "player"
                                                 ? "Победа"
                                                 : "Поражение"}
                                     </h2>
 
-                                    <div style={{ opacity: 0.9, fontSize: 12, marginBottom: 10 }}>
-                                        Раунд {roundNo} • Серия до {MATCH_WINS_TARGET} • Счёт {series.player}:{series.enemy}
-                                    </div>
+                                    {!isPvP && (
+                                        <div style={{ opacity: 0.9, fontSize: 12, marginBottom: 10 }}>
+                                            Раунд {roundNo} • Серия до {MATCH_WINS_TARGET} • Счёт {series.player}:{series.enemy}
+                                        </div>
+                                    )}
+
+                                    {isPvP && (
+                                        <div style={{ opacity: 0.9, fontSize: 12, marginBottom: 10 }}>
+                                            Board: You {boardScore.blue} - {boardScore.red} Opponent
+                                        </div>
+                                    )}
 
                                     {isStage2 && matchId ? (
                                         <div style={{ fontSize: 11, opacity: 0.85, marginBottom: 10, fontFamily: "monospace" }}>
@@ -961,7 +1350,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                         </div>
                                     ) : null}
 
-                                    {matchOver && matchWinner && loserSide && (
+                                    {matchOver && matchWinner && loserSide && !isPvP && (
                                         <>
                                             <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 8 }}>
                                                 {matchWinner === "player"
@@ -1069,8 +1458,8 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                     )}
 
                                     <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 10, flexWrap: "wrap" }}>
-                                        {!matchOver && <button onClick={onNextRound}>Следующий раунд</button>}
-                                        {matchOver && <button onClick={resetMatch}>Новый матч</button>}
+                                        {!matchOver && !isPvP && <button onClick={onNextRound}>Следующий раунд</button>}
+                                        {(matchOver || isPvP) && <button onClick={resetMatch}>{isPvP ? "Exit" : "Новый матч"}</button>}
                                         <button onClick={onExit}>Меню</button>
                                     </div>
                                 </div>
@@ -1170,10 +1559,10 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
                 ) : null}
 
                 <div className="tt-badge" />
-                <span className="tt-num top">{showVal(card.values.top)}</span>
-                <span className="tt-num left">{showVal(card.values.left)}</span>
-                <span className="tt-num right">{showVal(card.values.right)}</span>
-                <span className="tt-num bottom">{showVal(card.values.bottom)}</span>
+                <span className="tt-num top">{showVal(card.values?.top ?? "?")}</span>
+                <span className="tt-num left">{showVal(card.values?.left ?? "?")}</span>
+                <span className="tt-num right">{showVal(card.values?.right ?? "?")}</span>
+                <span className="tt-num bottom">{showVal(card.values?.bottom ?? "?")}</span>
             </div>
         </div>
     );
