@@ -313,15 +313,21 @@ function getFallbackEnemyDeck() {
 }
 
 function getWsUrl(matchId) {
-    const apiUrl = import.meta.env.VITE_API_URL || "";
-    // Convert http(s) to ws(s)
-    let wsBase = apiUrl.replace(/^http/, "ws");
-    if (!wsBase) {
-        // Fallback: use current host
-        const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-        wsBase = `${proto}//${window.location.host}`;
+    // Use VITE_API_BASE_URL (Railway backend)
+    const apiUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || "";
+
+    if (!apiUrl) {
+        console.error("[WS] No API URL configured!");
+        return null;
     }
-    return `${wsBase}/ws/match/${matchId}`;
+
+    // Convert https:// to wss:// or http:// to ws://
+    const wsBase = apiUrl.replace(/^https:/, "wss:").replace(/^http:/, "ws:");
+
+    const url = `${wsBase}/ws/match/${matchId}`;
+    console.log("[WS] Built URL:", url, "from API:", apiUrl);
+
+    return url;
 }
 
 export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
