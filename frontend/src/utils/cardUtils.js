@@ -1,118 +1,247 @@
-export var ELEMENTS = ["Earth", "Fire", "Water", "Poison", "Holy", "Thunder", "Wind", "Ice"];
-
-export var ELEM_ICON = {
-    Earth: "🪨",
-    Fire: "🔥",
-    Water: "💧",
-    Poison: "☠️",
-    Holy: "✨",
-    Thunder: "⚡",
-    Wind: "🌪️",
-    Ice: "❄️",
-};
-
-export var RANKS = [
-    { key: "common", label: "C", weight: 50, min: 1, max: 7, elemChance: 0.7 },
-    { key: "rare", label: "R", weight: 30, min: 2, max: 8, elemChance: 0.75 },
-    { key: "epic", label: "E", weight: 15, min: 3, max: 9, elemChance: 0.8 },
-    { key: "legendary", label: "L", weight: 5, min: 4, max: 10, elemChance: 0.85 },
-];
+// frontend/src/utils/cardUtils.js
+// Единая детерминированная логика для stats, elements, rarity
+// Используется в Inventory.jsx, Game.jsx и везде где нужны карты
 
 /**
- * Get rarity based on token_id
- * Lower token numbers = rarer
+ * Простой детерминированный хеш из строки
  */
-export function getRarityFromTokenId(tokenId, totalSupply) {
-    totalSupply = totalSupply || 10000;
-    var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
-    var pct = (num / totalSupply) * 100;
-
-    if (pct <= 25) return RANKS[3]; // legendary
-    if (pct <= 50) return RANKS[2]; // epic
-    if (pct <= 75) return RANKS[1]; // rare
-    return RANKS[0]; // common
+export function hashString(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        const char = str.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash);
 }
 
 /**
- * Deterministic stats generation based on token_id
- * Same token_id will ALWAYS produce same stats
+ * Извлекает числовой ID из token_id
+ * Например: "token-123" -> 123, "456" -> 456
  */
-export function genStats(tokenId, rarity) {
-    var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
+export function extractNumericId(tokenId) {
+    if (!tokenId) return 0;
+    const str = String(tokenId);
+    const match = str.match(/(\d+)/);
+    return match ? parseInt(match[1], 10) : hashString(str);
+}
 
-    // LCG for deterministic random
-    var seed = num;
-    var next = function () {
-        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-        return seed;
-    };
+/**
+ * Определяет rarity по token_id детерминированно
+ * 0-25% -> legendary, 25-50% -> epic, 50-75% -> rare, 75-100% -> common
+ */
+export function getRarityFromTokenId(tokenId, totalSupply = 1000) {
+    const numId = extractNumericId(tokenId);
+    const position = numId % totalSupply;
+    const percent = (position / totalSupply) * 100;
 
-    var rnd = function (lo, hi) {
-        return lo + (next() % (hi - lo + 1));
-    };
+    if (percent < 25) return 'legendary';
+    if (percent < 50) return 'epic';
+    if (percent < 75) return 'rare';
+    return 'common';
+}
 
-    var r = rarity || getRarityFromTokenId(tokenId);
-    var min = r.min;
-    var max = r.max;
+/**
+ * Возвращает множитель статов по rarity
+ */
+export function getStatMultiplier(rarity) {
+    switch (rarity) {
+        case 'legendary': return { base: 70, variance: 25 };
+        case 'epic': return { base: 55, variance: 20 };
+        case 'rare': return { base: 40, variance: 15 };
+        case 'common':
+        default: return { base: 25, variance: 15 };
+    }
+}
+
+/**
+ * Генерирует детерминированные статы по token_id
+ */
+export function generateStats(tokenId) {
+    const numId = extractNumericId(tokenId);
+    const rarity = getRarityFromTokenId(tokenId);
+    const { base, variance } = getStatMultiplier(rarity);
+
+    // Детерминированные вариации на основе token_id
+    const hash1 = hashString(tokenId + '_attack');
+    const hash2 = hashString(tokenId + '_defense');
+    const hash3 = hashString(tokenId + '_speed');
+
+    const attack = base + (hash1 % variance);
+    const defense = base + (hash2 % variance);
+    const speed = base + (hash3 % variance);
 
     return {
-        top: rnd(min, max),
-        right: rnd(min, max),
-        bottom: rnd(min, max),
-        left: rnd(min, max)
+        attack: Math.min(99, Math.max(1, attack)),
+        defense: Math.min(99, Math.max(1, defense)),
+        speed: Math.min(99, Math.max(1, speed))
     };
 }
 
 /**
- * Deterministic element generation based on token_id
- * Same token_id will ALWAYS have same element (or null)
+ * Список стихий
  */
-export function genElement(tokenId, rarity) {
-    var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
-    var r = rarity || getRarityFromTokenId(tokenId);
+export const ELEMENTS = ['fire', 'water', 'earth', 'air', 'lightning'];
 
-    // Different seed offset for element
-    var seed = num * 7919 + 104729;
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+/**
+ * Генерирует детерминированную стихию по token_id
+ */
+export function generateElement(tokenId) {
+    const hash = hashString(tokenId + '_element');
+    return ELEMENTS[hash % ELEMENTS.length];
+}
 
-    var chance = (seed % 100) / 100;
+/**
+ * Возвращает emoji для стихии
+ */
+export function getElementEmoji(element) {
+    switch (element) {
+        case 'fire': return '🔥';
+        case 'water': return '💧';
+        case 'earth': return '🪨';
+        case 'air': return '💨';
+        case 'lightning': return '⚡';
+        default: return '✨';
+    }
+}
 
-    if (chance < r.elemChance) {
-        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-        var elemIdx = seed % ELEMENTS.length;
-        return ELEMENTS[elemIdx];
+/**
+ * Возвращает цвет для стихии
+ */
+export function getElementColor(element) {
+    switch (element) {
+        case 'fire': return '#ff6b35';
+        case 'water': return '#4dabf7';
+        case 'earth': return '#8b7355';
+        case 'air': return '#a0d8ef';
+        case 'lightning': return '#ffd43b';
+        default: return '#888888';
+    }
+}
+
+/**
+ * Возвращает CSS класс для рамки по rarity
+ */
+export function getRarityClass(rarity) {
+    switch (rarity) {
+        case 'legendary': return 'card-legendary';
+        case 'epic': return 'card-epic';
+        case 'rare': return 'card-rare';
+        case 'common':
+        default: return 'card-common';
+    }
+}
+
+/**
+ * Конвертирует NFT объект в игровую карту
+ * Это ГЛАВНАЯ функция — использовать везде!
+ */
+export function nftToCard(nft) {
+    if (!nft) return null;
+
+    const tokenId = nft.token_id || nft.tokenId || `unknown_${Date.now()}`;
+    const metadata = nft.metadata || {};
+
+    // Пробуем взять stats из metadata.extra
+    let stats = null;
+    let element = null;
+
+    if (metadata.extra) {
+        try {
+            const extra = typeof metadata.extra === 'string'
+                ? JSON.parse(metadata.extra)
+                : metadata.extra;
+            if (extra.stats) stats = extra.stats;
+            if (extra.element) element = extra.element;
+        } catch (e) {
+            // ignore parse errors
+        }
     }
 
-    return null;
+    // Если нет в metadata — генерируем детерминированно
+    if (!stats) {
+        stats = generateStats(tokenId);
+    }
+    if (!element) {
+        element = generateElement(tokenId);
+    }
+
+    const rarity = getRarityFromTokenId(tokenId);
+
+    // Формируем URL картинки
+    let imageUrl = metadata.media || metadata.image || '';
+
+    // Проксируем IPFS и Arweave через backend
+    if (imageUrl) {
+        if (imageUrl.startsWith('ipfs://')) {
+            const cid = imageUrl.replace('ipfs://', '');
+            imageUrl = `/api/proxy/image?url=${encodeURIComponent(`https://ipfs.io/ipfs/${cid}`)}`;
+        } else if (imageUrl.includes('arweave.net') || imageUrl.includes('ipfs')) {
+            imageUrl = `/api/proxy/image?url=${encodeURIComponent(imageUrl)}`;
+        }
+    }
+
+    return {
+        id: tokenId,
+        token_id: tokenId,
+        name: metadata.title || metadata.name || `Card #${tokenId}`,
+        image: imageUrl,
+        description: metadata.description || '',
+        rarity,
+        element,
+        stats,
+        attack: stats.attack,
+        defense: stats.defense,
+        speed: stats.speed,
+        // Сохраняем оригинальные данные NFT
+        contract_id: nft.contract_id || nft.contractId,
+        owner_id: nft.owner_id || nft.ownerId,
+        metadata
+    };
 }
 
 /**
- * Convert NFT data to game card format
- * Ensures stats and element are always present
+ * Конвертирует массив NFT в массив карт
  */
-export function nftToCard(nft, idx, owner) {
-    owner = owner || "player";
+export function nftsToCards(nfts) {
+    if (!Array.isArray(nfts)) return [];
+    return nfts.map(nft => nftToCard(nft)).filter(Boolean);
+}
 
-    var tokenId = nft.tokenId || nft.token_id || String(idx);
-    var r = nft.rarity || getRarityFromTokenId(tokenId);
+/**
+ * Сравнение карт для боя
+ * Возвращает: 1 = card1 wins, -1 = card2 wins, 0 = draw
+ */
+export function compareCards(card1, card2, attribute) {
+    const val1 = card1[attribute] || card1.stats?.[attribute] || 0;
+    const val2 = card2[attribute] || card2.stats?.[attribute] || 0;
 
-    // Use existing stats/element or generate deterministically
-    var stats = (nft.stats && typeof nft.stats.top === "number")
-        ? nft.stats
-        : genStats(tokenId, r);
+    // Элементальные бонусы
+    const elementBonus1 = getElementBonus(card1.element, card2.element);
+    const elementBonus2 = getElementBonus(card2.element, card1.element);
 
-    var element = nft.element || genElement(tokenId, r);
+    const final1 = val1 + elementBonus1;
+    const final2 = val2 + elementBonus2;
 
-    return {
-        id: nft.key || nft.tokenId || "nft_" + idx,
-        owner: owner,
-        values: stats,
-        imageUrl: nft.imageUrl || "/cards/card.jpg",
-        rank: r.key,
-        rankLabel: r.label,
-        element: element,
-        placeKey: 0,
-        captureKey: 0,
-        nftData: nft,
+    if (final1 > final2) return 1;
+    if (final2 > final1) return -1;
+    return 0;
+}
+
+/**
+ * Бонус стихии в бою
+ */
+export function getElementBonus(attackerElement, defenderElement) {
+    const advantages = {
+        fire: 'air',      // огонь > воздух
+        water: 'fire',    // вода > огонь
+        earth: 'lightning', // земля > молния
+        air: 'earth',     // воздух > земля
+        lightning: 'water'  // молния > вода
     };
+
+    if (advantages[attackerElement] === defenderElement) {
+        return 10; // бонус за преимущество
+    }
+    return 0;
 }

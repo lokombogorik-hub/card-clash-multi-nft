@@ -1,163 +1,188 @@
-from fastapi import APIRouter, Header, HTTPException
+# backend/routers/decks.py
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from typing import List, Optional, Any
-import logging
-import json
-
-from database.session import get_session
-from database.models.deck import UserDeck
-from sqlalchemy import select
+from typing import List, Optional, Any, Dict
+from datetime import datetime
+from database.db import get_database
 from utils.security import decode_access_token
-
-logger = logging.getLogger(__name__)
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 router = APIRouter(prefix="/api/decks", tags=["decks"])
+security = HTTPBearer()
+
+
+class CardData(BaseModel):
+    id: str
+    token_id: Optional[str] = None
+    name: Optional[str] = None
+    image: Optional[str] = None
+    rarity: Optional[str] = None
+    element: Optional[str] = None
+    stats: Optional[Dict[str, int]] = None
+    attack: Optional[int] = None
+    defense: Optional[int] = None
+    speed: Optional[int] = None
+    contract_id: Optional[str] = None
 
 
 class DeckSaveRequest(BaseModel):
+    cards: List[str]  # список token_id
+    full_cards: Optional[List[Dict[str, Any]]] = None  # полные данные карт
+
+
+class DeckResponse(BaseModel):
     cards: List[str]
-    full_cards: Optional[List[Any]] = None
+    full_cards: Optional[List[Dict[str, Any]]] = None
+    updated_at: Optional[str] = None
 
 
-def get_user_id_from_token(authorization: Optional[str]) -> int:
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Missing token")
-
-    token = authorization.replace("Bearer ", "").strip()
-    if not token:
-        raise HTTPException(status_code=401, detail="Empty token")
-
-    try:
-        payload = decode_access_token(token)
-        user_id = int(payload.get("sub", 0))
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid token payload")
-        return user_id
-    except Exception as e:
-        logger.warning(f"Token decode error: {e}")
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-
-@router.get("/active")
-async def get_active_deck(authorization: Optional[str] = Header(None)):
-    user_id = get_user_id_from_token(authorization)
-
-    async for session in get_session():
-        result = await session.execute(
-            select(UserDeck).where(UserDeck.user_id == user_id)
-        )
-        deck = result.scalar_one_or_none()
-
-        if not deck:
-            return {"cards": [], "full_cards": []}
-
-        try:
-            cards = json.loads(deck.card_keys) if deck.card_keys else []
-        except:
-            cards = []
-
-        try:
-            full_cards = json.loads(deck.cards_json) if deck.cards_json else []
-        except:
-            full_cards = []
-
-        return {"cards": cards, "full_cards": full_cards}
-
-    return {"cards": [], "full_cards": []}
-
-
-@router.get("/active/full")
-async def get_active_deck_full(authorization: Optional[str] = Header(None)):
-    user_id = get_user_id_from_token(authorization)
-
-    async for session in get_session():
-        result = await session.execute(
-            select(UserDeck).where(UserDeck.user_id == user_id)
-        )
-        deck = result.scalar_one_or_none()
-
-        if not deck:
-            return {"cards": []}
-
-        try:
-            full_cards = json.loads(deck.cards_json) if deck.cards_json else []
-            return {"cards": full_cards}
-        except:
-            return {"cards": []}
-
-    return {"cards": []}
-
-
-@router.put("/active")
-async def save_active_deck(
-        deck: DeckSaveRequest,
-        authorization: Optional[str] = Header(None)
+async def get_current_user(
+        credentials: HTTPAuthorizationCredentials = Depends(security),
+        db=Depends(get_database)
 ):
-    user_id = get_user_id_from_token(authorization)
-    logger.info(
-        f"Saving deck for user {user_id}: {len(deck.cards)} cards, full_cards: {len(deck.full_cards) if deck.full_cards else 0}")
+    """Извлекает текущего пользователя из JWT токена"""
+    token = credentials.credentials
+    payload = decode_access_token(token)
 
-    if len(deck.cards) != 5:
-        raise HTTPException(status_code=400, detail=f"Deck must have exactly 5 cards, got {len(deck.cards)}")
-
-    card_keys_json = json.dumps(deck.cards)
-
-    # Handle full_cards
-    if deck.full_cards and len(deck.full_cards) == 5:
-        full_cards_json = json.dumps(deck.full_cards)
-    else:
-        full_cards_json = "[]"
-
-    logger.info(f"card_keys_json length: {len(card_keys_json)}, full_cards_json length: {len(full_cards_json)}")
-
-    async for session in get_session():
-        result = await session.execute(
-            select(UserDeck).where(UserDeck.user_id == user_id)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token"
         )
-        existing = result.scalar_one_or_none()
 
-        if existing:
-            existing.card_keys = card_keys_json
-            existing.cards_json = full_cards_json
-            logger.info(f"Updated existing deck for user {user_id}")
-        else:
-            new_deck = UserDeck(
-                user_id=user_id,
-                card_keys=card_keys_json,
-                cards_json=full_cards_json
-            )
-            session.add(new_deck)
-            logger.info(f"Created new deck for user {user_id}")
+    user_id = payload.get("sub") or payload.get("user_id") or payload.get("telegram_id")
 
-        await session.commit()
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload"
+        )
 
-        return {"cards": deck.cards, "status": "saved",
-                "full_cards_count": len(deck.full_cards) if deck.full_cards else 0}
+    # Ищем пользователя
+    users_collection = db["users"]
+    user = await users_collection.find_one({
+        "$or": [
+            {"telegram_id": str(user_id)},
+            {"telegram_id": int(user_id) if str(user_id).isdigit() else user_id},
+            {"_id": user_id}
+        ]
+    })
 
-    raise HTTPException(status_code=500, detail="Database error")
+    if not user:
+        # Создаём пользователя если нет
+        user = {
+            "telegram_id": str(user_id),
+            "created_at": datetime.utcnow(),
+            "elo_rating": 1000,
+            "wins": 0,
+            "losses": 0,
+            "total_matches": 0
+        }
+        await users_collection.insert_one(user)
+        user = await users_collection.find_one({"telegram_id": str(user_id)})
+
+    return user
 
 
-@router.get("/user/{target_user_id}/full")
-async def get_user_deck_full(
-        target_user_id: int,
-        authorization: Optional[str] = Header(None)
+@router.post("/save", response_model=dict)
+async def save_deck(
+        request: DeckSaveRequest,
+        current_user: dict = Depends(get_current_user),
+        db=Depends(get_database)
 ):
-    # Verify caller is authenticated
-    get_user_id_from_token(authorization)
+    """Сохраняет колоду пользователя"""
 
-    async for session in get_session():
-        result = await session.execute(
-            select(UserDeck).where(UserDeck.user_id == target_user_id)
+    if len(request.cards) != 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Deck must contain exactly 5 cards"
         )
-        deck = result.scalar_one_or_none()
 
-        if not deck:
-            return {"cards": []}
+    user_id = str(current_user.get("telegram_id") or current_user.get("_id"))
 
-        try:
-            full_cards = json.loads(deck.cards_json) if deck.cards_json else []
-            return {"cards": full_cards}
-        except:
-            return {"cards": []}
+    decks_collection = db["decks"]
 
-    return {"cards": []}
+    deck_data = {
+        "user_id": user_id,
+        "cards": request.cards,
+        "full_cards": [dict(c) for c in request.full_cards] if request.full_cards else [],
+        "updated_at": datetime.utcnow()
+    }
+
+    # Upsert - обновляем или создаём
+    result = await decks_collection.update_one(
+        {"user_id": user_id},
+        {"$set": deck_data},
+        upsert=True
+    )
+
+    print(f"[Decks] Saved deck for user {user_id}: {request.cards}")
+
+    return {
+        "success": True,
+        "message": "Deck saved successfully",
+        "cards": request.cards
+    }
+
+
+@router.get("/my", response_model=DeckResponse)
+async def get_my_deck(
+        current_user: dict = Depends(get_current_user),
+        db=Depends(get_database)
+):
+    """Получает колоду текущего пользователя"""
+
+    user_id = str(current_user.get("telegram_id") or current_user.get("_id"))
+
+    decks_collection = db["decks"]
+    deck = await decks_collection.find_one({"user_id": user_id})
+
+    if not deck:
+        return DeckResponse(cards=[], full_cards=None, updated_at=None)
+
+    return DeckResponse(
+        cards=deck.get("cards", []),
+        full_cards=deck.get("full_cards"),
+        updated_at=deck.get("updated_at", "").isoformat() if deck.get("updated_at") else None
+    )
+
+
+@router.get("/user/{user_id}", response_model=DeckResponse)
+async def get_user_deck(
+        user_id: str,
+        db=Depends(get_database)
+):
+    """Получает колоду конкретного пользователя (для PvP)"""
+
+    decks_collection = db["decks"]
+    deck = await decks_collection.find_one({"user_id": user_id})
+
+    if not deck:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Deck not found for this user"
+        )
+
+    return DeckResponse(
+        cards=deck.get("cards", []),
+        full_cards=deck.get("full_cards"),
+        updated_at=deck.get("updated_at", "").isoformat() if deck.get("updated_at") else None
+    )
+
+
+@router.delete("/clear")
+async def clear_deck(
+        current_user: dict = Depends(get_current_user),
+        db=Depends(get_database)
+):
+    """Очищает колоду пользователя"""
+
+    user_id = str(current_user.get("telegram_id") or current_user.get("_id"))
+
+    decks_collection = db["decks"]
+    result = await decks_collection.delete_one({"user_id": user_id})
+
+    return {
+        "success": True,
+        "deleted": result.deleted_count > 0
+    }
