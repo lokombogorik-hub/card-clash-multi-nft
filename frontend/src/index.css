@@ -1,5 +1,5 @@
 /* =========================================================
-   Card Clash — index.css  (optimised & merged)
+   Card Clash — index.css  (optimised & fixed)
    ========================================================= */
 
 /* =========================
@@ -596,12 +596,12 @@ button {
 }
 
 .hand.right .hand-slot.col2 {
-    grid-column: 1;
+    grid-column: 1 !important;
     transform: translateX(calc(-1*(var(--towards-board) - 6px))) translateY(var(--half-step));
 }
 
 .hand.right .hand-slot.col1 {
-    grid-column: 2;
+    grid-column: 2 !important;
     transform: none
 }
 
@@ -756,8 +756,8 @@ button {
     inset: 0
 }
 
-/* Card art — full cover (merged from fix file) */
-.card .card-art-img {
+/* Card art — GAME cards: full cover */
+.card-art-img {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -900,33 +900,23 @@ button {
     font-size: 32px;
 }
 
-/* Element pills — unified (game + inventory) */
-.card-elem-pill,
-.inv-card-elem-pill {
+/* --- Element pills — GAME CARDS (top-right) --- */
+.card-elem-pill {
     position: absolute;
-    top: 4px;
-    left: 4px;
-    z-index: 10;
+    top: 6px;
+    right: 6px;
+    z-index: 7;
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 2px 6px;
-    border-radius: 6px;
+    gap: 6px;
+    padding: 3px 8px;
+    border-radius: 999px;
     background: rgba(0, 0, 0, .75);
     border: 1px solid rgba(255, 255, 255, .2);
-    font-size: 14px;
-    line-height: 1;
 }
 
-/* Emoji font stack for element icons */
-.card-elem-pill span,
-.inv-card-elem-pill span {
-    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
-}
-
-.card-elem-ic,
-.inv-card-elem-ic {
-    font-size: 14px;
+.card-elem-ic {
+    font-size: 17px;
     line-height: 1;
     transform-origin: center;
     animation: elemPulse 1.6s ease-in-out infinite;
@@ -953,9 +943,14 @@ button {
     }
 }
 
-/* TT badge & numbers — unified base */
-.tt-badge,
-.inv-tt-badge {
+/* Emoji font stack */
+.card-elem-pill span,
+.inv-card-elem-pill span {
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+}
+
+/* --- TT badge & numbers — GAME CARDS --- */
+.tt-badge {
     position: absolute;
     top: 9px;
     left: 10px;
@@ -967,24 +962,15 @@ button {
     z-index: 4;
 }
 
-.inv-tt-badge {
-    top: 8px;
-    left: 8px;
-    width: 40px;
-    height: 40px;
-    background: rgba(0, 0, 0, .82)
-}
-
-.card .tt-num,
-.inv-card-game .inv-tt-num {
-    position: absolute;
+.card .tt-num {
+    position: absolute !important;
     z-index: 5;
-    font-size: 12px;
+    font-size: 12px !important;
     font-weight: 900;
     color: #fff;
     text-shadow: 0 2px 6px rgba(0, 0, 0, .9);
-    line-height: 1;
-    white-space: nowrap;
+    line-height: 1 !important;
+    white-space: nowrap !important;
 }
 
 .card .tt-num.top {
@@ -1005,31 +991,6 @@ button {
 .card .tt-num.bottom {
     top: 40px;
     left: 28px
-}
-
-.inv-card-game .inv-tt-num {
-    font-size: 14px;
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 1)
-}
-
-.inv-card-game .inv-tt-num.top {
-    top: 7px;
-    left: 27px
-}
-
-.inv-card-game .inv-tt-num.left {
-    top: 24px;
-    left: 14px
-}
-
-.inv-card-game .inv-tt-num.right {
-    top: 24px;
-    left: 41px
-}
-
-.inv-card-game .inv-tt-num.bottom {
-    top: 40px;
-    left: 27px
 }
 
 /* --- Magic buttons --- */
@@ -1298,7 +1259,7 @@ button {
     perspective: 1000px;
 }
 
-/* Inventory card */
+/* --- INVENTORY CARD — FIX: opacity:1 by default, no entry animation that breaks re-render --- */
 .inv-card-game {
     --rank: rgba(255, 255, 255, .18);
     --rankGlow: rgba(120, 200, 255, .25);
@@ -1312,13 +1273,19 @@ button {
     padding: 0;
     border: 2px solid var(--rank);
     transform-style: preserve-3d;
-    will-change: transform, opacity, box-shadow, filter;
+    will-change: transform, box-shadow, filter;
     transition: transform 260ms cubic-bezier(.2, .9, .2, 1), box-shadow 260ms ease, filter 260ms ease, border-color 260ms ease;
     background:
         radial-gradient(120% 120% at 20% 20%, rgba(120, 200, 255, .1), transparent 55%),
         radial-gradient(120% 120% at 80% 80%, rgba(255, 61, 242, .08), transparent 55%),
         linear-gradient(145deg, rgba(26, 34, 50, 1), rgba(10, 14, 26, 1));
     box-shadow: 0 10px 26px rgba(0, 0, 0, .55);
+    /* FIX: always visible, animation only on first mount via JS class */
+    opacity: 1;
+}
+
+/* Entry animation — add .inv-card-animate class from JS for first mount only */
+.inv-card-game.inv-card-animate {
     opacity: 0;
     animation: inv-enter-3d 720ms cubic-bezier(.2, .9, .2, 1) both;
     animation-delay: calc(var(--i, 0)*28ms);
@@ -1398,13 +1365,13 @@ button {
     box-shadow: 0 18px 54px rgba(0, 0, 0, .72), 0 0 30px var(--rankGlow), inset 0 0 0 1px rgba(255, 255, 255, .1);
 }
 
-/* Inventory art */
+/* --- Inventory art --- */
 .inv-card-art-full {
     position: absolute;
     inset: 0;
     z-index: 1;
     overflow: hidden;
-    border-radius: inherit
+    border-radius: inherit;
 }
 
 .inv-card-art-full img {
@@ -1412,7 +1379,7 @@ button {
     height: 100%;
     object-fit: cover;
     object-position: center;
-    display: block
+    display: block;
 }
 
 .inv-card-art-full::after {
@@ -1462,7 +1429,72 @@ button {
     }
 }
 
-/* Pick badge */
+/* --- Element pills — INVENTORY (top-right, like game) --- */
+.inv-card-elem-pill {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 7;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, .78);
+    border: 1px solid rgba(255, 255, 255, .22);
+}
+
+.inv-card-elem-ic {
+    font-size: 20px;
+    line-height: 1;
+    filter: drop-shadow(0 3px 6px rgba(0, 0, 0, .7));
+}
+
+/* --- TT numbers — INVENTORY --- */
+.inv-tt-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    width: 40px;
+    height: 40px;
+    background: rgba(0, 0, 0, .82);
+    transform: rotate(45deg);
+    border-radius: 4px;
+    z-index: 4;
+}
+
+.inv-card-game .inv-tt-num {
+    position: absolute !important;
+    z-index: 5;
+    font-size: 14px !important;
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 1);
+    line-height: 1 !important;
+    white-space: nowrap !important;
+}
+
+.inv-card-game .inv-tt-num.top {
+    top: 7px;
+    left: 27px
+}
+
+.inv-card-game .inv-tt-num.left {
+    top: 24px;
+    left: 14px
+}
+
+.inv-card-game .inv-tt-num.right {
+    top: 24px;
+    left: 41px
+}
+
+.inv-card-game .inv-tt-num.bottom {
+    top: 40px;
+    left: 27px
+}
+
+/* --- Pick badge --- */
 .inv-pick-badge {
     position: absolute;
     right: 10px;
@@ -2410,107 +2442,105 @@ button {
 }
 
 /* =========================
-   12) RESPONSIVE — CONSOLIDATED
+   12) RESPONSIVE
    ========================= */
 
-/* Touch devices / landscape */
+/* --- Touch / landscape small --- */
 @media(hover:none)and (pointer:coarse), (max-height:520px)and (orientation:landscape) {
     .exit {
-        top: auto;
-        bottom: calc(var(--safe-b)+12px);
-        left: 12px;
-        right: auto;
+        top: auto !important;
+        bottom: calc(var(--safe-b)+12px) !important;
+        left: 12px !important;
+        right: auto !important;
     }
 }
 
 @media(hover:none)and (pointer:coarse), (max-height:600px)and (orientation:landscape) {
     .player-badge {
-        max-width: 160px
+        max-width: 160px !important
     }
 
     .player-badge-name {
-        font-size: 11px
+        font-size: 11px !important
     }
 
     .player-badge-avatar,
     .player-badge-avatar-fallback {
-        width: 26px;
-        height: 26px
+        width: 26px !important;
+        height: 26px !important
     }
 
     .player-badge-avatar-fallback {
-        font-size: 10px
+        font-size: 10px !important
     }
 
     .player-badge.enemy {
-        left: calc(50% - (var(--board-w)/2) - var(--gap) - 8px)
+        left: calc(50% - (var(--board-w)/2) - var(--gap) - 8px) !important
     }
 
     .player-badge.player {
-        right: calc(50% - (var(--board-w)/2) - var(--gap) - 8px)
+        right: calc(50% - (var(--board-w)/2) - var(--gap) - 8px) !important
     }
 }
 
-/* Tablets & mobile landscape — card internals */
+/* --- Touch / landscape card internals --- */
 @media(hover:none)and (pointer:coarse), (max-width:768px)and (orientation:landscape) {
-
-    .card-elem-pill,
-    .inv-card-elem-pill {
-        padding: 1px 4px;
-        font-size: 12px;
-        gap: 2px
+    .card-elem-pill {
+        top: 3px !important;
+        right: 3px !important;
+        padding: 2px 5px !important;
+        gap: 3px !important;
     }
 
-    .card-elem-ic,
-    .inv-card-elem-ic {
-        font-size: 12px
+    .card-elem-ic {
+        font-size: 12px !important
     }
 
     .card-elem-delta {
-        font-size: 8px
+        font-size: 8px !important
     }
 
     .tt-badge {
-        width: 30px;
-        height: 30px;
-        top: 5px;
-        left: 5px
+        width: 30px !important;
+        height: 30px !important;
+        top: 5px !important;
+        left: 5px !important;
     }
 
     .card .tt-num {
-        font-size: 9px
+        font-size: 9px !important
     }
 
     .card .tt-num.top {
-        top: 3px;
-        left: 19px
+        top: 3px !important;
+        left: 19px !important
     }
 
     .card .tt-num.left {
-        top: 16px;
-        left: 8px
+        top: 16px !important;
+        left: 8px !important
     }
 
     .card .tt-num.right {
-        top: 16px;
-        left: 30px
+        top: 16px !important;
+        left: 30px !important
     }
 
     .card .tt-num.bottom {
-        top: 29px;
-        left: 19px
+        top: 29px !important;
+        left: 19px !important
     }
 }
 
-/* ≤768px */
+/* --- ≤768px: inventory + market grids --- */
 @media(max-width:768px) {
     .inv-grid-game-style {
         grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-        gap: 12px
+        gap: 12px;
     }
 
     .inv-card-game .inv-tt-num {
-        font-size: 12px
+        font-size: 12px !important
     }
 
     .inv-pick-badge {
@@ -2529,17 +2559,17 @@ button {
     }
 
     .market-cases-grid {
-        grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr))
+        grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
     }
 }
 
-/* ≤640px */
+/* --- ≤640px --- */
 @media(max-width:640px) {
     .matchmaking-back-btn {
         position: static;
         transform: none;
         margin-bottom: 16px;
-        width: 100%
+        width: 100%;
     }
 
     .profile-achievements-grid {
@@ -2547,36 +2577,36 @@ button {
     }
 }
 
-/* ≤600px — compact card numbers */
+/* --- ≤600px: compact card numbers --- */
 @media(max-width:600px) {
 
     .inv-tt-num,
-    .tt-num {
-        font-size: 10px;
-        min-width: 14px;
-        height: 14px;
-        line-height: 14px
+    .card .tt-num {
+        font-size: 10px !important;
+        min-width: 14px !important;
+        height: 14px !important;
+        line-height: 14px !important;
     }
 
     .inv-tt-badge,
     .tt-badge {
-        width: 24px;
-        height: 24px
+        width: 24px !important;
+        height: 24px !important;
     }
 
     .inv-card-elem-pill,
     .card-elem-pill {
-        padding: 1px 4px;
-        font-size: 12px
+        padding: 1px 4px !important;
+        font-size: 12px !important;
     }
 
     .inv-card-elem-ic,
     .card-elem-ic {
-        font-size: 12px
+        font-size: 12px !important
     }
 }
 
-/* ≤480px */
+/* --- ≤480px --- */
 @media(max-width:480px) {
     .market-cases-grid {
         grid-template-columns: 1fr
@@ -2585,22 +2615,71 @@ button {
     .profile-stats-grid {
         grid-template-columns: repeat(2, 1fr)
     }
+
+    .inv-grid-game-style {
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+        gap: 10px;
+    }
 }
 
-/* ≤400px — extra small devices */
+/* --- ≤400px: extra small --- */
 @media(max-width:400px) {
 
     .inv-tt-num,
-    .tt-num {
-        font-size: 9px;
-        min-width: 12px;
-        height: 12px
+    .card .tt-num {
+        font-size: 9px !important;
+        min-width: 12px !important;
+        height: 12px !important;
     }
 
     .inv-tt-badge,
     .tt-badge {
-        width: 20px;
-        height: 20px
+        width: 20px !important;
+        height: 20px !important;
+    }
+
+    .inv-grid-game-style {
+        grid-template-columns: repeat(auto-fill, minmax(95px, 1fr));
+        gap: 8px;
+    }
+
+    .inv-pick-badge {
+        width: 32px;
+        height: 32px;
+        right: 4px;
+        bottom: 4px
+    }
+
+    .inv-pick-check {
+        font-size: 13px
+    }
+
+    .inv-pick-no {
+        font-size: 9px
+    }
+}
+
+/* --- ≤360px: very small phones --- */
+@media(max-width:360px) {
+    .inv-grid-game-style {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px;
+    }
+
+    .inv-card-elem-pill,
+    .card-elem-pill {
+        padding: 1px 3px !important;
+        font-size: 10px !important;
+        gap: 2px !important;
+    }
+
+    .inv-card-elem-ic,
+    .card-elem-ic {
+        font-size: 10px !important
+    }
+
+    .matchmaking-modes {
+        grid-template-columns: 1fr;
     }
 }
 
@@ -2618,8 +2697,8 @@ button {
     }
 
     .inv-card-game {
-        opacity: 1;
-        transform: none;
-        filter: none
+        opacity: 1 !important;
+        transform: none !important;
+        filter: none !important
     }
 }
