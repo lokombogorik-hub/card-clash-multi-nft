@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef, memo } from "react";
 import { apiFetch } from "../api";
 import { useWalletConnect } from "../context/WalletConnectContext";
 import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from "../libs/nearNft";
@@ -10,7 +10,17 @@ function nftKey(n) {
     return "mock:" + (n.id || Math.random().toString(36).slice(2));
 }
 
-var ELEM_ICON = { Earth: "🪨", Fire: "🔥", Water: "💧", Poison: "☠️", Holy: "✨", Thunder: "⚡", Wind: "🌪️", Ice: "❄️" };
+var ELEM_ICON = {
+    Earth: "🪨",
+    Fire: "🔥",
+    Water: "💧",
+    Poison: "☠️",
+    Holy: "✨",
+    Thunder: "⚡",
+    Wind: "🌪️",
+    Ice: "❄️"
+};
+
 var ELEMENTS = ["Earth", "Fire", "Water", "Poison", "Holy", "Thunder", "Wind", "Ice"];
 
 function getRarityFromTokenId(tokenId, totalSupply) {
@@ -58,8 +68,13 @@ function genElement(tokenId, rarity) {
 }
 
 function safeParse(s) {
-    try { if (!s) return null; if (typeof s === "object") return s; return JSON.parse(String(s)); }
-    catch (e) { return null; }
+    try {
+        if (!s) return null;
+        if (typeof s === "object") return s;
+        return JSON.parse(String(s));
+    } catch (e) {
+        return null;
+    }
 }
 
 // Global cache for NFTs
@@ -69,34 +84,55 @@ var nftCache = {
     timestamp: 0
 };
 
-function NftImage({ src, originalSrc, alt }) {
-    var [stage, setStage] = useState(0);
-    var [loaded, setLoaded] = useState(false);
+// Global image cache to prevent reload
+var imageCache = new Map();
+
+// ============ MEMOIZED NftImage — prevents re-render issues ============
+var NftImage = memo(function NftImage({ src, originalSrc, alt, cacheKey }) {
+    // Use cache key to store/retrieve loaded state
+    var cached = imageCache.get(cacheKey);
+
+    var [stage, setStage] = useState(cached ? cached.stage : 0);
+    var [loaded, setLoaded] = useState(cached ? cached.loaded : false);
+    var [finalSrc, setFinalSrc] = useState(cached ? cached.finalSrc : (src || ""));
+    var mountedRef = useRef(true);
     var timerRef = useRef(null);
 
+    useEffect(function () {
+        mountedRef.current = true;
+        return function () {
+            mountedRef.current = false;
+            if (timerRef.current) clearTimeout(timerRef.current);
+        };
+    }, []);
+
+    // If we have cached successful load, use it
+    useEffect(function () {
+        if (cached && cached.loaded && cached.finalSrc) {
+            setStage(cached.stage);
+            setLoaded(true);
+            setFinalSrc(cached.finalSrc);
+        }
+    }, [cacheKey]);
+
     var currentSrc = useMemo(function () {
+        if (loaded && finalSrc) return finalSrc;
         if (stage === 0) return src || "";
         if (stage === -1) return "";
         if (!originalSrc || !isIpfsUrl(originalSrc)) return "";
         var gwIdx = stage - 1;
         if (gwIdx >= GATEWAY_COUNT) return "";
         return ipfsGatewayUrl(originalSrc, gwIdx);
-    }, [src, originalSrc, stage]);
-
-    useEffect(function () {
-        setStage(0);
-        setLoaded(false);
-        if (timerRef.current) clearTimeout(timerRef.current);
-    }, [src]);
-
-    useEffect(function () {
-        return function () { if (timerRef.current) clearTimeout(timerRef.current); };
-    }, []);
+    }, [src, originalSrc, stage, loaded, finalSrc]);
 
     var handleError = useCallback(function () {
+        if (!mountedRef.current) return;
+
         if (stage === 0) {
             if (originalSrc && isIpfsUrl(originalSrc)) {
-                timerRef.current = setTimeout(function () { setStage(1); }, 100);
+                timerRef.current = setTimeout(function () {
+                    if (mountedRef.current) setStage(1);
+                }, 100);
             } else {
                 setStage(-1);
             }
@@ -105,20 +141,35 @@ function NftImage({ src, originalSrc, alt }) {
         if (stage >= 1) {
             var nextGw = stage;
             if (nextGw < GATEWAY_COUNT) {
-                timerRef.current = setTimeout(function () { setStage(nextGw + 1); }, 200);
+                timerRef.current = setTimeout(function () {
+                    if (mountedRef.current) setStage(nextGw + 1);
+                }, 200);
             } else {
                 setStage(-1);
             }
         }
     }, [stage, originalSrc]);
 
-    var handleLoad = useCallback(function () {
+    var handleLoad = useCallback(function (e) {
+        if (!mountedRef.current) return;
+        var loadedUrl = e.target.src;
         setLoaded(true);
-    }, []);
+        setFinalSrc(loadedUrl);
+        // Cache successful load
+        imageCache.set(cacheKey, { stage: stage, loaded: true, finalSrc: loadedUrl });
+    }, [cacheKey, stage]);
 
     if (stage === -1 || !currentSrc) {
         return (
-            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #2d1b4e 0%, #1a0f2e 100%)", borderRadius: "inherit" }}>
+            <div style={{
+                width: "100%",
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "linear-gradient(135deg, #2d1b4e 0%, #1a0f2e 100%)",
+                borderRadius: "inherit"
+            }}>
                 <span style={{ fontSize: 32, opacity: 0.5 }}>🎴</span>
             </div>
         );
@@ -127,7 +178,16 @@ function NftImage({ src, originalSrc, alt }) {
     return (
         <>
             {!loaded && (
-                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(30,20,50,0.8)", borderRadius: "inherit", zIndex: 1 }}>
+                <div style={{
+                    position: "absolute",
+                    inset: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    background: "rgba(30,20,50,0.8)",
+                    borderRadius: "inherit",
+                    zIndex: 1
+                }}>
                     <div className="inv-loading-spinner" style={{ width: 20, height: 20 }} />
                 </div>
             )}
@@ -149,7 +209,258 @@ function NftImage({ src, originalSrc, alt }) {
             />
         </>
     );
-}
+});
+
+// ============ MEMOIZED Card Component ============
+var InventoryCard = memo(function InventoryCard({
+    nft,
+    isSelected,
+    pickNo,
+    onToggle,
+    index
+}) {
+    var k = nftKey(nft);
+    var stats = nft.stats || { top: 5, right: 5, bottom: 5, left: 5 };
+    var element = nft.element || null;
+    var r = nft.rarity || getRarityFromTokenId(nft.tokenId, 10000);
+
+    var onPD = function (e) {
+        var el = e.currentTarget;
+        var rect = el.getBoundingClientRect();
+        var cx = (e.clientX !== undefined ? e.clientX : rect.left + rect.width / 2) - rect.left;
+        var cy = (e.clientY !== undefined ? e.clientY : rect.top + rect.height / 2) - rect.top;
+        el.style.setProperty("--px", Math.max(0, Math.min(100, (cx / rect.width) * 100)) + "%");
+        el.style.setProperty("--py", Math.max(0, Math.min(100, (cy / rect.height) * 100)) + "%");
+        el.classList.remove("is-tapping");
+        void el.offsetWidth;
+        el.classList.add("is-tapping");
+        setTimeout(function () { el.classList.remove("is-tapping"); }, 520);
+    };
+
+    var handleClick = useCallback(function () {
+        onToggle(k);
+    }, [onToggle, k]);
+
+    return (
+        <button
+            key={k}
+            type="button"
+            onPointerDown={onPD}
+            onClick={handleClick}
+            className={"inv-card-game" + (isSelected ? " is-selected" : "")}
+            title={nft.name}
+            style={{
+                "--i": index,
+                "--rank": r.border,
+                "--rankGlow": r.glow
+            }}
+        >
+            {/* Art layer */}
+            <div className="inv-card-art-full">
+                <NftImage
+                    src={nft.imageUrl}
+                    originalSrc={nft.originalImageUrl}
+                    alt={nft.name || ""}
+                    cacheKey={k}
+                />
+            </div>
+
+            {/* Element pill — top right, high z-index */}
+            {element && (
+                <div
+                    className="inv-card-elem-pill"
+                    title={element}
+                    style={{
+                        position: "absolute",
+                        top: 6,
+                        right: 6,
+                        zIndex: 20,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "3px 7px",
+                        borderRadius: 999,
+                        background: "rgba(0,0,0,0.85)",
+                        border: "1px solid rgba(255,255,255,0.25)",
+                        pointerEvents: "none"
+                    }}
+                >
+                    <span
+                        className="inv-card-elem-ic"
+                        style={{
+                            fontSize: 16,
+                            lineHeight: 1,
+                            filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.8))"
+                        }}
+                    >
+                        {ELEM_ICON[element]}
+                    </span>
+                </div>
+            )}
+
+            {/* TT Badge (diamond) — centered positioning */}
+            <div
+                className="inv-tt-badge"
+                style={{
+                    position: "absolute",
+                    top: "6%",
+                    left: "6%",
+                    width: "32%",
+                    height: 0,
+                    paddingBottom: "32%",
+                    background: "rgba(0,0,0,0.8)",
+                    transform: "rotate(45deg)",
+                    borderRadius: 3,
+                    zIndex: 10,
+                    pointerEvents: "none"
+                }}
+            />
+
+            {/* TT Numbers — positioned relative to badge center */}
+            <span
+                className="inv-tt-num top"
+                style={{
+                    position: "absolute",
+                    top: "5%",
+                    left: "22%",
+                    zIndex: 15,
+                    fontSize: "clamp(9px, 2.5vw, 13px)",
+                    fontWeight: 900,
+                    color: "#fff",
+                    textShadow: "0 2px 6px rgba(0,0,0,0.95)",
+                    lineHeight: 1,
+                    pointerEvents: "none"
+                }}
+            >
+                {stats.top}
+            </span>
+            <span
+                className="inv-tt-num left"
+                style={{
+                    position: "absolute",
+                    top: "18%",
+                    left: "8%",
+                    zIndex: 15,
+                    fontSize: "clamp(9px, 2.5vw, 13px)",
+                    fontWeight: 900,
+                    color: "#fff",
+                    textShadow: "0 2px 6px rgba(0,0,0,0.95)",
+                    lineHeight: 1,
+                    pointerEvents: "none"
+                }}
+            >
+                {stats.left}
+            </span>
+            <span
+                className="inv-tt-num right"
+                style={{
+                    position: "absolute",
+                    top: "18%",
+                    left: "36%",
+                    zIndex: 15,
+                    fontSize: "clamp(9px, 2.5vw, 13px)",
+                    fontWeight: 900,
+                    color: "#fff",
+                    textShadow: "0 2px 6px rgba(0,0,0,0.95)",
+                    lineHeight: 1,
+                    pointerEvents: "none"
+                }}
+            >
+                {stats.right}
+            </span>
+            <span
+                className="inv-tt-num bottom"
+                style={{
+                    position: "absolute",
+                    top: "31%",
+                    left: "22%",
+                    zIndex: 15,
+                    fontSize: "clamp(9px, 2.5vw, 13px)",
+                    fontWeight: 900,
+                    color: "#fff",
+                    textShadow: "0 2px 6px rgba(0,0,0,0.95)",
+                    lineHeight: 1,
+                    pointerEvents: "none"
+                }}
+            >
+                {stats.bottom}
+            </span>
+
+            {/* Pick badge */}
+            {isSelected && (
+                <div
+                    className="inv-pick-badge"
+                    style={{
+                        position: "absolute",
+                        right: 6,
+                        bottom: 6,
+                        width: 36,
+                        height: 36,
+                        borderRadius: 999,
+                        zIndex: 25,
+                        padding: 0,
+                        display: "grid",
+                        placeItems: "center",
+                        background: "conic-gradient(from 90deg, rgba(120,200,255,1), rgba(255,61,242,0.75), rgba(120,200,255,1))",
+                        boxShadow: "0 0 20px rgba(120,200,255,0.5)"
+                    }}
+                >
+                    <div
+                        className="inv-pick-badge-inner"
+                        style={{
+                            width: "100%",
+                            height: "100%",
+                            borderRadius: 999,
+                            display: "grid",
+                            placeItems: "center",
+                            position: "relative"
+                        }}
+                    >
+                        <div style={{
+                            position: "absolute",
+                            inset: 2,
+                            borderRadius: 999,
+                            background: "rgba(0,0,0,0.7)",
+                            border: "1px solid rgba(255,255,255,0.2)"
+                        }} />
+                        <div
+                            className="inv-pick-check"
+                            style={{
+                                position: "relative",
+                                zIndex: 1,
+                                fontWeight: 1000,
+                                fontSize: 14,
+                                lineHeight: 1,
+                                color: "#fff",
+                                textShadow: "0 2px 8px rgba(0,0,0,0.9)",
+                                transform: "translateY(-1px)"
+                            }}
+                        >
+                            ✓
+                        </div>
+                        <div
+                            className="inv-pick-no"
+                            style={{
+                                position: "absolute",
+                                bottom: 4,
+                                left: "50%",
+                                transform: "translateX(-50%)",
+                                zIndex: 1,
+                                fontWeight: 900,
+                                fontSize: 10,
+                                lineHeight: 1,
+                                color: "rgba(255,255,255,0.95)",
+                                textShadow: "0 2px 8px rgba(0,0,0,0.9)"
+                            }}
+                        >
+                            {pickNo}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </button>
+    );
+});
 
 export default function Inventory({ token, onDeckReady }) {
     var ctx = useWalletConnect();
@@ -166,6 +477,7 @@ export default function Inventory({ token, onDeckReady }) {
     var nftContractId = (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim();
 
     var selectedArr = useMemo(function () { return Array.from(selected); }, [selected]);
+
     var orderMap = useMemo(function () {
         var m = new Map();
         selectedArr.forEach(function (k, i) { m.set(k, i + 1); });
@@ -262,14 +574,18 @@ export default function Inventory({ token, onDeckReady }) {
         return function () { alive = false; };
     }, [token, accountId, connected, nftContractId]);
 
-    var toggle = function (k) {
+    var toggle = useCallback(function (k) {
         setSelected(function (prev) {
             var next = new Set(prev);
-            if (next.has(k)) next.delete(k);
-            else { if (next.size >= 5) return next; next.add(k); }
+            if (next.has(k)) {
+                next.delete(k);
+            } else {
+                if (next.size >= 5) return prev;
+                next.add(k);
+            }
             return next;
         });
-    };
+    }, []);
 
     var saveDeck = async function () {
         if (selected.size !== 5) return;
@@ -296,43 +612,70 @@ export default function Inventory({ token, onDeckReady }) {
         }
     };
 
-    var onPD = function (e) {
-        var el = e.currentTarget, rect = el.getBoundingClientRect();
-        var cx = (e.clientX !== undefined ? e.clientX : rect.left + rect.width / 2) - rect.left;
-        var cy = (e.clientY !== undefined ? e.clientY : rect.top + rect.height / 2) - rect.top;
-        el.style.setProperty("--px", Math.max(0, Math.min(100, (cx / rect.width) * 100)) + "%");
-        el.style.setProperty("--py", Math.max(0, Math.min(100, (cy / rect.height) * 100)) + "%");
-        el.classList.remove("is-tapping"); void el.offsetWidth; el.classList.add("is-tapping");
-        setTimeout(function () { el.classList.remove("is-tapping"); }, 520);
-    };
+    var resetSelection = useCallback(function () {
+        setSelected(new Set());
+    }, []);
 
     return (
         <div className="page inventory-page">
             <div className="inv-header">
-                <h2 className="inv-title"><span className="inv-title-icon">🎴</span>Выбери колоду</h2>
-                <div className="inv-subtitle">Выбери 5 карт для игры • {selected.size}/5</div>
+                <h2 className="inv-title">
+                    <span className="inv-title-icon">🎴</span>
+                    Выбери колоду
+                </h2>
+                <div className="inv-subtitle">
+                    Выбери 5 карт для игры • {selected.size}/5
+                </div>
             </div>
 
             {connected && accountId ? (
                 <div className="inv-info-box">
-                    <div className="inv-info-label">🔗 {accountId.length > 20 ? accountId.slice(0, 10) + "…" + accountId.slice(-6) : accountId}</div>
-                    {source && <div className="inv-info-value" style={{ marginTop: 4, color: source.startsWith("✅") ? "#22c55e" : source.startsWith("❌") ? "#ff6b6b" : "#f59e0b" }}>{source}</div>}
+                    <div className="inv-info-label">
+                        🔗 {accountId.length > 20 ? accountId.slice(0, 10) + "…" + accountId.slice(-6) : accountId}
+                    </div>
+                    {source && (
+                        <div
+                            className="inv-info-value"
+                            style={{
+                                marginTop: 4,
+                                color: source.startsWith("✅") ? "#22c55e" : source.startsWith("❌") ? "#ff6b6b" : "#f59e0b"
+                            }}
+                        >
+                            {source}
+                        </div>
+                    )}
                 </div>
             ) : (
                 <div className="inv-info-box">
-                    <div className="inv-info-label" style={{ color: "#f59e0b" }}>⚠️ Подключи кошелёк на главной</div>
+                    <div className="inv-info-label" style={{ color: "#f59e0b" }}>
+                        ⚠️ Подключи кошелёк на главной
+                    </div>
                 </div>
             )}
 
             {error && <div className="inv-error">⚠️ {error}</div>}
-            {!token && <div className="inv-loading"><div className="inv-loading-spinner" /><div>Ожидание авторизации…</div></div>}
-            {loading && <div className="inv-loading"><div className="inv-loading-spinner" /><div>Загрузка NFT…</div></div>}
+
+            {!token && (
+                <div className="inv-loading">
+                    <div className="inv-loading-spinner" />
+                    <div>Ожидание авторизации…</div>
+                </div>
+            )}
+
+            {loading && (
+                <div className="inv-loading">
+                    <div className="inv-loading-spinner" />
+                    <div>Загрузка NFT…</div>
+                </div>
+            )}
 
             {!loading && nfts.length === 0 && token && (
                 <div className="inv-empty">
                     <div className="inv-empty-icon">📭</div>
                     <div className="inv-empty-title">Нет NFT карт</div>
-                    <div className="inv-empty-text">{connected ? "NFT не найдены для " + accountId : "Подключи кошелёк на главной странице"}</div>
+                    <div className="inv-empty-text">
+                        {connected ? "NFT не найдены для " + accountId : "Подключи кошелёк на главной странице"}
+                    </div>
                 </div>
             )}
 
@@ -340,35 +683,15 @@ export default function Inventory({ token, onDeckReady }) {
                 <div className="inv-grid-game-style">
                     {nfts.map(function (n, idx) {
                         var k = nftKey(n);
-                        var isSel = selected.has(k);
-                        var pickNo = orderMap.get(k) || 0;
-                        var stats = n.stats || { top: 5, right: 5, bottom: 5, left: 5 };
-                        var element = n.element || null;
-                        var r = n.rarity || getRarityFromTokenId(n.tokenId, 10000);
-
                         return (
-                            <button key={k} type="button" onPointerDown={onPD} onClick={function () { toggle(k); }}
-                                className={"inv-card-game" + (isSel ? " is-selected" : "")} title={n.name}
-                                style={{ "--i": idx, "--rank": r.border, "--rankGlow": r.glow }}>
-                                <div className="inv-card-art-full">
-                                    <NftImage
-                                        src={n.imageUrl}
-                                        originalSrc={n.originalImageUrl}
-                                        alt={n.name || ""}
-                                    />
-                                </div>
-                                {element && (
-                                    <div className="inv-card-elem-pill" title={element}>
-                                        <span className="inv-card-elem-ic">{ELEM_ICON[element]}</span>
-                                    </div>
-                                )}
-                                <div className="inv-tt-badge" />
-                                <span className="inv-tt-num top">{stats.top}</span>
-                                <span className="inv-tt-num left">{stats.left}</span>
-                                <span className="inv-tt-num right">{stats.right}</span>
-                                <span className="inv-tt-num bottom">{stats.bottom}</span>
-                                {isSel ? (<div className="inv-pick-badge"><div className="inv-pick-badge-inner"><div className="inv-pick-check">✓</div><div className="inv-pick-no">{pickNo}</div></div></div>) : null}
-                            </button>
+                            <InventoryCard
+                                key={k}
+                                nft={n}
+                                isSelected={selected.has(k)}
+                                pickNo={orderMap.get(k) || 0}
+                                onToggle={toggle}
+                                index={idx}
+                            />
                         );
                     })}
                 </div>
@@ -376,10 +699,18 @@ export default function Inventory({ token, onDeckReady }) {
 
             {nfts.length > 0 && (
                 <div className="inv-actions">
-                    <button className="inv-btn inv-btn-secondary" onClick={function () { setSelected(new Set()); }} disabled={!selected.size || saving}>
+                    <button
+                        className="inv-btn inv-btn-secondary"
+                        onClick={resetSelection}
+                        disabled={!selected.size || saving}
+                    >
                         Сбросить
                     </button>
-                    <button className="inv-btn inv-btn-primary" disabled={selected.size !== 5 || saving} onClick={saveDeck}>
+                    <button
+                        className="inv-btn inv-btn-primary"
+                        disabled={selected.size !== 5 || saving}
+                        onClick={saveDeck}
+                    >
                         {saving ? "Сохранение..." : selected.size === 5 ? "Играть! →" : "Выбери " + (5 - selected.size) + " карт"}
                     </button>
                 </div>
