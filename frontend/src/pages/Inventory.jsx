@@ -17,34 +17,24 @@ function getRarityFromTokenId(tokenId, totalSupply) {
     totalSupply = totalSupply || 10000;
     var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
     var pct = (num / totalSupply) * 100;
-    if (pct <= 25) return { key: "legendary", border: "#7c3aed", glow: "rgba(124,58,237,0.60)", min: 4, max: 9 };
-    if (pct <= 50) return { key: "epic", border: "#a78bfa", glow: "rgba(167,139,250,0.55)", min: 3, max: 9 };
-    if (pct <= 75) return { key: "rare", border: "#f97316", glow: "rgba(249,115,22,0.55)", min: 2, max: 8 };
-    return { key: "common", border: "#22c55e", glow: "rgba(34,197,94,0.50)", min: 1, max: 7 };
+    if (pct <= 25) return { key: "legendary", border: "#7c3aed", glow: "rgba(124,58,237,0.60)", min: 4, max: 9, elemChance: 0.9 };
+    if (pct <= 50) return { key: "epic", border: "#a78bfa", glow: "rgba(167,139,250,0.55)", min: 3, max: 9, elemChance: 0.8 };
+    if (pct <= 75) return { key: "rare", border: "#f97316", glow: "rgba(249,115,22,0.55)", min: 2, max: 8, elemChance: 0.7 };
+    return { key: "common", border: "#22c55e", glow: "rgba(34,197,94,0.50)", min: 1, max: 7, elemChance: 0.6 };
 }
 
-/**
- * Deterministic stats generation based on token_id
- * Same token_id will ALWAYS produce same stats
- */
 function genStats(tokenId, rarity) {
-    // Use token_id as seed for deterministic random
     var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
-
-    // LCG (Linear Congruential Generator) for deterministic "random"
     var seed = num;
     var next = function () {
         seed = (seed * 1103515245 + 12345) & 0x7fffffff;
         return seed;
     };
-
     var rnd = function (lo, hi) {
         return lo + (next() % (hi - lo + 1));
     };
-
     var min = rarity.min;
     var max = rarity.max;
-
     return {
         top: rnd(min, max),
         right: rnd(min, max),
@@ -53,28 +43,18 @@ function genStats(tokenId, rarity) {
     };
 }
 
-/**
- * Deterministic element generation based on token_id
- * Same token_id will ALWAYS have same element (or null)
- * ~70% chance to have an element
- */
-function genElement(tokenId) {
+function genElement(tokenId, rarity) {
     var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
-
-    // Different seed offset for element vs stats
-    var seed = num * 7919 + 104729; // Prime numbers for different distribution
+    var seed = num * 7919 + 104729;
     seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-
     var chance = (seed % 100) / 100;
-
-    if (chance < 0.7) {
-        // Has element
+    var elemChance = rarity ? rarity.elemChance : 0.7;
+    if (chance < elemChance) {
         seed = (seed * 1103515245 + 12345) & 0x7fffffff;
         var elemIdx = seed % ELEMENTS.length;
         return ELEMENTS[elemIdx];
     }
-
-    return null; // No element
+    return null;
 }
 
 function safeParse(s) {
@@ -82,10 +62,16 @@ function safeParse(s) {
     catch (e) { return null; }
 }
 
-function NftImage({ src, originalSrc, alt, tokenId }) {
+// Global cache for NFTs
+var nftCache = {
+    accountId: null,
+    items: [],
+    timestamp: 0
+};
+
+function NftImage({ src, originalSrc, alt }) {
     var [stage, setStage] = useState(0);
     var [loaded, setLoaded] = useState(false);
-    var [errorMsg, setErrorMsg] = useState("");
     var timerRef = useRef(null);
 
     var currentSrc = useMemo(function () {
@@ -100,7 +86,6 @@ function NftImage({ src, originalSrc, alt, tokenId }) {
     useEffect(function () {
         setStage(0);
         setLoaded(false);
-        setErrorMsg("");
         if (timerRef.current) clearTimeout(timerRef.current);
     }, [src]);
 
@@ -108,10 +93,7 @@ function NftImage({ src, originalSrc, alt, tokenId }) {
         return function () { if (timerRef.current) clearTimeout(timerRef.current); };
     }, []);
 
-    var handleError = useCallback(function (e) {
-        var msg = "stage" + stage + " failed";
-        setErrorMsg(msg);
-
+    var handleError = useCallback(function () {
         if (stage === 0) {
             if (originalSrc && isIpfsUrl(originalSrc)) {
                 timerRef.current = setTimeout(function () { setStage(1); }, 100);
@@ -132,14 +114,12 @@ function NftImage({ src, originalSrc, alt, tokenId }) {
 
     var handleLoad = useCallback(function () {
         setLoaded(true);
-        setErrorMsg("");
     }, []);
 
     if (stage === -1 || !currentSrc) {
         return (
-            <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(30,20,50,0.8)", borderRadius: 8, padding: 4 }}>
-                <span style={{ fontSize: 24 }}>🎴</span>
-                <span style={{ fontSize: 8, color: "#f66", marginTop: 2 }}>{errorMsg || "failed"}</span>
+            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #2d1b4e 0%, #1a0f2e 100%)", borderRadius: "inherit" }}>
+                <span style={{ fontSize: 32, opacity: 0.5 }}>🎴</span>
             </div>
         );
     }
@@ -147,18 +127,25 @@ function NftImage({ src, originalSrc, alt, tokenId }) {
     return (
         <>
             {!loaded && (
-                <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(30,20,50,0.6)", borderRadius: 8, zIndex: 1 }}>
-                    <div className="inv-loading-spinner" style={{ width: 24, height: 24 }} />
+                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(30,20,50,0.8)", borderRadius: "inherit", zIndex: 1 }}>
+                    <div className="inv-loading-spinner" style={{ width: 20, height: 20 }} />
                 </div>
             )}
             <img
                 src={currentSrc}
                 alt={alt || ""}
                 draggable="false"
-                loading="eager"
                 onError={handleError}
                 onLoad={handleLoad}
-                style={{ opacity: loaded ? 1 : 0, transition: "opacity 0.3s", width: "100%", height: "100%", objectFit: "cover" }}
+                style={{
+                    opacity: loaded ? 1 : 0,
+                    transition: "opacity 0.3s",
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    objectPosition: "center",
+                    borderRadius: "inherit"
+                }}
             />
         </>
     );
@@ -193,13 +180,25 @@ export default function Inventory({ token, onDeckReady }) {
 
     useEffect(function () {
         if (!token) return;
+
+        // Check cache first
+        var now = Date.now();
+        var cacheValid = nftCache.accountId === accountId &&
+            nftCache.items.length > 0 &&
+            (now - nftCache.timestamp) < 60000; // 1 minute cache
+
+        if (cacheValid) {
+            setNfts(nftCache.items);
+            setSource("✅ " + nftCache.items.length + " NFTs (cached)");
+            return;
+        }
+
         var alive = true;
 
         (async function () {
             setLoading(true);
             setError("");
             setSource("");
-            setSelected(new Set());
 
             try {
                 var items = [];
@@ -211,16 +210,12 @@ export default function Inventory({ token, onDeckReady }) {
                         items = tokens.map(function (t) {
                             var extra = safeParse(t.metadata ? t.metadata.extra : null);
                             var r = getRarityFromTokenId(t.token_id, 10000);
-
-                            // Use extra stats/element if available from NFT metadata
-                            // Otherwise generate deterministically from token_id
                             var st = (extra && extra.stats && typeof extra.stats.top === "number")
                                 ? extra.stats
                                 : genStats(t.token_id, r);
-
                             var elem = (extra && extra.element)
                                 ? extra.element
-                                : genElement(t.token_id);
+                                : genElement(t.token_id, r);
 
                             return {
                                 key: "near:" + nftContractId + ":" + t.token_id,
@@ -238,6 +233,12 @@ export default function Inventory({ token, onDeckReady }) {
                                 rankLabel: r.key[0].toUpperCase(),
                             };
                         });
+
+                        // Update cache
+                        nftCache.accountId = accountId;
+                        nftCache.items = items;
+                        nftCache.timestamp = Date.now();
+
                         setSource(items.length > 0 ? "✅ " + items.length + " NFTs" : "⚠️ 0 NFTs");
                     } catch (e) {
                         setSource("❌ " + (e.message || e));
@@ -277,7 +278,7 @@ export default function Inventory({ token, onDeckReady }) {
         setSaving(true);
         setError("");
         try {
-            await apiFetch("/api/decks/active", {
+            var result = await apiFetch("/api/decks/active", {
                 token: token,
                 method: "PUT",
                 body: JSON.stringify({
@@ -285,9 +286,11 @@ export default function Inventory({ token, onDeckReady }) {
                     full_cards: selectedNfts
                 })
             });
+            console.log("Deck saved:", result);
             setSaving(false);
             onDeckReady?.(selectedNfts);
         } catch (e) {
+            console.error("Save deck error:", e);
             setError(e.message || "Save failed");
             setSaving(false);
         }
@@ -352,10 +355,13 @@ export default function Inventory({ token, onDeckReady }) {
                                         src={n.imageUrl}
                                         originalSrc={n.originalImageUrl}
                                         alt={n.name || ""}
-                                        tokenId={n.tokenId}
                                     />
                                 </div>
-                                {element && <div className="inv-card-elem-pill" title={element}><span className="inv-card-elem-ic">{ELEM_ICON[element] || element}</span></div>}
+                                {element && (
+                                    <div className="inv-card-elem-pill" title={element}>
+                                        <span className="inv-card-elem-ic">{ELEM_ICON[element]}</span>
+                                    </div>
+                                )}
                                 <div className="inv-tt-badge" />
                                 <span className="inv-tt-num top">{stats.top}</span>
                                 <span className="inv-tt-num left">{stats.left}</span>
