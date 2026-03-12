@@ -1,16 +1,7 @@
-// frontend/src/Game.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 import { apiFetch } from "./api.js";
 import { useWalletConnect } from "./context/WalletConnectContext";
-import {
-    nftToCard,
-    cloneDeckToHand,
-    generateStats,
-    generateElement,
-    ELEMENTS,
-    ELEM_ICON,
-} from "./utils/cardUtils";
 
 /* =========================
    Triple Triad (3x3) + Same/Plus/Combo + best-of-3 (to 3 wins)
@@ -45,6 +36,18 @@ const ART = [
     "/cards/card8.jpg",
     "/cards/card9.jpg",
 ];
+
+const ELEMENTS = ["Earth", "Fire", "Water", "Poison", "Holy", "Thunder", "Wind", "Ice"];
+const ELEM_ICON = {
+    Earth: "🪨",
+    Fire: "🔥",
+    Water: "💧",
+    Poison: "☠️",
+    Holy: "✨",
+    Thunder: "⚡",
+    Wind: "🌪️",
+    Ice: "❄️",
+};
 
 const BEATS = {
     Earth: ["Thunder"],
@@ -273,18 +276,23 @@ function makeBoardElements() {
     return Array.from({ length: 9 }, () => (Math.random() < chance ? pick(ELEMENTS) : null));
 }
 
-function convertToGameCard(nft, idx) {
-    // Use unified nftToCard
-    const card = nftToCard(nft, idx);
-    if (!card) {
-        // Fallback
-        return genCard("player", `fallback_${idx}`);
-    }
-    return card;
+function cloneDeckToHand(deck, owner) {
+    return deck.map((c) => ({ ...c, owner, placeKey: 0, captureKey: 0 }));
 }
 
-function getFallbackEnemyDeck() {
-    return Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`));
+function nftToCard(nft, idx) {
+    return {
+        id: nft.key || nft.tokenId || `nft_${idx}`,
+        owner: "player",
+        values: nft.stats || { top: 5, right: 5, bottom: 5, left: 5 },
+        imageUrl: nft.imageUrl || ART[0],
+        rank: nft.rank || "common",
+        rankLabel: nft.rankLabel || "C",
+        element: nft.element || null,
+        placeKey: 0,
+        captureKey: 0,
+        nftData: nft,
+    };
 }
 
 function getStoredToken() {
@@ -300,7 +308,11 @@ function getStoredToken() {
     }
 }
 
-export default function Game({ onExit, me, playerDeck, matchId, mode = "ai", pvpMatchData }) {
+function getFallbackEnemyDeck() {
+    return Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`));
+}
+
+export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const revealTimerRef = useRef(null);
 
     const {
@@ -309,6 +321,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai", pvp
         signAndSendTransaction,
     } = useWalletConnect();
 
+    // escrowClaim built on top of signAndSendTransaction
     const escrowClaim = async ({ matchId: mId, winnerAccountId, loserNftContractId, loserTokenId }) => {
         const escrowContractId = (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim();
         if (!escrowContractId) throw new Error("Escrow contract not configured");
@@ -335,7 +348,9 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai", pvp
 
         const txHash =
             (result && typeof result === "object"
-                ? result.transaction_outcome?.id || result.transaction?.hash || result.txHash
+                ? result.transaction_outcome?.id ||
+                result.transaction?.hash ||
+                result.txHash
                 : typeof result === "string"
                     ? result
                     : "") || "";
@@ -350,14 +365,13 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai", pvp
     const myTgId = me?.id ? Number(me.id) : 0;
 
     const isStage2 = mode === "pvp" && Boolean(matchId);
-    const isPvP = mode === "pvp";
 
     const [enemyDeck, setEnemyDeck] = useState(() => getFallbackEnemyDeck());
     const [loadingEnemyDeck, setLoadingEnemyDeck] = useState(true);
 
     const [hands, setHands] = useState(() => ({
-        player: [],
-        enemy: [],
+        player: cloneDeckToHand((playerDeck || []).map((n, idx) => nftToCard(n, idx)), "player"),
+        enemy: cloneDeckToHand(getFallbackEnemyDeck(), "enemy"),
     }));
 
     const [boardElems, setBoardElems] = useState(() => makeBoardElements());
@@ -392,73 +406,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai", pvp
 
     const deckOk = Array.isArray(playerDeck) && playerDeck.length === 5;
 
-    // Initialize player hand from playerDeck
-    useEffect(() => {
-        if (!deckOk) return;
-        const playerCards = playerDeck.map((nft, idx) => {
-            const card = convertToGameCard(nft, idx);
-            card.owner = "player";
-            return card;
-        });
-        setHands((h) => ({ ...h, player: cloneDeckToHand(playerCards, "player") }));
-    }, [playerDeck, deckOk]);
-
-    // Load enemy deck
-    useEffect(() => {
-        let alive = true;
-
-        (async () => {
-            try {
-                setLoadingEnemyDeck(true);
-
-                // If PvP, try to get opponent deck from pvpMatchData
-                if (isPvP && pvpMatchData) {
-                    const opponentDeck = pvpMatchData.opponent_deck || pvpMatchData.player2_deck;
-                    if (opponentDeck && Array.isArray(opponentDeck) && opponentDeck.length === 5) {
-                        const cards = opponentDeck.map((nft, idx) => {
-                            const card = convertToGameCard(nft, idx);
-                            card.owner = "enemy";
-                            return card;
-                        });
-                        if (alive) {
-                            setEnemyDeck(cards);
-                            setHands((h) => ({ ...h, enemy: cloneDeckToHand(cards, "enemy") }));
-                        }
-                        return;
-                    }
-                }
-
-                // Fallback: AI deck from backend
-                const token = getStoredToken();
-                const aiDeck = await apiFetch("/api/decks/ai_opponent", { token });
-                const cards = Array.isArray(aiDeck) ? aiDeck.map((n, idx) => convertToGameCard(n, idx)) : [];
-
-                if (!alive) return;
-
-                if (cards.length === 5) {
-                    cards.forEach((c) => (c.owner = "enemy"));
-                    setEnemyDeck(cards);
-                    setHands((h) => ({ ...h, enemy: cloneDeckToHand(cards, "enemy") }));
-                } else {
-                    const fallback = getFallbackEnemyDeck();
-                    setEnemyDeck(fallback);
-                    setHands((h) => ({ ...h, enemy: cloneDeckToHand(fallback, "enemy") }));
-                }
-            } catch {
-                if (!alive) return;
-                const fallback = getFallbackEnemyDeck();
-                setEnemyDeck(fallback);
-                setHands((h) => ({ ...h, enemy: cloneDeckToHand(fallback, "enemy") }));
-            } finally {
-                if (alive) setLoadingEnemyDeck(false);
-            }
-        })();
-
-        return () => {
-            alive = false;
-        };
-    }, [isPvP, pvpMatchData]);
-
     const refreshStage2Match = async () => {
         if (!isStage2) return;
         try {
@@ -473,7 +420,52 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai", pvp
 
     useEffect(() => {
         refreshStage2Match();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [matchId, isStage2]);
+
+    useEffect(() => {
+        let alive = true;
+
+        (async () => {
+            try {
+                setLoadingEnemyDeck(true);
+                const token = getStoredToken();
+                const aiDeck = await apiFetch("/api/decks/ai_opponent", { token });
+                const cards = Array.isArray(aiDeck) ? aiDeck.map((n, idx) => nftToCard(n, idx)) : [];
+
+                if (!alive) return;
+
+                if (cards.length === 5) setEnemyDeck(cards);
+                else setEnemyDeck(getFallbackEnemyDeck());
+            } catch {
+                if (!alive) return;
+                setEnemyDeck(getFallbackEnemyDeck());
+            } finally {
+                if (!alive) return;
+                setLoadingEnemyDeck(false);
+            }
+        })();
+
+        return () => {
+            alive = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!deckOk) return;
+        setHands((h) => ({
+            ...h,
+            player: cloneDeckToHand(playerDeck.map((n, idx) => nftToCard(n, idx)), "player"),
+        }));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [playerDeck]);
+
+    useEffect(() => {
+        setHands((h) => ({
+            ...h,
+            enemy: cloneDeckToHand(enemyDeck, "enemy"),
+        }));
+    }, [enemyDeck]);
 
     const haptic = (kind = "light") => {
         try {
@@ -506,13 +498,8 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai", pvp
         setBoardElems(makeBoardElements());
 
         if (deckOk) {
-            const playerCards = playerDeck.map((nft, idx) => {
-                const card = convertToGameCard(nft, idx);
-                card.owner = "player";
-                return card;
-            });
             setHands({
-                player: cloneDeckToHand(playerCards, "player"),
+                player: cloneDeckToHand(playerDeck.map((n, idx) => nftToCard(n, idx)), "player"),
                 enemy: cloneDeckToHand(ed, "enemy"),
             });
         }
@@ -559,7 +546,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai", pvp
     const myName = getPlayerName(me);
     const myAvatar = getPlayerAvatarUrl(me);
 
-    const enemyName = isPvP ? "Opponent" : "BunnyBot";
+    const enemyName = "BunnyBot";
     const enemyAvatar = "/ui/avatar-enemy.png?v=1";
 
     const canUseMagic = turn === "player" && !roundOver && !matchOver;
@@ -642,7 +629,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai", pvp
         setTurn("enemy");
     };
 
-    // Enemy AI turn
     useEffect(() => {
         if (turn !== "enemy" || roundOver || matchOver) return;
 
@@ -686,7 +672,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai", pvp
         };
     }, [turn, roundOver, matchOver]);
 
-    // Check round end
     useEffect(() => {
         if (roundOver || matchOver) return;
         if (board.some((c) => c === null)) return;
@@ -707,7 +692,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai", pvp
         });
     }, [board, roundOver, matchOver]);
 
-    // Check match end
     useEffect(() => {
         if (matchOver) return;
         if (series.player >= MATCH_WINS_TARGET || series.enemy >= MATCH_WINS_TARGET) {
@@ -716,27 +700,17 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai", pvp
             setClaimDone(false);
             if (isStage2) refreshStage2Match();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [series, matchOver, isStage2]);
 
-    // Confetti on player round win
     useEffect(() => {
         if (!roundOver) return;
         if (roundWinner !== "player") return;
 
         const origin = { x: 0.5, y: 0.35 };
         const timers = [];
-        timers.push(
-            setTimeout(
-                () => confetti({ zIndex: 99999, particleCount: 34, spread: 75, startVelocity: 30, origin }),
-                0
-            )
-        );
-        timers.push(
-            setTimeout(
-                () => confetti({ zIndex: 99999, particleCount: 22, spread: 95, startVelocity: 26, origin }),
-                160
-            )
-        );
+        timers.push(setTimeout(() => confetti({ zIndex: 99999, particleCount: 34, spread: 75, startVelocity: 30, origin }), 0));
+        timers.push(setTimeout(() => confetti({ zIndex: 99999, particleCount: 22, spread: 95, startVelocity: 26, origin }), 160));
         return () => timers.forEach(clearTimeout);
     }, [roundOver, roundWinner]);
 
@@ -751,10 +725,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai", pvp
     const loserSide = matchWinner === "player" ? "enemy" : matchWinner === "enemy" ? "player" : null;
     const winnerSide = matchWinner;
 
-    const playerDeckCards = useMemo(
-        () => (playerDeck || []).map((n, idx) => convertToGameCard(n, idx)),
-        [playerDeck]
-    );
+    const playerDeckCards = useMemo(() => playerDeck.map((n, idx) => nftToCard(n, idx)), [playerDeck]);
     const loserDeck = loserSide === "enemy" ? enemyDeck : loserSide === "player" ? playerDeckCards : [];
 
     const stage2OpponentDeposits = useMemo(() => {
@@ -798,9 +769,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai", pvp
             if (!opp) throw new Error("Opponent not found in match");
 
             const loserUserId = Number(opp.user_id);
-            const picked = deposits.find(
-                (d) => String(d.id) === String(claimPickId) && Number(d.user_id) === loserUserId
-            );
+            const picked = deposits.find((d) => String(d.id) === String(claimPickId) && Number(d.user_id) === loserUserId);
             if (!picked) throw new Error("Selected deposit not found (or not opponent deposit)");
 
             await apiFetch(`/api/matches/${matchId}/finish`, {
@@ -846,9 +815,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai", pvp
                 </button>
 
                 {!deckOk ? (
-                    <div
-                        style={{ color: "#fff", padding: 20, textAlign: "center", gridColumn: "1 / -1", fontSize: 14 }}
-                    >
+                    <div style={{ color: "#fff", padding: 20, textAlign: "center", gridColumn: "1 / -1", fontSize: 14 }}>
                         ⚠️ Ошибка: активная колода не содержит 5 карт.
                         <br />
                         Вернитесь в Инвентарь и выберите 5 NFT.
@@ -858,7 +825,9 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai", pvp
                 {deckOk ? (
                     <>
                         <div className="hud-corner hud-score red hud-near-left">🟥 {boardScore.red}</div>
-                        <div className="hud-corner hud-score blue hud-near-right">{boardScore.blue} 🟦</div>
+                        <div className="hud-corner hud-score blue hud-near-right">
+                            {boardScore.blue} 🟦
+                        </div>
 
                         <PlayerBadge side="enemy" name={enemyName} avatarUrl={enemyAvatar} active={turn === "enemy"} />
                         <PlayerBadge side="player" name={myName} avatarUrl={myAvatar} active={turn === "player"} />
@@ -963,7 +932,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai", pvp
                                 <div className="game-over-box" style={{ minWidth: 320 }}>
                                     <h2 style={{ margin: 0 }}>Загрузка соперника…</h2>
                                     <div style={{ opacity: 0.85, fontSize: 12, marginTop: 10 }}>
-                                        {isPvP ? "Получаем колоду оппонента..." : "Получаем AI deck из backend…"}
+                                        Получаем AI deck из backend…
                                     </div>
                                 </div>
                             </div>
@@ -1039,7 +1008,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai", pvp
                                                                 </div>
                                                             ) : (
                                                                 <div style={{ opacity: 0.85, fontSize: 12, marginBottom: 10 }}>
-                                                                    Нет депозитов соперника в матче. Stage2 claim невозможен.
+                                                                    Нет депозитов соперника в матче. Stage2 claim невозможен (нужно lock 5 NFT до боя).
                                                                 </div>
                                                             )}
                                                         </>
@@ -1089,21 +1058,17 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai", pvp
 
                                                     {isStage2 && !nearConnected ? (
                                                         <div style={{ marginTop: 8, opacity: 0.85, fontSize: 12 }}>
-                                                            Для Stage2 claim нужен подключённый NEAR кошелёк.
+                                                            Для Stage2 claim нужен подключённый NEAR кошелёк (HERE).
                                                         </div>
                                                     ) : null}
                                                 </>
                                             ) : (
-                                                <div style={{ opacity: 0.85, fontSize: 12, marginBottom: 10 }}>
-                                                    (Пока AI не выбирает.)
-                                                </div>
+                                                <div style={{ opacity: 0.85, fontSize: 12, marginBottom: 10 }}>(Пока AI не выбирает.)</div>
                                             )}
                                         </>
                                     )}
 
-                                    <div
-                                        style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 10, flexWrap: "wrap" }}
-                                    >
+                                    <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 10, flexWrap: "wrap" }}>
                                         {!matchOver && <button onClick={onNextRound}>Следующий раунд</button>}
                                         {matchOver && <button onClick={resetMatch}>Новый матч</button>}
                                         <button onClick={onExit}>Меню</button>
@@ -1163,13 +1128,7 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
         return (
             <div className="card back" aria-hidden="true">
                 <div className="card-back-inner">
-                    <img
-                        className="card-back-logo-img"
-                        src="/ui/cardclash-logo.png?v=3"
-                        alt="CardClash"
-                        draggable="false"
-                        loading="lazy"
-                    />
+                    <img className="card-back-logo-img" src="/ui/cardclash-logo.png?v=3" alt="CardClash" draggable="false" loading="lazy" />
                 </div>
             </div>
         );
@@ -1192,7 +1151,7 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
             <div className="card-anim">
                 <img
                     className="card-art-img"
-                    src={card.imageUrl || card.image || "/cards/card.jpg"}
+                    src={card.imageUrl || "/cards/card.jpg"}
                     alt=""
                     draggable="false"
                     loading="lazy"
@@ -1211,10 +1170,10 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
                 ) : null}
 
                 <div className="tt-badge" />
-                <span className="tt-num top">{showVal(card.values?.top ?? "?")}</span>
-                <span className="tt-num left">{showVal(card.values?.left ?? "?")}</span>
-                <span className="tt-num right">{showVal(card.values?.right ?? "?")}</span>
-                <span className="tt-num bottom">{showVal(card.values?.bottom ?? "?")}</span>
+                <span className="tt-num top">{showVal(card.values.top)}</span>
+                <span className="tt-num left">{showVal(card.values.left)}</span>
+                <span className="tt-num right">{showVal(card.values.right)}</span>
+                <span className="tt-num bottom">{showVal(card.values.bottom)}</span>
             </div>
         </div>
     );
