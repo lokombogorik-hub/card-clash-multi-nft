@@ -11,6 +11,7 @@ function nftKey(n) {
 }
 
 var ELEM_ICON = { Earth: "🪨", Fire: "🔥", Water: "💧", Poison: "☠️", Holy: "✨", Thunder: "⚡", Wind: "🌪️", Ice: "❄️" };
+var ELEMENTS = ["Earth", "Fire", "Water", "Poison", "Holy", "Thunder", "Wind", "Ice"];
 
 function getRarityFromTokenId(tokenId, totalSupply) {
     totalSupply = totalSupply || 10000;
@@ -22,10 +23,58 @@ function getRarityFromTokenId(tokenId, totalSupply) {
     return { key: "common", border: "#22c55e", glow: "rgba(34,197,94,0.50)", min: 1, max: 7 };
 }
 
-function genStats(tokenId, r) {
-    var seed = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
-    var rnd = function (lo, hi) { seed = (seed * 9301 + 49297) % 233280; return lo + Math.floor((seed / 233280) * (hi - lo + 1)); };
-    return { top: rnd(r.min, r.max), right: rnd(r.min, r.max), bottom: rnd(r.min, r.max), left: rnd(r.min, r.max) };
+/**
+ * Deterministic stats generation based on token_id
+ * Same token_id will ALWAYS produce same stats
+ */
+function genStats(tokenId, rarity) {
+    // Use token_id as seed for deterministic random
+    var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
+
+    // LCG (Linear Congruential Generator) for deterministic "random"
+    var seed = num;
+    var next = function () {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        return seed;
+    };
+
+    var rnd = function (lo, hi) {
+        return lo + (next() % (hi - lo + 1));
+    };
+
+    var min = rarity.min;
+    var max = rarity.max;
+
+    return {
+        top: rnd(min, max),
+        right: rnd(min, max),
+        bottom: rnd(min, max),
+        left: rnd(min, max)
+    };
+}
+
+/**
+ * Deterministic element generation based on token_id
+ * Same token_id will ALWAYS have same element (or null)
+ * ~70% chance to have an element
+ */
+function genElement(tokenId) {
+    var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
+
+    // Different seed offset for element vs stats
+    var seed = num * 7919 + 104729; // Prime numbers for different distribution
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+
+    var chance = (seed % 100) / 100;
+
+    if (chance < 0.7) {
+        // Has element
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        var elemIdx = seed % ELEMENTS.length;
+        return ELEMENTS[elemIdx];
+    }
+
+    return null; // No element
 }
 
 function safeParse(s) {
@@ -136,7 +185,6 @@ export default function Inventory({ token, onDeckReady }) {
         return m;
     }, [selectedArr]);
 
-    // Get full NFT objects for selected cards
     var selectedNfts = useMemo(function () {
         return selectedArr.map(function (key) {
             return nfts.find(function (n) { return nftKey(n) === key; });
@@ -163,16 +211,28 @@ export default function Inventory({ token, onDeckReady }) {
                         items = tokens.map(function (t) {
                             var extra = safeParse(t.metadata ? t.metadata.extra : null);
                             var r = getRarityFromTokenId(t.token_id, 10000);
-                            var st = (extra && extra.stats && extra.stats.top != null) ? extra.stats : genStats(t.token_id, r);
+
+                            // Use extra stats/element if available from NFT metadata
+                            // Otherwise generate deterministically from token_id
+                            var st = (extra && extra.stats && typeof extra.stats.top === "number")
+                                ? extra.stats
+                                : genStats(t.token_id, r);
+
+                            var elem = (extra && extra.element)
+                                ? extra.element
+                                : genElement(t.token_id);
+
                             return {
                                 key: "near:" + nftContractId + ":" + t.token_id,
-                                chain: "near", contractId: nftContractId,
-                                tokenId: t.token_id, token_id: t.token_id,
+                                chain: "near",
+                                contractId: nftContractId,
+                                tokenId: t.token_id,
+                                token_id: t.token_id,
                                 name: (t.metadata && t.metadata.title) || ("Card #" + t.token_id),
                                 imageUrl: (t.metadata && t.metadata.media) || "",
                                 originalImageUrl: (t.metadata && t.metadata.originalMedia) || "",
                                 stats: st,
-                                element: (extra && extra.element) || null,
+                                element: elem,
                                 rarity: r,
                                 rank: r.key,
                                 rankLabel: r.key[0].toUpperCase(),
@@ -217,14 +277,15 @@ export default function Inventory({ token, onDeckReady }) {
         setSaving(true);
         setError("");
         try {
-            // Save card keys to backend
             await apiFetch("/api/decks/active", {
                 token: token,
                 method: "PUT",
-                body: JSON.stringify({ cards: selectedArr })
+                body: JSON.stringify({
+                    cards: selectedArr,
+                    full_cards: selectedNfts
+                })
             });
             setSaving(false);
-            // Pass full NFT data to App for the game
             onDeckReady?.(selectedNfts);
         } catch (e) {
             setError(e.message || "Save failed");

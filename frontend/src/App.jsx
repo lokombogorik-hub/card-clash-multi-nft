@@ -49,6 +49,7 @@ function AppContent() {
     var [token, setToken] = useState(null);
     var [me, setMe] = useState(null);
     var [playerDeck, setPlayerDeck] = useState(null);
+    var [pvpMatchData, setPvpMatchData] = useState(null);
 
     var [gameMode, setGameMode] = useState("ai");
     var [stage2LockOpen, setStage2LockOpen] = useState(false);
@@ -149,7 +150,6 @@ function AppContent() {
         setScreen("inventory");
     };
 
-    // Called when deck is saved in Inventory - receives full NFT data
     var onDeckReady = function (selectedNfts) {
         if (Array.isArray(selectedNfts) && selectedNfts.length === 5) {
             setPlayerDeck(selectedNfts);
@@ -160,6 +160,7 @@ function AppContent() {
     var onExitGame = function () {
         setScreen("home");
         setPlayerDeck(null);
+        setPvpMatchData(null);
         setStage2MatchId("");
         setGameMode("ai");
     };
@@ -177,7 +178,14 @@ function AppContent() {
                 <StormBg />
                 <div className={"game-host" + (showRotate ? " is-hidden" : "")}>
                     {playerDeck && playerDeck.length === 5 ? (
-                        <Game onExit={onExitGame} me={me} playerDeck={playerDeck} matchId={stage2MatchId} mode={gameMode} />
+                        <Game
+                            onExit={onExitGame}
+                            me={me}
+                            playerDeck={playerDeck}
+                            matchId={stage2MatchId}
+                            mode={gameMode}
+                            pvpMatchData={pvpMatchData}
+                        />
                     ) : (
                         <div style={{ color: "#fff", padding: 20 }}>Loading deck...</div>
                     )}
@@ -228,27 +236,57 @@ function AppContent() {
                     <Matchmaking
                         me={me}
                         onBack={function () { setScreen("inventory"); }}
-                        onMatched={function (data) {
+                        onMatched={async function (data) {
                             setGameMode(data.mode || "ai");
 
                             if (!playerDeck || playerDeck.length !== 5) {
-                                alert("Колода не выбрана. Вернись в инвентарь.");
-                                setScreen("inventory");
-                                return;
+                                // Try to load from backend
+                                try {
+                                    var t = token || getStoredToken();
+                                    var deckRes = await apiFetch("/api/decks/active/full", { token: t });
+                                    if (deckRes && Array.isArray(deckRes.cards) && deckRes.cards.length === 5) {
+                                        setPlayerDeck(deckRes.cards);
+                                    } else {
+                                        alert("Колода не выбрана. Вернись в инвентарь.");
+                                        setScreen("inventory");
+                                        return;
+                                    }
+                                } catch (e) {
+                                    alert("Колода не выбрана. Вернись в инвентарь.");
+                                    setScreen("inventory");
+                                    return;
+                                }
                             }
 
                             if (data.mode === "ai") {
                                 setStage2MatchId("");
+                                setPvpMatchData(null);
                                 setScreen("game");
                                 return;
                             }
-                            if (!stage2Enabled) {
-                                setStage2MatchId(data.matchId || "");
-                                setScreen("game");
+
+                            // PvP mode - load match data with opponent's deck
+                            if (data.mode === "pvp" && data.matchId) {
+                                try {
+                                    var t = token || getStoredToken();
+                                    var matchData = await apiFetch("/api/matches/" + data.matchId, { token: t });
+                                    setPvpMatchData(matchData);
+                                    setStage2MatchId(data.matchId);
+
+                                    if (stage2Enabled) {
+                                        setStage2LockOpen(true);
+                                    } else {
+                                        setScreen("game");
+                                    }
+                                } catch (e) {
+                                    alert("Ошибка загрузки матча: " + (e.message || e));
+                                    setScreen("matchmaking");
+                                }
                                 return;
                             }
+
                             setStage2MatchId(data.matchId || "");
-                            setStage2LockOpen(true);
+                            setScreen("game");
                         }}
                     />
                 )}
