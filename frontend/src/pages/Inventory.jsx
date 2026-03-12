@@ -589,12 +589,29 @@ export default function Inventory({ token, onDeckReady }) {
         setSaving(true);
         setError("");
         try {
-            var result = await apiFetch("/api/decks/active", {
+            // Преобразуем NFT в формат для backend
+            var cardsPayload = selectedNfts.map(function (nft) {
+                return {
+                    id: nft.key || nft.tokenId || nft.token_id,
+                    token_id: nft.tokenId || nft.token_id,
+                    name: nft.name,
+                    imageUrl: nft.imageUrl,
+                    image: nft.imageUrl,
+                    rarity: nft.rank || (nft.rarity && nft.rarity.key) || "common",
+                    rank: nft.rank || (nft.rarity && nft.rarity.key) || "common",
+                    element: nft.element,
+                    values: nft.stats,
+                    stats: nft.stats,
+                    contract_id: nft.contractId
+                };
+            });
+
+            var result = await apiFetch("/api/decks/save", {
                 token: token,
-                method: "PUT",
+                method: "POST",
                 body: JSON.stringify({
                     cards: selectedArr,
-                    full_cards: selectedNfts
+                    full_cards: cardsPayload
                 })
             });
             console.log("Deck saved:", result);
