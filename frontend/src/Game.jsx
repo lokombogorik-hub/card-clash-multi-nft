@@ -444,7 +444,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
         const wsUrl = getWsUrl(matchId);
         console.log("[WS] Connecting to:", wsUrl);
-
+        alert("WS URL: " + wsUrl);
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
 
