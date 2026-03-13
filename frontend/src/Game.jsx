@@ -312,28 +312,11 @@ function getFallbackEnemyDeck() {
     return Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`));
 }
 
-function getWsUrl(matchId) {
-    // Use VITE_API_BASE_URL (Railway backend)
-    const apiUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || "";
-
-    if (!apiUrl) {
-        console.error("[WS] No API URL configured!");
-        return null;
-    }
-
-    // Convert https:// to wss:// or http:// to ws://
-    const wsBase = apiUrl.replace(/^https:/, "wss:").replace(/^http:/, "ws:");
-
-    const url = `${wsBase}/ws/match/${matchId}`;
-    console.log("[WS] Built URL:", url, "from API:", apiUrl);
-
-    return url;
-}
-
 export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const revealTimerRef = useRef(null);
     const wsRef = useRef(null);
     const pingIntervalRef = useRef(null);
+    const mountedRef = useRef(true);
 
     const {
         connected: nearConnected,
@@ -345,14 +328,13 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const [wsConnected, setWsConnected] = useState(false);
     const [wsError, setWsError] = useState("");
     const [pvpState, setPvpState] = useState(null);
-    const [myRole, setMyRole] = useState(null); // "player1" or "player2"
+    const [myRole, setMyRole] = useState(null);
     const [opponentConnected, setOpponentConnected] = useState(false);
     const [waitingForOpponent, setWaitingForOpponent] = useState(false);
     const [reconnectDeadline, setReconnectDeadline] = useState(null);
 
     const isPvP = mode === "pvp" && Boolean(matchId);
 
-    // escrowClaim built on top of signAndSendTransaction
     const escrowClaim = async ({ matchId: mId, winnerAccountId, loserNftContractId, loserTokenId }) => {
         const escrowContractId = (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim();
         if (!escrowContractId) throw new Error("Escrow contract not configured");
@@ -438,23 +420,17 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const deckOk = Array.isArray(playerDeck) && playerDeck.length === 5;
 
     // ==================== PvP WebSocket Logic ====================
-    // ==================== PvP WebSocket Logic ====================
-
-    // ==================== PvP WebSocket Logic ====================
-
-    const wsInitialized = useRef(false);
 
     useEffect(() => {
         if (!isPvP || !matchId) return;
-        if (wsInitialized.current) return; // Prevent double init
+
+        mountedRef.current = true;
 
         const token = getStoredToken();
         if (!token) {
             setWsError("No auth token");
             return;
         }
-
-        wsInitialized.current = true;
 
         const apiUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || "";
         if (!apiUrl) {
@@ -467,24 +443,45 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
         console.log("[WS] Connecting to:", wsUrl);
 
-        let ws;
+        let ws = null;
         let reconnectAttempts = 0;
-        const maxReconnectAttempts = 3;
+        const maxReconnectAttempts = 5;
+        let reconnectTimeout = null;
 
         const connect = () => {
-            ws = new WebSocket(wsUrl);
-            wsRef.current = ws;
+            if (!mountedRef.current) return;
+
+            try {
+                ws = new WebSocket(wsUrl);
+                wsRef.current = ws;
+            } catch (err) {
+                console.error("[WS] Failed to create WebSocket:", err);
+                setWsError("Failed to connect");
+                return;
+            }
 
             ws.onopen = () => {
+                if (!mountedRef.current) {
+                    ws.close();
+                    return;
+                }
                 console.log("[WS] Connected, sending auth...");
                 reconnectAttempts = 0;
-                ws.send(JSON.stringify({ type: "auth", token }));
+                setWsError("");
+
+                try {
+                    ws.send(JSON.stringify({ type: "auth", token }));
+                } catch (err) {
+                    console.error("[WS] Failed to send auth:", err);
+                }
             };
 
             ws.onmessage = (event) => {
+                if (!mountedRef.current) return;
+
                 try {
                     const data = JSON.parse(event.data);
-                    console.log("[WS] Message:", data.type);
+                    console.log("[WS] Message:", data.type, data);
 
                     switch (data.type) {
                         case "connected":
@@ -534,7 +531,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                             break;
 
                         case "pong":
-                            // Heartbeat response
                             break;
 
                         default:
@@ -553,46 +549,65 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                 console.log("[WS] Disconnected, code:", event.code, "reason:", event.reason);
                 setWsConnected(false);
 
-                // Try to reconnect if game is still active
-                if (reconnectAttempts < maxReconnectAttempts && !matchOver && !roundOver) {
+                if (!mountedRef.current) return;
+
+                // Don't reconnect if game is over or closed normally
+                if (matchOver || roundOver || event.code === 1000) {
+                    return;
+                }
+
+                // Try to reconnect
+                if (reconnectAttempts < maxReconnectAttempts) {
                     reconnectAttempts++;
-                    console.log(`[WS] Reconnecting... attempt ${reconnectAttempts}`);
-                    setTimeout(connect, 2000);
+                    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 10000);
+                    console.log(`[WS] Reconnecting in ${delay}ms... attempt ${reconnectAttempts}`);
+                    reconnectTimeout = setTimeout(connect, delay);
+                } else {
+                    setWsError("Connection lost. Please refresh.");
                 }
             };
         };
 
         connect();
 
-        // Ping interval to keep connection alive
+        // Ping interval
         pingIntervalRef.current = setInterval(() => {
             if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                wsRef.current.send(JSON.stringify({ type: "ping" }));
+                try {
+                    wsRef.current.send(JSON.stringify({ type: "ping" }));
+                } catch (err) {
+                    console.error("[WS] Ping failed:", err);
+                }
             }
-        }, 15000); // Every 15 seconds
+        }, 20000);
 
         return () => {
-            wsInitialized.current = false;
-            if (pingIntervalRef.current) {
-                clearInterval(pingIntervalRef.current);
-            }
+            mountedRef.current = false;
+            if (reconnectTimeout) clearTimeout(reconnectTimeout);
+            if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
             if (wsRef.current) {
-                wsRef.current.close();
+                wsRef.current.onclose = null; // Prevent reconnect on cleanup
+                wsRef.current.close(1000, "Component unmounted");
+                wsRef.current = null;
             }
         };
     }, [isPvP, matchId]);
 
     const handleGameState = (data) => {
+        if (!mountedRef.current) return;
+
         const state = data.state;
         setPvpState(state);
 
         // Update board
         if (state.board) {
+            const myPlayerId = myRole === "player1" ? state.player1_id : state.player2_id;
             const newBoard = state.board.map((cell, idx) => {
                 if (!cell) return null;
                 return {
                     ...cell,
-                    owner: cell.owner === state.player1_id ? "player" : "enemy",
+                    values: cell.values || cell.stats || { top: 5, right: 5, bottom: 5, left: 5 },
+                    owner: cell.owner === myPlayerId ? "player" : "enemy",
                     placeKey: boardRef.current[idx]?.placeKey || 0,
                     captureKey: boardRef.current[idx]?.captureKey || 0,
                 };
@@ -606,7 +621,8 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         }
 
         // Update turn
-        const isMyTurn = state.current_turn === (myRole === "player1" ? state.player1_id : state.player2_id);
+        const myPlayerId = myRole === "player1" ? state.player1_id : state.player2_id;
+        const isMyTurn = state.current_turn === myPlayerId;
         setTurn(isMyTurn ? "player" : "enemy");
 
         // Update hand
@@ -618,11 +634,27 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             setHands(h => ({ ...h, player: myHand }));
         }
 
+        // Update enemy hand count for display
+        const enemyHandCount = myRole === "player1"
+            ? state.player2_hand_count
+            : state.player1_hand_count;
+
+        if (enemyHandCount !== undefined) {
+            setHands(h => ({
+                ...h,
+                enemy: Array(enemyHandCount).fill(null).map((_, i) => ({
+                    id: `enemy_hidden_${i}`,
+                    owner: "enemy",
+                    hidden: true,
+                })),
+            }));
+        }
+
         // Update status
         if (state.status === "finished") {
             setMatchOver(true);
             setRoundOver(true);
-            const iWon = state.winner === (myRole === "player1" ? state.player1_id : state.player2_id);
+            const iWon = state.winner === myPlayerId;
             setRoundWinner(iWon ? "player" : "enemy");
         }
 
@@ -630,11 +662,16 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     };
 
     const handleCardPlayed = (data) => {
+        if (!mountedRef.current) return;
+
         const { cell_index, card, captured, player_id } = data;
 
-        // Determine owner
-        const isMyCard = (myRole === "player1" && player_id === pvpState?.player1_id) ||
-            (myRole === "player2" && player_id === pvpState?.player2_id);
+        // Determine owner relative to me
+        const state = pvpState;
+        if (!state) return;
+
+        const myPlayerId = myRole === "player1" ? state.player1_id : state.player2_id;
+        const isMyCard = player_id === myPlayerId;
         const owner = isMyCard ? "player" : "enemy";
 
         // Update board
@@ -642,6 +679,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             const next = [...prev];
             next[cell_index] = {
                 ...nftToCard(card, 0),
+                values: card.values || card.stats || { top: 5, right: 5, bottom: 5, left: 5 },
                 owner,
                 placeKey: Date.now(),
             };
@@ -662,11 +700,21 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             return next;
         });
 
-        // Remove card from appropriate hand
+        // Remove card from hand if it's my card
         if (isMyCard) {
+            const cardId = card.id || card.token_id || card.tokenId;
             setHands(h => ({
                 ...h,
-                player: h.player.filter(c => c.id !== card.id),
+                player: h.player.filter(c => {
+                    const cId = c.id || c.token_id || c.tokenId;
+                    return cId !== cardId;
+                }),
+            }));
+        } else {
+            // Reduce enemy hand count
+            setHands(h => ({
+                ...h,
+                enemy: h.enemy.slice(0, -1),
             }));
         }
 
@@ -674,15 +722,26 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     };
 
     const handleTurnChange = (data) => {
-        const isMyTurn = data.current_turn === (myRole === "player1" ? pvpState?.player1_id : pvpState?.player2_id);
+        if (!mountedRef.current) return;
+
+        const state = pvpState;
+        if (!state) return;
+
+        const myPlayerId = myRole === "player1" ? state.player1_id : state.player2_id;
+        const isMyTurn = data.current_turn === myPlayerId;
         setTurn(isMyTurn ? "player" : "enemy");
     };
 
     const handleGameOver = (data) => {
+        if (!mountedRef.current) return;
+
         setMatchOver(true);
         setRoundOver(true);
 
-        const myPlayerId = myRole === "player1" ? pvpState?.player1_id : pvpState?.player2_id;
+        const state = pvpState;
+        if (!state) return;
+
+        const myPlayerId = myRole === "player1" ? state.player1_id : state.player2_id;
         const iWon = data.winner === myPlayerId;
         setRoundWinner(iWon ? "player" : "enemy");
 
@@ -693,17 +752,24 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
     const sendPvPMove = (cardIndex, cellIndex) => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-            console.error("[WS] Not connected");
+            console.error("[WS] Not connected, state:", wsRef.current?.readyState);
+            setWsError("Connection lost, reconnecting...");
             return false;
         }
 
-        wsRef.current.send(JSON.stringify({
-            type: "play_card",
-            card_index: cardIndex,
-            cell_index: cellIndex,
-        }));
-
-        return true;
+        try {
+            wsRef.current.send(JSON.stringify({
+                type: "play_card",
+                card_index: cardIndex,
+                cell_index: cellIndex,
+            }));
+            console.log("[WS] Sent play_card:", { card_index: cardIndex, cell_index: cellIndex });
+            return true;
+        } catch (err) {
+            console.error("[WS] Failed to send:", err);
+            setWsError("Failed to send move");
+            return false;
+        }
     };
 
     // ==================== End PvP WebSocket Logic ====================
@@ -726,10 +792,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
     // Load AI deck (only for AI mode)
     useEffect(() => {
-        if (isPvP) {
-            // PvP: deck comes from WebSocket
-            return;
-        }
+        if (isPvP) return;
 
         let alive = true;
 
@@ -760,7 +823,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
     useEffect(() => {
         if (!deckOk) return;
-        if (isPvP) return; // PvP handles hands via WebSocket
+        if (isPvP) return;
 
         setHands((h) => ({
             ...h,
@@ -769,7 +832,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     }, [playerDeck, isPvP]);
 
     useEffect(() => {
-        if (isPvP) return; // PvP handles hands via WebSocket
+        if (isPvP) return;
 
         setHands((h) => ({
             ...h,
@@ -802,7 +865,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     };
 
     const startRound = ({ keepSeries = true, enemyDeckOverride = null } = {}) => {
-        if (isPvP) return; // PvP doesn't support local round reset
+        if (isPvP) return;
 
         const ed = enemyDeckOverride || enemyDeck;
 
@@ -840,7 +903,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
     const resetMatch = () => {
         if (isPvP) {
-            // For PvP, just exit
             onExit();
             return;
         }
@@ -877,9 +939,11 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         if (frozen[cellIdx] > 0) return;
 
         if (isPvP) {
-            // PvP: send move via WebSocket
             const cardIndex = hands.player.findIndex(c => c.id === selected.id);
-            if (cardIndex === -1) return;
+            if (cardIndex === -1) {
+                console.error("[Game] Card not found in hand");
+                return;
+            }
 
             if (sendPvPMove(cardIndex, cellIdx)) {
                 setSelected(null);
@@ -961,7 +1025,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
     // AI enemy turn (only for AI mode)
     useEffect(() => {
-        if (isPvP) return; // PvP is handled by server
+        if (isPvP) return;
         if (turn !== "enemy" || roundOver || matchOver) return;
 
         const t = setTimeout(() => {
@@ -1006,7 +1070,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
     // Check round/match end (AI mode only)
     useEffect(() => {
-        if (isPvP) return; // PvP handles this via WebSocket
+        if (isPvP) return;
         if (roundOver || matchOver) return;
         if (board.some((c) => c === null)) return;
 
@@ -1077,7 +1141,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         if (winnerSide !== "player") return;
         if (!loserSide) return;
 
-        // Stage1 (AI)
         if (!isStage2) {
             if (!claimPickId) return;
             setClaimDone(true);
@@ -1085,7 +1148,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             return;
         }
 
-        // Stage2 (PvP on-chain)
         setStage2Err("");
         setStage2Busy(true);
 
@@ -1141,6 +1203,13 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             setStage2Busy(false);
         }
     };
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            mountedRef.current = false;
+        };
+    }, []);
 
     // PvP: Show waiting/connecting screen
     if (isPvP && (!wsConnected || waitingForOpponent)) {
@@ -1254,12 +1323,13 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
                         <div className="hand left">
                             <div className="hand-grid">
-                                {(isPvP ? Array(pvpState?.player2_hand_count || 0).fill(null) : hands.enemy).map((c, i) => {
+                                {hands.enemy.map((c, i) => {
                                     const { col, row } = posForHandIndex(i);
                                     const isRevealed = !isPvP && enemyRevealId === c?.id;
+                                    const isHidden = isPvP || c?.hidden;
                                     return (
                                         <div key={c?.id || `enemy_${i}`} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
-                                            {isRevealed ? <Card card={c} disabled /> : <Card hidden />}
+                                            {isRevealed ? <Card card={c} disabled /> : isHidden ? <Card hidden /> : <Card card={c} disabled />}
                                         </div>
                                     );
                                 })}
@@ -1565,13 +1635,14 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
         );
     }
 
-    const sd = card.element && cellElement ? (card.element === cellElement ? +1 : -1) : 0;
+    const cardValues = card?.values || card?.stats || { top: 5, right: 5, bottom: 5, left: 5 };
+    const sd = card?.element && cellElement ? (card.element === cellElement ? +1 : -1) : 0;
 
     return (
         <div
             className={[
                 "card",
-                card.owner === "player" ? "player" : "enemy",
+                card?.owner === "player" ? "player" : "enemy",
                 selected ? "selected" : "",
                 disabled ? "disabled" : "",
                 placedAnim ? "is-placed" : "",
@@ -1582,7 +1653,7 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
             <div className="card-anim">
                 <img
                     className="card-art-img"
-                    src={card.imageUrl || "/cards/card.jpg"}
+                    src={card?.imageUrl || "/cards/card.jpg"}
                     alt=""
                     draggable="false"
                     loading="lazy"
@@ -1593,7 +1664,7 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
                     }}
                 />
 
-                {card.element ? (
+                {card?.element ? (
                     <div className="card-elem-pill" title={card.element}>
                         <span className="card-elem-ic">{ELEM_ICON[card.element]}</span>
                         {sd !== 0 ? <span className="card-elem-delta">{sd > 0 ? "+1" : "-1"}</span> : null}
@@ -1601,10 +1672,10 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
                 ) : null}
 
                 <div className="tt-badge" />
-                <span className="tt-num top">{showVal(card.values?.top ?? "?")}</span>
-                <span className="tt-num left">{showVal(card.values?.left ?? "?")}</span>
-                <span className="tt-num right">{showVal(card.values?.right ?? "?")}</span>
-                <span className="tt-num bottom">{showVal(card.values?.bottom ?? "?")}</span>
+                <span className="tt-num top">{showVal(cardValues.top ?? "?")}</span>
+                <span className="tt-num left">{showVal(cardValues.left ?? "?")}</span>
+                <span className="tt-num right">{showVal(cardValues.right ?? "?")}</span>
+                <span className="tt-num bottom">{showVal(cardValues.bottom ?? "?")}</span>
             </div>
         </div>
     );
