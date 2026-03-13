@@ -421,6 +421,10 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
     // ==================== PvP WebSocket Logic ====================
 
+    // Store player IDs from server
+    const [myPlayerId, setMyPlayerId] = useState(null);
+    const [opponentPlayerId, setOpponentPlayerId] = useState(null);
+
     useEffect(() => {
         if (!isPvP || !matchId) return;
 
@@ -485,19 +489,23 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
                     switch (data.type) {
                         case "connected":
+                            console.log("[WS] Connected as", data.you_are, "player_id:", data.player_id);
                             setWsConnected(true);
                             setMyRole(data.you_are);
+                            setMyPlayerId(data.player_id);
                             setWaitingForOpponent(true);
                             setWsError("");
                             break;
 
                         case "player_connected":
+                            console.log("[WS] Opponent connected:", data.player_id);
                             setOpponentConnected(true);
                             setWaitingForOpponent(false);
                             setReconnectDeadline(null);
                             break;
 
                         case "player_disconnected":
+                            console.log("[WS] Opponent disconnected");
                             setOpponentConnected(false);
                             if (data.reconnect_deadline) {
                                 setReconnectDeadline(new Date(data.reconnect_deadline));
@@ -505,6 +513,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                             break;
 
                         case "game_start":
+                            console.log("[WS] Game starting, first turn:", data.current_turn);
                             setWaitingForOpponent(false);
                             setOpponentConnected(true);
                             break;
@@ -533,6 +542,15 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                         case "pong":
                             break;
 
+                        case "ping":
+                            // Server sent ping, respond with pong
+                            try {
+                                ws.send(JSON.stringify({ type: "pong" }));
+                            } catch (e) {
+                                console.error("[WS] Failed to send pong:", e);
+                            }
+                            break;
+
                         default:
                             console.log("[WS] Unknown message type:", data.type);
                     }
@@ -552,7 +570,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                 if (!mountedRef.current) return;
 
                 // Don't reconnect if game is over or closed normally
-                if (matchOver || roundOver || event.code === 1000) {
+                if (matchOver || event.code === 1000) {
                     return;
                 }
 
@@ -570,7 +588,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
         connect();
 
-        // Ping interval
+        // Ping interval - send ping every 15 seconds
         pingIntervalRef.current = setInterval(() => {
             if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
                 try {
@@ -579,14 +597,14 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                     console.error("[WS] Ping failed:", err);
                 }
             }
-        }, 20000);
+        }, 15000);
 
         return () => {
             mountedRef.current = false;
             if (reconnectTimeout) clearTimeout(reconnectTimeout);
             if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
             if (wsRef.current) {
-                wsRef.current.onclose = null; // Prevent reconnect on cleanup
+                wsRef.current.onclose = null;
                 wsRef.current.close(1000, "Component unmounted");
                 wsRef.current = null;
             }
@@ -597,17 +615,31 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         if (!mountedRef.current) return;
 
         const state = data.state;
+        console.log("[WS] handleGameState:", {
+            current_turn: state.current_turn,
+            my_player_id: myPlayerId,
+            you_are: data.you_are,
+            status: state.status,
+        });
+
         setPvpState(state);
+
+        // Determine my player ID from the message if not set
+        const effectiveMyPlayerId = myPlayerId || (data.you_are === "player1" ? state.player1_id : state.player2_id);
+
+        // Update myPlayerId if we got it from game_state
+        if (!myPlayerId && effectiveMyPlayerId) {
+            setMyPlayerId(effectiveMyPlayerId);
+        }
 
         // Update board
         if (state.board) {
-            const myPlayerId = myRole === "player1" ? state.player1_id : state.player2_id;
             const newBoard = state.board.map((cell, idx) => {
                 if (!cell) return null;
                 return {
                     ...cell,
                     values: cell.values || cell.stats || { top: 5, right: 5, bottom: 5, left: 5 },
-                    owner: cell.owner === myPlayerId ? "player" : "enemy",
+                    owner: cell.owner === effectiveMyPlayerId ? "player" : "enemy",
                     placeKey: boardRef.current[idx]?.placeKey || 0,
                     captureKey: boardRef.current[idx]?.captureKey || 0,
                 };
@@ -620,12 +652,16 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             setBoardElems(state.board_elements);
         }
 
-        // Update turn
-        const myPlayerId = myRole === "player1" ? state.player1_id : state.player2_id;
-        const isMyTurn = state.current_turn === myPlayerId;
+        // Update turn - this is the key fix!
+        const isMyTurn = String(state.current_turn) === String(effectiveMyPlayerId);
+        console.log("[WS] Turn check:", {
+            current_turn: state.current_turn,
+            effectiveMyPlayerId,
+            isMyTurn,
+        });
         setTurn(isMyTurn ? "player" : "enemy");
 
-        // Update hand
+        // Update my hand
         if (data.your_hand) {
             const myHand = data.your_hand.map((card, idx) => ({
                 ...nftToCard(card, idx),
@@ -635,7 +671,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         }
 
         // Update enemy hand count for display
-        const enemyHandCount = myRole === "player1"
+        const enemyHandCount = data.you_are === "player1"
             ? state.player2_hand_count
             : state.player1_hand_count;
 
@@ -654,7 +690,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         if (state.status === "finished") {
             setMatchOver(true);
             setRoundOver(true);
-            const iWon = state.winner === myPlayerId;
+            const iWon = state.winner === effectiveMyPlayerId;
             setRoundWinner(iWon ? "player" : "enemy");
         }
 
@@ -666,12 +702,17 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
         const { cell_index, card, captured, player_id } = data;
 
-        // Determine owner relative to me
-        const state = pvpState;
-        if (!state) return;
+        console.log("[WS] handleCardPlayed:", {
+            player_id,
+            cell_index,
+            card_id: card?.id,
+            captured,
+            myPlayerId,
+        });
 
-        const myPlayerId = myRole === "player1" ? state.player1_id : state.player2_id;
-        const isMyCard = player_id === myPlayerId;
+        // Determine owner relative to me
+        const effectiveMyPlayerId = myPlayerId || (myRole === "player1" ? pvpState?.player1_id : pvpState?.player2_id);
+        const isMyCard = String(player_id) === String(effectiveMyPlayerId);
         const owner = isMyCard ? "player" : "enemy";
 
         // Update board
@@ -714,7 +755,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             // Reduce enemy hand count
             setHands(h => ({
                 ...h,
-                enemy: h.enemy.slice(0, -1),
+                enemy: h.enemy.length > 0 ? h.enemy.slice(0, -1) : [],
             }));
         }
 
@@ -724,25 +765,28 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const handleTurnChange = (data) => {
         if (!mountedRef.current) return;
 
-        const state = pvpState;
-        if (!state) return;
+        const effectiveMyPlayerId = myPlayerId || (myRole === "player1" ? pvpState?.player1_id : pvpState?.player2_id);
+        const isMyTurn = String(data.current_turn) === String(effectiveMyPlayerId);
 
-        const myPlayerId = myRole === "player1" ? state.player1_id : state.player2_id;
-        const isMyTurn = data.current_turn === myPlayerId;
+        console.log("[WS] handleTurnChange:", {
+            current_turn: data.current_turn,
+            effectiveMyPlayerId,
+            isMyTurn,
+        });
+
         setTurn(isMyTurn ? "player" : "enemy");
     };
 
     const handleGameOver = (data) => {
         if (!mountedRef.current) return;
 
+        console.log("[WS] handleGameOver:", data);
+
         setMatchOver(true);
         setRoundOver(true);
 
-        const state = pvpState;
-        if (!state) return;
-
-        const myPlayerId = myRole === "player1" ? state.player1_id : state.player2_id;
-        const iWon = data.winner === myPlayerId;
+        const effectiveMyPlayerId = myPlayerId || (myRole === "player1" ? pvpState?.player1_id : pvpState?.player2_id);
+        const iWon = String(data.winner) === String(effectiveMyPlayerId);
         setRoundWinner(iWon ? "player" : "enemy");
 
         if (iWon) {
@@ -757,13 +801,14 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             return false;
         }
 
+        console.log("[WS] Sending play_card:", { card_index: cardIndex, cell_index: cellIndex });
+
         try {
             wsRef.current.send(JSON.stringify({
                 type: "play_card",
                 card_index: cardIndex,
                 cell_index: cellIndex,
             }));
-            console.log("[WS] Sent play_card:", { card_index: cardIndex, cell_index: cellIndex });
             return true;
         } catch (err) {
             console.error("[WS] Failed to send:", err);
@@ -773,7 +818,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     };
 
     // ==================== End PvP WebSocket Logic ====================
-
     const refreshStage2Match = async () => {
         if (!isStage2) return;
         try {
