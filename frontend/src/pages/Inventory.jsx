@@ -10,8 +10,9 @@ function nftKey(n) {
     return "mock:" + (n.id || Math.random().toString(36).slice(2));
 }
 
+// Earth заменён на 🌍 для лучшей поддержки
 var ELEM_ICON = {
-    Earth: "🪨",
+    Earth: "🌍",
     Fire: "🔥",
     Water: "💧",
     Poison: "☠️",
@@ -53,6 +54,7 @@ function getRarityFromTokenId(tokenId, totalSupply) {
     var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
     var pct = (num / totalSupply) * 100;
 
+    // max всегда 9, никогда не 10
     if (pct <= 10) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 6, max: 9 };
     if (pct <= 30) return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 5, max: 9 };
     if (pct <= 60) return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 3, max: 7 };
@@ -80,15 +82,21 @@ function storeCardData(tokenId, data) {
 function genStats(tokenId, rarity) {
     var stored = getStoredCardData(tokenId);
     if (stored && stored.stats && typeof stored.stats.top === "number") {
-        return stored.stats;
+        // Проверяем что нет 10
+        var s = stored.stats;
+        if (s.top <= 9 && s.right <= 9 && s.bottom <= 9 && s.left <= 9) {
+            return s;
+        }
+        // Если есть 10, пересоздаём
     }
 
-    var seed = createSeed(tokenId, "stats_v3");
+    var seed = createSeed(tokenId, "stats_v4");
     var rng = mulberry32(seed);
 
     var min = rarity.min;
     var max = rarity.max;
 
+    // Жёстко ограничиваем 1-9
     if (max > 9) max = 9;
     if (min < 1) min = 1;
 
@@ -98,6 +106,12 @@ function genStats(tokenId, rarity) {
         bottom: Math.floor(rng() * (max - min + 1)) + min,
         left: Math.floor(rng() * (max - min + 1)) + min
     };
+
+    // Дополнительная проверка
+    stats.top = Math.min(9, Math.max(1, stats.top));
+    stats.right = Math.min(9, Math.max(1, stats.right));
+    stats.bottom = Math.min(9, Math.max(1, stats.bottom));
+    stats.left = Math.min(9, Math.max(1, stats.left));
 
     var data = stored || {};
     data.stats = stats;
@@ -125,16 +139,6 @@ function genElement(tokenId) {
     return element;
 }
 
-function safeParse(s) {
-    try {
-        if (!s) return null;
-        if (typeof s === "object") return s;
-        return JSON.parse(String(s));
-    } catch (e) {
-        return null;
-    }
-}
-
 var nftCache = {
     accountId: null,
     items: [],
@@ -150,13 +154,11 @@ var NftImage = memo(function NftImage({ src, originalSrc, alt, cacheKey }) {
     var [loaded, setLoaded] = useState(cached ? cached.loaded : false);
     var [finalSrc, setFinalSrc] = useState(cached ? cached.finalSrc : (src || ""));
     var mountedRef = useRef(true);
-    var timerRef = useRef(null);
 
     useEffect(function () {
         mountedRef.current = true;
         return function () {
             mountedRef.current = false;
-            if (timerRef.current) clearTimeout(timerRef.current);
         };
     }, []);
 
@@ -182,9 +184,7 @@ var NftImage = memo(function NftImage({ src, originalSrc, alt, cacheKey }) {
         if (!mountedRef.current) return;
         if (stage === 0) {
             if (originalSrc && isIpfsUrl(originalSrc)) {
-                timerRef.current = setTimeout(function () {
-                    if (mountedRef.current) setStage(1);
-                }, 100);
+                setStage(1);
             } else {
                 setStage(-1);
             }
@@ -193,9 +193,7 @@ var NftImage = memo(function NftImage({ src, originalSrc, alt, cacheKey }) {
         if (stage >= 1) {
             var nextGw = stage;
             if (nextGw < GATEWAY_COUNT) {
-                timerRef.current = setTimeout(function () {
-                    if (mountedRef.current) setStage(nextGw + 1);
-                }, 200);
+                setStage(nextGw + 1);
             } else {
                 setStage(-1);
             }
@@ -250,7 +248,7 @@ var NftImage = memo(function NftImage({ src, originalSrc, alt, cacheKey }) {
                 onLoad={handleLoad}
                 style={{
                     opacity: loaded ? 1 : 0,
-                    transition: "opacity 0.3s",
+                    transition: "opacity 0.2s",
                     width: "100%",
                     height: "100%",
                     objectFit: "cover",
@@ -272,6 +270,14 @@ var InventoryCard = memo(function InventoryCard({
     var k = nftKey(nft);
     var stats = nft.stats || { top: 5, right: 5, bottom: 5, left: 5 };
 
+    // Проверяем что stats в диапазоне 1-9
+    var safeStats = {
+        top: Math.min(9, Math.max(1, stats.top || 5)),
+        right: Math.min(9, Math.max(1, stats.right || 5)),
+        bottom: Math.min(9, Math.max(1, stats.bottom || 5)),
+        left: Math.min(9, Math.max(1, stats.left || 5))
+    };
+
     var element = nft.element;
     if (!element) {
         var tokenId = nft.tokenId || nft.token_id || nft.id || k;
@@ -279,19 +285,6 @@ var InventoryCard = memo(function InventoryCard({
     }
 
     var r = nft.rarity || getRarityFromTokenId(nft.tokenId, 2000);
-
-    var onPD = function (e) {
-        var el = e.currentTarget;
-        var rect = el.getBoundingClientRect();
-        var cx = (e.clientX !== undefined ? e.clientX : rect.left + rect.width / 2) - rect.left;
-        var cy = (e.clientY !== undefined ? e.clientY : rect.top + rect.height / 2) - rect.top;
-        el.style.setProperty("--px", Math.max(0, Math.min(100, (cx / rect.width) * 100)) + "%");
-        el.style.setProperty("--py", Math.max(0, Math.min(100, (cy / rect.height) * 100)) + "%");
-        el.classList.remove("is-tapping");
-        void el.offsetWidth;
-        el.classList.add("is-tapping");
-        setTimeout(function () { el.classList.remove("is-tapping"); }, 520);
-    };
 
     var handleClick = useCallback(function () {
         onToggle(k);
@@ -301,7 +294,6 @@ var InventoryCard = memo(function InventoryCard({
         <button
             key={k}
             type="button"
-            onPointerDown={onPD}
             onClick={handleClick}
             className={"inv-card-game" + (isSelected ? " is-selected" : "")}
             title={nft.name}
@@ -325,15 +317,14 @@ var InventoryCard = memo(function InventoryCard({
             </div>
 
             <div className="inv-tt-badge" />
-            <span className="inv-tt-num top">{stats.top}</span>
-            <span className="inv-tt-num left">{stats.left}</span>
-            <span className="inv-tt-num right">{stats.right}</span>
-            <span className="inv-tt-num bottom">{stats.bottom}</span>
+            <span className="inv-tt-num top">{safeStats.top}</span>
+            <span className="inv-tt-num left">{safeStats.left}</span>
+            <span className="inv-tt-num right">{safeStats.right}</span>
+            <span className="inv-tt-num bottom">{safeStats.bottom}</span>
 
             {isSelected && (
                 <div className="inv-pick-badge">
                     <div className="inv-pick-badge-inner">
-                        <span className="inv-pick-check">✓</span>
                         <span className="inv-pick-no">{pickNo}</span>
                     </div>
                 </div>
@@ -474,6 +465,14 @@ export default function Inventory({ token, onDeckReady }) {
                     elem = genElement(tid);
                 }
 
+                // Гарантируем 1-9
+                var safeStats = {
+                    top: Math.min(9, Math.max(1, (nft.stats && nft.stats.top) || 5)),
+                    right: Math.min(9, Math.max(1, (nft.stats && nft.stats.right) || 5)),
+                    bottom: Math.min(9, Math.max(1, (nft.stats && nft.stats.bottom) || 5)),
+                    left: Math.min(9, Math.max(1, (nft.stats && nft.stats.left) || 5))
+                };
+
                 return {
                     id: nft.key || nft.tokenId || nft.token_id,
                     token_id: nft.tokenId || nft.token_id,
@@ -483,8 +482,8 @@ export default function Inventory({ token, onDeckReady }) {
                     rarity: nft.rank || (nft.rarity && nft.rarity.key) || "common",
                     rank: nft.rank || (nft.rarity && nft.rarity.key) || "common",
                     element: elem,
-                    values: nft.stats,
-                    stats: nft.stats,
+                    values: safeStats,
+                    stats: safeStats,
                     contract_id: nft.contractId
                 };
             });

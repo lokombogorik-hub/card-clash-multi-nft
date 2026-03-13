@@ -2765,6 +2765,14 @@ img {
     }
 }
 
+/* Wallet connector position */
+.wallet-connector-wrapper {
+    position: fixed;
+    top: calc(var(--safe-t, 0px) + 60px);
+    right: 12px;
+    z-index: 100;
+}
+
 /* =========================
    13) REDUCED MOTION
    ========================= */

@@ -199,7 +199,11 @@ function AppContent() {
         <div className="shell">
             <StormBg />
 
-            {showWalletConnector ? <WalletConnector /> : null}
+            {showWalletConnector ? (
+                <div className="wallet-connector-wrapper">
+                    <WalletConnector />
+                </div>
+            ) : null}
 
             <LockEscrowModal
                 open={stage2LockOpen}
@@ -240,7 +244,6 @@ function AppContent() {
                             setGameMode(data.mode || "ai");
 
                             if (!playerDeck || playerDeck.length !== 5) {
-                                // Try to load from backend
                                 try {
                                     var t = token || getStoredToken();
                                     var deckRes = await apiFetch("/api/decks/active/full", { token: t });
@@ -265,7 +268,6 @@ function AppContent() {
                                 return;
                             }
 
-                            // PvP mode - load match data with opponent's deck
                             if (data.mode === "pvp" && data.matchId) {
                                 try {
                                     var t = token || getStoredToken();

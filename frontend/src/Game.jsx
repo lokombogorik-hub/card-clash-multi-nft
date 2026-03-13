@@ -35,7 +35,7 @@ const ART = [
 
 const ELEMENTS = ["Earth", "Fire", "Water", "Poison", "Holy", "Thunder", "Wind", "Ice"];
 const ELEM_ICON = {
-    Earth: "🪨",
+    Earth: "🌍",
     Fire: "🔥",
     Water: "💧",
     Poison: "☠️",
@@ -62,9 +62,9 @@ const pick = (arr) => arr[(Math.random() * arr.length) | 0];
 const randomFirstTurn = () => (Math.random() < 0.5 ? "player" : "enemy");
 
 const RANKS = [
-    { key: "common", label: "C", weight: 50, min: 1, max: 7, elemChance: 1.0 },
-    { key: "rare", label: "R", weight: 30, min: 2, max: 8, elemChance: 1.0 },
-    { key: "epic", label: "E", weight: 15, min: 3, max: 9, elemChance: 1.0 },
+    { key: "common", label: "C", weight: 50, min: 1, max: 5, elemChance: 1.0 },
+    { key: "rare", label: "R", weight: 30, min: 2, max: 7, elemChance: 1.0 },
+    { key: "epic", label: "E", weight: 15, min: 3, max: 8, elemChance: 1.0 },
     { key: "legendary", label: "L", weight: 5, min: 4, max: 9, elemChance: 1.0 },
 ];
 
@@ -83,11 +83,14 @@ function weightedPick(defs) {
 
 function genCard(owner, id) {
     const r = weightedPick(RANKS);
+    const maxVal = Math.min(r.max, 9);
+    const minVal = Math.max(r.min, 1);
+
     const values = {
-        top: randInt(r.min, Math.min(r.max, 9)),
-        right: randInt(r.min, Math.min(r.max, 9)),
-        bottom: randInt(r.min, Math.min(r.max, 9)),
-        left: randInt(r.min, Math.min(r.max, 9)),
+        top: randInt(minVal, maxVal),
+        right: randInt(minVal, maxVal),
+        bottom: randInt(minVal, maxVal),
+        left: randInt(minVal, maxVal),
     };
 
     const element = pick(ELEMENTS);
