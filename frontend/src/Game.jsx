@@ -3,10 +3,6 @@ import confetti from "canvas-confetti";
 import { apiFetch } from "./api.js";
 import { useWalletConnect } from "./context/WalletConnectContext";
 
-/* =========================
-   Triple Triad (3x3) + Same/Plus/Combo + best-of-3 (to 3 wins)
-   ========================= */
-
 const DIRS = [
     { dx: 0, dy: -1, a: "top", b: "bottom" },
     { dx: 1, dy: 0, a: "right", b: "left" },
@@ -64,13 +60,12 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const randInt = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
 const pick = (arr) => arr[(Math.random() * arr.length) | 0];
 const randomFirstTurn = () => (Math.random() < 0.5 ? "player" : "enemy");
-const showVal = (v) => String(v);
 
 const RANKS = [
     { key: "common", label: "C", weight: 50, min: 1, max: 7, elemChance: 1.0 },
     { key: "rare", label: "R", weight: 30, min: 2, max: 8, elemChance: 1.0 },
-    { key: "epic", label: "E", weight: 15, min: 3, max: 10, elemChance: 1.0 },
-    { key: "legendary", label: "L", weight: 5, min: 4, max: 10, elemChance: 1.0 },
+    { key: "epic", label: "E", weight: 15, min: 3, max: 9, elemChance: 1.0 },
+    { key: "legendary", label: "L", weight: 5, min: 4, max: 9, elemChance: 1.0 },
 ];
 
 const FREEZE_DURATION_MOVES = 2;
@@ -89,13 +84,12 @@ function weightedPick(defs) {
 function genCard(owner, id) {
     const r = weightedPick(RANKS);
     const values = {
-        top: randInt(r.min, r.max),
-        right: randInt(r.min, r.max),
-        bottom: randInt(r.min, r.max),
-        left: randInt(r.min, r.max),
+        top: randInt(r.min, Math.min(r.max, 9)),
+        right: randInt(r.min, Math.min(r.max, 9)),
+        bottom: randInt(r.min, Math.min(r.max, 9)),
+        left: randInt(r.min, Math.min(r.max, 9)),
     };
 
-    // Всегда даём элемент
     const element = pick(ELEMENTS);
 
     return {
@@ -153,13 +147,13 @@ function battleElementDelta(attackerElement, defenderElement) {
 function valueForSamePlus(card, side, idx, boardElems) {
     const base = card.values[side];
     const d = squareDelta(card.element, boardElems[idx]);
-    return clamp(base + d, 1, 10);
+    return clamp(base + d, 1, 9);
 }
 
 function attackerValueForBattle(attacker, side, aIdx, defender, boardElems) {
     const base = valueForSamePlus(attacker, side, aIdx, boardElems);
     const ed = battleElementDelta(attacker.element, defender.element);
-    return clamp(base + ed, 1, 10);
+    return clamp(base + ed, 1, 9);
 }
 
 function resolvePlacementTT(placedIdx, grid, boardElems) {
@@ -281,10 +275,8 @@ function cloneDeckToHand(deck, owner) {
 }
 
 function nftToCard(nft, idx) {
-    // Генерируем элемент если его нет
     let element = nft.element;
     if (!element) {
-        // Детерминированная генерация на основе id
         const id = nft.id || nft.key || nft.tokenId || nft.token_id || `nft_${idx}`;
         const hash = String(id).split('').reduce((a, c) => a + c.charCodeAt(0), 0);
         element = ELEMENTS[hash % ELEMENTS.length];
@@ -426,7 +418,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     useEffect(() => void (boardElemsRef.current = boardElems), [boardElems]);
 
     const deckOk = Array.isArray(playerDeck) && playerDeck.length === 5;
-
     // ==================== PvP WebSocket Logic ====================
     useEffect(() => {
         if (!isPvP || !matchId) return;
@@ -1274,9 +1265,10 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                             <div className="hand-grid">
                                 {hands.enemy.map((c, i) => {
                                     const { col, row } = posForHandIndex(i);
-                                    // AI режим: всегда скрыто, кроме reveal
+
+                                    // AI: всегда скрыто, кроме reveal
                                     // PvP: всегда скрыто
-                                    const isRevealed = !isPvP && enemyRevealId === c?.id;
+                                    const isRevealed = !isPvP && c && enemyRevealId && enemyRevealId === c.id;
 
                                     return (
                                         <div key={c?.id || `enemy_${i}`} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
@@ -1530,22 +1522,28 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
 
     const cardValues = card?.values || card?.stats || { top: 5, right: 5, bottom: 5, left: 5 };
 
-    // Вычисляем бонус от стихии ячейки
-    const elemBonus = card?.element && cellElement
+    // Вычисляем бонус от стихии ячейки (только если карта на поле)
+    const elemBonus = (card?.element && cellElement)
         ? (card.element === cellElement ? +1 : -1)
         : 0;
 
-    // Функция для получения отображаемого значения с бонусом
+    // Функция для получения отображаемого значения с бонусом (диапазон 1-9)
     const getDisplayValue = (base) => {
         if (elemBonus === 0) return base;
-        return clamp(base + elemBonus, 1, 10);
+        const result = base + elemBonus;
+        // Ограничиваем: если base=9 и бонус +1, остаётся 9; если base=1 и бонус -1, остаётся 1
+        return clamp(result, 1, 9);
     };
 
     // Функция для получения цвета числа
-    const getNumColor = (base) => {
-        if (elemBonus === 0) return "#fff";
-        if (elemBonus > 0) return "#4ade80"; // зелёный для +
-        return "#f87171"; // красный для -
+    const getNumStyle = (base) => {
+        if (elemBonus === 0) return {};
+        const result = base + elemBonus;
+        // Проверяем, изменилось ли значение реально (с учётом clamp)
+        const clamped = clamp(result, 1, 9);
+        if (clamped === base) return {}; // Не изменилось из-за clamp
+        if (elemBonus > 0) return { color: "#4ade80" }; // зелёный для бонуса
+        return { color: "#f87171" }; // красный для штрафа
     };
 
     return (
@@ -1577,28 +1575,20 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
                 {card?.element ? (
                     <div className="card-elem-pill" title={card.element}>
                         <span className="card-elem-ic">{ELEM_ICON[card.element]}</span>
-                        {elemBonus !== 0 && (
-                            <span
-                                className="card-elem-delta"
-                                style={{ color: elemBonus > 0 ? "#4ade80" : "#f87171" }}
-                            >
-                                {elemBonus > 0 ? "+1" : "-1"}
-                            </span>
-                        )}
                     </div>
                 ) : null}
 
                 <div className="tt-badge" />
-                <span className="tt-num top" style={{ color: getNumColor(cardValues.top) }}>
+                <span className="tt-num top" style={getNumStyle(cardValues.top)}>
                     {getDisplayValue(cardValues.top)}
                 </span>
-                <span className="tt-num left" style={{ color: getNumColor(cardValues.left) }}>
+                <span className="tt-num left" style={getNumStyle(cardValues.left)}>
                     {getDisplayValue(cardValues.left)}
                 </span>
-                <span className="tt-num right" style={{ color: getNumColor(cardValues.right) }}>
+                <span className="tt-num right" style={getNumStyle(cardValues.right)}>
                     {getDisplayValue(cardValues.right)}
                 </span>
-                <span className="tt-num bottom" style={{ color: getNumColor(cardValues.bottom) }}>
+                <span className="tt-num bottom" style={getNumStyle(cardValues.bottom)}>
                     {getDisplayValue(cardValues.bottom)}
                 </span>
             </div>

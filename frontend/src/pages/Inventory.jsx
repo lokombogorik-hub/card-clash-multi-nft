@@ -23,7 +23,6 @@ var ELEM_ICON = {
 
 var ELEMENTS = ["Earth", "Fire", "Water", "Poison", "Holy", "Thunder", "Wind", "Ice"];
 
-// Улучшенная хэш-функция для детерминированной генерации
 function hashCode(str) {
     var hash = 0;
     var str2 = String(str);
@@ -35,7 +34,6 @@ function hashCode(str) {
     return Math.abs(hash);
 }
 
-// Mulberry32 PRNG - детерминированный генератор
 function mulberry32(seed) {
     return function () {
         var t = seed += 0x6D2B79F5;
@@ -45,7 +43,6 @@ function mulberry32(seed) {
     };
 }
 
-// Создаём уникальный seed из token_id
 function createSeed(tokenId, salt) {
     var combined = String(tokenId) + "_" + String(salt || "default");
     return hashCode(combined);
@@ -56,14 +53,12 @@ function getRarityFromTokenId(tokenId, totalSupply) {
     var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
     var pct = (num / totalSupply) * 100;
 
-    // Меньший номер = выше рарность
-    if (pct <= 10) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 7, max: 10, elemChance: 0.95 };
-    if (pct <= 30) return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 5, max: 9, elemChance: 0.85 };
-    if (pct <= 60) return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 3, max: 7, elemChance: 0.70 };
-    return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 5, elemChance: 0.50 };
+    if (pct <= 10) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 6, max: 9 };
+    if (pct <= 30) return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 5, max: 9 };
+    if (pct <= 60) return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 3, max: 7 };
+    return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 5 };
 }
 
-// Загрузка/сохранение данных карты в localStorage
 function getStoredCardData(tokenId) {
     try {
         var key = "cc_card_" + String(tokenId);
@@ -83,17 +78,19 @@ function storeCardData(tokenId, data) {
 }
 
 function genStats(tokenId, rarity) {
-    // Проверяем localStorage
     var stored = getStoredCardData(tokenId);
     if (stored && stored.stats && typeof stored.stats.top === "number") {
         return stored.stats;
     }
 
-    var seed = createSeed(tokenId, "stats_v2");
+    var seed = createSeed(tokenId, "stats_v3");
     var rng = mulberry32(seed);
 
     var min = rarity.min;
     var max = rarity.max;
+
+    if (max > 9) max = 9;
+    if (min < 1) min = 1;
 
     var stats = {
         top: Math.floor(rng() * (max - min + 1)) + min,
@@ -102,7 +99,6 @@ function genStats(tokenId, rarity) {
         left: Math.floor(rng() * (max - min + 1)) + min
     };
 
-    // Сохраняем
     var data = stored || {};
     data.stats = stats;
     storeCardData(tokenId, data);
@@ -110,26 +106,18 @@ function genStats(tokenId, rarity) {
     return stats;
 }
 
-function genElement(tokenId, rarity) {
-    // Проверяем localStorage
+function genElement(tokenId) {
     var stored = getStoredCardData(tokenId);
-    if (stored && stored.hasOwnProperty("element")) {
+    if (stored && stored.element) {
         return stored.element;
     }
 
-    var seed = createSeed(tokenId, "element_v2");
+    var seed = createSeed(tokenId, "element_v3");
     var rng = mulberry32(seed);
 
-    var elemChance = rarity ? rarity.elemChance : 0.7;
-    var roll = rng();
+    var elemIdx = Math.floor(rng() * ELEMENTS.length);
+    var element = ELEMENTS[elemIdx];
 
-    var element = null;
-    if (roll < elemChance) {
-        var elemIdx = Math.floor(rng() * ELEMENTS.length);
-        element = ELEMENTS[elemIdx];
-    }
-
-    // Сохраняем
     var data = stored || {};
     data.element = element;
     storeCardData(tokenId, data);
@@ -283,7 +271,13 @@ var InventoryCard = memo(function InventoryCard({
 }) {
     var k = nftKey(nft);
     var stats = nft.stats || { top: 5, right: 5, bottom: 5, left: 5 };
-    var element = nft.element || null;
+
+    var element = nft.element;
+    if (!element) {
+        var tokenId = nft.tokenId || nft.token_id || nft.id || k;
+        element = genElement(tokenId);
+    }
+
     var r = nft.rarity || getRarityFromTokenId(nft.tokenId, 2000);
 
     var onPD = function (e) {
@@ -317,7 +311,6 @@ var InventoryCard = memo(function InventoryCard({
                 "--rankGlow": r.glow
             }}
         >
-            {/* Art layer */}
             <div className="inv-card-art-full">
                 <NftImage
                     src={nft.imageUrl}
@@ -327,23 +320,16 @@ var InventoryCard = memo(function InventoryCard({
                 />
             </div>
 
-            {/* Element pill — top right */}
-            {element && (
-                <div className="inv-card-elem-pill">
-                    <span className="inv-card-elem-ic">{ELEM_ICON[element]}</span>
-                </div>
-            )}
-
-            {/* TT Badge — ромб с числами */}
-            <div className="inv-tt-container">
-                <div className="inv-tt-badge" />
-                <span className="inv-tt-num top">{stats.top}</span>
-                <span className="inv-tt-num left">{stats.left}</span>
-                <span className="inv-tt-num right">{stats.right}</span>
-                <span className="inv-tt-num bottom">{stats.bottom}</span>
+            <div className="inv-card-elem-pill">
+                <span className="inv-card-elem-ic">{ELEM_ICON[element] || "🔮"}</span>
             </div>
 
-            {/* Pick badge */}
+            <div className="inv-tt-badge" />
+            <span className="inv-tt-num top">{stats.top}</span>
+            <span className="inv-tt-num left">{stats.left}</span>
+            <span className="inv-tt-num right">{stats.right}</span>
+            <span className="inv-tt-num bottom">{stats.bottom}</span>
+
             {isSelected && (
                 <div className="inv-pick-badge">
                     <div className="inv-pick-badge-inner">
@@ -415,7 +401,7 @@ export default function Inventory({ token, onDeckReady }) {
                         items = tokens.map(function (t) {
                             var r = getRarityFromTokenId(t.token_id, 2000);
                             var st = genStats(t.token_id, r);
-                            var elem = genElement(t.token_id, r);
+                            var elem = genElement(t.token_id);
 
                             return {
                                 key: "near:" + nftContractId + ":" + t.token_id,
@@ -482,6 +468,12 @@ export default function Inventory({ token, onDeckReady }) {
         setError("");
         try {
             var cardsPayload = selectedNfts.map(function (nft) {
+                var elem = nft.element;
+                if (!elem) {
+                    var tid = nft.tokenId || nft.token_id || nft.id;
+                    elem = genElement(tid);
+                }
+
                 return {
                     id: nft.key || nft.tokenId || nft.token_id,
                     token_id: nft.tokenId || nft.token_id,
@@ -490,7 +482,7 @@ export default function Inventory({ token, onDeckReady }) {
                     image: nft.imageUrl,
                     rarity: nft.rank || (nft.rarity && nft.rarity.key) || "common",
                     rank: nft.rank || (nft.rarity && nft.rarity.key) || "common",
-                    element: nft.element,
+                    element: elem,
                     values: nft.stats,
                     stats: nft.stats,
                     contract_id: nft.contractId
