@@ -23,48 +23,118 @@ var ELEM_ICON = {
 
 var ELEMENTS = ["Earth", "Fire", "Water", "Poison", "Holy", "Thunder", "Wind", "Ice"];
 
+// Улучшенная хэш-функция для детерминированной генерации
+function hashCode(str) {
+    var hash = 0;
+    var str2 = String(str);
+    for (var i = 0; i < str2.length; i++) {
+        var char = str2.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
+    }
+    return Math.abs(hash);
+}
+
+// Mulberry32 PRNG - детерминированный генератор
+function mulberry32(seed) {
+    return function () {
+        var t = seed += 0x6D2B79F5;
+        t = Math.imul(t ^ t >>> 15, t | 1);
+        t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+}
+
+// Создаём уникальный seed из token_id
+function createSeed(tokenId, salt) {
+    var combined = String(tokenId) + "_" + String(salt || "default");
+    return hashCode(combined);
+}
+
 function getRarityFromTokenId(tokenId, totalSupply) {
-    totalSupply = totalSupply || 10000;
+    totalSupply = totalSupply || 2000;
     var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
     var pct = (num / totalSupply) * 100;
-    if (pct <= 25) return { key: "legendary", border: "#7c3aed", glow: "rgba(124,58,237,0.60)", min: 4, max: 9, elemChance: 0.9 };
-    if (pct <= 50) return { key: "epic", border: "#a78bfa", glow: "rgba(167,139,250,0.55)", min: 3, max: 9, elemChance: 0.8 };
-    if (pct <= 75) return { key: "rare", border: "#f97316", glow: "rgba(249,115,22,0.55)", min: 2, max: 8, elemChance: 0.7 };
-    return { key: "common", border: "#22c55e", glow: "rgba(34,197,94,0.50)", min: 1, max: 7, elemChance: 0.6 };
+
+    // Меньший номер = выше рарность
+    if (pct <= 10) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 7, max: 10, elemChance: 0.95 };
+    if (pct <= 30) return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 5, max: 9, elemChance: 0.85 };
+    if (pct <= 60) return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 3, max: 7, elemChance: 0.70 };
+    return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 5, elemChance: 0.50 };
+}
+
+// Загрузка/сохранение данных карты в localStorage
+function getStoredCardData(tokenId) {
+    try {
+        var key = "cc_card_" + String(tokenId);
+        var stored = localStorage.getItem(key);
+        if (stored) {
+            return JSON.parse(stored);
+        }
+    } catch (e) { }
+    return null;
+}
+
+function storeCardData(tokenId, data) {
+    try {
+        var key = "cc_card_" + String(tokenId);
+        localStorage.setItem(key, JSON.stringify(data));
+    } catch (e) { }
 }
 
 function genStats(tokenId, rarity) {
-    var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
-    var seed = num;
-    var next = function () {
-        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-        return seed;
-    };
-    var rnd = function (lo, hi) {
-        return lo + (next() % (hi - lo + 1));
-    };
+    // Проверяем localStorage
+    var stored = getStoredCardData(tokenId);
+    if (stored && stored.stats && typeof stored.stats.top === "number") {
+        return stored.stats;
+    }
+
+    var seed = createSeed(tokenId, "stats_v2");
+    var rng = mulberry32(seed);
+
     var min = rarity.min;
     var max = rarity.max;
-    return {
-        top: rnd(min, max),
-        right: rnd(min, max),
-        bottom: rnd(min, max),
-        left: rnd(min, max)
+
+    var stats = {
+        top: Math.floor(rng() * (max - min + 1)) + min,
+        right: Math.floor(rng() * (max - min + 1)) + min,
+        bottom: Math.floor(rng() * (max - min + 1)) + min,
+        left: Math.floor(rng() * (max - min + 1)) + min
     };
+
+    // Сохраняем
+    var data = stored || {};
+    data.stats = stats;
+    storeCardData(tokenId, data);
+
+    return stats;
 }
 
 function genElement(tokenId, rarity) {
-    var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
-    var seed = num * 7919 + 104729;
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    var chance = (seed % 100) / 100;
-    var elemChance = rarity ? rarity.elemChance : 0.7;
-    if (chance < elemChance) {
-        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-        var elemIdx = seed % ELEMENTS.length;
-        return ELEMENTS[elemIdx];
+    // Проверяем localStorage
+    var stored = getStoredCardData(tokenId);
+    if (stored && stored.hasOwnProperty("element")) {
+        return stored.element;
     }
-    return null;
+
+    var seed = createSeed(tokenId, "element_v2");
+    var rng = mulberry32(seed);
+
+    var elemChance = rarity ? rarity.elemChance : 0.7;
+    var roll = rng();
+
+    var element = null;
+    if (roll < elemChance) {
+        var elemIdx = Math.floor(rng() * ELEMENTS.length);
+        element = ELEMENTS[elemIdx];
+    }
+
+    // Сохраняем
+    var data = stored || {};
+    data.element = element;
+    storeCardData(tokenId, data);
+
+    return element;
 }
 
 function safeParse(s) {
@@ -214,7 +284,7 @@ var InventoryCard = memo(function InventoryCard({
     var k = nftKey(nft);
     var stats = nft.stats || { top: 5, right: 5, bottom: 5, left: 5 };
     var element = nft.element || null;
-    var r = nft.rarity || getRarityFromTokenId(nft.tokenId, 10000);
+    var r = nft.rarity || getRarityFromTokenId(nft.tokenId, 2000);
 
     var onPD = function (e) {
         var el = e.currentTarget;
@@ -232,11 +302,6 @@ var InventoryCard = memo(function InventoryCard({
     var handleClick = useCallback(function () {
         onToggle(k);
     }, [onToggle, k]);
-
-    // Размеры ромба относительно ширины карты
-    // Ромб: 28% ширины карты, квадратный
-    // Центр ромба: left 6% + 14% = 20% от левого края
-    // Числа позиционируются относительно центра ромба
 
     return (
         <button
@@ -264,194 +329,26 @@ var InventoryCard = memo(function InventoryCard({
 
             {/* Element pill — top right */}
             {element && (
-                <div
-                    className="inv-card-elem-pill"
-                    title={element}
-                    style={{
-                        position: "absolute",
-                        top: 6,
-                        right: 6,
-                        zIndex: 20,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 4,
-                        padding: "3px 7px",
-                        borderRadius: 999,
-                        background: "rgba(0,0,0,0.85)",
-                        border: "1px solid rgba(255,255,255,0.25)",
-                        pointerEvents: "none"
-                    }}
-                >
-                    <span
-                        className="inv-card-elem-ic"
-                        style={{
-                            fontSize: 16,
-                            lineHeight: 1,
-                            filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.8))"
-                        }}
-                    >
-                        {ELEM_ICON[element]}
-                    </span>
+                <div className="inv-card-elem-pill">
+                    <span className="inv-card-elem-ic">{ELEM_ICON[element]}</span>
                 </div>
             )}
 
-            {/* TT Badge Container — содержит ромб и все 4 числа */}
-            <div
-                className="inv-tt-container"
-                style={{
-                    position: "absolute",
-                    top: 6,
-                    left: 6,
-                    // Размер контейнера = размер ромба (квадрат)
-                    width: "clamp(32px, 28%, 48px)",
-                    height: "clamp(32px, 28%, 48px)",
-                    zIndex: 10,
-                    pointerEvents: "none"
-                }}
-            >
-                {/* Ромб (повёрнутый квадрат) */}
-                <div
-                    className="inv-tt-badge"
-                    style={{
-                        position: "absolute",
-                        inset: 0,
-                        background: "rgba(0,0,0,0.85)",
-                        transform: "rotate(45deg)",
-                        borderRadius: 4,
-                        border: "1px solid rgba(255,255,255,0.15)"
-                    }}
-                />
-
-                {/* Числа — позиционируются относительно центра контейнера */}
-                {/* TOP — сверху по центру */}
-                <span
-                    style={{
-                        position: "absolute",
-                        top: "2%",
-                        left: "50%",
-                        transform: "translateX(-50%)",
-                        zIndex: 15,
-                        fontSize: "clamp(8px, 1.8vw, 11px)",
-                        fontWeight: 900,
-                        color: "#fff",
-                        textShadow: "0 1px 3px rgba(0,0,0,1)",
-                        lineHeight: 1
-                    }}
-                >
-                    {stats.top}
-                </span>
-
-                {/* LEFT — слева по центру */}
-                <span
-                    style={{
-                        position: "absolute",
-                        top: "50%",
-                        left: "2%",
-                        transform: "translateY(-50%)",
-                        zIndex: 15,
-                        fontSize: "clamp(8px, 1.8vw, 11px)",
-                        fontWeight: 900,
-                        color: "#fff",
-                        textShadow: "0 1px 3px rgba(0,0,0,1)",
-                        lineHeight: 1
-                    }}
-                >
-                    {stats.left}
-                </span>
-
-                {/* RIGHT — справа по центру */}
-                <span
-                    style={{
-                        position: "absolute",
-                        top: "50%",
-                        right: "2%",
-                        transform: "translateY(-50%)",
-                        zIndex: 15,
-                        fontSize: "clamp(8px, 1.8vw, 11px)",
-                        fontWeight: 900,
-                        color: "#fff",
-                        textShadow: "0 1px 3px rgba(0,0,0,1)",
-                        lineHeight: 1
-                    }}
-                >
-                    {stats.right}
-                </span>
-
-                {/* BOTTOM — снизу по центру */}
-                <span
-                    style={{
-                        position: "absolute",
-                        bottom: "2%",
-                        left: "50%",
-                        transform: "translateX(-50%)",
-                        zIndex: 15,
-                        fontSize: "clamp(8px, 1.8vw, 11px)",
-                        fontWeight: 900,
-                        color: "#fff",
-                        textShadow: "0 1px 3px rgba(0,0,0,1)",
-                        lineHeight: 1
-                    }}
-                >
-                    {stats.bottom}
-                </span>
+            {/* TT Badge — ромб с числами */}
+            <div className="inv-tt-container">
+                <div className="inv-tt-badge" />
+                <span className="inv-tt-num top">{stats.top}</span>
+                <span className="inv-tt-num left">{stats.left}</span>
+                <span className="inv-tt-num right">{stats.right}</span>
+                <span className="inv-tt-num bottom">{stats.bottom}</span>
             </div>
 
             {/* Pick badge */}
             {isSelected && (
-                <div
-                    className="inv-pick-badge"
-                    style={{
-                        position: "absolute",
-                        right: 6,
-                        bottom: 6,
-                        width: "clamp(28px, 22%, 40px)",
-                        height: "clamp(28px, 22%, 40px)",
-                        borderRadius: 999,
-                        zIndex: 25,
-                        padding: 0,
-                        display: "grid",
-                        placeItems: "center",
-                        background: "conic-gradient(from 90deg, rgba(120,200,255,1), rgba(255,61,242,0.75), rgba(120,200,255,1))",
-                        boxShadow: "0 0 16px rgba(120,200,255,0.5)"
-                    }}
-                >
-                    <div
-                        style={{
-                            position: "absolute",
-                            inset: 2,
-                            borderRadius: 999,
-                            background: "rgba(0,0,0,0.75)",
-                            border: "1px solid rgba(255,255,255,0.2)"
-                        }}
-                    />
-                    <div
-                        style={{
-                            position: "relative",
-                            zIndex: 1,
-                            fontWeight: 1000,
-                            fontSize: "clamp(10px, 2vw, 14px)",
-                            lineHeight: 1,
-                            color: "#fff",
-                            textShadow: "0 2px 6px rgba(0,0,0,0.9)"
-                        }}
-                    >
-                        ✓
-                    </div>
-                    <div
-                        style={{
-                            position: "absolute",
-                            bottom: "15%",
-                            left: "50%",
-                            transform: "translateX(-50%)",
-                            zIndex: 1,
-                            fontWeight: 900,
-                            fontSize: "clamp(7px, 1.5vw, 10px)",
-                            lineHeight: 1,
-                            color: "rgba(255,255,255,0.95)",
-                            textShadow: "0 1px 4px rgba(0,0,0,0.9)"
-                        }}
-                    >
-                        {pickNo}
+                <div className="inv-pick-badge">
+                    <div className="inv-pick-badge-inner">
+                        <span className="inv-pick-check">✓</span>
+                        <span className="inv-pick-no">{pickNo}</span>
                     </div>
                 </div>
             )}
@@ -516,14 +413,9 @@ export default function Inventory({ token, onDeckReady }) {
                         var tokens = await nearNftTokensForOwner(nftContractId, accountId);
 
                         items = tokens.map(function (t) {
-                            var extra = safeParse(t.metadata ? t.metadata.extra : null);
-                            var r = getRarityFromTokenId(t.token_id, 10000);
-                            var st = (extra && extra.stats && typeof extra.stats.top === "number")
-                                ? extra.stats
-                                : genStats(t.token_id, r);
-                            var elem = (extra && extra.element)
-                                ? extra.element
-                                : genElement(t.token_id, r);
+                            var r = getRarityFromTokenId(t.token_id, 2000);
+                            var st = genStats(t.token_id, r);
+                            var elem = genElement(t.token_id, r);
 
                             return {
                                 key: "near:" + nftContractId + ":" + t.token_id,
@@ -589,7 +481,6 @@ export default function Inventory({ token, onDeckReady }) {
         setSaving(true);
         setError("");
         try {
-            // Преобразуем NFT в формат для backend
             var cardsPayload = selectedNfts.map(function (nft) {
                 return {
                     id: nft.key || nft.tokenId || nft.token_id,
