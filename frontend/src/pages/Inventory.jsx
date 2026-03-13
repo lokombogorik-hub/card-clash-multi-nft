@@ -10,7 +10,6 @@ function nftKey(n) {
     return "mock:" + (n.id || Math.random().toString(36).slice(2));
 }
 
-// Earth заменён на 🌍 для лучшей поддержки
 var ELEM_ICON = {
     Earth: "🌍",
     Fire: "🔥",
@@ -54,7 +53,6 @@ function getRarityFromTokenId(tokenId, totalSupply) {
     var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
     var pct = (num / totalSupply) * 100;
 
-    // max всегда 9, никогда не 10
     if (pct <= 10) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 6, max: 9 };
     if (pct <= 30) return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 5, max: 9 };
     if (pct <= 60) return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 3, max: 7 };
@@ -82,36 +80,24 @@ function storeCardData(tokenId, data) {
 function genStats(tokenId, rarity) {
     var stored = getStoredCardData(tokenId);
     if (stored && stored.stats && typeof stored.stats.top === "number") {
-        // Проверяем что нет 10
         var s = stored.stats;
         if (s.top <= 9 && s.right <= 9 && s.bottom <= 9 && s.left <= 9) {
             return s;
         }
-        // Если есть 10, пересоздаём
     }
 
     var seed = createSeed(tokenId, "stats_v4");
     var rng = mulberry32(seed);
 
-    var min = rarity.min;
-    var max = rarity.max;
-
-    // Жёстко ограничиваем 1-9
-    if (max > 9) max = 9;
-    if (min < 1) min = 1;
+    var min = Math.max(1, rarity.min);
+    var max = Math.min(9, rarity.max);
 
     var stats = {
-        top: Math.floor(rng() * (max - min + 1)) + min,
-        right: Math.floor(rng() * (max - min + 1)) + min,
-        bottom: Math.floor(rng() * (max - min + 1)) + min,
-        left: Math.floor(rng() * (max - min + 1)) + min
+        top: Math.min(9, Math.max(1, Math.floor(rng() * (max - min + 1)) + min)),
+        right: Math.min(9, Math.max(1, Math.floor(rng() * (max - min + 1)) + min)),
+        bottom: Math.min(9, Math.max(1, Math.floor(rng() * (max - min + 1)) + min)),
+        left: Math.min(9, Math.max(1, Math.floor(rng() * (max - min + 1)) + min))
     };
-
-    // Дополнительная проверка
-    stats.top = Math.min(9, Math.max(1, stats.top));
-    stats.right = Math.min(9, Math.max(1, stats.right));
-    stats.bottom = Math.min(9, Math.max(1, stats.bottom));
-    stats.left = Math.min(9, Math.max(1, stats.left));
 
     var data = stored || {};
     data.stats = stats;
@@ -147,144 +133,79 @@ var nftCache = {
 
 var imageCache = new Map();
 
+// Оптимизированный NftImage — без лишних эффектов
 var NftImage = memo(function NftImage({ src, originalSrc, alt, cacheKey }) {
     var cached = imageCache.get(cacheKey);
-
-    var [stage, setStage] = useState(cached ? cached.stage : 0);
-    var [loaded, setLoaded] = useState(cached ? cached.loaded : false);
-    var [finalSrc, setFinalSrc] = useState(cached ? cached.finalSrc : (src || ""));
-    var mountedRef = useRef(true);
-
-    useEffect(function () {
-        mountedRef.current = true;
-        return function () {
-            mountedRef.current = false;
-        };
-    }, []);
-
-    useEffect(function () {
-        if (cached && cached.loaded && cached.finalSrc) {
-            setStage(cached.stage);
-            setLoaded(true);
-            setFinalSrc(cached.finalSrc);
-        }
-    }, [cacheKey]);
-
-    var currentSrc = useMemo(function () {
-        if (loaded && finalSrc) return finalSrc;
-        if (stage === 0) return src || "";
-        if (stage === -1) return "";
-        if (!originalSrc || !isIpfsUrl(originalSrc)) return "";
-        var gwIdx = stage - 1;
-        if (gwIdx >= GATEWAY_COUNT) return "";
-        return ipfsGatewayUrl(originalSrc, gwIdx);
-    }, [src, originalSrc, stage, loaded, finalSrc]);
+    var [loaded, setLoaded] = useState(cached ? true : false);
+    var [imgSrc, setImgSrc] = useState(cached ? cached.finalSrc : (src || ""));
+    var [failed, setFailed] = useState(false);
+    var attemptRef = useRef(0);
 
     var handleError = useCallback(function () {
-        if (!mountedRef.current) return;
-        if (stage === 0) {
-            if (originalSrc && isIpfsUrl(originalSrc)) {
-                setStage(1);
-            } else {
-                setStage(-1);
-            }
-            return;
+        if (attemptRef.current < GATEWAY_COUNT && originalSrc && isIpfsUrl(originalSrc)) {
+            setImgSrc(ipfsGatewayUrl(originalSrc, attemptRef.current));
+            attemptRef.current++;
+        } else {
+            setFailed(true);
         }
-        if (stage >= 1) {
-            var nextGw = stage;
-            if (nextGw < GATEWAY_COUNT) {
-                setStage(nextGw + 1);
-            } else {
-                setStage(-1);
-            }
-        }
-    }, [stage, originalSrc]);
+    }, [originalSrc]);
 
-    var handleLoad = useCallback(function (e) {
-        if (!mountedRef.current) return;
-        var loadedUrl = e.target.src;
+    var handleLoad = useCallback(function () {
         setLoaded(true);
-        setFinalSrc(loadedUrl);
-        imageCache.set(cacheKey, { stage: stage, loaded: true, finalSrc: loadedUrl });
-    }, [cacheKey, stage]);
+        imageCache.set(cacheKey, { finalSrc: imgSrc });
+    }, [cacheKey, imgSrc]);
 
-    if (stage === -1 || !currentSrc) {
+    if (failed || !imgSrc) {
         return (
-            <div style={{
-                width: "100%",
-                height: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background: "linear-gradient(135deg, #2d1b4e 0%, #1a0f2e 100%)",
-                borderRadius: "inherit"
-            }}>
-                <span style={{ fontSize: 32, opacity: 0.5 }}>🎴</span>
+            <div className="inv-card-placeholder">
+                <span>🎴</span>
             </div>
         );
     }
 
     return (
-        <>
-            {!loaded && (
-                <div style={{
-                    position: "absolute",
-                    inset: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: "rgba(30,20,50,0.8)",
-                    borderRadius: "inherit",
-                    zIndex: 1
-                }}>
-                    <div className="inv-loading-spinner" style={{ width: 20, height: 20 }} />
-                </div>
-            )}
-            <img
-                src={currentSrc}
-                alt={alt || ""}
-                draggable="false"
-                onError={handleError}
-                onLoad={handleLoad}
-                style={{
-                    opacity: loaded ? 1 : 0,
-                    transition: "opacity 0.2s",
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    objectPosition: "center",
-                    borderRadius: "inherit"
-                }}
-            />
-        </>
+        <img
+            src={imgSrc}
+            alt={alt || ""}
+            draggable="false"
+            loading="lazy"
+            onError={handleError}
+            onLoad={handleLoad}
+            className={loaded ? "inv-card-img loaded" : "inv-card-img"}
+        />
     );
+}, function (prev, next) {
+    return prev.cacheKey === next.cacheKey;
 });
 
+// КЛЮЧЕВАЯ ОПТИМИЗАЦИЯ: memo с правильным сравнением
 var InventoryCard = memo(function InventoryCard({
     nft,
     isSelected,
     pickNo,
-    onToggle,
-    index
+    onToggle
 }) {
-    var k = nftKey(nft);
-    var stats = nft.stats || { top: 5, right: 5, bottom: 5, left: 5 };
+    var k = useMemo(function () { return nftKey(nft); }, [nft]);
 
-    // Проверяем что stats в диапазоне 1-9
-    var safeStats = {
-        top: Math.min(9, Math.max(1, stats.top || 5)),
-        right: Math.min(9, Math.max(1, stats.right || 5)),
-        bottom: Math.min(9, Math.max(1, stats.bottom || 5)),
-        left: Math.min(9, Math.max(1, stats.left || 5))
-    };
+    var stats = useMemo(function () {
+        var s = nft.stats || { top: 5, right: 5, bottom: 5, left: 5 };
+        return {
+            top: Math.min(9, Math.max(1, s.top || 5)),
+            right: Math.min(9, Math.max(1, s.right || 5)),
+            bottom: Math.min(9, Math.max(1, s.bottom || 5)),
+            left: Math.min(9, Math.max(1, s.left || 5))
+        };
+    }, [nft.stats]);
 
-    var element = nft.element;
-    if (!element) {
+    var element = useMemo(function () {
+        if (nft.element) return nft.element;
         var tokenId = nft.tokenId || nft.token_id || nft.id || k;
-        element = genElement(tokenId);
-    }
+        return genElement(tokenId);
+    }, [nft.element, nft.tokenId, nft.token_id, nft.id, k]);
 
-    var r = nft.rarity || getRarityFromTokenId(nft.tokenId, 2000);
+    var rarity = useMemo(function () {
+        return nft.rarity || getRarityFromTokenId(nft.tokenId, 2000);
+    }, [nft.rarity, nft.tokenId]);
 
     var handleClick = useCallback(function () {
         onToggle(k);
@@ -292,15 +213,12 @@ var InventoryCard = memo(function InventoryCard({
 
     return (
         <button
-            key={k}
             type="button"
             onClick={handleClick}
             className={"inv-card-game" + (isSelected ? " is-selected" : "")}
-            title={nft.name}
             style={{
-                "--i": index,
-                "--rank": r.border,
-                "--rankGlow": r.glow
+                "--rank": rarity.border,
+                "--rankGlow": rarity.glow
             }}
         >
             <div className="inv-card-art-full">
@@ -317,19 +235,24 @@ var InventoryCard = memo(function InventoryCard({
             </div>
 
             <div className="inv-tt-badge" />
-            <span className="inv-tt-num top">{safeStats.top}</span>
-            <span className="inv-tt-num left">{safeStats.left}</span>
-            <span className="inv-tt-num right">{safeStats.right}</span>
-            <span className="inv-tt-num bottom">{safeStats.bottom}</span>
+            <span className="inv-tt-num top">{stats.top}</span>
+            <span className="inv-tt-num left">{stats.left}</span>
+            <span className="inv-tt-num right">{stats.right}</span>
+            <span className="inv-tt-num bottom">{stats.bottom}</span>
 
             {isSelected && (
                 <div className="inv-pick-badge">
-                    <div className="inv-pick-badge-inner">
-                        <span className="inv-pick-no">{pickNo}</span>
-                    </div>
+                    <span className="inv-pick-no">{pickNo}</span>
                 </div>
             )}
         </button>
+    );
+}, function (prev, next) {
+    // Перерендерим ТОЛЬКО если изменились важные props
+    return (
+        prev.isSelected === next.isSelected &&
+        prev.pickNo === next.pickNo &&
+        nftKey(prev.nft) === nftKey(next.nft)
     );
 });
 
@@ -347,8 +270,12 @@ export default function Inventory({ token, onDeckReady }) {
 
     var nftContractId = (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim();
 
-    var selectedArr = useMemo(function () { return Array.from(selected); }, [selected]);
+    // Оптимизация: стабильный массив ключей
+    var selectedArr = useMemo(function () {
+        return Array.from(selected);
+    }, [selected]);
 
+    // Оптимизация: Map создаётся только при изменении selected
     var orderMap = useMemo(function () {
         var m = new Map();
         selectedArr.forEach(function (k, i) { m.set(k, i + 1); });
@@ -438,6 +365,7 @@ export default function Inventory({ token, onDeckReady }) {
         return function () { alive = false; };
     }, [token, accountId, connected, nftContractId]);
 
+    // Стабильная функция toggle
     var toggle = useCallback(function (k) {
         setSelected(function (prev) {
             var next = new Set(prev);
@@ -451,7 +379,7 @@ export default function Inventory({ token, onDeckReady }) {
         });
     }, []);
 
-    var saveDeck = async function () {
+    var saveDeck = useCallback(async function () {
         if (selected.size !== 5) return;
         if (selectedNfts.length !== 5) return;
 
@@ -459,13 +387,7 @@ export default function Inventory({ token, onDeckReady }) {
         setError("");
         try {
             var cardsPayload = selectedNfts.map(function (nft) {
-                var elem = nft.element;
-                if (!elem) {
-                    var tid = nft.tokenId || nft.token_id || nft.id;
-                    elem = genElement(tid);
-                }
-
-                // Гарантируем 1-9
+                var elem = nft.element || genElement(nft.tokenId || nft.token_id || nft.id);
                 var safeStats = {
                     top: Math.min(9, Math.max(1, (nft.stats && nft.stats.top) || 5)),
                     right: Math.min(9, Math.max(1, (nft.stats && nft.stats.right) || 5)),
@@ -504,7 +426,7 @@ export default function Inventory({ token, onDeckReady }) {
             setError(e.message || "Save failed");
             setSaving(false);
         }
-    };
+    }, [selected.size, selectedNfts, selectedArr, token, onDeckReady]);
 
     var resetSelection = useCallback(function () {
         setSelected(new Set());
@@ -575,16 +497,17 @@ export default function Inventory({ token, onDeckReady }) {
 
             {nfts.length > 0 && (
                 <div className="inv-grid-game-style">
-                    {nfts.map(function (n, idx) {
+                    {nfts.map(function (n) {
                         var k = nftKey(n);
+                        var isSelected = selected.has(k);
+                        var pickNo = orderMap.get(k) || 0;
                         return (
                             <InventoryCard
                                 key={k}
                                 nft={n}
-                                isSelected={selected.has(k)}
-                                pickNo={orderMap.get(k) || 0}
+                                isSelected={isSelected}
+                                pickNo={pickNo}
                                 onToggle={toggle}
-                                index={idx}
                             />
                         );
                     })}
