@@ -438,9 +438,15 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const deckOk = Array.isArray(playerDeck) && playerDeck.length === 5;
 
     // ==================== PvP WebSocket Logic ====================
+    // ==================== PvP WebSocket Logic ====================
+
+    // ==================== PvP WebSocket Logic ====================
+
+    const wsInitialized = useRef(false);
 
     useEffect(() => {
         if (!isPvP || !matchId) return;
+        if (wsInitialized.current) return; // Prevent double init
 
         const token = getStoredToken();
         if (!token) {
@@ -448,100 +454,130 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             return;
         }
 
-        const wsUrl = getWsUrl(matchId);
+        wsInitialized.current = true;
+
+        const apiUrl = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || "";
+        if (!apiUrl) {
+            setWsError("No API URL configured");
+            return;
+        }
+
+        const wsBase = apiUrl.replace(/^https:/, "wss:").replace(/^http:/, "ws:");
+        const wsUrl = `${wsBase}/ws/match/${matchId}`;
+
         console.log("[WS] Connecting to:", wsUrl);
 
-        const ws = new WebSocket(wsUrl);
-        wsRef.current = ws;
+        let ws;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 3;
 
-        ws.onopen = () => {
-            console.log("[WS] Connected, sending auth...");
-            ws.send(JSON.stringify({ type: "auth", token }));
-        };
+        const connect = () => {
+            ws = new WebSocket(wsUrl);
+            wsRef.current = ws;
 
-        ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                console.log("[WS] Message:", data.type, data);
+            ws.onopen = () => {
+                console.log("[WS] Connected, sending auth...");
+                reconnectAttempts = 0;
+                ws.send(JSON.stringify({ type: "auth", token }));
+            };
 
-                switch (data.type) {
-                    case "connected":
-                        setWsConnected(true);
-                        setMyRole(data.you_are);
-                        setWaitingForOpponent(true);
-                        break;
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log("[WS] Message:", data.type);
 
-                    case "player_connected":
-                        setOpponentConnected(true);
-                        setWaitingForOpponent(false);
-                        setReconnectDeadline(null);
-                        break;
+                    switch (data.type) {
+                        case "connected":
+                            setWsConnected(true);
+                            setMyRole(data.you_are);
+                            setWaitingForOpponent(true);
+                            setWsError("");
+                            break;
 
-                    case "player_disconnected":
-                        setOpponentConnected(false);
-                        if (data.reconnect_deadline) {
-                            setReconnectDeadline(new Date(data.reconnect_deadline));
-                        }
-                        break;
+                        case "player_connected":
+                            setOpponentConnected(true);
+                            setWaitingForOpponent(false);
+                            setReconnectDeadline(null);
+                            break;
 
-                    case "game_start":
-                        setWaitingForOpponent(false);
-                        setOpponentConnected(true);
-                        break;
+                        case "player_disconnected":
+                            setOpponentConnected(false);
+                            if (data.reconnect_deadline) {
+                                setReconnectDeadline(new Date(data.reconnect_deadline));
+                            }
+                            break;
 
-                    case "game_state":
-                        handleGameState(data);
-                        break;
+                        case "game_start":
+                            setWaitingForOpponent(false);
+                            setOpponentConnected(true);
+                            break;
 
-                    case "card_played":
-                        handleCardPlayed(data);
-                        break;
+                        case "game_state":
+                            handleGameState(data);
+                            break;
 
-                    case "turn_change":
-                        handleTurnChange(data);
-                        break;
+                        case "card_played":
+                            handleCardPlayed(data);
+                            break;
 
-                    case "game_over":
-                        handleGameOver(data);
-                        break;
+                        case "turn_change":
+                            handleTurnChange(data);
+                            break;
 
-                    case "error":
-                        console.error("[WS] Error:", data.message);
-                        setWsError(data.message);
-                        break;
+                        case "game_over":
+                            handleGameOver(data);
+                            break;
 
-                    case "pong":
-                        // Heartbeat response
-                        break;
+                        case "error":
+                            console.error("[WS] Server error:", data.message);
+                            setWsError(data.message);
+                            break;
+
+                        case "pong":
+                            // Heartbeat response
+                            break;
+
+                        default:
+                            console.log("[WS] Unknown message type:", data.type);
+                    }
+                } catch (e) {
+                    console.error("[WS] Parse error:", e);
                 }
-            } catch (e) {
-                console.error("[WS] Parse error:", e);
-            }
+            };
+
+            ws.onerror = (error) => {
+                console.error("[WS] WebSocket error:", error);
+            };
+
+            ws.onclose = (event) => {
+                console.log("[WS] Disconnected, code:", event.code, "reason:", event.reason);
+                setWsConnected(false);
+
+                // Try to reconnect if game is still active
+                if (reconnectAttempts < maxReconnectAttempts && !matchOver && !roundOver) {
+                    reconnectAttempts++;
+                    console.log(`[WS] Reconnecting... attempt ${reconnectAttempts}`);
+                    setTimeout(connect, 2000);
+                }
+            };
         };
 
-        ws.onerror = (error) => {
-            console.error("[WS] Error:", error);
-            setWsError("Connection error");
-        };
-
-        ws.onclose = () => {
-            console.log("[WS] Disconnected");
-            setWsConnected(false);
-        };
+        connect();
 
         // Ping interval to keep connection alive
         pingIntervalRef.current = setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: "ping" }));
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({ type: "ping" }));
             }
-        }, 25000);
+        }, 15000); // Every 15 seconds
 
         return () => {
+            wsInitialized.current = false;
             if (pingIntervalRef.current) {
                 clearInterval(pingIntervalRef.current);
             }
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.close();
+            if (wsRef.current) {
+                wsRef.current.close();
             }
         };
     }, [isPvP, matchId]);
