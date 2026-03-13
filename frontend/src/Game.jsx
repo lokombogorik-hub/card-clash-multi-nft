@@ -67,10 +67,10 @@ const randomFirstTurn = () => (Math.random() < 0.5 ? "player" : "enemy");
 const showVal = (v) => String(v);
 
 const RANKS = [
-    { key: "common", label: "C", weight: 50, min: 1, max: 7, elemChance: 0.6 },
-    { key: "rare", label: "R", weight: 30, min: 2, max: 8, elemChance: 0.7 },
-    { key: "epic", label: "E", weight: 15, min: 3, max: 10, elemChance: 0.8 },
-    { key: "legendary", label: "L", weight: 5, min: 4, max: 10, elemChance: 0.9 },
+    { key: "common", label: "C", weight: 50, min: 1, max: 7, elemChance: 1.0 },
+    { key: "rare", label: "R", weight: 30, min: 2, max: 8, elemChance: 1.0 },
+    { key: "epic", label: "E", weight: 15, min: 3, max: 10, elemChance: 1.0 },
+    { key: "legendary", label: "L", weight: 5, min: 4, max: 10, elemChance: 1.0 },
 ];
 
 const FREEZE_DURATION_MOVES = 2;
@@ -95,8 +95,8 @@ function genCard(owner, id) {
         left: randInt(r.min, r.max),
     };
 
-    const hasElem = Math.random() < r.elemChance;
-    const element = hasElem ? pick(ELEMENTS) : null;
+    // Всегда даём элемент
+    const element = pick(ELEMENTS);
 
     return {
         id,
@@ -281,6 +281,15 @@ function cloneDeckToHand(deck, owner) {
 }
 
 function nftToCard(nft, idx) {
+    // Генерируем элемент если его нет
+    let element = nft.element;
+    if (!element) {
+        // Детерминированная генерация на основе id
+        const id = nft.id || nft.key || nft.tokenId || nft.token_id || `nft_${idx}`;
+        const hash = String(id).split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+        element = ELEMENTS[hash % ELEMENTS.length];
+    }
+
     return {
         id: nft.id || nft.key || nft.tokenId || nft.token_id || `nft_${idx}`,
         owner: "player",
@@ -288,7 +297,7 @@ function nftToCard(nft, idx) {
         imageUrl: nft.imageUrl || nft.image || ART[0],
         rank: nft.rank || nft.rarity || "common",
         rankLabel: nft.rankLabel || "C",
-        element: nft.element || null,
+        element: element,
         placeKey: 0,
         captureKey: 0,
         nftData: nft,
@@ -324,7 +333,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         signAndSendTransaction,
     } = useWalletConnect();
 
-    // PvP WebSocket state
     const [wsConnected, setWsConnected] = useState(false);
     const [wsError, setWsError] = useState("");
     const [pvpState, setPvpState] = useState(null);
@@ -332,6 +340,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const [opponentConnected, setOpponentConnected] = useState(false);
     const [waitingForOpponent, setWaitingForOpponent] = useState(false);
     const [reconnectDeadline, setReconnectDeadline] = useState(null);
+    const [myPlayerId, setMyPlayerId] = useState(null);
 
     const isPvP = mode === "pvp" && Boolean(matchId);
 
@@ -376,7 +385,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const [stage2Match, setStage2Match] = useState(null);
 
     const myTgId = me?.id ? Number(me.id) : 0;
-
     const isStage2 = mode === "pvp" && Boolean(matchId);
 
     const [enemyDeck, setEnemyDeck] = useState(() => getFallbackEnemyDeck());
@@ -420,11 +428,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const deckOk = Array.isArray(playerDeck) && playerDeck.length === 5;
 
     // ==================== PvP WebSocket Logic ====================
-
-    // Store player IDs from server
-    const [myPlayerId, setMyPlayerId] = useState(null);
-    const [opponentPlayerId, setOpponentPlayerId] = useState(null);
-
     useEffect(() => {
         if (!isPvP || !matchId) return;
 
@@ -445,8 +448,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         const wsBase = apiUrl.replace(/^https:/, "wss:").replace(/^http:/, "ws:");
         const wsUrl = `${wsBase}/ws/match/${matchId}`;
 
-        console.log("[WS] Connecting to:", wsUrl);
-
         let ws = null;
         let reconnectAttempts = 0;
         const maxReconnectAttempts = 5;
@@ -459,7 +460,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                 ws = new WebSocket(wsUrl);
                 wsRef.current = ws;
             } catch (err) {
-                console.error("[WS] Failed to create WebSocket:", err);
                 setWsError("Failed to connect");
                 return;
             }
@@ -469,15 +469,11 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                     ws.close();
                     return;
                 }
-                console.log("[WS] Connected, sending auth...");
                 reconnectAttempts = 0;
                 setWsError("");
-
                 try {
                     ws.send(JSON.stringify({ type: "auth", token }));
-                } catch (err) {
-                    console.error("[WS] Failed to send auth:", err);
-                }
+                } catch (err) { }
             };
 
             ws.onmessage = (event) => {
@@ -485,11 +481,9 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
                 try {
                     const data = JSON.parse(event.data);
-                    console.log("[WS] Message:", data.type, data);
 
                     switch (data.type) {
                         case "connected":
-                            console.log("[WS] Connected as", data.you_are, "player_id:", data.player_id);
                             setWsConnected(true);
                             setMyRole(data.you_are);
                             setMyPlayerId(data.player_id);
@@ -498,14 +492,12 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                             break;
 
                         case "player_connected":
-                            console.log("[WS] Opponent connected:", data.player_id);
                             setOpponentConnected(true);
                             setWaitingForOpponent(false);
                             setReconnectDeadline(null);
                             break;
 
                         case "player_disconnected":
-                            console.log("[WS] Opponent disconnected");
                             setOpponentConnected(false);
                             if (data.reconnect_deadline) {
                                 setReconnectDeadline(new Date(data.reconnect_deadline));
@@ -513,7 +505,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                             break;
 
                         case "game_start":
-                            console.log("[WS] Game starting, first turn:", data.current_turn);
                             setWaitingForOpponent(false);
                             setOpponentConnected(true);
                             break;
@@ -535,7 +526,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                             break;
 
                         case "error":
-                            console.error("[WS] Server error:", data.message);
                             setWsError(data.message);
                             break;
 
@@ -543,42 +533,25 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                             break;
 
                         case "ping":
-                            // Server sent ping, respond with pong
                             try {
                                 ws.send(JSON.stringify({ type: "pong" }));
-                            } catch (e) {
-                                console.error("[WS] Failed to send pong:", e);
-                            }
+                            } catch (e) { }
                             break;
-
-                        default:
-                            console.log("[WS] Unknown message type:", data.type);
                     }
-                } catch (e) {
-                    console.error("[WS] Parse error:", e);
-                }
+                } catch (e) { }
             };
 
-            ws.onerror = (error) => {
-                console.error("[WS] WebSocket error:", error);
-            };
+            ws.onerror = () => { };
 
             ws.onclose = (event) => {
-                console.log("[WS] Disconnected, code:", event.code, "reason:", event.reason);
                 setWsConnected(false);
 
                 if (!mountedRef.current) return;
+                if (matchOver || event.code === 1000) return;
 
-                // Don't reconnect if game is over or closed normally
-                if (matchOver || event.code === 1000) {
-                    return;
-                }
-
-                // Try to reconnect
                 if (reconnectAttempts < maxReconnectAttempts) {
                     reconnectAttempts++;
                     const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 10000);
-                    console.log(`[WS] Reconnecting in ${delay}ms... attempt ${reconnectAttempts}`);
                     reconnectTimeout = setTimeout(connect, delay);
                 } else {
                     setWsError("Connection lost. Please refresh.");
@@ -588,14 +561,11 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
         connect();
 
-        // Ping interval - send ping every 15 seconds
         pingIntervalRef.current = setInterval(() => {
             if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
                 try {
                     wsRef.current.send(JSON.stringify({ type: "ping" }));
-                } catch (err) {
-                    console.error("[WS] Ping failed:", err);
-                }
+                } catch (err) { }
             }
         }, 15000);
 
@@ -615,24 +585,14 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         if (!mountedRef.current) return;
 
         const state = data.state;
-        console.log("[WS] handleGameState:", {
-            current_turn: state.current_turn,
-            my_player_id: myPlayerId,
-            you_are: data.you_are,
-            status: state.status,
-        });
-
         setPvpState(state);
 
-        // Determine my player ID from the message if not set
         const effectiveMyPlayerId = myPlayerId || (data.you_are === "player1" ? state.player1_id : state.player2_id);
 
-        // Update myPlayerId if we got it from game_state
         if (!myPlayerId && effectiveMyPlayerId) {
             setMyPlayerId(effectiveMyPlayerId);
         }
 
-        // Update board
         if (state.board) {
             const newBoard = state.board.map((cell, idx) => {
                 if (!cell) return null;
@@ -647,21 +607,13 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             setBoard(newBoard);
         }
 
-        // Update board elements
         if (state.board_elements) {
             setBoardElems(state.board_elements);
         }
 
-        // Update turn - this is the key fix!
         const isMyTurn = String(state.current_turn) === String(effectiveMyPlayerId);
-        console.log("[WS] Turn check:", {
-            current_turn: state.current_turn,
-            effectiveMyPlayerId,
-            isMyTurn,
-        });
         setTurn(isMyTurn ? "player" : "enemy");
 
-        // Update my hand
         if (data.your_hand) {
             const myHand = data.your_hand.map((card, idx) => ({
                 ...nftToCard(card, idx),
@@ -670,7 +622,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             setHands(h => ({ ...h, player: myHand }));
         }
 
-        // Update enemy hand count for display
         const enemyHandCount = data.you_are === "player1"
             ? state.player2_hand_count
             : state.player1_hand_count;
@@ -686,7 +637,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             }));
         }
 
-        // Update status
         if (state.status === "finished") {
             setMatchOver(true);
             setRoundOver(true);
@@ -702,20 +652,10 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
         const { cell_index, card, captured, player_id } = data;
 
-        console.log("[WS] handleCardPlayed:", {
-            player_id,
-            cell_index,
-            card_id: card?.id,
-            captured,
-            myPlayerId,
-        });
-
-        // Determine owner relative to me
         const effectiveMyPlayerId = myPlayerId || (myRole === "player1" ? pvpState?.player1_id : pvpState?.player2_id);
         const isMyCard = String(player_id) === String(effectiveMyPlayerId);
         const owner = isMyCard ? "player" : "enemy";
 
-        // Update board
         setBoard(prev => {
             const next = [...prev];
             next[cell_index] = {
@@ -725,7 +665,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                 placeKey: Date.now(),
             };
 
-            // Handle captures
             if (captured && captured.length > 0) {
                 for (const idx of captured) {
                     if (next[idx]) {
@@ -741,7 +680,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             return next;
         });
 
-        // Remove card from hand if it's my card
         if (isMyCard) {
             const cardId = card.id || card.token_id || card.tokenId;
             setHands(h => ({
@@ -752,7 +690,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                 }),
             }));
         } else {
-            // Reduce enemy hand count
             setHands(h => ({
                 ...h,
                 enemy: h.enemy.length > 0 ? h.enemy.slice(0, -1) : [],
@@ -768,19 +705,11 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         const effectiveMyPlayerId = myPlayerId || (myRole === "player1" ? pvpState?.player1_id : pvpState?.player2_id);
         const isMyTurn = String(data.current_turn) === String(effectiveMyPlayerId);
 
-        console.log("[WS] handleTurnChange:", {
-            current_turn: data.current_turn,
-            effectiveMyPlayerId,
-            isMyTurn,
-        });
-
         setTurn(isMyTurn ? "player" : "enemy");
     };
 
     const handleGameOver = (data) => {
         if (!mountedRef.current) return;
-
-        console.log("[WS] handleGameOver:", data);
 
         setMatchOver(true);
         setRoundOver(true);
@@ -796,12 +725,9 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
     const sendPvPMove = (cardIndex, cellIndex) => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-            console.error("[WS] Not connected, state:", wsRef.current?.readyState);
             setWsError("Connection lost, reconnecting...");
             return false;
         }
-
-        console.log("[WS] Sending play_card:", { card_index: cardIndex, cell_index: cellIndex });
 
         try {
             wsRef.current.send(JSON.stringify({
@@ -811,13 +737,13 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             }));
             return true;
         } catch (err) {
-            console.error("[WS] Failed to send:", err);
             setWsError("Failed to send move");
             return false;
         }
     };
 
     // ==================== End PvP WebSocket Logic ====================
+
     const refreshStage2Match = async () => {
         if (!isStage2) return;
         try {
@@ -825,16 +751,13 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             if (!token) return;
             const m = await apiFetch(`/api/matches/${matchId}`, { token });
             setStage2Match(m);
-        } catch {
-            // ignore
-        }
+        } catch { }
     };
 
     useEffect(() => {
         refreshStage2Match();
     }, [matchId, isStage2]);
 
-    // Load AI deck (only for AI mode)
     useEffect(() => {
         if (isPvP) return;
 
@@ -855,8 +778,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                 if (!alive) return;
                 setEnemyDeck(getFallbackEnemyDeck());
             } finally {
-                if (!alive) return;
-                setLoadingEnemyDeck(false);
+                if (alive) setLoadingEnemyDeck(false);
             }
         })();
 
@@ -984,10 +906,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
         if (isPvP) {
             const cardIndex = hands.player.findIndex(c => c.id === selected.id);
-            if (cardIndex === -1) {
-                console.error("[Game] Card not found in hand");
-                return;
-            }
+            if (cardIndex === -1) return;
 
             if (sendPvPMove(cardIndex, cellIdx)) {
                 setSelected(null);
@@ -995,7 +914,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             return;
         }
 
-        // AI mode: local logic
         const next = [...board];
         next[cellIdx] = { ...selected, owner: "player", placeKey: (selected.placeKey || 0) + 1 };
 
@@ -1067,7 +985,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         setTurn("enemy");
     };
 
-    // AI enemy turn (only for AI mode)
     useEffect(() => {
         if (isPvP) return;
         if (turn !== "enemy" || roundOver || matchOver) return;
@@ -1112,7 +1029,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         };
     }, [turn, roundOver, matchOver, isPvP]);
 
-    // Check round/match end (AI mode only)
     useEffect(() => {
         if (isPvP) return;
         if (roundOver || matchOver) return;
@@ -1211,7 +1127,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
             const loserUserId = Number(opp.user_id);
             const picked = deposits.find((d) => String(d.id) === String(claimPickId) && Number(d.user_id) === loserUserId);
-            if (!picked) throw new Error("Selected deposit not found (or not opponent deposit)");
+            if (!picked) throw new Error("Selected deposit not found");
 
             await apiFetch(`/api/matches/${matchId}/finish`, {
                 method: "POST",
@@ -1248,7 +1164,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         }
     };
 
-    // Cleanup on unmount
     useEffect(() => {
         return () => {
             mountedRef.current = false;
@@ -1308,10 +1223,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                         <div className="game-over-box" style={{ minWidth: 320 }}>
                             <h2 style={{ margin: 0, color: "#ffd43b" }}>Opponent Disconnected</h2>
                             <div style={{ marginTop: 10, opacity: 0.9, fontSize: 14 }}>
-                                Waiting for reconnect: {Math.floor(remainingSec / 60)}:{(remainingSec % 60).toString().padStart(2, '0')}
-                            </div>
-                            <div style={{ marginTop: 8, opacity: 0.7, fontSize: 12 }}>
-                                If they don't return, you win!
+                                Waiting: {Math.floor(remainingSec / 60)}:{(remainingSec % 60).toString().padStart(2, '0')}
                             </div>
                         </div>
                     </div>
@@ -1323,26 +1235,19 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     return (
         <div className="game-root">
             <div className="game-ui tt-layout">
-                <button className="exit" onClick={onExit}>
-                    ← Меню
-                </button>
+                <button className="exit" onClick={onExit}>← Меню</button>
 
                 {!deckOk ? (
                     <div style={{ color: "#fff", padding: 20, textAlign: "center", gridColumn: "1 / -1", fontSize: 14 }}>
                         ⚠️ Ошибка: активная колода не содержит 5 карт.
-                        <br />
-                        Вернитесь в Инвентарь и выберите 5 NFT.
                     </div>
                 ) : null}
 
                 {deckOk ? (
                     <>
                         <div className="hud-corner hud-score red hud-near-left">🟥 {boardScore.red}</div>
-                        <div className="hud-corner hud-score blue hud-near-right">
-                            {boardScore.blue} 🟦
-                        </div>
+                        <div className="hud-corner hud-score blue hud-near-right">{boardScore.blue} 🟦</div>
 
-                        {/* PvP indicator */}
                         {isPvP && (
                             <div style={{
                                 position: "absolute",
@@ -1369,11 +1274,17 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                             <div className="hand-grid">
                                 {hands.enemy.map((c, i) => {
                                     const { col, row } = posForHandIndex(i);
+                                    // AI режим: всегда скрыто, кроме reveal
+                                    // PvP: всегда скрыто
                                     const isRevealed = !isPvP && enemyRevealId === c?.id;
-                                    const isHidden = isPvP || c?.hidden;
+
                                     return (
                                         <div key={c?.id || `enemy_${i}`} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
-                                            {isRevealed ? <Card card={c} disabled /> : isHidden ? <Card hidden /> : <Card card={c} disabled />}
+                                            {isRevealed ? (
+                                                <Card card={c} disabled />
+                                            ) : (
+                                                <Card hidden />
+                                            )}
                                         </div>
                                     );
                                 })}
@@ -1447,7 +1358,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                         className={`magic-btn freeze ${spellMode === "freeze" ? "active" : ""}`}
                                         onClick={onMagicFreeze}
                                         disabled={!canUseMagic || playerSpells.freeze <= 0}
-                                        title="Freeze (house rule)"
+                                        title="Freeze"
                                     >
                                         <span className="magic-ic">❄</span>
                                         <span className="magic-count">{playerSpells.freeze}</span>
@@ -1457,7 +1368,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                         className="magic-btn reveal"
                                         onClick={onMagicReveal}
                                         disabled={!canUseMagic || playerSpells.reveal <= 0}
-                                        title="Reveal (house rule)"
+                                        title="Reveal"
                                     >
                                         <span className="magic-ic">👁</span>
                                         <span className="magic-count">{playerSpells.reveal}</span>
@@ -1470,9 +1381,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                             <div className="game-over">
                                 <div className="game-over-box" style={{ minWidth: 320 }}>
                                     <h2 style={{ margin: 0 }}>Загрузка соперника…</h2>
-                                    <div style={{ opacity: 0.85, fontSize: 12, marginTop: 10 }}>
-                                        Получаем AI deck из backend…
-                                    </div>
                                 </div>
                             </div>
                         ) : null}
@@ -1500,12 +1408,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                         </div>
                                     )}
 
-                                    {isStage2 && matchId ? (
-                                        <div style={{ fontSize: 11, opacity: 0.85, marginBottom: 10, fontFamily: "monospace" }}>
-                                            Stage2 matchId: {matchId}
-                                        </div>
-                                    ) : null}
-
                                     {matchOver && matchWinner && loserSide && !isPvP && (
                                         <>
                                             <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 8 }}>
@@ -1514,101 +1416,48 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                                     : "Соперник забирает 1 твою карту"}
                                             </div>
 
-                                            {matchWinner === "player" ? (
-                                                <>
-                                                    {isStage2 && Array.isArray(stage2OpponentDeposits) ? (
-                                                        <>
-                                                            {stage2OpponentDeposits.length ? (
-                                                                <div
-                                                                    style={{
-                                                                        display: "grid",
-                                                                        gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
-                                                                        gap: 8,
-                                                                        marginBottom: 10,
-                                                                    }}
-                                                                >
-                                                                    {stage2OpponentDeposits.map((d) => (
-                                                                        <div
-                                                                            key={d.id}
-                                                                            onClick={() => !claimDone && setClaimPickId(String(d.id))}
-                                                                            style={{
-                                                                                cursor: claimDone ? "default" : "pointer",
-                                                                                outline:
-                                                                                    claimPickId === String(d.id)
-                                                                                        ? "2px solid rgba(120,200,255,0.75)"
-                                                                                        : "1px solid rgba(255,255,255,0.12)",
-                                                                                borderRadius: 12,
-                                                                                padding: 10,
-                                                                                background: "rgba(0,0,0,0.35)",
-                                                                                fontSize: 11,
-                                                                                fontFamily: "monospace",
-                                                                                opacity: claimDone ? 0.6 : 1,
-                                                                            }}
-                                                                        >
-                                                                            <div style={{ fontWeight: 900, marginBottom: 6 }}>NFT</div>
-                                                                            <div style={{ opacity: 0.9 }}>{d.nft_contract_id}</div>
-                                                                            <div style={{ opacity: 0.9 }}>{d.token_id}</div>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            ) : (
-                                                                <div style={{ opacity: 0.85, fontSize: 12, marginBottom: 10 }}>
-                                                                    Нет депозитов соперника в матче. Stage2 claim невозможен (нужно lock 5 NFT до боя).
-                                                                </div>
-                                                            )}
-                                                        </>
-                                                    ) : (
+                                            {matchWinner === "player" && (
+                                                <div
+                                                    style={{
+                                                        display: "grid",
+                                                        gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+                                                        gap: 8,
+                                                        marginBottom: 10,
+                                                    }}
+                                                >
+                                                    {loserDeck.map((c) => (
                                                         <div
+                                                            key={c.id}
+                                                            onClick={() => !claimDone && setClaimPickId(c.id)}
                                                             style={{
-                                                                display: "grid",
-                                                                gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
-                                                                gap: 8,
-                                                                marginBottom: 10,
+                                                                cursor: claimDone ? "default" : "pointer",
+                                                                outline:
+                                                                    claimPickId === c.id
+                                                                        ? "2px solid rgba(120,200,255,0.75)"
+                                                                        : "1px solid rgba(255,255,255,0.12)",
+                                                                borderRadius: 12,
+                                                                padding: 4,
+                                                                opacity: claimDone ? 0.6 : 1,
                                                             }}
                                                         >
-                                                            {loserDeck.map((c) => (
-                                                                <div
-                                                                    key={c.id}
-                                                                    onClick={() => !claimDone && setClaimPickId(c.id)}
-                                                                    style={{
-                                                                        cursor: claimDone ? "default" : "pointer",
-                                                                        outline:
-                                                                            claimPickId === c.id
-                                                                                ? "2px solid rgba(120,200,255,0.75)"
-                                                                                : "1px solid rgba(255,255,255,0.12)",
-                                                                        borderRadius: 12,
-                                                                        padding: 4,
-                                                                        opacity: claimDone ? 0.6 : 1,
-                                                                    }}
-                                                                >
-                                                                    <Card card={c} disabled />
-                                                                </div>
-                                                            ))}
+                                                            <Card card={c} disabled />
                                                         </div>
-                                                    )}
+                                                    ))}
+                                                </div>
+                                            )}
 
-                                                    {!claimDone ? (
-                                                        <button disabled={!claimPickId || stage2Busy} onClick={onConfirmClaim}>
-                                                            {stage2Busy ? "On-chain..." : "Забрать выбранную карту"}
-                                                        </button>
-                                                    ) : (
-                                                        <div style={{ marginTop: 6, opacity: 0.9, fontSize: 12 }}>
-                                                            Карта получена. {isStage2 ? "Stage2 (on-chain)." : "Stage1 (off-chain)."}
-                                                        </div>
-                                                    )}
+                                            {matchWinner === "player" && !claimDone ? (
+                                                <button disabled={!claimPickId || stage2Busy} onClick={onConfirmClaim}>
+                                                    {stage2Busy ? "On-chain..." : "Забрать выбранную карту"}
+                                                </button>
+                                            ) : matchWinner === "player" && claimDone ? (
+                                                <div style={{ marginTop: 6, opacity: 0.9, fontSize: 12 }}>
+                                                    Карта получена.
+                                                </div>
+                                            ) : null}
 
-                                                    {stage2Err ? (
-                                                        <div style={{ marginTop: 8, color: "#ffb3b3", fontSize: 12 }}>{stage2Err}</div>
-                                                    ) : null}
-
-                                                    {isStage2 && !nearConnected ? (
-                                                        <div style={{ marginTop: 8, opacity: 0.85, fontSize: 12 }}>
-                                                            Для Stage2 claim нужен подключённый NEAR кошелёк (HERE).
-                                                        </div>
-                                                    ) : null}
-                                                </>
-                                            ) : (
-                                                <div style={{ opacity: 0.85, fontSize: 12, marginBottom: 10 }}>(Пока AI не выбирает.)</div>
+                                            {stage2Err && (
+                                                <div style={{ marginTop: 8, color: "#ffb3b3", fontSize: 12 }}>{stage2Err}</div>
                                             )}
                                         </>
                                     )}
@@ -1680,7 +1529,24 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
     }
 
     const cardValues = card?.values || card?.stats || { top: 5, right: 5, bottom: 5, left: 5 };
-    const sd = card?.element && cellElement ? (card.element === cellElement ? +1 : -1) : 0;
+
+    // Вычисляем бонус от стихии ячейки
+    const elemBonus = card?.element && cellElement
+        ? (card.element === cellElement ? +1 : -1)
+        : 0;
+
+    // Функция для получения отображаемого значения с бонусом
+    const getDisplayValue = (base) => {
+        if (elemBonus === 0) return base;
+        return clamp(base + elemBonus, 1, 10);
+    };
+
+    // Функция для получения цвета числа
+    const getNumColor = (base) => {
+        if (elemBonus === 0) return "#fff";
+        if (elemBonus > 0) return "#4ade80"; // зелёный для +
+        return "#f87171"; // красный для -
+    };
 
     return (
         <div
@@ -1711,15 +1577,30 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
                 {card?.element ? (
                     <div className="card-elem-pill" title={card.element}>
                         <span className="card-elem-ic">{ELEM_ICON[card.element]}</span>
-                        {sd !== 0 ? <span className="card-elem-delta">{sd > 0 ? "+1" : "-1"}</span> : null}
+                        {elemBonus !== 0 && (
+                            <span
+                                className="card-elem-delta"
+                                style={{ color: elemBonus > 0 ? "#4ade80" : "#f87171" }}
+                            >
+                                {elemBonus > 0 ? "+1" : "-1"}
+                            </span>
+                        )}
                     </div>
                 ) : null}
 
                 <div className="tt-badge" />
-                <span className="tt-num top">{showVal(cardValues.top ?? "?")}</span>
-                <span className="tt-num left">{showVal(cardValues.left ?? "?")}</span>
-                <span className="tt-num right">{showVal(cardValues.right ?? "?")}</span>
-                <span className="tt-num bottom">{showVal(cardValues.bottom ?? "?")}</span>
+                <span className="tt-num top" style={{ color: getNumColor(cardValues.top) }}>
+                    {getDisplayValue(cardValues.top)}
+                </span>
+                <span className="tt-num left" style={{ color: getNumColor(cardValues.left) }}>
+                    {getDisplayValue(cardValues.left)}
+                </span>
+                <span className="tt-num right" style={{ color: getNumColor(cardValues.right) }}>
+                    {getDisplayValue(cardValues.right)}
+                </span>
+                <span className="tt-num bottom" style={{ color: getNumColor(cardValues.bottom) }}>
+                    {getDisplayValue(cardValues.bottom)}
+                </span>
             </div>
         </div>
     );
