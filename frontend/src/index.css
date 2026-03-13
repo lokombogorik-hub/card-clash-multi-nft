@@ -368,11 +368,11 @@ img {
 
     0%,
     100% {
-        opacity: .9;
+        box-shadow: 0 0 12px rgba(0, 180, 255, .2);
     }
 
     50% {
-        opacity: 1;
+        box-shadow: 0 0 22px rgba(0, 180, 255, .4);
     }
 }
 
@@ -380,11 +380,11 @@ img {
 
     0%,
     100% {
-        opacity: .9;
+        box-shadow: 0 0 12px rgba(255, 80, 80, .15);
     }
 
     50% {
-        opacity: 1;
+        box-shadow: 0 0 22px rgba(255, 80, 80, .35);
     }
 }
 
@@ -2271,11 +2271,6 @@ img {
     }
 
     .board::after {
-        animation: none;
-    }
-
-    .card.player,
-    .card.enemy {
         animation: none;
     }
 }
