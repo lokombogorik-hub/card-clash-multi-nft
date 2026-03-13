@@ -1347,16 +1347,22 @@ img {
     box-shadow: 0 10px 26px rgba(0, 0, 0, .55);
 }
 
-/* Neon ring */
+/* Neon ring — ОТКЛЮЧЕНО для производительности */
 .inv-card-game::before {
     content: "";
     position: absolute;
-    inset: -150%;
-    background: conic-gradient(from 90deg, transparent 0 25%, rgba(120, 200, 255, .35) 44%, rgba(255, 61, 242, .22) 56%, transparent 75% 100%);
-    opacity: .12;
-    animation: inv-ring-spin 6s linear infinite;
+    inset: -2px;
+    border-radius: 16px;
+    background: linear-gradient(135deg, rgba(120, 200, 255, .2), rgba(255, 61, 242, .15));
+    opacity: 0;
+    transition: opacity 0.2s;
     pointer-events: none;
-    z-index: 2;
+    z-index: 0;
+}
+
+.inv-card-game:hover::before,
+.inv-card-game.is-selected::before {
+    opacity: 1;
 }
 
 @keyframes inv-ring-spin {
@@ -1413,6 +1419,7 @@ img {
 }
 
 /* Inventory art */
+/* Inventory art — упрощённый */
 .inv-card-art-full {
     position: absolute;
     inset: 0;
@@ -1542,46 +1549,30 @@ img {
     left: 22px;
 }
 
-/* Pick badge — INVENTORY (номер выбора 1-5) */
+/* Pick badge — INVENTORY (оптимизированный) */
 .inv-pick-badge {
     position: absolute;
     right: 8px;
     bottom: 8px;
-    width: 36px;
-    height: 36px;
-    border-radius: 999px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
     z-index: 9;
-    padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #78c8ff 0%, #ff3df2 100%);
-    box-shadow: 0 0 20px rgba(120, 200, 255, .5), 0 4px 12px rgba(0, 0, 0, .5);
-    animation: inv-badge-appear 220ms cubic-bezier(.2, .9, .2, 1) both;
-}
-
-@keyframes inv-badge-appear {
-    from {
-        transform: scale(.6);
-        opacity: 0
-    }
-
-    to {
-        transform: scale(1);
-        opacity: 1
-    }
+    background: #78c8ff;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .4);
+    /* БЕЗ анимации */
 }
 
 .inv-pick-badge-inner {
-    width: calc(100% - 4px);
-    height: calc(100% - 4px);
-    border-radius: 999px;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, .75);
-    border: 1px solid rgba(255, 255, 255, .2);
+    width: 100%;
+    height: 100%;
 }
 
 .inv-pick-check {
@@ -1590,10 +1581,9 @@ img {
 
 .inv-pick-no {
     font-weight: 900;
-    font-size: 16px;
+    font-size: 14px;
     line-height: 1;
-    color: #fff;
-    text-shadow: 0 2px 8px rgba(0, 0, 0, .9);
+    color: #000;
 }
 
 /* =========================
