@@ -14,6 +14,7 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
     var walletAddress = ctx.accountId || "";
 
     var [status, setStatus] = useState("idle");
+    var [statusText, setStatusText] = useState("");
     var [error, setError] = useState("");
     var [matchId, setMatchId] = useState("");
 
@@ -25,9 +26,15 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
         return playerDeck.map(function (c) { return c.token_id || c.tokenId || ""; }).filter(Boolean);
     }, [playerDeck]);
 
+    var deckImages = useMemo(function () {
+        if (!Array.isArray(playerDeck)) return [];
+        return playerDeck.map(function (c) { return c.imageUrl || c.image || ""; });
+    }, [playerDeck]);
+
     useEffect(function () {
         if (!open) {
             setStatus("idle");
+            setStatusText("");
             setError("");
             setMatchId("");
         }
@@ -55,9 +62,11 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
         }
 
         setStatus("loading");
+        setStatusText("Checking NFT ownership...");
         setError("");
 
         try {
+            // Step 1: Verify ownership
             var owned = await nearNftTokensForOwner(nftContractId, walletAddress);
             var ownedIds = new Set(owned.map(function (t) { return t.token_id; }));
 
@@ -65,6 +74,9 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
             if (missing.length > 0) {
                 throw new Error("Missing NFTs: " + missing.join(", "));
             }
+
+            // Step 2: Create match on backend
+            setStatusText("Creating match...");
 
             var token = getStoredToken();
             var createRes = await apiFetch("/api/matches/create", {
@@ -80,6 +92,9 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
             if (!newMatchId) throw new Error("Backend didn't return match_id");
 
             setMatchId(newMatchId);
+
+            // Step 3: Lock NFTs in escrow
+            setStatusText("Locking NFTs in escrow...");
 
             if (!ctx.selector) throw new Error("Wallet selector not initialized");
             var wallet = await ctx.selector.wallet();
@@ -106,10 +121,39 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                 actions: actions,
             });
 
+            // Step 4: Register deposits on backend
+            setStatusText("Registering deposits...");
+
+            await apiFetch("/api/matches/" + newMatchId + "/register_deposits", {
+                method: "POST",
+                token: token,
+                body: JSON.stringify({
+                    token_ids: deckTokenIds,
+                    nft_contract_id: nftContractId,
+                    images: deckImages,
+                }),
+            });
+
+            // Step 5: Confirm escrow
+            setStatusText("Confirming escrow...");
+
+            await apiFetch("/api/matches/" + newMatchId + "/confirm_escrow", {
+                method: "POST",
+                token: token,
+                body: JSON.stringify({
+                    player_id: String(me?.id || ""),
+                    token_ids: deckTokenIds,
+                }),
+            });
+
+            // Success!
             setStatus("success");
+            setStatusText("NFTs locked successfully!");
+
             setTimeout(function () {
                 onReady?.({ matchId: newMatchId });
-            }, 1000);
+            }, 1200);
+
         } catch (err) {
             console.error("[LockEscrow] error:", err);
             setError(String(err?.message || err));
@@ -138,7 +182,7 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                 onClick={function (e) { e.stopPropagation(); }}
             >
                 <h3 style={{ margin: "0 0 12px", fontSize: 20, fontWeight: 900, color: "#fff" }}>
-                    Lock NFTs in Escrow
+                    🔒 Lock NFTs in Escrow
                 </h3>
 
                 {!escrowContractId && (
@@ -154,10 +198,42 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
 
                 {status === "idle" && (
                     <>
-                        <p style={{ margin: "0 0 20px", fontSize: 13, opacity: 0.7, color: "#a0d8ff" }}>
+                        <p style={{ margin: "0 0 16px", fontSize: 13, opacity: 0.7, color: "#a0d8ff" }}>
                             This will lock your 5 NFTs in the escrow contract.
                             <br />Winner takes 1 NFT from loser.
                         </p>
+
+                        {/* Show deck cards */}
+                        <div style={{
+                            display: "flex",
+                            gap: 6,
+                            justifyContent: "center",
+                            marginBottom: 16,
+                            flexWrap: "wrap",
+                        }}>
+                            {playerDeck && playerDeck.slice(0, 5).map(function (card, i) {
+                                return (
+                                    <div
+                                        key={card?.token_id || card?.tokenId || i}
+                                        style={{
+                                            width: 48,
+                                            height: 64,
+                                            borderRadius: 8,
+                                            overflow: "hidden",
+                                            border: "2px solid rgba(255,140,0,0.4)",
+                                        }}
+                                    >
+                                        <img
+                                            src={card?.imageUrl || card?.image || "/cards/card.jpg"}
+                                            alt=""
+                                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                            onError={function (e) { e.currentTarget.src = "/cards/card.jpg"; }}
+                                        />
+                                    </div>
+                                );
+                            })}
+                        </div>
+
                         <button
                             onClick={handleLock}
                             disabled={!escrowContractId}
@@ -172,7 +248,7 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                                 opacity: escrowContractId ? 1 : 0.5,
                             }}
                         >
-                            🔒 Lock & Start
+                            🔒 Lock & Start Match
                         </button>
                     </>
                 )}
@@ -180,41 +256,67 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                 {status === "loading" && (
                     <div style={{ padding: 20, color: "#fff" }}>
                         <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
-                        <div>Locking NFTs...</div>
+                        <div style={{ fontSize: 14, marginBottom: 8 }}>{statusText || "Processing..."}</div>
+                        <div style={{
+                            fontSize: 11,
+                            opacity: 0.6,
+                            padding: "8px 12px",
+                            background: "rgba(255,255,255,0.05)",
+                            borderRadius: 8,
+                        }}>
+                            Please confirm in your wallet
+                        </div>
                     </div>
                 )}
 
                 {status === "success" && (
-                    <div style={{ padding: 20, color: "#0f0" }}>
+                    <div style={{ padding: 20, color: "#4ade80" }}>
                         <div style={{ fontSize: 32, marginBottom: 12 }}>✅</div>
-                        <div>NFTs locked! Starting match...</div>
+                        <div style={{ fontSize: 14, fontWeight: 700 }}>NFTs locked!</div>
+                        <div style={{ fontSize: 12, opacity: 0.8, marginTop: 6 }}>
+                            Entering matchmaking...
+                        </div>
                     </div>
                 )}
 
                 {status === "error" && (
                     <div style={{ padding: 20 }}>
                         <div style={{ fontSize: 32, marginBottom: 12 }}>❌</div>
-                        <div style={{ color: "#ff6b6b", marginBottom: 20, wordBreak: "break-word" }}>{error}</div>
+                        <div style={{
+                            color: "#ff6b6b",
+                            marginBottom: 20,
+                            wordBreak: "break-word",
+                            fontSize: 13,
+                            padding: "10px 12px",
+                            background: "rgba(255,100,100,0.1)",
+                            borderRadius: 8,
+                        }}>
+                            {error}
+                        </div>
                         <button
-                            onClick={function () { setStatus("idle"); setError(""); }}
+                            onClick={function () { setStatus("idle"); setError(""); setStatusText(""); }}
                             style={{
                                 padding: "10px 20px", borderRadius: 10,
                                 border: "1px solid rgba(255,255,255,0.2)",
                                 background: "rgba(255,255,255,0.05)", color: "#fff", cursor: "pointer",
                             }}
                         >
-                            Retry
+                            Try Again
                         </button>
                     </div>
                 )}
 
                 <button
                     onClick={onClose}
+                    disabled={status === "loading"}
                     style={{
                         marginTop: 14, padding: "10px 20px", borderRadius: 10,
                         border: "1px solid rgba(255,255,255,0.1)",
                         background: "rgba(255,255,255,0.05)",
-                        color: "rgba(255,255,255,0.6)", fontSize: 13, cursor: "pointer", width: "100%",
+                        color: "rgba(255,255,255,0.6)", fontSize: 13,
+                        cursor: status === "loading" ? "not-allowed" : "pointer",
+                        width: "100%",
+                        opacity: status === "loading" ? 0.5 : 1,
                     }}
                 >
                     Cancel
