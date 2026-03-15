@@ -15,16 +15,12 @@ import base64
 router = APIRouter(prefix="/api/cases", tags=["cases"])
 
 # ============================================================
-# CONFIGURATION - Set these in Railway env variables
+# CONFIGURATION
 # ============================================================
 
-# NFT Contract where cards are minted
 NFT_CONTRACT_ID = os.getenv("NFT_CONTRACT_ID", "")
-
-# Treasury wallet that receives payments
 TREASURY_WALLET = os.getenv("TREASURY_WALLET", "retardo-s.near")
 
-# Pool wallets - each holds NFTs of specific rarity
 POOL_WALLETS = {
     "common": os.getenv("POOL_WALLET_COMMON", "common-nft.near"),
     "rare": os.getenv("POOL_WALLET_RARE", "rare-nfts.near"),
@@ -32,8 +28,6 @@ POOL_WALLETS = {
     "legendary": os.getenv("POOL_WALLET_LEGENDARY", "legendary-nft.near"),
 }
 
-# Pool private keys (function call access keys)
-# Format: ed25519:base58privatekey
 POOL_KEYS = {
     "common": os.getenv("POOL_KEY_COMMON", ""),
     "rare": os.getenv("POOL_KEY_RARE", ""),
@@ -41,7 +35,6 @@ POOL_KEYS = {
     "legendary": os.getenv("POOL_KEY_LEGENDARY", ""),
 }
 
-# Rarity weights for mixed cases
 RARITY_WEIGHTS = {
     "common": 55,
     "rare": 30,
@@ -49,36 +42,13 @@ RARITY_WEIGHTS = {
     "legendary": 3,
 }
 
-# Case definitions
 CASES = {
-    "starter": {
-        "price": 0.1,
-        "card_count": 1,
-        "rarity_mode": "mixed",
-        "description": "1 random card",
-    },
-    "premium": {
-        "price": 2,
-        "card_count": 5,
-        "rarity_mode": "mixed",
-        "description": "5 random cards",
-    },
-    "legendary": {
-        "price": 5,
-        "card_count": 5,
-        "rarity_mode": "epic",
-        "description": "5 epic cards guaranteed",
-    },
-    "ultimate": {
-        "price": 10,
-        "card_count": 5,
-        "rarity_mode": "legendary",
-        "description": "5 legendary cards guaranteed",
-    },
+    "starter": {"price": 0.1, "card_count": 1, "rarity_mode": "mixed"},
+    "premium": {"price": 2, "card_count": 5, "rarity_mode": "mixed"},
+    "legendary": {"price": 5, "card_count": 5, "rarity_mode": "epic"},
+    "ultimate": {"price": 10, "card_count": 5, "rarity_mode": "legendary"},
 }
 
-# In-memory reservation storage
-# In production: use Redis or database
 reserved_tokens: Dict[str, List[dict]] = {}
 used_tx_hashes: set = set()
 
@@ -97,26 +67,10 @@ class ClaimNFTRequest(BaseModel):
 # ============================================================
 
 def is_configured() -> bool:
-    """Check if pool system is configured"""
     return bool(NFT_CONTRACT_ID) and any(POOL_KEYS.values())
 
 
-def get_config_status() -> dict:
-    """Get configuration status for debugging"""
-    return {
-        "nft_contract": NFT_CONTRACT_ID or "NOT SET",
-        "treasury": TREASURY_WALLET,
-        "pools_configured": {
-            rarity: bool(POOL_KEYS.get(rarity))
-            for rarity in RARITY_WEIGHTS.keys()
-        },
-        "ready": is_configured(),
-    }
-
-
 async def fetch_pool_tokens(wallet: str) -> List[str]:
-    """Fetch NFT token_ids owned by pool wallet"""
-
     if not NFT_CONTRACT_ID:
         return []
 
@@ -154,54 +108,58 @@ async def fetch_pool_tokens(wallet: str) -> List[str]:
     return []
 
 
-async def transfer_nft(from_wallet: str, to_wallet: str, token_id: str, pool_key: str) -> dict:
-    """
-    Transfer NFT from pool wallet to user wallet.
+async def transfer_nft(from_wallet: str, to_wallet: str, token_id: str, private_key: str) -> dict:
+    """Transfer NFT using py-near"""
 
-    NOTE: This requires py-near or similar library for signing.
-    For now returns mock success - implement actual signing when keys are ready.
-    """
-
-    if not pool_key:
+    if not private_key:
         return {
             "success": False,
             "error": "Pool key not configured",
+            "mock": True,
+        }
+
+    try:
+        from py_near.account import Account
+        import asyncio
+
+        # Initialize account with private key
+        account = Account(from_wallet, private_key)
+
+        # Call nft_transfer
+        result = await account.function_call(
+            NFT_CONTRACT_ID,
+            "nft_transfer",
+            {
+                "receiver_id": to_wallet,
+                "token_id": token_id,
+            },
+            gas=30_000_000_000_000,  # 30 TGas
+            deposit=1,  # 1 yoctoNEAR required for transfer
+        )
+
+        tx_hash = ""
+        if hasattr(result, "transaction") and hasattr(result.transaction, "hash"):
+            tx_hash = result.transaction.hash
+        elif hasattr(result, "transaction_outcome") and hasattr(result.transaction_outcome, "id"):
+            tx_hash = result.transaction_outcome.id
+
+        print(f"[CASES] Transferred {token_id} from {from_wallet} to {to_wallet}, tx: {tx_hash}")
+
+        return {
+            "success": True,
+            "tx_hash": tx_hash,
             "token_id": token_id,
         }
 
-    # TODO: Implement actual NEAR transaction signing
-    #
-    # When you have py-near installed:
-    #
-    # from py_near.account import Account
-    #
-    # account = Account(from_wallet, pool_key)
-    # result = await account.function_call(
-    #     NFT_CONTRACT_ID,
-    #     "nft_transfer",
-    #     {
-    #         "receiver_id": to_wallet,
-    #         "token_id": token_id,
-    #     },
-    #     gas=30_000_000_000_000,
-    #     deposit=1,
-    # )
-    # return {"success": True, "tx_hash": result.transaction.hash}
-
-    print(f"[CASES] MOCK TRANSFER: {token_id} from {from_wallet} to {to_wallet}")
-
-    return {
-        "success": True,
-        "mock": True,
-        "token_id": token_id,
-        "from": from_wallet,
-        "to": to_wallet,
-        "message": "Transfer will work when POOL_KEY is configured",
-    }
+    except Exception as e:
+        print(f"[CASES] Transfer error: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+        }
 
 
 def pick_rarity(mode: str) -> str:
-    """Pick rarity based on mode"""
     if mode in RARITY_WEIGHTS:
         return mode
 
@@ -211,7 +169,6 @@ def pick_rarity(mode: str) -> str:
 
 
 def generate_mock_token_id(rarity: str) -> str:
-    """Generate mock token_id for testing when pools not configured"""
     rarity_ranges = {
         "legendary": (1, 250),
         "epic": (251, 1000),
@@ -230,18 +187,16 @@ def generate_mock_token_id(rarity: str) -> str:
 
 @router.get("/config")
 async def get_config():
-    """Get cases configuration status"""
     return {
         "cases": CASES,
-        "config": get_config_status(),
-        "rarity_weights": RARITY_WEIGHTS,
+        "configured": is_configured(),
+        "nft_contract": NFT_CONTRACT_ID or "NOT SET",
+        "pools": {r: {"wallet": w, "has_key": bool(POOL_KEYS.get(r))} for r, w in POOL_WALLETS.items()},
     }
 
 
 @router.get("/pools")
 async def get_pools_status():
-    """Get pool wallets status"""
-
     pools = {}
 
     for rarity, wallet in POOL_WALLETS.items():
@@ -250,7 +205,7 @@ async def get_pools_status():
             "wallet": wallet,
             "available": len(tokens),
             "configured": bool(POOL_KEYS.get(rarity)),
-            "sample_tokens": tokens[:5] if tokens else [],
+            "sample_tokens": tokens[:3] if tokens else [],
         }
 
     return {
@@ -266,27 +221,17 @@ async def open_case(
         user: User = Depends(get_current_user),
         session: AsyncSession = Depends(get_db),
 ):
-    """Open a case and get cards"""
-
-    # Validate case
     case = CASES.get(data.case_id)
     if not case:
         raise HTTPException(400, f"Unknown case_id: {data.case_id}")
 
-    # Validate tx_hash
     if not data.tx_hash or len(data.tx_hash) < 10:
         raise HTTPException(400, "Invalid tx_hash")
 
-    # Check tx not already used
     if data.tx_hash in used_tx_hashes:
         raise HTTPException(400, "Transaction already used")
 
     used_tx_hashes.add(data.tx_hash)
-
-    # TODO: Verify tx on-chain:
-    # - Check transfer to TREASURY_WALLET
-    # - Check amount >= case price
-    # For MVP we trust the tx_hash
 
     user_id = str(user.id)
     card_count = case["card_count"]
@@ -302,11 +247,9 @@ async def open_case(
         token_id = None
         from_pool = False
 
-        # Try to get real token from pool
-        if is_configured():
+        if is_configured() and pool_key:
             available = await fetch_pool_tokens(pool_wallet)
 
-            # Filter reserved tokens
             all_reserved = set()
             for res_list in reserved_tokens.values():
                 for res in res_list:
@@ -318,7 +261,6 @@ async def open_case(
                 token_id = random.choice(available)
                 from_pool = True
 
-        # Fallback to mock token
         if not token_id:
             token_id = generate_mock_token_id(rarity)
             from_pool = False
@@ -331,15 +273,11 @@ async def open_case(
             "contract_id": NFT_CONTRACT_ID or "mock",
         })
 
-    # Store reservation
     reservation_id = f"{user_id}_{data.tx_hash[:8]}"
-
     reserved_tokens[reservation_id] = cards
 
-    # Get user's NEAR wallet
     near_account = getattr(user, "near_account_id", None)
 
-    # If wallet connected and pools configured - auto transfer
     transfers = []
     if near_account and is_configured():
         for card in cards:
@@ -349,9 +287,10 @@ async def open_case(
                     from_wallet=card["pool_wallet"],
                     to_wallet=near_account,
                     token_id=card["token_id"],
-                    pool_key=POOL_KEYS.get(rarity, ""),
+                    private_key=POOL_KEYS.get(rarity, ""),
                 )
                 transfers.append(result)
+                card["transferred"] = result.get("success", False)
 
     print(f"[CASES] User {user_id} opened {data.case_id}: {[c['token_id'] for c in cards]}")
 
@@ -363,7 +302,6 @@ async def open_case(
         "tx_hash": data.tx_hash,
         "transfers": transfers if transfers else None,
         "config_ready": is_configured(),
-        "message": "Cards received!" if is_configured() else "Cards reserved (transfers will work when pools are configured)",
     }
 
 
@@ -372,18 +310,15 @@ async def claim_reserved(
         data: ClaimNFTRequest,
         user: User = Depends(get_current_user),
 ):
-    """Claim reserved NFTs (if not auto-transferred)"""
-
     near_account = getattr(user, "near_account_id", None)
     if not near_account:
         raise HTTPException(400, "Connect NEAR wallet first")
 
     if not is_configured():
-        raise HTTPException(400, "Pool system not configured yet. Cards will be delivered when ready.")
+        raise HTTPException(400, "Pool system not configured yet")
 
     user_id = str(user.id)
 
-    # Find user's reservations
     user_reservations = {
         k: v for k, v in reserved_tokens.items()
         if k.startswith(user_id)
@@ -396,17 +331,16 @@ async def claim_reserved(
 
     for res_id, cards in user_reservations.items():
         for card in cards:
-            if card.get("from_pool"):
+            if card.get("from_pool") and not card.get("transferred"):
                 rarity = card["rarity"]
                 result = await transfer_nft(
                     from_wallet=card["pool_wallet"],
                     to_wallet=near_account,
                     token_id=card["token_id"],
-                    pool_key=POOL_KEYS.get(rarity, ""),
+                    private_key=POOL_KEYS.get(rarity, ""),
                 )
                 transfers.append(result)
 
-        # Clear reservation
         del reserved_tokens[res_id]
 
     return {
