@@ -339,6 +339,14 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
     const isPvP = mode === "pvp" && Boolean(matchId);
 
+    // ==================== PvP Claim State ====================
+    const [pvpClaimCards, setPvpClaimCards] = useState([]);  // 5 карт противника (скрытые)
+    const [pvpClaimPickIndex, setPvpClaimPickIndex] = useState(null);  // выбранный индекс (0-4)
+    const [pvpClaimRevealed, setPvpClaimRevealed] = useState(false);  // показать выбранную карту
+    const [pvpClaimBusy, setPvpClaimBusy] = useState(false);
+    const [pvpClaimDone, setPvpClaimDone] = useState(false);
+    const [pvpClaimError, setPvpClaimError] = useState("");
+
     const escrowClaim = async ({ matchId: mId, winnerAccountId, loserNftContractId, loserTokenId }) => {
         const escrowContractId = (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim();
         if (!escrowContractId) throw new Error("Escrow contract not configured");
@@ -421,6 +429,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     useEffect(() => void (boardElemsRef.current = boardElems), [boardElems]);
 
     const deckOk = Array.isArray(playerDeck) && playerDeck.length === 5;
+
     // ==================== PvP WebSocket Logic ====================
     useEffect(() => {
         if (!isPvP || !matchId) return;
@@ -714,6 +723,44 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
         if (iWon) {
             confetti({ zIndex: 99999, particleCount: 50, spread: 80, origin: { y: 0.4 } });
+
+            // Загружаем карты противника для claim (5 скрытых карт)
+            loadOpponentCardsForClaim();
+        }
+    };
+
+    // Загрузка карт противника из escrow для claim
+    const loadOpponentCardsForClaim = async () => {
+        try {
+            const token = getStoredToken();
+            if (!token || !matchId) return;
+
+            // Запрашиваем deposits противника
+            const res = await apiFetch(`/api/matches/${matchId}/opponent_deposits`, { token });
+
+            if (res && res.deposits && res.deposits.length > 0) {
+                // Есть реальные deposits
+                setPvpClaimCards(res.deposits.map((d, i) => ({
+                    id: d.token_id || `deposit_${i}`,
+                    token_id: d.token_id,
+                    nft_contract_id: d.nft_contract_id,
+                    imageUrl: d.image || d.imageUrl || ART[0],
+                    // Остальное скрыто
+                })));
+            } else {
+                // Fallback: 5 пустых карт (backend ещё не настроен)
+                setPvpClaimCards(Array.from({ length: 5 }, (_, i) => ({
+                    id: `hidden_${i}`,
+                    index: i,
+                })));
+            }
+        } catch (e) {
+            console.error("[Game] Failed to load opponent deposits:", e);
+            // Fallback
+            setPvpClaimCards(Array.from({ length: 5 }, (_, i) => ({
+                id: `hidden_${i}`,
+                index: i,
+            })));
         }
     };
 
@@ -733,6 +780,56 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         } catch (err) {
             setWsError("Failed to send move");
             return false;
+        }
+    };
+
+    // ==================== PvP Claim Logic ====================
+    const onPvpClaimPick = (index) => {
+        if (pvpClaimDone || pvpClaimBusy || pvpClaimRevealed) return;
+        setPvpClaimPickIndex(index);
+        haptic("light");
+    };
+
+    const onPvpClaimConfirm = async () => {
+        if (pvpClaimPickIndex === null || pvpClaimBusy || pvpClaimDone) return;
+
+        setPvpClaimBusy(true);
+        setPvpClaimError("");
+
+        try {
+            const token = getStoredToken();
+            if (!token) throw new Error("No auth token");
+
+            // Сначала показываем выбранную карту (переворачиваем)
+            setPvpClaimRevealed(true);
+            haptic("medium");
+
+            // Небольшая задержка для анимации
+            await new Promise(r => setTimeout(r, 800));
+
+            // Отправляем claim на backend
+            const pickedCard = pvpClaimCards[pvpClaimPickIndex];
+
+            const res = await apiFetch(`/api/matches/${matchId}/claim`, {
+                method: "POST",
+                token,
+                body: JSON.stringify({
+                    pick_index: pvpClaimPickIndex,
+                    token_id: pickedCard?.token_id || null,
+                    nft_contract_id: pickedCard?.nft_contract_id || null,
+                }),
+            });
+
+            if (res.success) {
+                setPvpClaimDone(true);
+                confetti({ zIndex: 99999, particleCount: 30, spread: 60, origin: { y: 0.5 } });
+            } else {
+                throw new Error(res.error || "Claim failed");
+            }
+        } catch (e) {
+            setPvpClaimError(String(e?.message || e));
+        } finally {
+            setPvpClaimBusy(false);
         }
     };
 
@@ -1380,88 +1477,271 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                             </div>
                         ) : null}
 
+                        {/* ==================== GAME OVER / CLAIM MODAL ==================== */}
                         {(roundOver || matchOver) && (
                             <div className="game-over">
-                                <div className="game-over-box" style={{ minWidth: 320 }}>
-                                    <h2 style={{ marginBottom: 8 }}>
-                                        {matchOver
-                                            ? (isPvP ? (roundWinner === "player" ? "You Win!" : "You Lose!") : (matchWinner === "player" ? "Матч выигран" : "Матч проигран"))
-                                            : roundWinner === "player"
-                                                ? "Победа"
-                                                : "Поражение"}
-                                    </h2>
+                                <div className="game-over-box" style={{ minWidth: 340, maxWidth: 400 }}>
 
-                                    {!isPvP && (
-                                        <div style={{ opacity: 0.9, fontSize: 12, marginBottom: 10 }}>
-                                            Раунд {roundNo} • Серия до {MATCH_WINS_TARGET} • Счёт {series.player}:{series.enemy}
-                                        </div>
-                                    )}
-
+                                    {/* PvP Game Over */}
                                     {isPvP && (
-                                        <div style={{ opacity: 0.9, fontSize: 12, marginBottom: 10 }}>
-                                            Board: You {boardScore.blue} - {boardScore.red} Opponent
-                                        </div>
-                                    )}
-
-                                    {matchOver && matchWinner && loserSide && !isPvP && (
                                         <>
-                                            <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 8 }}>
-                                                {matchWinner === "player"
-                                                    ? "Выбери 1 карту соперника"
-                                                    : "Соперник забирает 1 твою карту"}
+                                            <h2 style={{ marginBottom: 8 }}>
+                                                {roundWinner === "player" ? "🎉 Victory!" : "😔 Defeat"}
+                                            </h2>
+
+                                            <div style={{ opacity: 0.9, fontSize: 13, marginBottom: 16 }}>
+                                                Board: You {boardScore.blue} - {boardScore.red} Opponent
                                             </div>
 
-                                            {matchWinner === "player" && (
-                                                <div
-                                                    style={{
-                                                        display: "grid",
-                                                        gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+                                            {/* Winner claims 1 card */}
+                                            {roundWinner === "player" && !pvpClaimDone && (
+                                                <>
+                                                    <div style={{
+                                                        fontWeight: 700,
+                                                        fontSize: 14,
+                                                        marginBottom: 12,
+                                                        color: "#ffd700"
+                                                    }}>
+                                                        🎁 Choose 1 card from opponent
+                                                    </div>
+
+                                                    <div style={{
+                                                        fontSize: 11,
+                                                        opacity: 0.7,
+                                                        marginBottom: 12
+                                                    }}>
+                                                        Cards are hidden — pick your luck!
+                                                    </div>
+
+                                                    {/* 5 перевёрнутых карт */}
+                                                    <div style={{
+                                                        display: "flex",
                                                         gap: 8,
-                                                        marginBottom: 10,
-                                                    }}
-                                                >
-                                                    {loserDeck.map((c) => (
-                                                        <div
-                                                            key={c.id}
-                                                            onClick={() => !claimDone && setClaimPickId(c.id)}
+                                                        justifyContent: "center",
+                                                        marginBottom: 16,
+                                                        flexWrap: "wrap",
+                                                    }}>
+                                                        {(pvpClaimCards.length > 0 ? pvpClaimCards : Array(5).fill(null)).map((card, idx) => {
+                                                            const isSelected = pvpClaimPickIndex === idx;
+                                                            const showRevealed = pvpClaimRevealed && isSelected;
+
+                                                            return (
+                                                                <div
+                                                                    key={card?.id || idx}
+                                                                    onClick={() => onPvpClaimPick(idx)}
+                                                                    style={{
+                                                                        cursor: pvpClaimRevealed ? "default" : "pointer",
+                                                                        transform: isSelected ? "scale(1.08)" : "scale(1)",
+                                                                        transition: "all 0.2s ease",
+                                                                        outline: isSelected
+                                                                            ? "3px solid #ffd700"
+                                                                            : "2px solid transparent",
+                                                                        borderRadius: 12,
+                                                                        padding: 2,
+                                                                    }}
+                                                                >
+                                                                    {showRevealed && card?.imageUrl ? (
+                                                                        // Показываем выбранную карту
+                                                                        <div style={{
+                                                                            width: 52,
+                                                                            height: 72,
+                                                                            borderRadius: 10,
+                                                                            overflow: "hidden",
+                                                                            border: "2px solid #ffd700",
+                                                                        }}>
+                                                                            <img
+                                                                                src={card.imageUrl}
+                                                                                alt=""
+                                                                                style={{
+                                                                                    width: "100%",
+                                                                                    height: "100%",
+                                                                                    objectFit: "cover",
+                                                                                }}
+                                                                                onError={(e) => {
+                                                                                    e.currentTarget.src = "/cards/card.jpg";
+                                                                                }}
+                                                                            />
+                                                                        </div>
+                                                                    ) : (
+                                                                        // Рубашка карты
+                                                                        <div style={{
+                                                                            width: 52,
+                                                                            height: 72,
+                                                                            background: "linear-gradient(145deg, #1a1a2e, #0a0a15)",
+                                                                            borderRadius: 10,
+                                                                            border: isSelected
+                                                                                ? "2px solid #ffd700"
+                                                                                : "2px solid rgba(255,255,255,0.15)",
+                                                                            display: "flex",
+                                                                            alignItems: "center",
+                                                                            justifyContent: "center",
+                                                                            boxShadow: isSelected
+                                                                                ? "0 0 20px rgba(255,215,0,0.4)"
+                                                                                : "none",
+                                                                        }}>
+                                                                            <span style={{ fontSize: 20 }}>❓</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+
+                                                    {/* Кнопка Claim */}
+                                                    {!pvpClaimRevealed && (
+                                                        <button
+                                                            onClick={onPvpClaimConfirm}
+                                                            disabled={pvpClaimPickIndex === null || pvpClaimBusy}
                                                             style={{
-                                                                cursor: claimDone ? "default" : "pointer",
-                                                                outline:
-                                                                    claimPickId === c.id
-                                                                        ? "2px solid rgba(120,200,255,0.75)"
-                                                                        : "1px solid rgba(255,255,255,0.12)",
+                                                                padding: "12px 24px",
+                                                                fontSize: 14,
+                                                                fontWeight: 900,
                                                                 borderRadius: 12,
-                                                                padding: 4,
-                                                                opacity: claimDone ? 0.6 : 1,
+                                                                border: "none",
+                                                                background: pvpClaimPickIndex !== null
+                                                                    ? "linear-gradient(135deg, #ffd700, #ff8c00)"
+                                                                    : "rgba(255,255,255,0.1)",
+                                                                color: pvpClaimPickIndex !== null ? "#000" : "#666",
+                                                                cursor: pvpClaimPickIndex !== null ? "pointer" : "not-allowed",
+                                                                marginBottom: 12,
                                                             }}
                                                         >
-                                                            <Card card={c} disabled />
+                                                            {pvpClaimBusy ? "⏳ Claiming..." : "🎁 Claim Card"}
+                                                        </button>
+                                                    )}
+
+                                                    {/* После reveal */}
+                                                    {pvpClaimRevealed && !pvpClaimDone && (
+                                                        <div style={{
+                                                            fontSize: 13,
+                                                            color: "#4ade80",
+                                                            marginBottom: 12,
+                                                        }}>
+                                                            {pvpClaimBusy ? "⏳ Transferring NFT..." : "✨ Card revealed!"}
                                                         </div>
-                                                    ))}
+                                                    )}
+
+                                                    {pvpClaimError && (
+                                                        <div style={{
+                                                            fontSize: 12,
+                                                            color: "#ff6b6b",
+                                                            marginBottom: 12,
+                                                            wordBreak: "break-word",
+                                                        }}>
+                                                            ❌ {pvpClaimError}
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+
+                                            {/* Claim done */}
+                                            {roundWinner === "player" && pvpClaimDone && (
+                                                <div style={{
+                                                    fontSize: 14,
+                                                    color: "#4ade80",
+                                                    marginBottom: 16,
+                                                    fontWeight: 700,
+                                                }}>
+                                                    ✅ Card claimed! Check your inventory.
                                                 </div>
                                             )}
 
-                                            {matchWinner === "player" && !claimDone ? (
-                                                <button disabled={!claimPickId || stage2Busy} onClick={onConfirmClaim}>
-                                                    {stage2Busy ? "On-chain..." : "Забрать выбранную карту"}
+                                            {/* Loser message */}
+                                            {roundWinner === "enemy" && (
+                                                <div style={{
+                                                    fontSize: 13,
+                                                    opacity: 0.8,
+                                                    marginBottom: 16
+                                                }}>
+                                                    Opponent will claim 1 of your cards.
+                                                </div>
+                                            )}
+
+                                            {/* Exit buttons */}
+                                            <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 10 }}>
+                                                <button onClick={onExit}>
+                                                    {pvpClaimDone || roundWinner === "enemy" ? "Exit" : "Cancel"}
                                                 </button>
-                                            ) : matchWinner === "player" && claimDone ? (
-                                                <div style={{ marginTop: 6, opacity: 0.9, fontSize: 12 }}>
-                                                    Карта получена.
-                                                </div>
-                                            ) : null}
-
-                                            {stage2Err && (
-                                                <div style={{ marginTop: 8, color: "#ffb3b3", fontSize: 12 }}>{stage2Err}</div>
-                                            )}
+                                            </div>
                                         </>
                                     )}
 
-                                    <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 10, flexWrap: "wrap" }}>
-                                        {!matchOver && !isPvP && <button onClick={onNextRound}>Следующий раунд</button>}
-                                        {(matchOver || isPvP) && <button onClick={resetMatch}>{isPvP ? "Exit" : "Новый матч"}</button>}
-                                        <button onClick={onExit}>Меню</button>
-                                    </div>
+                                    {/* AI Game Over (existing logic) */}
+                                    {!isPvP && (
+                                        <>
+                                            <h2 style={{ marginBottom: 8 }}>
+                                                {matchOver
+                                                    ? (matchWinner === "player" ? "Матч выигран" : "Матч проигран")
+                                                    : roundWinner === "player"
+                                                        ? "Победа"
+                                                        : "Поражение"}
+                                            </h2>
+
+                                            <div style={{ opacity: 0.9, fontSize: 12, marginBottom: 10 }}>
+                                                Раунд {roundNo} • Серия до {MATCH_WINS_TARGET} • Счёт {series.player}:{series.enemy}
+                                            </div>
+
+                                            {matchOver && matchWinner && loserSide && (
+                                                <>
+                                                    <div style={{ fontWeight: 900, fontSize: 12, marginBottom: 8 }}>
+                                                        {matchWinner === "player"
+                                                            ? "Выбери 1 карту соперника"
+                                                            : "Соперник забирает 1 твою карту"}
+                                                    </div>
+
+                                                    {matchWinner === "player" && (
+                                                        <div
+                                                            style={{
+                                                                display: "grid",
+                                                                gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+                                                                gap: 8,
+                                                                marginBottom: 10,
+                                                            }}
+                                                        >
+                                                            {loserDeck.map((c) => (
+                                                                <div
+                                                                    key={c.id}
+                                                                    onClick={() => !claimDone && setClaimPickId(c.id)}
+                                                                    style={{
+                                                                        cursor: claimDone ? "default" : "pointer",
+                                                                        outline:
+                                                                            claimPickId === c.id
+                                                                                ? "2px solid rgba(120,200,255,0.75)"
+                                                                                : "1px solid rgba(255,255,255,0.12)",
+                                                                        borderRadius: 12,
+                                                                        padding: 4,
+                                                                        opacity: claimDone ? 0.6 : 1,
+                                                                    }}
+                                                                >
+                                                                    <Card card={c} disabled />
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+
+                                                    {matchWinner === "player" && !claimDone ? (
+                                                        <button disabled={!claimPickId || stage2Busy} onClick={onConfirmClaim}>
+                                                            {stage2Busy ? "On-chain..." : "Забрать выбранную карту"}
+                                                        </button>
+                                                    ) : matchWinner === "player" && claimDone ? (
+                                                        <div style={{ marginTop: 6, opacity: 0.9, fontSize: 12 }}>
+                                                            Карта получена.
+                                                        </div>
+                                                    ) : null}
+
+                                                    {stage2Err && (
+                                                        <div style={{ marginTop: 8, color: "#ffb3b3", fontSize: 12 }}>{stage2Err}</div>
+                                                    )}
+                                                </>
+                                            )}
+
+                                            <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 10, flexWrap: "wrap" }}>
+                                                {!matchOver && <button onClick={onNextRound}>Следующий раунд</button>}
+                                                {matchOver && <button onClick={resetMatch}>Новый матч</button>}
+                                                <button onClick={onExit}>Меню</button>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         )}
