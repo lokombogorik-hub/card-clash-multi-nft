@@ -17,8 +17,12 @@ async def ensure_users_columns(engine):
         ("losses", "INTEGER", "0"),
         ("elo_rating", "INTEGER", "1000"),
         ("nfts_count", "INTEGER", "0"),
+        ("pvp_wins", "INTEGER", "0"),
+        ("pvp_losses", "INTEGER", "0"),
+        ("rank", "VARCHAR(50)", "NULL"),
         ("created_at", "TIMESTAMP", "CURRENT_TIMESTAMP"),
         ("updated_at", "TIMESTAMP", "CURRENT_TIMESTAMP"),
+
     ]
 
     try:
