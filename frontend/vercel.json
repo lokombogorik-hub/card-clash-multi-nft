@@ -1,0 +1,12 @@
+{
+    "rewrites": [
+        {
+            "source": "/api/:path*",
+            "destination": "https://card-clash-multi-nft.onrender.com/api/:path*"
+        },
+        {
+            "source": "/health",
+            "destination": "https://card-clash-multi-nft.onrender.com/health"
+        }
+    ]
+}

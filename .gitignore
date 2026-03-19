@@ -1,0 +1,22 @@
+# Python
+**/__pycache__/
+*.pyc
+*.pyo
+
+# env / secrets
+.env
+**/.env
+
+# venv
+backend/venv/
+venv/
+
+# node
+frontend/node_modules/telegram.env
+telegram.env
+frontend/public/ui/photo_*.jpg 
+"*.lnk" 
+*.lnk
+frontend/dist/
+contracts/near/escrow/target/
+contracts/near/escrow/Cargo.lock

@@ -1,0 +1,11 @@
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+restartPolicyType = "ON_FAILURE"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+startCommand = "bash -c '/opt/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}'"
+
+[build.env]
+NIXPACKS_BUILD_DIR = "backend"
