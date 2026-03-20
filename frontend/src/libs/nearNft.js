@@ -1,6 +1,9 @@
-var RPC_URL = "https://rpc.mainnet.near.org";
+var DIRECT_RPC_URL = "https://rpc.mainnet.near.org";
 
 var API_BASE = (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_BASE_URL) || "";
+
+// RPC через бэкенд прокси (для мобилки)
+var PROXY_RPC_URL = API_BASE ? API_BASE + "/api/near/rpc" : "";
 
 var IPFS_GATEWAYS = [
     function (cid, path) { return "https://ipfs.near.social/ipfs/" + cid + path; },
@@ -49,18 +52,41 @@ async function getJson(url) {
     } catch (e) { return null; }
 }
 
+// Пробуем сначала через прокси, потом напрямую
 async function rpc(contractId, method, args) {
-    var res = await fetch(RPC_URL, {
+    var payload = {
+        jsonrpc: "2.0", id: "q", method: "query",
+        params: {
+            request_type: "call_function", finality: "final",
+            account_id: contractId, method_name: method,
+            args_base64: toB64(JSON.stringify(args || {})),
+        },
+    };
+
+    // Сначала через бэкенд прокси (работает на мобилке)
+    if (PROXY_RPC_URL) {
+        try {
+            var proxyRes = await fetch(PROXY_RPC_URL, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+            if (proxyRes.ok) {
+                var proxyJ = await proxyRes.json();
+                if (!proxyJ.error) {
+                    return JSON.parse(new TextDecoder().decode(new Uint8Array(proxyJ.result.result)));
+                }
+            }
+        } catch (e) {
+            // Fallback на прямой RPC
+        }
+    }
+
+    // Прямой RPC (работает на ПК)
+    var res = await fetch(DIRECT_RPC_URL, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-            jsonrpc: "2.0", id: "q", method: "query",
-            params: {
-                request_type: "call_function", finality: "final",
-                account_id: contractId, method_name: method,
-                args_base64: toB64(JSON.stringify(args || {})),
-            },
-        }),
+        body: JSON.stringify(payload),
     });
     var j = await res.json();
     if (j.error) throw new Error(j.error.message || "RPC err");
@@ -102,14 +128,9 @@ export function ipfsGatewayUrl(originalUrl, gatewayIndex) {
     return IPFS_GATEWAYS[gi](parsed.cid, parsed.path);
 }
 
-/**
- * Build a proxy URL through our backend.
- * NO URL encoding - pass URL as-is for Telegram WebView compatibility.
- */
 export function proxyImageUrl(originalUrl) {
     if (!originalUrl) return "";
     if (!API_BASE) return originalUrl;
-    // Don't use encodeURIComponent - it breaks in Telegram WebView
     return API_BASE + "/api/proxy/image?url=" + originalUrl;
 }
 
@@ -275,7 +296,6 @@ export async function nearNftTokensForOwner(contractId, accountId) {
 
         var originalMedia = media;
 
-        // Build proxy URL without encoding
         if (media && API_BASE) {
             media = proxyImageUrl(originalMedia);
             if (i < 5) debugLog.push("token_" + t.token_id + "_proxied=" + media);
