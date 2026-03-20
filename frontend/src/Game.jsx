@@ -249,7 +249,7 @@ function resolveCombo(queue, grid, boardElems) {
 const posForHandIndex = (i) => {
     if (i === 0) return { col: 1, row: 1 };
     if (i === 1) return { col: 2, row: 1 };
-    if (i === 2) return { col: 1, row: 2 }; // центр
+    if (i === 2) return { col: 1, row: 2 };
     if (i === 3) return { col: 1, row: 3 };
     if (i === 4) return { col: 2, row: 3 };
     return { col: 1, row: 1 };
@@ -1308,34 +1308,32 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
                         <div className="hand left">
                             <div className="hand-grid">
-                                {hands.player.map((c, i) => {
+                                {hands.enemy.map((c, i) => {
                                     const { col, row } = posForHandIndex(i);
                                     const isCenterCard = i === 2;
+                                    const isRevealed = !isPvP && c && enemyRevealId && enemyRevealId === c.id;
 
                                     return (
                                         <div
-                                            key={c.id}
+                                            key={c?.id || `enemy_${i}`}
                                             style={{
                                                 gridColumn: isCenterCard ? "1 / span 2" : col,
                                                 gridRow: row,
                                                 justifySelf: isCenterCard ? "center" : "auto",
-                                                // Боковые карты смещаем на полкарты
-                                                transform: (i === 0 || i === 1)
-                                                    ? "translateY(calc(var(--card-h) / 2))"
-                                                    : (i === 3 || i === 4)
-                                                        ? "translateY(calc(var(--card-h) / -2))"
-                                                        : "none",
+                                                marginBottom: (i === 0 || i === 1) ? "calc(var(--card-h) / -2)" : undefined,
+                                                marginTop: (i === 3 || i === 4) ? "calc(var(--card-h) / -2)" : undefined,
                                                 width: "var(--card-w)",
                                                 height: "var(--card-h)",
                                                 overflow: "visible",
+                                                position: "relative",
+                                                zIndex: isCenterCard ? 2 : 1,
                                             }}
                                         >
-                                            <Card
-                                                card={c}
-                                                selected={selected?.id === c.id}
-                                                disabled={roundOver || matchOver || turn !== "player" || (spellMode === "freeze" && !isPvP)}
-                                                onClick={() => setSelected((prev) => (prev?.id === c.id ? null : c))}
-                                            />
+                                            {isRevealed ? (
+                                                <Card card={c} disabled />
+                                            ) : (
+                                                <Card hidden />
+                                            )}
                                         </div>
                                     );
                                 })}
@@ -1388,33 +1386,34 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
                         <div className="hand right">
                             <div className="hand-grid">
-                                {hands.enemy.map((c, i) => {
+                                {hands.player.map((c, i) => {
                                     const { col, row } = posForHandIndex(i);
                                     const isCenterCard = i === 2;
-                                    const isRevealed = !isPvP && c && enemyRevealId && enemyRevealId === c.id;
 
                                     return (
                                         <div
-                                            key={c?.id || `enemy_${i}`}
+                                            key={c.id}
                                             style={{
                                                 gridColumn: isCenterCard ? "1 / span 2" : col,
                                                 gridRow: row,
                                                 justifySelf: isCenterCard ? "center" : "auto",
-                                                transform: (i === 0 || i === 1)
-                                                    ? "translateY(calc(var(--card-h) / 2))"
-                                                    : (i === 3 || i === 4)
-                                                        ? "translateY(calc(var(--card-h) / -2))"
-                                                        : "none",
+                                                // Верхние карты [0,1] — вниз на полкарты
+                                                // Нижние карты [3,4] — вверх на полкарты
+                                                marginBottom: (i === 0 || i === 1) ? "calc(var(--card-h) / -2)" : undefined,
+                                                marginTop: (i === 3 || i === 4) ? "calc(var(--card-h) / -2)" : undefined,
                                                 width: "var(--card-w)",
                                                 height: "var(--card-h)",
                                                 overflow: "visible",
+                                                position: "relative",
+                                                zIndex: isCenterCard ? 2 : 1,
                                             }}
                                         >
-                                            {isRevealed ? (
-                                                <Card card={c} disabled />
-                                            ) : (
-                                                <Card hidden />
-                                            )}
+                                            <Card
+                                                card={c}
+                                                selected={selected?.id === c.id}
+                                                disabled={roundOver || matchOver || turn !== "player" || (spellMode === "freeze" && !isPvP)}
+                                                onClick={() => setSelected((prev) => (prev?.id === c.id ? null : c))}
+                                            />
                                         </div>
                                     );
                                 })}

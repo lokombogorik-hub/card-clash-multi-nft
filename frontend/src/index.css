@@ -839,7 +839,6 @@ img {
     overflow: visible;
 }
 
-/* Убираем старые смещения */
 .hand.left .hand-slot.col2 {
     transform: none;
 }
