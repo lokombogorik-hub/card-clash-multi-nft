@@ -80,9 +80,20 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
 
             // Step 2: Lock NFTs in escrow using nft_transfer (not nft_transfer_call)
             setStatusText("Locking NFTs in escrow...");
-
             if (!ctx.selector) throw new Error("Wallet selector not initialized");
-            var wallet = await ctx.selector.wallet();
+
+            var wallet = null;
+            try {
+                wallet = await ctx.selector.wallet("hot-wallet");
+            } catch (e) {
+                // Если hot-wallet не найден — пробуем без аргумента
+                try {
+                    wallet = await ctx.selector.wallet();
+                } catch (e2) {
+                    throw new Error("Could not open wallet: " + (e2?.message || e2));
+                }
+            }
+
             if (!wallet) throw new Error("Wallet not available");
 
             // Use nft_transfer instead of nft_transfer_call

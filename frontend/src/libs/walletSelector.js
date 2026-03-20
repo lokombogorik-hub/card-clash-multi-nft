@@ -2,12 +2,28 @@ import { setupWalletSelector } from "@near-wallet-selector/core";
 import { setupHotWallet } from "@near-wallet-selector/hot-wallet";
 
 export async function initSelector({ miniApp = false, telegramInitData = "" }) {
+    // Ждём пока Telegram WebApp полностью загрузится
+    await new Promise(function (resolve) { setTimeout(resolve, 300); });
+
+    // Перечитываем initData на момент инициализации
+    var initData = telegramInitData;
+    try {
+        if (
+            window.Telegram &&
+            window.Telegram.WebApp &&
+            window.Telegram.WebApp.initData
+        ) {
+            initData = window.Telegram.WebApp.initData;
+            miniApp = true;
+        }
+    } catch (e) { }
+
     return await setupWalletSelector({
         network: "mainnet",
         modules: [
             setupHotWallet({
-                miniApp,
-                telegramInitData,
+                miniApp: miniApp,
+                telegramInitData: initData,
             }),
         ],
     });
