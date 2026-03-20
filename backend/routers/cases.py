@@ -216,6 +216,45 @@ async def get_pools_status():
 
 
 @router.post("/open")
+async def fetch_token_metadata(token_id: str) -> dict:
+    """Получить метадату NFT токена (включая картинку)"""
+    if not NFT_CONTRACT_ID:
+        return {}
+
+    try:
+        args = json.dumps({"token_id": token_id})
+        args_base64 = base64.b64encode(args.encode()).decode()
+
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                "https://rpc.mainnet.near.org",
+                json={
+                    "jsonrpc": "2.0",
+                    "id": "1",
+                    "method": "query",
+                    "params": {
+                        "request_type": "call_function",
+                        "finality": "final",
+                        "account_id": NFT_CONTRACT_ID,
+                        "method_name": "nft_token",
+                        "args_base64": args_base64,
+                    }
+                }
+            )
+
+            data = resp.json()
+            if "result" in data and "result" in data["result"]:
+                result_bytes = bytes(data["result"]["result"])
+                token = json.loads(result_bytes.decode())
+                if token and "metadata" in token:
+                    return token["metadata"]
+    except Exception as e:
+        print(f"[CASES] Error fetching metadata for {token_id}: {e}")
+
+    return {}
+
+
+@router.post("/open")
 async def open_case(
         data: OpenCaseRequest,
         user: User = Depends(get_current_user),
@@ -265,12 +304,38 @@ async def open_case(
             token_id = generate_mock_token_id(rarity)
             from_pool = False
 
+        # Получаем метадату для картинки
+        image_url = None
+        title = None
+        if from_pool and NFT_CONTRACT_ID:
+            try:
+                meta = await fetch_token_metadata(token_id)
+                raw_media = meta.get("media", "")
+                title = meta.get("title") or None
+
+                # Обрабатываем IPFS ссылки
+                if raw_media:
+                    if raw_media.startswith("ipfs://"):
+                        cid = raw_media.replace("ipfs://", "")
+                        image_url = f"https://ipfs.io/ipfs/{cid}"
+                    elif raw_media.startswith("http"):
+                        image_url = raw_media
+                    else:
+                        # Может быть просто CID
+                        image_url = f"https://ipfs.io/ipfs/{raw_media}"
+            except Exception as e:
+                print(f"[CASES] Metadata fetch failed for {token_id}: {e}")
+
         cards.append({
             "token_id": token_id,
             "rarity": rarity,
             "pool_wallet": pool_wallet,
             "from_pool": from_pool,
             "contract_id": NFT_CONTRACT_ID or "mock",
+            "image_url": image_url,
+            "imageUrl": image_url,
+            "title": title or f"Card #{token_id}",
+            "name": title or f"Card #{token_id}",
         })
 
     reservation_id = f"{user_id}_{data.tx_hash[:8]}"
@@ -303,7 +368,6 @@ async def open_case(
         "transfers": transfers if transfers else None,
         "config_ready": is_configured(),
     }
-
 
 @router.post("/claim")
 async def claim_reserved(
