@@ -39,26 +39,23 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
     }, [open]);
 
     var handleLock = async function () {
+        // Базовые проверки
         if (!walletAddress) {
-            setError("Wallet not connected");
+            setError("Wallet not connected. AccountId: " + (ctx.accountId || "null"));
             return;
         }
-
         if (!escrowContractId) {
-            setError("Escrow contract not configured");
+            setError("Escrow contract not configured (VITE_NEAR_ESCROW_CONTRACT_ID)");
             return;
         }
-
         if (!nftContractId) {
-            setError("NFT contract not configured");
+            setError("NFT contract not configured (VITE_NEAR_NFT_CONTRACT_ID)");
             return;
         }
-
         if (deckTokenIds.length !== 5) {
-            setError("Deck must have exactly 5 cards. You have " + deckTokenIds.length);
+            setError("Deck must have 5 cards. Have: " + deckTokenIds.length);
             return;
         }
-
         if (!existingMatchId) {
             setError("No match ID provided");
             return;
@@ -72,32 +69,64 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
             // Step 1: Verify ownership
             var owned = await nearNftTokensForOwner(nftContractId, walletAddress);
             var ownedIds = new Set(owned.map(function (t) { return t.token_id; }));
-
             var missing = deckTokenIds.filter(function (id) { return !ownedIds.has(id); });
             if (missing.length > 0) {
                 throw new Error("You don't own these NFTs: " + missing.join(", "));
             }
 
-            // Step 2: Lock NFTs in escrow using nft_transfer (not nft_transfer_call)
-            setStatusText("Locking NFTs in escrow...");
-            if (!ctx.selector) throw new Error("Wallet selector not initialized");
+            // Step 2: Получаем кошелёк
+            setStatusText("Opening wallet...");
 
-            var wallet = null;
+            if (!ctx.selector) {
+                throw new Error("Selector is null. Wallet not initialized.");
+            }
+
+            // Проверяем состояние селектора
+            var selectorState = null;
             try {
-                wallet = await ctx.selector.wallet("hot-wallet");
+                selectorState = ctx.selector.store.getState();
             } catch (e) {
-                // Если hot-wallet не найден — пробуем без аргумента
+                throw new Error("Cannot read selector state: " + (e?.message || e));
+            }
+
+            var selectedWalletId = selectorState?.selectedWalletId || null;
+            var isSignedIn = selectorState?.accounts?.length > 0;
+
+            if (!isSignedIn) {
+                throw new Error("Not signed in to any wallet. Please reconnect wallet from main screen.");
+            }
+
+            setStatusText("Getting wallet: " + (selectedWalletId || "hot-wallet") + "...");
+
+            // Получаем кошелёк
+            var wallet = null;
+            var walletError = null;
+
+            // Пробуем selectedWalletId
+            if (selectedWalletId) {
                 try {
-                    wallet = await ctx.selector.wallet();
-                } catch (e2) {
-                    throw new Error("Could not open wallet: " + (e2?.message || e2));
+                    wallet = await ctx.selector.wallet(selectedWalletId);
+                } catch (e) {
+                    walletError = "wallet(" + selectedWalletId + ") failed: " + (e?.message || e);
                 }
             }
 
-            if (!wallet) throw new Error("Wallet not available");
+            // Fallback на hot-wallet
+            if (!wallet) {
+                try {
+                    wallet = await ctx.selector.wallet("hot-wallet");
+                } catch (e) {
+                    walletError = (walletError ? walletError + " | " : "") + "hot-wallet failed: " + (e?.message || e);
+                }
+            }
 
-            // Use nft_transfer instead of nft_transfer_call
-            // nft_transfer works with regular wallets (no smart contract needed)
+            if (!wallet) {
+                throw new Error("Cannot get wallet. " + (walletError || "Unknown error") + ". Try reconnecting wallet from main screen.");
+            }
+
+            // Step 3: Отправляем транзакцию
+            setStatusText("Sending " + deckTokenIds.length + " NFTs to escrow...");
+
             var actions = deckTokenIds.map(function (tokenId) {
                 return {
                     type: "FunctionCall",
@@ -119,7 +148,7 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                 actions: actions,
             });
 
-            // Step 3: Register deposits on backend
+            // Step 4: Register deposits on backend
             setStatusText("Registering deposits...");
 
             var token = getStoredToken();
@@ -134,8 +163,8 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                 }),
             });
 
-            // Step 4: Confirm escrow
-            setStatusText("Confirming...");
+            // Step 5: Confirm escrow
+            setStatusText("Confirming escrow...");
 
             await apiFetch("/api/matches/" + existingMatchId + "/confirm_escrow", {
                 method: "POST",
@@ -164,7 +193,6 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
 
     if (!open) return null;
 
-    // Разбиваем карты: 3 сверху, 2 снизу
     var topCards = playerDeck ? playerDeck.slice(0, 3) : [];
     var bottomCards = playerDeck ? playerDeck.slice(3, 5) : [];
 
@@ -199,29 +227,16 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                             <span style={{ color: "#ffd700" }}>Winner takes 1 NFT from loser!</span>
                         </p>
 
-                        {/* Show deck cards - 3 top + 2 bottom, BIGGER */}
+                        {/* Карты 3 + 2 */}
                         <div style={{ marginBottom: 20 }}>
-                            {/* Top row: 3 cards */}
-                            <div style={{
-                                display: "flex",
-                                gap: 12,
-                                justifyContent: "center",
-                                marginBottom: 12,
-                            }}>
+                            <div style={{ display: "flex", gap: 12, justifyContent: "center", marginBottom: 12 }}>
                                 {topCards.map(function (card, i) {
                                     return (
-                                        <div
-                                            key={card?.token_id || card?.tokenId || i}
-                                            style={{
-                                                width: 80,
-                                                height: 110,
-                                                borderRadius: 12,
-                                                overflow: "hidden",
-                                                border: "3px solid rgba(255,215,0,0.6)",
-                                                boxShadow: "0 4px 15px rgba(255,215,0,0.25)",
-                                                transition: "transform 0.2s",
-                                            }}
-                                        >
+                                        <div key={card?.token_id || card?.tokenId || i} style={{
+                                            width: 80, height: 110, borderRadius: 12, overflow: "hidden",
+                                            border: "3px solid rgba(255,215,0,0.6)",
+                                            boxShadow: "0 4px 15px rgba(255,215,0,0.25)",
+                                        }}>
                                             <img
                                                 src={card?.imageUrl || card?.image || "/cards/card.jpg"}
                                                 alt=""
@@ -232,27 +247,14 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                                     );
                                 })}
                             </div>
-
-                            {/* Bottom row: 2 cards */}
-                            <div style={{
-                                display: "flex",
-                                gap: 12,
-                                justifyContent: "center",
-                            }}>
+                            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
                                 {bottomCards.map(function (card, i) {
                                     return (
-                                        <div
-                                            key={card?.token_id || card?.tokenId || (i + 3)}
-                                            style={{
-                                                width: 80,
-                                                height: 110,
-                                                borderRadius: 12,
-                                                overflow: "hidden",
-                                                border: "3px solid rgba(255,215,0,0.6)",
-                                                boxShadow: "0 4px 15px rgba(255,215,0,0.25)",
-                                                transition: "transform 0.2s",
-                                            }}
-                                        >
+                                        <div key={card?.token_id || card?.tokenId || (i + 3)} style={{
+                                            width: 80, height: 110, borderRadius: 12, overflow: "hidden",
+                                            border: "3px solid rgba(255,215,0,0.6)",
+                                            boxShadow: "0 4px 15px rgba(255,215,0,0.25)",
+                                        }}>
                                             <img
                                                 src={card?.imageUrl || card?.image || "/cards/card.jpg"}
                                                 alt=""
@@ -267,16 +269,15 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
 
                         {/* Match info */}
                         <div style={{
-                            fontSize: 11,
-                            opacity: 0.5,
-                            marginBottom: 20,
+                            fontSize: 11, opacity: 0.5, marginBottom: 20,
                             padding: "10px 14px",
-                            background: "rgba(255,255,255,0.03)",
-                            borderRadius: 10,
+                            background: "rgba(255,255,255,0.03)", borderRadius: 10,
                         }}>
-                            Match ID: {existingMatchId?.slice(0, 12)}...
+                            Match: {existingMatchId?.slice(0, 12)}...
                             <br />
                             Escrow: {escrowContractId}
+                            <br />
+                            Wallet: {walletAddress?.slice(0, 16)}...
                         </div>
 
                         <button
@@ -288,10 +289,7 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                                 color: "#000", fontSize: 18, fontWeight: 900,
                                 cursor: "pointer",
                                 boxShadow: "0 6px 25px rgba(255,215,0,0.4)",
-                                transition: "transform 0.15s, box-shadow 0.15s",
                             }}
-                            onMouseOver={function (e) { e.currentTarget.style.transform = "scale(1.02)"; }}
-                            onMouseOut={function (e) { e.currentTarget.style.transform = "scale(1)"; }}
                         >
                             🔒 Lock & Battle!
                         </button>
@@ -303,11 +301,9 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                         <div style={{ fontSize: 40, marginBottom: 16 }}>⏳</div>
                         <div style={{ fontSize: 16, marginBottom: 10, fontWeight: 600 }}>{statusText}</div>
                         <div style={{
-                            fontSize: 12,
-                            opacity: 0.6,
+                            fontSize: 12, opacity: 0.6,
                             padding: "10px 14px",
-                            background: "rgba(255,255,255,0.05)",
-                            borderRadius: 10,
+                            background: "rgba(255,255,255,0.05)", borderRadius: 10,
                         }}>
                             Please confirm in your wallet
                         </div>
@@ -328,14 +324,11 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                     <div style={{ padding: 24 }}>
                         <div style={{ fontSize: 40, marginBottom: 16 }}>❌</div>
                         <div style={{
-                            color: "#ff6b6b",
-                            marginBottom: 24,
-                            wordBreak: "break-word",
-                            fontSize: 14,
+                            color: "#ff6b6b", marginBottom: 24,
+                            wordBreak: "break-word", fontSize: 13,
                             padding: "14px 16px",
-                            background: "rgba(255,100,100,0.12)",
-                            borderRadius: 12,
-                            lineHeight: 1.5,
+                            background: "rgba(255,100,100,0.12)", borderRadius: 12,
+                            lineHeight: 1.6, textAlign: "left",
                         }}>
                             {error}
                         </div>
