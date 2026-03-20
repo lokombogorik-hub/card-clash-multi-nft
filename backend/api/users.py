@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, text
+from sqlalchemy import select
 import os
 
-from database.session import get_db, get_session
+from database.session import get_db
 from database.models.user import User
 from utils.rating import get_rank_by_rating, get_progress_to_next_rank, RANKS
 
@@ -88,17 +88,3 @@ async def get_me(current_user: User = Depends(get_current_user)):
         "nfts_count": nfts_count,
         "all_ranks": RANKS,
     }
-
-
-@router.post("/admin/reset-ratings")
-async def reset_ratings():
-    """ВРЕМЕННЫЙ эндпоинт — удалить после использования"""
-    try:
-        async for session in get_session():
-            await session.execute(
-                text("UPDATE users SET elo_rating = 0, rank = 'Новичок', pvp_wins = 0, pvp_losses = 0, wins = 0, losses = 0, total_matches = 0")
-            )
-            await session.commit()
-            return {"success": True, "message": "All ratings reset to 0"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
