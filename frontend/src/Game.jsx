@@ -1301,25 +1301,15 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
                         <PlayerBadge side="enemy" name={enemyName} avatarUrl={enemyAvatar} active={turn === "enemy"} />
                         <PlayerBadge side="player" name={myName} avatarUrl={myAvatar} active={turn === "player"} />
-
                         <div className="hand left">
                             <div className="hand-cross">
-                                {hands.enemy.map((c, i) => {
+                                {hands.enemy.slice(0, 5).map((c, i) => {
                                     const isRevealed = !isPvP && c && enemyRevealId && enemyRevealId === c.id;
-                                    // крест: 0=top, 1=left, 2=center, 3=right, 4=bottom
-                                    const positions = ["top", "left", "center", "right", "bottom"];
-                                    const pos = positions[i] || "center";
+                                    const cls = ["hand-cross-top", "hand-cross-right", "hand-cross-center", "hand-cross-left", "hand-cross-bottom"][i];
 
                                     return (
-                                        <div
-                                            key={c?.id || `enemy_${i}`}
-                                            className={`hand-cross-card hand-cross-${pos}`}
-                                        >
-                                            {isRevealed ? (
-                                                <Card card={c} disabled />
-                                            ) : (
-                                                <Card hidden />
-                                            )}
+                                        <div key={c?.id || `enemy_${i}`} className={`hand-cross-card ${cls}`}>
+                                            {isRevealed ? <Card card={c} disabled /> : <Card hidden />}
                                         </div>
                                     );
                                 })}
@@ -1327,12 +1317,8 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
                             {!isPvP && (
                                 <div className="magic-column enemy" aria-hidden="true">
-                                    <button className="magic-btn freeze" disabled>
-                                        <span className="magic-ic">❄</span>
-                                    </button>
-                                    <button className="magic-btn reveal" disabled>
-                                        <span className="magic-ic">👁</span>
-                                    </button>
+                                    <button className="magic-btn freeze" disabled><span className="magic-ic">❄</span></button>
+                                    <button className="magic-btn reveal" disabled><span className="magic-ic">👁</span></button>
                                 </div>
                             )}
                         </div>
@@ -1372,15 +1358,11 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
                         <div className="hand right">
                             <div className="hand-cross">
-                                {hands.player.map((c, i) => {
-                                    const positions = ["top", "left", "center", "right", "bottom"];
-                                    const pos = positions[i] || "center";
+                                {hands.player.slice(0, 5).map((c, i) => {
+                                    const cls = ["hand-cross-top", "hand-cross-right", "hand-cross-center", "hand-cross-left", "hand-cross-bottom"][i];
 
                                     return (
-                                        <div
-                                            key={c.id}
-                                            className={`hand-cross-card hand-cross-${pos}`}
-                                        >
+                                        <div key={c.id} className={`hand-cross-card ${cls}`}>
                                             <Card
                                                 card={c}
                                                 selected={selected?.id === c.id}
