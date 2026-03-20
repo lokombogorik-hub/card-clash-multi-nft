@@ -826,6 +826,7 @@ img {
     position: relative;
 }
 
+/* hand-grid оставляем для совместимости но не используем */
 .hand-grid {
     height: 100%;
     display: grid;
@@ -839,18 +840,12 @@ img {
     overflow: visible;
 }
 
-.hand.left .hand-slot.col2 {
-    transform: none;
-}
-
-.hand.right .hand-slot.col2 {
-    grid-column: unset !important;
-    transform: none;
-}
-
+/* Убираем старые смещения — больше не нужны */
+.hand.left .hand-slot.col2,
+.hand.right .hand-slot.col2,
 .hand.right .hand-slot.col1 {
-    grid-column: unset !important;
     transform: none;
+    grid-column: unset !important;
 }
 
 .center-col {
@@ -858,6 +853,56 @@ img {
     align-items: center;
     justify-content: center;
     min-height: 0;
+}
+
+/* =========================
+   HAND CROSS (крестообразное расположение)
+   ========================= */
+.hand-cross {
+    position: relative;
+    width: calc(var(--card-w) * 2 + var(--hand-col-gap));
+    height: calc(var(--card-h) * 2 + var(--hand-col-gap));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: auto;
+}
+
+.hand-cross-card {
+    position: absolute;
+    width: var(--card-w);
+    height: var(--card-h);
+}
+
+.hand-cross-center {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+}
+
+.hand-cross-top {
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.hand-cross-bottom {
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.hand-cross-left {
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.hand-cross-right {
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
 }
 
 /* Board */

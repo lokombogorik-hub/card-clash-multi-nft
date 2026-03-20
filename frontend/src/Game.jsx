@@ -247,11 +247,7 @@ function resolveCombo(queue, grid, boardElems) {
 }
 
 const posForHandIndex = (i) => {
-    if (i === 0) return { col: 1, row: 1 };
-    if (i === 1) return { col: 2, row: 1 };
-    if (i === 2) return { col: 1, row: 2 };
-    if (i === 3) return { col: 1, row: 3 };
-    if (i === 4) return { col: 2, row: 3 };
+    // Не используется для grid, используем абсолютное позиционирование
     return { col: 1, row: 1 };
 };
 function getPlayerName(me) {
@@ -1307,27 +1303,17 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                         <PlayerBadge side="player" name={myName} avatarUrl={myAvatar} active={turn === "player"} />
 
                         <div className="hand left">
-                            <div className="hand-grid">
+                            <div className="hand-cross">
                                 {hands.enemy.map((c, i) => {
-                                    const { col, row } = posForHandIndex(i);
-                                    const isCenterCard = i === 2;
                                     const isRevealed = !isPvP && c && enemyRevealId && enemyRevealId === c.id;
+                                    // крест: 0=top, 1=left, 2=center, 3=right, 4=bottom
+                                    const positions = ["top", "left", "center", "right", "bottom"];
+                                    const pos = positions[i] || "center";
 
                                     return (
                                         <div
                                             key={c?.id || `enemy_${i}`}
-                                            style={{
-                                                gridColumn: isCenterCard ? "1 / span 2" : col,
-                                                gridRow: row,
-                                                justifySelf: isCenterCard ? "center" : "auto",
-                                                marginBottom: (i === 0 || i === 1) ? "calc(var(--card-h) / -2)" : undefined,
-                                                marginTop: (i === 3 || i === 4) ? "calc(var(--card-h) / -2)" : undefined,
-                                                width: "var(--card-w)",
-                                                height: "var(--card-h)",
-                                                overflow: "visible",
-                                                position: "relative",
-                                                zIndex: isCenterCard ? 2 : 1,
-                                            }}
+                                            className={`hand-cross-card hand-cross-${pos}`}
                                         >
                                             {isRevealed ? (
                                                 <Card card={c} disabled />
@@ -1341,10 +1327,10 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
                             {!isPvP && (
                                 <div className="magic-column enemy" aria-hidden="true">
-                                    <button className="magic-btn freeze" disabled title="Enemy magic (soon)">
+                                    <button className="magic-btn freeze" disabled>
                                         <span className="magic-ic">❄</span>
                                     </button>
-                                    <button className="magic-btn reveal" disabled title="Enemy magic (soon)">
+                                    <button className="magic-btn reveal" disabled>
                                         <span className="magic-ic">👁</span>
                                     </button>
                                 </div>
@@ -1385,28 +1371,15 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                         </div>
 
                         <div className="hand right">
-                            <div className="hand-grid">
+                            <div className="hand-cross">
                                 {hands.player.map((c, i) => {
-                                    const { col, row } = posForHandIndex(i);
-                                    const isCenterCard = i === 2;
+                                    const positions = ["top", "left", "center", "right", "bottom"];
+                                    const pos = positions[i] || "center";
 
                                     return (
                                         <div
                                             key={c.id}
-                                            style={{
-                                                gridColumn: isCenterCard ? "1 / span 2" : col,
-                                                gridRow: row,
-                                                justifySelf: isCenterCard ? "center" : "auto",
-                                                // Верхние карты [0,1] — вниз на полкарты
-                                                // Нижние карты [3,4] — вверх на полкарты
-                                                marginBottom: (i === 0 || i === 1) ? "calc(var(--card-h) / -2)" : undefined,
-                                                marginTop: (i === 3 || i === 4) ? "calc(var(--card-h) / -2)" : undefined,
-                                                width: "var(--card-w)",
-                                                height: "var(--card-h)",
-                                                overflow: "visible",
-                                                position: "relative",
-                                                zIndex: isCenterCard ? 2 : 1,
-                                            }}
+                                            className={`hand-cross-card hand-cross-${pos}`}
                                         >
                                             <Card
                                                 card={c}
@@ -1425,17 +1398,14 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                         className={`magic-btn freeze ${spellMode === "freeze" ? "active" : ""}`}
                                         onClick={onMagicFreeze}
                                         disabled={!canUseMagic || playerSpells.freeze <= 0}
-                                        title="Freeze"
                                     >
                                         <span className="magic-ic">❄</span>
                                         <span className="magic-count">{playerSpells.freeze}</span>
                                     </button>
-
                                     <button
                                         className="magic-btn reveal"
                                         onClick={onMagicReveal}
                                         disabled={!canUseMagic || playerSpells.reveal <= 0}
-                                        title="Reveal"
                                     >
                                         <span className="magic-ic">👁</span>
                                         <span className="magic-count">{playerSpells.reveal}</span>
