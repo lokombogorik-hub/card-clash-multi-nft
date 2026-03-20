@@ -693,7 +693,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     // Подготовка карт для claim (5 перевёрнутых карт)
     const prepareClaimCards = async () => {
         if (isPvP && matchId) {
-            // PvP: загружаем deposits противника
             try {
                 const token = getStoredToken();
                 const res = await apiFetch(`/api/matches/${matchId}/opponent_deposits`, { token });
@@ -704,35 +703,29 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                         token_id: d.token_id,
                         nft_contract_id: d.nft_contract_id,
                         index: i,
-                        // ВАЖНО: сохраняем реальную картинку!
-                        image: d.image,
-                        imageUrl: d.image,
+                        image: d.image || null,
+                        imageUrl: d.image || null,
                     })));
-                } else {
-                    // Fallback: 5 карт без картинок
-                    setClaimCards(Array.from({ length: 5 }, (_, i) => ({
-                        id: `claim_${i}`,
-                        index: i,
-                        image: null,
-                        imageUrl: null,
-                    })));
+                    return;
                 }
             } catch (e) {
                 console.error("[Game] Failed to load opponent deposits:", e);
-                setClaimCards(Array.from({ length: 5 }, (_, i) => ({
-                    id: `claim_${i}`,
-                    index: i,
-                    image: null,
-                    imageUrl: null,
-                })));
             }
+
+            // Fallback если deposits не пришли
+            setClaimCards(Array.from({ length: 5 }, (_, i) => ({
+                id: `claim_${i}`,
+                index: i,
+                image: null,
+                imageUrl: null,
+            })));
         } else {
-            // AI: используем enemyDeck с реальными картинками
+            // AI: используем enemyDeck
             setClaimCards(enemyDeck.map((c, i) => ({
                 ...c,
                 index: i,
-                image: c.imageUrl || c.image,
-                imageUrl: c.imageUrl || c.image,
+                image: c.imageUrl || c.image || null,
+                imageUrl: c.imageUrl || c.image || null,
             })));
         }
     };

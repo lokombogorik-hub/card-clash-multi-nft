@@ -9,7 +9,185 @@ var CASES = [
     { id: "ultimate", name: "Ultimate Case", price: 10, displayPrice: "5 Legendary", image: "/ui/case-ultimate.png", rarity: "legendary", description: "5 Legendary cards guaranteed", type: "pack" },
 ];
 
+var RARITY_COLORS = {
+    common: "#6b7280",
+    rare: "#3b82f6",
+    epic: "#a855f7",
+    legendary: "#ffd700",
+};
+
 var TREASURY = "retardo-s.near";
+
+// Анимация открытия кейса
+function CaseOpenModal({ caseItem, cards, onClose }) {
+    var [revealed, setRevealed] = useState(false);
+    var [revealedCards, setRevealedCards] = useState([]);
+
+    var handleReveal = function () {
+        setRevealed(true);
+        // Открываем карты по одной с задержкой
+        cards.forEach(function (card, i) {
+            setTimeout(function () {
+                setRevealedCards(function (prev) { return [...prev, card]; });
+                try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("medium"); } catch (e) { }
+            }, i * 300);
+        });
+    };
+
+    return (
+        <div style={{
+            position: "fixed", inset: 0, zIndex: 99999,
+            background: "rgba(0,0,0,0.95)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: 16, flexDirection: "column",
+        }}>
+            <div style={{
+                width: "100%", maxWidth: 420,
+                background: "linear-gradient(145deg, #1a1a2e, #0f0f1a)",
+                border: "2px solid rgba(120,200,255,0.3)",
+                borderRadius: 24, padding: "28px 20px",
+                textAlign: "center",
+            }}>
+                <h3 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 900, color: "#fff" }}>
+                    🎁 {caseItem.name}
+                </h3>
+                <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 20, color: "#a0d8ff" }}>
+                    {cards.length} карт получено!
+                </div>
+
+                {!revealed ? (
+                    <>
+                        {/* Анимация кейса до открытия */}
+                        <div style={{
+                            width: 120, height: 120,
+                            margin: "0 auto 24px",
+                            position: "relative",
+                        }}>
+                            <img
+                                src={caseItem.image}
+                                alt=""
+                                style={{
+                                    width: "100%", height: "100%",
+                                    objectFit: "contain",
+                                    animation: "iconBounce 1s ease-in-out infinite",
+                                    filter: "drop-shadow(0 0 20px rgba(120,200,255,0.5))",
+                                }}
+                                onError={function (e) { e.currentTarget.src = "/cards/card.jpg"; }}
+                            />
+                        </div>
+
+                        <button
+                            onClick={handleReveal}
+                            style={{
+                                padding: "14px 32px",
+                                fontSize: 17, fontWeight: 900,
+                                borderRadius: 16, border: "none",
+                                background: "linear-gradient(135deg, #78c8ff, #5096ff)",
+                                color: "#000", cursor: "pointer",
+                                boxShadow: "0 6px 25px rgba(120,200,255,0.4)",
+                                width: "100%",
+                            }}
+                        >
+                            ✨ Открыть!
+                        </button>
+                    </>
+                ) : (
+                    <>
+                        {/* Карты появляются по одной */}
+                        <div style={{
+                            display: "flex",
+                            gap: 8,
+                            justifyContent: "center",
+                            flexWrap: "wrap",
+                            marginBottom: 20,
+                            minHeight: 110,
+                        }}>
+                            {cards.map(function (card, i) {
+                                var isVisible = revealedCards.length > i;
+                                var rarityColor = RARITY_COLORS[card.rarity] || "#6b7280";
+
+                                return (
+                                    <div
+                                        key={card.token_id || i}
+                                        style={{
+                                            opacity: isVisible ? 1 : 0,
+                                            transform: isVisible ? "scale(1) translateY(0)" : "scale(0.5) translateY(20px)",
+                                            transition: "all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                                            width: 72, height: 100,
+                                            borderRadius: 10,
+                                            overflow: "hidden",
+                                            border: "3px solid " + rarityColor,
+                                            boxShadow: isVisible ? "0 0 16px " + rarityColor + "80" : "none",
+                                            background: "#0a0e1a",
+                                            position: "relative",
+                                            flexShrink: 0,
+                                        }}
+                                    >
+                                        {/* Картинка карты */}
+                                        {card.image_url || card.imageUrl ? (
+                                            <img
+                                                src={card.image_url || card.imageUrl}
+                                                alt=""
+                                                style={{
+                                                    width: "100%", height: "100%",
+                                                    objectFit: "cover",
+                                                }}
+                                                onError={function (e) {
+                                                    e.currentTarget.src = "/cards/card.jpg";
+                                                }}
+                                            />
+                                        ) : (
+                                            <div style={{
+                                                width: "100%", height: "100%",
+                                                display: "flex", alignItems: "center",
+                                                justifyContent: "center",
+                                                background: "linear-gradient(135deg, #1a2232, #0f1625)",
+                                                fontSize: 28,
+                                            }}>
+                                                🎴
+                                            </div>
+                                        )}
+
+                                        {/* Rarity badge */}
+                                        <div style={{
+                                            position: "absolute",
+                                            bottom: 0, left: 0, right: 0,
+                                            padding: "3px 4px",
+                                            background: "rgba(0,0,0,0.7)",
+                                            fontSize: 9, fontWeight: 900,
+                                            color: rarityColor,
+                                            textAlign: "center",
+                                            textTransform: "uppercase",
+                                        }}>
+                                            {card.rarity}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {revealedCards.length === cards.length && (
+                            <button
+                                onClick={onClose}
+                                style={{
+                                    padding: "12px 24px",
+                                    fontSize: 15, fontWeight: 700,
+                                    borderRadius: 14, border: "none",
+                                    background: "linear-gradient(135deg, #22c55e, #16a34a)",
+                                    color: "#fff", cursor: "pointer",
+                                    width: "100%",
+                                    boxShadow: "0 4px 20px rgba(34,197,94,0.35)",
+                                }}
+                            >
+                                ✅ В инвентарь!
+                            </button>
+                        )}
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
 
 export default function Market() {
     var ctx = useWalletConnect();
@@ -19,7 +197,8 @@ export default function Market() {
     var sendNear = ctx.sendNear;
 
     var [buying, setBuying] = useState(null);
-    var [result, setResult] = useState(null);
+    var [error, setError] = useState("");
+    var [openModal, setOpenModal] = useState(null); // { caseItem, cards }
 
     var token = "";
     try {
@@ -37,9 +216,10 @@ export default function Market() {
         }
 
         setBuying(c.id);
-        setResult(null);
+        setError("");
 
         try {
+            // 1. Оплата
             var pay = await sendNear({
                 receiverId: TREASURY,
                 amount: String(c.price),
@@ -50,6 +230,7 @@ export default function Market() {
                 throw new Error("Transaction failed — no txHash returned");
             }
 
+            // 2. Открытие кейса на бэкенде
             var open = await apiFetch("/api/cases/open", {
                 method: "POST",
                 token: token,
@@ -57,76 +238,106 @@ export default function Market() {
             });
 
             var cards = open.cards || [];
-            setResult({
-                success: true,
-                cards: cards,
-                message: "Получено " + cards.length + " карт!",
-            });
+
+            // 3. Показываем модалку с анимацией
+            setOpenModal({ caseItem: c, cards: cards });
+
+            try {
+                window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("success");
+            } catch (e) { }
+
         } catch (e) {
-            setResult({
-                success: false,
-                message: "Ошибка: " + (e.message || e),
-            });
+            setError("Ошибка: " + (e.message || e));
         } finally {
             setBuying(null);
         }
     };
 
+    var handleCloseModal = function () {
+        setOpenModal(null);
+    };
+
     return (
         <div className="market-page">
+            {/* Модалка открытия кейса */}
+            {openModal && (
+                <CaseOpenModal
+                    caseItem={openModal.caseItem}
+                    cards={openModal.cards}
+                    onClose={handleCloseModal}
+                />
+            )}
+
             <div className="market-header">
-                <h2 className="market-title"><span className="market-title-icon">🛒</span>NFT Market</h2>
+                <h2 className="market-title">
+                    <span className="market-title-icon">🛒</span>NFT Market
+                </h2>
                 <div className="market-subtitle">Buy cases to get NFT cards</div>
             </div>
 
-            {!connected && <div className="market-warning">⚠️ Подключи HOT Wallet чтобы покупать</div>}
+            {!connected && (
+                <div className="market-warning">⚠️ Подключи HOT Wallet чтобы покупать</div>
+            )}
 
             {connected && (
-                <div style={{ textAlign: "center", marginBottom: 20, padding: 12, background: "rgba(120,200,255,0.1)", borderRadius: 12, border: "1px solid rgba(120,200,255,0.2)" }}>
-                    <div style={{ fontSize: 13, color: "#78c8ff" }}>💰 Баланс: {Number(balance).toFixed(4)} Ⓝ</div>
-                    <div style={{ fontSize: 11, opacity: 0.6, marginTop: 4 }}>Treasury: {TREASURY}</div>
+                <div style={{
+                    textAlign: "center", marginBottom: 20, padding: 12,
+                    background: "rgba(120,200,255,0.1)", borderRadius: 12,
+                    border: "1px solid rgba(120,200,255,0.2)",
+                }}>
+                    <div style={{ fontSize: 13, color: "#78c8ff" }}>
+                        💰 Баланс: {Number(balance).toFixed(4)} Ⓝ
+                    </div>
+                    <div style={{ fontSize: 11, opacity: 0.6, marginTop: 4 }}>
+                        Treasury: {TREASURY}
+                    </div>
                 </div>
             )}
 
-            {result && (
+            {error && (
                 <div style={{
-                    textAlign: "center", marginBottom: 20, padding: 16,
-                    background: result.success ? "rgba(34,197,94,0.12)" : "rgba(255,80,80,0.12)",
-                    border: "1px solid " + (result.success ? "rgba(34,197,94,0.35)" : "rgba(255,80,80,0.35)"), borderRadius: 12,
+                    textAlign: "center", marginBottom: 16, padding: 14,
+                    background: "rgba(255,80,80,0.12)",
+                    border: "1px solid rgba(255,80,80,0.35)",
+                    borderRadius: 12, color: "#ff6b6b", fontSize: 13,
                 }}>
-                    <div style={{ fontSize: 15, fontWeight: 900, color: result.success ? "#22c55e" : "#ff6b6b" }}>
-                        {result.success ? "✅ " : "❌ "}{result.message}
-                    </div>
-                    {result.cards && result.cards.length > 0 && (
-                        <div style={{ marginTop: 10, display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-                            {result.cards.map(function (card, i) {
-                                return <div key={i} style={{ padding: "4px 10px", borderRadius: 8, background: "rgba(0,0,0,0.3)", fontSize: 11, color: "#a0d8ff" }}>
-                                    {card.rarity} • {card.token_id}
-                                </div>;
-                            })}
-                        </div>
-                    )}
+                    ❌ {error}
                 </div>
             )}
 
             <div className="market-cases-grid">
                 {CASES.map(function (c) {
                     var canBuy = connected && balance >= c.price;
+                    var isBuying = buying === c.id;
+
                     return (
                         <div key={c.id} className="market-case-card">
                             <div className="market-case-image">
-                                <img src={c.image} alt={c.name} draggable="false" loading="lazy"
-                                    onError={function (e) { e.currentTarget.src = "/cards/card.jpg"; }} />
+                                <img
+                                    src={c.image}
+                                    alt={c.name}
+                                    draggable="false"
+                                    loading="lazy"
+                                    onError={function (e) { e.currentTarget.src = "/cards/card.jpg"; }}
+                                />
                             </div>
-                            <div className="market-case-rarity-badge" data-rarity={c.rarity}>{c.rarity}</div>
+                            <div className="market-case-rarity-badge" data-rarity={c.rarity}>
+                                {c.rarity}
+                            </div>
                             <div className="market-case-name">{c.name}</div>
                             <div className="market-case-desc">{c.description}</div>
                             <div className="market-case-price">{c.price} Ⓝ</div>
-                            <button className="market-case-buy-btn"
+                            <button
+                                className="market-case-buy-btn"
                                 onClick={function () { handleBuy(c); }}
-                                disabled={!canBuy || buying === c.id}
-                                style={{ opacity: canBuy ? 1 : 0.5 }}>
-                                {buying === c.id ? "⏳ Paying..." : canBuy ? "Buy" : "Need " + c.price + " Ⓝ"}
+                                disabled={!canBuy || isBuying}
+                                style={{ opacity: canBuy ? 1 : 0.5 }}
+                            >
+                                {isBuying
+                                    ? "⏳ Оплата..."
+                                    : canBuy
+                                        ? "🛒 Купить"
+                                        : "Нужно " + c.price + " Ⓝ"}
                             </button>
                         </div>
                     );
@@ -135,7 +346,9 @@ export default function Market() {
 
             <div className="market-footer">
                 <div className="market-footer-icon">💎</div>
-                <div className="market-footer-text">Cards will appear in your Inventory after purchase</div>
+                <div className="market-footer-text">
+                    Карты появятся в Инвентаре после покупки
+                </div>
             </div>
         </div>
     );
