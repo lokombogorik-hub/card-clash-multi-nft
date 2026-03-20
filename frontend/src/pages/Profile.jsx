@@ -18,15 +18,15 @@ function getDisplayName(me) {
 
 function getAvatarUrl(me) {
     if (!me) return null;
-    // Сначала photo_url из профиля бэкенда
+    // photo_url приходит из Telegram при авторизации
     if (me.photo_url) return me.photo_url;
-    // Потом Telegram CDN
-    if (me.username) return "https://t.me/i/userpic/320/" + me.username + ".jpg";
-    // Потом UI Avatars как fallback
-    var name = [me.first_name, me.last_name].filter(Boolean).join("+") || "User";
-    return "https://ui-avatars.com/api/?name=" + name + "&background=1a2232&color=78c8ff&size=128";
+    // UI Avatars как fallback
+    var name = encodeURIComponent(
+        [me.first_name, me.last_name].filter(Boolean).join(" ").trim() ||
+        (me.username ? me.username : "User")
+    );
+    return "https://ui-avatars.com/api/?name=" + name + "&background=1a2232&color=78c8ff&size=128&bold=true";
 }
-
 export default function Profile({ token, me }) {
     var { accountId, balance, connected } = useWalletConnect();
     var [profile, setProfile] = useState(null);
@@ -71,7 +71,6 @@ export default function Profile({ token, me }) {
                             src={avatarUrl}
                             alt=""
                             draggable="false"
-                            crossOrigin="anonymous"
                             referrerPolicy="no-referrer"
                             onError={function () { setAvatarOk(false); }}
                         />
