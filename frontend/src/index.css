@@ -839,23 +839,18 @@ img {
     overflow: visible;
 }
 
-.hand-slot {
-    width: var(--card-w);
-    height: var(--card-h);
-    overflow: visible;
-}
-
+/* Убираем старые смещения */
 .hand.left .hand-slot.col2 {
-    transform: translateX(calc(var(--towards-board) - 6px)) translateY(var(--half-step));
+    transform: none;
 }
 
 .hand.right .hand-slot.col2 {
-    grid-column: 1 !important;
-    transform: translateX(calc(-1 * (var(--towards-board) - 6px))) translateY(var(--half-step));
+    grid-column: unset !important;
+    transform: none;
 }
 
 .hand.right .hand-slot.col1 {
-    grid-column: 2 !important;
+    grid-column: unset !important;
     transform: none;
 }
 

@@ -246,7 +246,15 @@ function resolveCombo(queue, grid, boardElems) {
     }
 }
 
-const posForHandIndex = (i) => (i < 3 ? { col: 1, row: i + 1 } : { col: 2, row: i - 2 });
+const posForHandIndex = (i) => {
+    // кубик 5: 2 сверху, 1 в центре, 2 снизу
+    if (i === 0) return { col: 1, row: 1 }; // верх-лево
+    if (i === 1) return { col: 2, row: 1 }; // верх-право
+    if (i === 2) return { col: 1, row: 2 }; // центр (займёт оба столбца)
+    if (i === 3) return { col: 1, row: 3 }; // низ-лево
+    if (i === 4) return { col: 2, row: 3 }; // низ-право
+    return { col: 1, row: 1 };
+};
 
 function getPlayerName(me) {
     if (!me) return "Guest";
@@ -1304,10 +1312,19 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                             <div className="hand-grid">
                                 {hands.enemy.map((c, i) => {
                                     const { col, row } = posForHandIndex(i);
+                                    const isCenterCard = i === 2;
                                     const isRevealed = !isPvP && c && enemyRevealId && enemyRevealId === c.id;
 
                                     return (
-                                        <div key={c?.id || `enemy_${i}`} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
+                                        <div
+                                            key={c?.id || `enemy_${i}`}
+                                            className={`hand-slot col${col}`}
+                                            style={{
+                                                gridColumn: isCenterCard ? "1 / span 2" : col,
+                                                gridRow: row,
+                                                justifySelf: isCenterCard ? "center" : "auto",
+                                            }}
+                                        >
                                             {isRevealed ? (
                                                 <Card card={c} disabled />
                                             ) : (
@@ -1367,8 +1384,18 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                             <div className="hand-grid">
                                 {hands.player.map((c, i) => {
                                     const { col, row } = posForHandIndex(i);
+                                    const isCenterCard = i === 2;
+
                                     return (
-                                        <div key={c.id} className={`hand-slot col${col}`} style={{ gridColumn: col, gridRow: row }}>
+                                        <div
+                                            key={c.id}
+                                            className={`hand-slot col${col}`}
+                                            style={{
+                                                gridColumn: isCenterCard ? "1 / span 2" : col,
+                                                gridRow: row,
+                                                justifySelf: isCenterCard ? "center" : "auto",
+                                            }}
+                                        >
                                             <Card
                                                 card={c}
                                                 selected={selected?.id === c.id}
