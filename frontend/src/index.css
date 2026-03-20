@@ -831,7 +831,7 @@ img {
 
 .hand-cross {
     position: relative;
-    width: calc(var(--card-w) * 2 + var(--gap) * 3);
+    width: calc(var(--card-w) * 3);
     height: calc(var(--card-h) * 2 + var(--gap));
 }
 
@@ -841,18 +841,19 @@ img {
     height: var(--card-h);
 }
 
-/* Верхние 2 карты — правый край выровнен по центру */
+/* Верхняя левая */
 .hand-cross-top {
     top: 0;
     left: 0;
 }
 
+/* Верхняя правая */
 .hand-cross-right {
     top: 0;
     right: 0;
 }
 
-/* Центральная карта — сдвинута вниз на полкарты */
+/* Центральная карта */
 .hand-cross-center {
     top: 50%;
     left: 50%;
@@ -860,12 +861,13 @@ img {
     z-index: 2;
 }
 
-/* Нижние 2 карты */
+/* Нижняя левая */
 .hand-cross-left {
     bottom: 0;
     left: 0;
 }
 
+/* Нижняя правая */
 .hand-cross-bottom {
     bottom: 0;
     right: 0;
