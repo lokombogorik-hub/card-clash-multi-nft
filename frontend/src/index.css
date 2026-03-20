@@ -831,7 +831,7 @@ img {
 
 .hand-cross {
     position: relative;
-    width: calc(var(--card-w) * 2 + var(--gap));
+    width: calc(var(--card-w) * 2 + var(--card-w) * 0.5 + var(--gap) * 2);
     height: calc(var(--card-h) * 2 + var(--gap));
 }
 
