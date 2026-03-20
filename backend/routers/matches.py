@@ -797,41 +797,39 @@ async def finish_match(match_id: str, body: dict):
 
 
 async def update_player_ratings(winner_id: str, loser_id: str) -> Optional[Dict]:
-    """Update ELO ratings after PvP match"""
+    """Обновить очки после PvP: +10 победителю, -10 проигравшему"""
     try:
         async for session in get_session():
             winner = await session.get(User, int(winner_id))
-            loser = await session.get(User, int(loser_id))
+            loser  = await session.get(User, int(loser_id))
 
             if not winner or not loser:
                 print(f"[RATING] Users not found: winner={winner_id}, loser={loser_id}")
                 return None
 
-            winner_rating = winner.elo_rating or 1000
-            loser_rating = loser.elo_rating or 1000
+            winner_rating = winner.elo_rating or 0
+            loser_rating  = loser.elo_rating  or 0
 
-            # Calculate changes
             winner_change, loser_change = calculate_rating_change(winner_rating, loser_rating)
 
             new_winner_rating = max(0, winner_rating + winner_change)
-            new_loser_rating = max(0, loser_rating + loser_change)
+            new_loser_rating  = max(0, loser_rating  + loser_change)
 
-            # Get new ranks
             new_winner_rank = get_rank_by_rating(new_winner_rating)
-            new_loser_rank = get_rank_by_rating(new_loser_rating)
+            new_loser_rank  = get_rank_by_rating(new_loser_rating)
 
-            # Update winner
-            winner.elo_rating = new_winner_rating
-            winner.rank = new_winner_rank["name"]
-            winner.pvp_wins = (winner.pvp_wins or 0) + 1
-            winner.wins = (winner.wins or 0) + 1
+            # Обновляем победителя
+            winner.elo_rating   = new_winner_rating
+            winner.rank         = new_winner_rank["name"]
+            winner.pvp_wins     = (winner.pvp_wins  or 0) + 1
+            winner.wins         = (winner.wins       or 0) + 1
             winner.total_matches = (winner.total_matches or 0) + 1
 
-            # Update loser
-            loser.elo_rating = new_loser_rating
-            loser.rank = new_loser_rank["name"]
-            loser.pvp_losses = (loser.pvp_losses or 0) + 1
-            loser.losses = (loser.losses or 0) + 1
+            # Обновляем проигравшего
+            loser.elo_rating    = new_loser_rating
+            loser.rank          = new_loser_rank["name"]
+            loser.pvp_losses    = (loser.pvp_losses  or 0) + 1
+            loser.losses        = (loser.losses       or 0) + 1
             loser.total_matches = (loser.total_matches or 0) + 1
 
             await session.commit()
@@ -844,6 +842,7 @@ async def update_player_ratings(winner_id: str, loser_id: str) -> Optional[Dict]
                     "change": winner_change,
                     "old_rank": get_rank_by_rating(winner_rating)["name"],
                     "new_rank": new_winner_rank["name"],
+                    "rank_up": new_winner_rank["name"] != get_rank_by_rating(winner_rating)["name"],
                 },
                 "loser": {
                     "id": loser_id,
@@ -852,16 +851,17 @@ async def update_player_ratings(winner_id: str, loser_id: str) -> Optional[Dict]
                     "change": loser_change,
                     "old_rank": get_rank_by_rating(loser_rating)["name"],
                     "new_rank": new_loser_rank["name"],
+                    "rank_down": new_loser_rank["name"] != get_rank_by_rating(loser_rating)["name"],
                 },
             }
 
-            print(
-                f"[RATING] Updated: winner {winner_id} +{winner_change} ({new_winner_rating}), loser {loser_id} {loser_change} ({new_loser_rating})")
+            print(f"[RATING] winner {winner_id}: {winner_rating} → {new_winner_rating} ({new_winner_rank['name']})")
+            print(f"[RATING] loser  {loser_id}: {loser_rating} → {new_loser_rating} ({new_loser_rank['name']})")
 
             return result
 
     except Exception as e:
-        print(f"[RATING] Error updating ratings: {e}")
+        print(f"[RATING] Error: {e}")
         import traceback
         traceback.print_exc()
         return None

@@ -50,7 +50,7 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
 
 @router.get("/users/me")
 async def get_me(current_user: User = Depends(get_current_user)):
-    rating = getattr(current_user, "elo_rating", 1000) or 1000
+    rating = getattr(current_user, "elo_rating", 0) or 0
     pvp_wins = getattr(current_user, "pvp_wins", 0) or 0
     pvp_losses = getattr(current_user, "pvp_losses", 0) or 0
     wins = getattr(current_user, "wins", 0) or 0
