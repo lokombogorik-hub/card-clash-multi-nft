@@ -393,6 +393,7 @@ img {
     --edge-inset: 14px;
     --card-w-max: 170px;
     --hand-col-gap: 18px;
+    --hand-card-gap: 6px;
     --row-gap: 12px;
     --towards-board: 12px;
     --hand-pad-x: 10px;
@@ -414,9 +415,11 @@ img {
     --card-h: calc(var(--card-w) * 1.375);
     --board-w: calc((var(--card-w)*3) + (var(--gap)*4));
     --board-h: calc((var(--card-h)*3) + (var(--gap)*4));
-    --side-w: calc((var(--card-w)*2) + var(--hand-col-gap) + (var(--hand-pad-x)*2));
+    --hand-wrap-w: calc((var(--card-w)*2) + var(--hand-col-gap));
+    --hand-wrap-h: calc((var(--card-h)*2) + var(--row-gap) + var(--card-h) + (var(--hand-card-gap)*2));
+    --side-w: calc(var(--hand-wrap-w) + (var(--hand-pad-x)*2));
     --half-step: calc((var(--card-h) + var(--row-gap)) / 2);
-    --stage-w: calc((var(--edge-inset)*2) + (var(--side-w)*2) + var(--board-w) + (var(--gap)*2));
+    --stage-w: calc((var(--edge-inset)*2) + (var(--side-w)*2) + var(--board-w) + (var(--gap)*4));
 }
 
 @media (hover:none) and (pointer:coarse),
@@ -690,14 +693,13 @@ img {
     isolation: isolate;
 }
 
-/* === ГЛАВНЫЙ GRID — 1fr board 1fr для симметрии === */
 .game-ui.tt-layout {
     height: 100%;
     width: min(100%, var(--stage-w));
     margin: 0 auto;
     display: grid;
     grid-template-columns: 1fr var(--board-w) 1fr;
-    gap: var(--gap);
+    gap: clamp(10px, 2vw, 20px);
     padding-left: var(--edge-inset);
     padding-right: var(--edge-inset);
     position: relative;
@@ -753,7 +755,7 @@ img {
     border-color: rgba(0, 180, 255, .4);
 }
 
-/* === БЕЙДЖИ ИГРОКОВ — зеркально === */
+/* === PLAYER BADGES — зеркально от стола === */
 .player-badge {
     position: absolute;
     z-index: 105;
@@ -811,21 +813,20 @@ img {
 }
 
 .player-badge.enemy {
-    right: calc(50% + (var(--board-w) / 2) + var(--gap) + 8px);
+    right: calc(50% + (var(--board-w)/2) + var(--gap) + 8px);
     left: auto;
     transform: none;
 }
 
 .player-badge.player {
-    left: calc(50% + (var(--board-w) / 2) + var(--gap) + 8px);
+    left: calc(50% + (var(--board-w)/2) + var(--gap) + 8px);
     right: auto;
     transform: none;
 }
 
-/* === РУКИ === */
-.hand.left {
-    justify-self: end;
-    align-self: center;
+/* === HANDS === */
+.hand.left,
+.hand.right {
     background: transparent;
     border: none;
     border-radius: 0;
@@ -839,45 +840,34 @@ img {
     height: 100%;
     padding-left: var(--hand-pad-x);
     padding-right: var(--hand-pad-x);
-    max-width: var(--side-w);
+}
+
+.hand.left {
+    justify-self: end;
 }
 
 .hand.right {
     justify-self: start;
-    align-self: center;
-    background: transparent;
-    border: none;
-    border-radius: 0;
-    overflow: visible;
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    height: 100%;
-    padding-left: var(--hand-pad-x);
-    padding-right: var(--hand-pad-x);
-    max-width: var(--side-w);
 }
 
-/* Обёртка карт — одинаковая для обеих рук */
+/* === HAND CARDS WRAP — ромб без наложений === */
 .hand-cards-wrap {
     position: relative;
     width: calc(var(--card-w) * 2 + var(--hand-col-gap));
-    height: calc(var(--card-h) * 2 + var(--row-gap));
+    height: calc(var(--card-h) * 3 + var(--hand-card-gap) * 2);
     flex-shrink: 0;
-    margin-top: 60px;
+    margin-top: 10px;
     margin-bottom: 8px;
 }
 
-/* Базовый стиль каждой позиции */
+/* Позиции карт — ромб 2-1-2 без наложений */
 .hc {
     position: absolute;
     width: var(--card-w);
     height: var(--card-h);
 }
 
+/* Верхний ряд — 2 карты */
 .hc-top-left {
     top: 0;
     left: 0;
@@ -888,13 +878,15 @@ img {
     right: 0;
 }
 
+/* Центральная карта — строго между рядами, без наложений */
 .hc-center {
-    top: 50%;
+    top: calc(var(--card-h) + var(--hand-card-gap));
     left: 50%;
-    transform: translate(-50%, -50%);
+    transform: translateX(-50%);
     z-index: 2;
 }
 
+/* Нижний ряд — 2 карты */
 .hc-bot-left {
     bottom: 0;
     left: 0;
@@ -905,7 +897,7 @@ img {
     right: 0;
 }
 
-/* Кнопки магии — по центру под картами */
+/* Кнопки магии */
 .hand-magic-row {
     display: flex;
     flex-direction: row;
@@ -1142,7 +1134,6 @@ img {
     grid-area: bottom;
 }
 
-/* GAME CARD — Element pill */
 .card-elem-pill {
     position: absolute;
     top: 0;
@@ -1244,7 +1235,6 @@ img {
     grid-area: bottom;
 }
 
-/* INVENTORY CARD — Element pill */
 .inv-card-elem-pill {
     position: absolute;
     top: 0;
