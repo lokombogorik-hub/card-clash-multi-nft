@@ -2573,7 +2573,7 @@ img {
    ========================= */
 @media (min-width: 1024px) {
     :root {
-        --card-w-max: 120px;
+        --card-w-max: 150px;
         --hand-col-gap: 14px;
         --row-gap: 10px;
         --gap: 8px;
@@ -2584,7 +2584,7 @@ img {
 
 @media (min-width: 1400px) {
     :root {
-        --card-w-max: 130px;
+        --card-w-max: 150px;
         --hand-col-gap: 16px;
         --gap: 10px;
     }
