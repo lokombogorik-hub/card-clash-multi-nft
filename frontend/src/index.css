@@ -465,12 +465,13 @@ img {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding-top: 20px;
+    padding-top: 60px;
+    gap: 0;
 }
 
 .play-logo {
-    width: min(240px, 56vmin);
-    height: min(240px, 56vmin);
+    width: min(280px, 58vmin);
+    height: min(280px, 58vmin);
     border-radius: 999px;
     padding: 0;
     border: 1px solid rgba(255, 255, 255, .1);
@@ -482,6 +483,7 @@ img {
     place-items: center;
     position: relative;
     overflow: hidden;
+    flex-shrink: 0;
 }
 
 .logo-wrap {
@@ -1406,11 +1408,11 @@ img {
     z-index: 22000;
 }
 
-/* Wallet connector */
+
 .wallet-connector-wrapper {
     position: fixed;
-    top: auto !important;
-    bottom: 180px !important;
+    top: auto;
+    bottom: calc(var(--safe-b) + var(--bottom-stack-h) + 20px);
     right: 12px;
     z-index: 100;
 }
@@ -2628,13 +2630,15 @@ img {
    LEADERBOARD — Таблица лидеров
    ========================= */
 .leaderboard {
-    margin-top: 20px;
+    margin-top: 16px;
+    margin-bottom: 0;
     padding: 16px;
     background: rgba(0, 0, 0, .45);
     border: 1px solid rgba(255, 255, 255, .12);
     border-radius: 16px;
     max-width: 400px;
-    width: 100%;
+    width: 90vw;
+    flex-shrink: 0;
 }
 
 .leaderboard-title {
@@ -3043,23 +3047,4 @@ img {
     font-size: 14px;
     opacity: .7;
     color: #a0d8ff;
-}
-
-/* =========================
-   HOME — Кошелек ниже
-   ========================= */
-.wallet-connector-wrapper {
-    position: fixed;
-    top: auto;
-    bottom: calc(var(--safe-b) + var(--bottom-stack-h) + 20px);
-    right: 12px;
-    z-index: 100;
-}
-
-/* На мобильных ещё выше от навигации */
-@media (max-width: 768px) {
-    .wallet-connector-wrapper {
-        bottom: calc(var(--safe-b) + var(--bottom-stack-h) + 10px);
-        right: 10px;
-    }
 }
