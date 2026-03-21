@@ -696,7 +696,7 @@ img {
     margin: 0 auto;
     display: grid;
     grid-template-columns: var(--side-w) var(--board-w) var(--side-w);
-    gap: var(--gap);
+    gap: clamp(12px, 2.5vw, 20px);
     padding-left: var(--edge-inset);
     padding-right: var(--edge-inset);
     position: relative;
@@ -903,6 +903,8 @@ img {
     border-radius: 16px;
     padding: var(--gap);
     isolation: isolate;
+    margin-left: 10px;
+    margin-right: 10px;
 }
 
 .board::before {
