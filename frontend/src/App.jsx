@@ -484,6 +484,8 @@ function AppContent() {
             <div className="shell-content">
                 {screen === "home" && (
                     <div className="home-center">
+                        <div style={{ flex: 1 }} />
+
                         <button className="play-logo" aria-label="Play" onClick={onPlay}>
                             <div className="logo-wrap">
                                 {logoOk ? (
@@ -496,8 +498,6 @@ function AppContent() {
                             </div>
                             <span className="play-icon"><PlayIcon /></span>
                         </button>
-
-                        <div style={{ flex: 1 }} />
 
                         <Leaderboard token={token} />
                     </div>

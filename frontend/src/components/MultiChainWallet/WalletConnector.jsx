@@ -8,8 +8,8 @@ export default function WalletConnector() {
 
     var wrapStyle = {
         position: "fixed",
-        bottom: "calc(env(safe-area-inset-bottom, 0px) + 200px)",
-        top: "auto",
+        top: "calc(env(safe-area-inset-top, 0px) + 14px)",
+        bottom: "auto",
         right: 14,
         zIndex: 9999,
     };

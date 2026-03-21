@@ -2630,8 +2630,8 @@ img {
    LEADERBOARD — Таблица лидеров
    ========================= */
 .leaderboard {
-    margin-top: 16px;
-    margin-bottom: 0;
+    margin-top: 0;
+    margin-bottom: 10px;
     padding: 16px;
     background: rgba(0, 0, 0, .45);
     border: 1px solid rgba(255, 255, 255, .12);
