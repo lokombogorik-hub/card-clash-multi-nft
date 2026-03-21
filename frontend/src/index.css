@@ -690,16 +690,18 @@ img {
     isolation: isolate;
 }
 
+/* === ГЛАВНЫЙ GRID — 1fr board 1fr для симметрии === */
 .game-ui.tt-layout {
     height: 100%;
     width: min(100%, var(--stage-w));
     margin: 0 auto;
     display: grid;
-    grid-template-columns: var(--side-w) var(--board-w) var(--side-w);
-    gap: 30px !important;
+    grid-template-columns: 1fr var(--board-w) 1fr;
+    gap: var(--gap);
     padding-left: var(--edge-inset);
     padding-right: var(--edge-inset);
     position: relative;
+    align-items: center;
 }
 
 .exit {
@@ -751,6 +753,7 @@ img {
     border-color: rgba(0, 180, 255, .4);
 }
 
+/* === БЕЙДЖИ ИГРОКОВ — зеркально === */
 .player-badge {
     position: absolute;
     z-index: 105;
@@ -808,17 +811,21 @@ img {
 }
 
 .player-badge.enemy {
-    left: calc(50% - (var(--board-w)/2) - var(--gap) - 8px);
-    transform: translateX(-100%);
+    right: calc(50% + (var(--board-w) / 2) + var(--gap) + 8px);
+    left: auto;
+    transform: none;
 }
 
 .player-badge.player {
-    right: calc(50% - (var(--board-w)/2) - var(--gap) - 8px);
-    transform: translateX(100%);
+    left: calc(50% + (var(--board-w) / 2) + var(--gap) + 8px);
+    right: auto;
+    transform: none;
 }
 
-.hand.left,
-.hand.right {
+/* === РУКИ === */
+.hand.left {
+    justify-self: end;
+    align-self: center;
     background: transparent;
     border: none;
     border-radius: 0;
@@ -830,14 +837,34 @@ img {
     justify-content: center;
     gap: 8px;
     height: 100%;
-    padding-left: 20px !important;
-    padding-right: 10px !important;
+    padding-left: var(--hand-pad-x);
+    padding-right: var(--hand-pad-x);
+    max-width: var(--side-w);
 }
 
-/* Обёртка карт */
+.hand.right {
+    justify-self: start;
+    align-self: center;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    overflow: visible;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 100%;
+    padding-left: var(--hand-pad-x);
+    padding-right: var(--hand-pad-x);
+    max-width: var(--side-w);
+}
+
+/* Обёртка карт — одинаковая для обеих рук */
 .hand-cards-wrap {
     position: relative;
-    width: calc(var(--card-w) * 2 + var(--hand-col-gap) + var(--card-w));
+    width: calc(var(--card-w) * 2 + var(--hand-col-gap));
     height: calc(var(--card-h) * 2 + var(--row-gap));
     flex-shrink: 0;
     margin-top: 60px;
@@ -851,19 +878,16 @@ img {
     height: var(--card-h);
 }
 
-/* Верхняя левая */
 .hc-top-left {
     top: 0;
     left: 0;
 }
 
-/* Верхняя правая */
 .hc-top-right {
     top: 0;
     right: 0;
 }
 
-/* Центральная — между верхними и нижними */
 .hc-center {
     top: 50%;
     left: 50%;
@@ -871,19 +895,17 @@ img {
     z-index: 2;
 }
 
-/* Нижняя левая */
 .hc-bot-left {
     bottom: 0;
     left: 0;
 }
 
-/* Нижняя правая */
 .hc-bot-right {
     bottom: 0;
     right: 0;
 }
 
-/* Кнопки магии — горизонтально под картами */
+/* Кнопки магии — по центру под картами */
 .hand-magic-row {
     display: flex;
     flex-direction: row;
@@ -891,8 +913,10 @@ img {
     flex-shrink: 0;
 }
 
-/* Board */
+/* === BOARD === */
 .board {
+    justify-self: center;
+    align-self: center;
     position: relative;
     width: var(--board-w);
     height: var(--board-h);
@@ -903,8 +927,6 @@ img {
     border-radius: 16px;
     padding: var(--gap);
     isolation: isolate;
-    margin-left: 10px;
-    margin-right: 20px;
 }
 
 .board::before {
@@ -1068,7 +1090,7 @@ img {
 }
 
 /* =========================
-   GAME CARD — Stats badge (левый верхний угол)
+   GAME CARD — Stats badge
    ========================= */
 .tt-badge {
     position: absolute;
@@ -1148,7 +1170,6 @@ img {
     display: block;
 }
 
-/* GAME CARD — Desktop */
 @media (min-width: 768px) {
     .tt-badge {
         width: 32px;
@@ -1260,7 +1281,6 @@ img {
     font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
 }
 
-/* INVENTORY — Desktop */
 @media (min-width: 768px) {
     .inv-tt-badge {
         width: 36px;
@@ -1281,31 +1301,22 @@ img {
     }
 }
 
-/* Magic buttons */
+/* === Magic buttons === */
 .magic-column {
-    position: absolute;
-    bottom: 0;
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    top: auto;
+    transform: none;
     display: flex;
     flex-direction: row;
     gap: var(--magic-gap);
     z-index: 120;
     pointer-events: auto;
     width: auto;
-    transform: none;
-    top: auto;
-}
-
-.hand.left .magic-column {
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: calc(-1 * (var(--magic-w) + 8px));
-}
-
-.hand.right .magic-column {
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: calc(-1 * (var(--magic-w) + 8px));
-    right: auto;
+    flex-shrink: 0;
+    justify-content: center;
 }
 
 .magic-btn {
@@ -1401,7 +1412,7 @@ img {
 }
 
 /* =========================================================
-   Card Clash — index-pages.css  (Part 2: Pages + Responsive)
+   Card Clash — index.css  (Part 2: Pages + Responsive)
    ========================================================= */
 
 /* =========================
@@ -1629,54 +1640,6 @@ img {
     border-radius: inherit;
     font-size: 32px;
     opacity: .5;
-}
-
-/* INVENTORY CARD — Element pill (просто эмодзи в углу) */
-.inv-card-elem-pill {
-    position: absolute;
-    top: 0;
-    right: 0;
-    z-index: 7;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: auto;
-    height: auto;
-    padding: 2px;
-    border-radius: 0;
-    background: none;
-    border: none;
-    pointer-events: none;
-    overflow: visible;
-}
-
-.inv-card-elem-pill::before {
-    display: none;
-}
-
-.inv-card-elem-pill::after {
-    display: none;
-}
-
-.inv-card-elem-ic {
-    font-size: 12px;
-    line-height: 1;
-    display: block;
-}
-
-.inv-card-elem-pill span {
-    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
-}
-
-/* INVENTORY — Desktop */
-@media (min-width: 768px) {
-    .inv-card-elem-pill {
-        padding: 4px;
-    }
-
-    .inv-card-elem-ic {
-        font-size: 18px;
-    }
 }
 
 /* Pick badge */
