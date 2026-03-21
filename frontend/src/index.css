@@ -1409,8 +1409,8 @@ img {
 /* Wallet connector */
 .wallet-connector-wrapper {
     position: fixed;
-    top: auto;
-    bottom: calc(var(--safe-b) + var(--bottom-stack-h) + 20px);
+    top: auto !important;
+    bottom: 180px !important;
     right: 12px;
     z-index: 100;
 }
