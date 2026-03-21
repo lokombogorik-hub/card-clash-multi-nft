@@ -837,7 +837,7 @@ img {
 /* Обёртка карт */
 .hand-cards-wrap {
     position: relative;
-    width: var(--side-w);
+    width: calc(var(--card-w) * 2 + var(--hand-col-gap) + var(--card-w));
     height: calc(var(--card-h) * 2 + var(--row-gap));
     flex-shrink: 0;
     margin-top: 60px;
