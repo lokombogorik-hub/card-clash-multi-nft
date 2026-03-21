@@ -707,8 +707,7 @@ img {
 .exit {
     position: fixed;
     left: 12px;
-    bottom: calc(var(--safe-b) + 12px);
-    top: auto;
+    top: 12px;
     z-index: 999;
     padding: 10px 12px;
     border-radius: 12px;
@@ -725,13 +724,12 @@ img {
 }
 
 .hud-near-left {
-    left: calc(50% - 70px - (var(--board-w)/2) - var(--score-w) - 12px);
+    left: calc(50% - (var(--board-w)/2) - var(--score-w) - var(--score-gap));
     bottom: 10px;
 }
 
-
 .hud-near-right {
-    left: calc(50% - 70px + (var(--board-w)/2) + 12px);
+    left: calc(50% + (var(--board-w)/2) + var(--score-gap));
     bottom: 10px;
 }
 
@@ -812,14 +810,14 @@ img {
 }
 
 .player-badge.enemy {
-    right: calc(50% + 70px + (var(--board-w)/2) + 12px);
+    right: calc(50% + (var(--board-w)/2) + var(--gap) + 8px);
     left: auto;
     transform: none;
 }
 
 
 .player-badge.player {
-    left: calc(50% - 70px + (var(--board-w)/2) + 12px);
+    left: calc(50% + (var(--board-w)/2) + var(--gap) + 8px);
     right: auto;
     transform: none;
 }
@@ -1389,7 +1387,9 @@ img {
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, .7);
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     z-index: 20000;
 }
 
@@ -1401,10 +1401,7 @@ img {
     min-width: 260px;
     max-width: 90vw;
     border: 1px solid rgba(255, 255, 255, .12);
-    position: fixed;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
+    position: relative;
     z-index: 22000;
 }
 
