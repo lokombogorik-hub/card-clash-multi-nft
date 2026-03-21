@@ -390,7 +390,7 @@ img {
     --bottom-stack-h: 160px;
     --ui-pad: clamp(8px, 2vw, 14px);
     --gap: clamp(6px, 1.6vw, 10px);
-    --edge-inset: 14px;
+    --edge-inset: 25px;
     --card-w-max: 170px;
     --hand-col-gap: 18px;
     --row-gap: 12px;
