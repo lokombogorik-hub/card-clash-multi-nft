@@ -853,10 +853,10 @@ img {
 /* === HAND CARDS WRAP — ромб без наложений === */
 .hand-cards-wrap {
     position: relative;
-    width: calc(var(--card-w) * 2 + var(--hand-col-gap));
-    height: calc(var(--card-h) * 3 + var(--hand-card-gap) * 2);
+    width: calc(var(--card-w) * 2 + var(--hand-col-gap) + var(--card-w));
+    height: calc(var(--card-h) * 2 + var(--row-gap));
     flex-shrink: 0;
-    margin-top: 10px;
+    margin-top: 60px;
     margin-bottom: 8px;
 }
 
