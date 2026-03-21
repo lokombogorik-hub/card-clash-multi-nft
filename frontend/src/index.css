@@ -393,7 +393,6 @@ img {
     --edge-inset: 14px;
     --card-w-max: 170px;
     --hand-col-gap: 18px;
-    --hand-card-gap: 6px;
     --row-gap: 12px;
     --towards-board: 12px;
     --hand-pad-x: 10px;
@@ -415,11 +414,9 @@ img {
     --card-h: calc(var(--card-w) * 1.375);
     --board-w: calc((var(--card-w)*3) + (var(--gap)*4));
     --board-h: calc((var(--card-h)*3) + (var(--gap)*4));
-    --hand-wrap-w: calc((var(--card-w)*2) + var(--hand-col-gap));
-    --hand-wrap-h: calc((var(--card-h)*2) + var(--row-gap) + var(--card-h) + (var(--hand-card-gap)*2));
-    --side-w: calc(var(--hand-wrap-w) + (var(--hand-pad-x)*2));
+    --side-w: calc((var(--card-w)*2) + var(--hand-col-gap) + (var(--hand-pad-x)*2));
     --half-step: calc((var(--card-h) + var(--row-gap)) / 2);
-    --stage-w: calc((var(--edge-inset)*2) + (var(--side-w)*2) + var(--board-w) + (var(--gap)*4));
+    --stage-w: calc((var(--edge-inset)*2) + (var(--side-w)*2) + var(--board-w) + (var(--gap)*2));
 }
 
 @media (hover:none) and (pointer:coarse),
@@ -699,7 +696,7 @@ img {
     margin: 0 auto;
     display: grid;
     grid-template-columns: 1fr var(--board-w) 1fr;
-    gap: clamp(10px, 2vw, 20px);
+    gap: var(--gap);
     padding-left: var(--edge-inset);
     padding-right: var(--edge-inset);
     position: relative;
@@ -755,7 +752,6 @@ img {
     border-color: rgba(0, 180, 255, .4);
 }
 
-/* === PLAYER BADGES — зеркально от стола === */
 .player-badge {
     position: absolute;
     z-index: 105;
@@ -818,13 +814,13 @@ img {
     transform: none;
 }
 
+
 .player-badge.player {
     left: calc(50% + (var(--board-w)/2) + var(--gap) + 8px);
     right: auto;
     transform: none;
 }
 
-/* === HANDS === */
 .hand.left,
 .hand.right {
     background: transparent;
@@ -850,7 +846,7 @@ img {
     justify-self: start;
 }
 
-/* === HAND CARDS WRAP — ромб без наложений === */
+/* Обёртка карт */
 .hand-cards-wrap {
     position: relative;
     width: calc(var(--card-w) * 2 + var(--hand-col-gap) + var(--card-w));
@@ -860,44 +856,46 @@ img {
     margin-bottom: 8px;
 }
 
-/* Позиции карт — ромб 2-1-2 без наложений */
+/* Базовый стиль каждой позиции */
 .hc {
     position: absolute;
     width: var(--card-w);
     height: var(--card-h);
 }
 
-/* Верхний ряд — 2 карты */
+/* Верхняя левая */
 .hc-top-left {
     top: 0;
     left: 0;
 }
 
+/* Верхняя правая */
 .hc-top-right {
     top: 0;
     right: 0;
 }
 
-/* Центральная карта — строго между рядами, без наложений */
+/* Центральная — между верхними и нижними */
 .hc-center {
-    top: calc(var(--card-h) + var(--hand-card-gap));
+    top: 50%;
     left: 50%;
-    transform: translateX(-50%);
+    transform: translate(-50%, -50%);
     z-index: 2;
 }
 
-/* Нижний ряд — 2 карты */
+/* Нижняя левая */
 .hc-bot-left {
     bottom: 0;
     left: 0;
 }
 
+/* Нижняя правая */
 .hc-bot-right {
     bottom: 0;
     right: 0;
 }
 
-/* Кнопки магии */
+/* Кнопки магии — горизонтально под картами */
 .hand-magic-row {
     display: flex;
     flex-direction: row;
@@ -905,10 +903,8 @@ img {
     flex-shrink: 0;
 }
 
-/* === BOARD === */
+/* Board */
 .board {
-    justify-self: center;
-    align-self: center;
     position: relative;
     width: var(--board-w);
     height: var(--board-h);
@@ -919,6 +915,8 @@ img {
     border-radius: 16px;
     padding: var(--gap);
     isolation: isolate;
+    justify-self: center;
+    align-self: center;
 }
 
 .board::before {
@@ -1082,7 +1080,7 @@ img {
 }
 
 /* =========================
-   GAME CARD — Stats badge
+   GAME CARD — Stats badge (левый верхний угол)
    ========================= */
 .tt-badge {
     position: absolute;
@@ -1134,6 +1132,7 @@ img {
     grid-area: bottom;
 }
 
+/* GAME CARD — Element pill */
 .card-elem-pill {
     position: absolute;
     top: 0;
@@ -1161,6 +1160,7 @@ img {
     display: block;
 }
 
+/* GAME CARD — Desktop */
 @media (min-width: 768px) {
     .tt-badge {
         width: 32px;
@@ -1235,6 +1235,7 @@ img {
     grid-area: bottom;
 }
 
+/* INVENTORY CARD — Element pill */
 .inv-card-elem-pill {
     position: absolute;
     top: 0;
@@ -1271,6 +1272,7 @@ img {
     font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
 }
 
+/* INVENTORY — Desktop */
 @media (min-width: 768px) {
     .inv-tt-badge {
         width: 36px;
@@ -1291,22 +1293,31 @@ img {
     }
 }
 
-/* === Magic buttons === */
+/* Magic buttons */
 .magic-column {
-    position: relative;
-    left: auto;
-    right: auto;
-    bottom: auto;
-    top: auto;
-    transform: none;
+    position: absolute;
+    bottom: 0;
     display: flex;
     flex-direction: row;
     gap: var(--magic-gap);
     z-index: 120;
     pointer-events: auto;
     width: auto;
-    flex-shrink: 0;
-    justify-content: center;
+    transform: none;
+    top: auto;
+}
+
+.hand.left .magic-column {
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(-1 * (var(--magic-w) + 8px));
+}
+
+.hand.right .magic-column {
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(-1 * (var(--magic-w) + 8px));
+    right: auto;
 }
 
 .magic-btn {
@@ -1402,7 +1413,7 @@ img {
 }
 
 /* =========================================================
-   Card Clash — index.css  (Part 2: Pages + Responsive)
+   Card Clash — index-pages.css  (Part 2: Pages + Responsive)
    ========================================================= */
 
 /* =========================
@@ -1630,6 +1641,54 @@ img {
     border-radius: inherit;
     font-size: 32px;
     opacity: .5;
+}
+
+/* INVENTORY CARD — Element pill (просто эмодзи в углу) */
+.inv-card-elem-pill {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    height: auto;
+    padding: 2px;
+    border-radius: 0;
+    background: none;
+    border: none;
+    pointer-events: none;
+    overflow: visible;
+}
+
+.inv-card-elem-pill::before {
+    display: none;
+}
+
+.inv-card-elem-pill::after {
+    display: none;
+}
+
+.inv-card-elem-ic {
+    font-size: 12px;
+    line-height: 1;
+    display: block;
+}
+
+.inv-card-elem-pill span {
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+}
+
+/* INVENTORY — Desktop */
+@media (min-width: 768px) {
+    .inv-card-elem-pill {
+        padding: 4px;
+    }
+
+    .inv-card-elem-ic {
+        font-size: 18px;
+    }
 }
 
 /* Pick badge */
