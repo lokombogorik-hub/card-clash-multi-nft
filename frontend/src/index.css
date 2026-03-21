@@ -825,38 +825,42 @@ img {
     overflow: visible;
     position: relative;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 8px;
     height: 100%;
 }
 
-.hand-cross {
+/* Обёртка карт */
+.hand-cards-wrap {
     position: relative;
-    width: calc(var(--card-w) * 2 + var(--gap));
-    height: calc(var(--card-h) * 1.5 + var(--gap) * 2);
+    width: calc(var(--card-w) * 2 + var(--hand-col-gap));
+    height: calc(var(--card-h) * 2 + var(--row-gap));
     flex-shrink: 0;
 }
 
-.hand-cross-card {
+/* Базовый стиль каждой позиции */
+.hc {
     position: absolute;
     width: var(--card-w);
     height: var(--card-h);
 }
 
-/* Верхняя левая — смещена вниз на четверть */
-.hand-cross-top {
+/* Верхняя левая */
+.hc-top-left {
     top: 0;
     left: 0;
 }
 
 /* Верхняя правая */
-.hand-cross-right {
+.hc-top-right {
     top: 0;
     right: 0;
 }
 
-/* Центральная карта — точно по центру */
-.hand-cross-center {
+/* Центральная — между верхними и нижними */
+.hc-center {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
@@ -864,22 +868,23 @@ img {
 }
 
 /* Нижняя левая */
-.hand-cross-left {
+.hc-bot-left {
     bottom: 0;
     left: 0;
 }
 
 /* Нижняя правая */
-.hand-cross-bottom {
+.hc-bot-right {
     bottom: 0;
     right: 0;
 }
 
-.center-col {
+/* Кнопки магии — горизонтально под картами */
+.hand-magic-row {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 0;
+    flex-direction: row;
+    gap: var(--magic-gap);
+    flex-shrink: 0;
 }
 
 /* Board */
