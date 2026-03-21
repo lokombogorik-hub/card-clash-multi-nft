@@ -1409,7 +1409,8 @@ img {
 /* Wallet connector */
 .wallet-connector-wrapper {
     position: fixed;
-    top: calc(var(--safe-t, 0px) + 60px);
+    top: auto;
+    bottom: calc(var(--safe-b) + var(--bottom-stack-h) + 20px);
     right: 12px;
     z-index: 100;
 }
@@ -2620,5 +2621,445 @@ img {
     .inv-card-game {
         opacity: 1 !important;
         transform: none !important;
+    }
+}
+
+/* =========================
+   LEADERBOARD — Таблица лидеров
+   ========================= */
+.leaderboard {
+    margin-top: 20px;
+    padding: 16px;
+    background: rgba(0, 0, 0, .45);
+    border: 1px solid rgba(255, 255, 255, .12);
+    border-radius: 16px;
+    max-width: 400px;
+    width: 100%;
+}
+
+.leaderboard-title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 18px;
+    font-weight: 900;
+    margin-bottom: 16px;
+    color: #fff;
+}
+
+.leaderboard-title-icon {
+    font-size: 24px;
+}
+
+.leaderboard-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.leaderboard-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .05);
+    border: 1px solid rgba(255, 255, 255, .08);
+    transition: transform .2s, border-color .2s;
+}
+
+.leaderboard-item:hover {
+    transform: translateX(4px);
+    border-color: rgba(120, 200, 255, .3);
+}
+
+/* Топ 3 — особые стили */
+.leaderboard-item.gold {
+    background: linear-gradient(135deg, rgba(255, 215, 0, .15) 0%, rgba(255, 180, 0, .08) 100%);
+    border-color: rgba(255, 215, 0, .4);
+}
+
+.leaderboard-item.silver {
+    background: linear-gradient(135deg, rgba(192, 192, 192, .12) 0%, rgba(160, 160, 160, .06) 100%);
+    border-color: rgba(192, 192, 192, .35);
+}
+
+.leaderboard-item.bronze {
+    background: linear-gradient(135deg, rgba(205, 127, 50, .12) 0%, rgba(180, 100, 40, .06) 100%);
+    border-color: rgba(205, 127, 50, .35);
+}
+
+.leaderboard-rank {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.leaderboard-item.gold .leaderboard-rank {
+    background: linear-gradient(135deg, #ffd700, #ffb800);
+    color: #000;
+}
+
+.leaderboard-item.silver .leaderboard-rank {
+    background: linear-gradient(135deg, #c0c0c0, #a8a8a8);
+    color: #000;
+}
+
+.leaderboard-item.bronze .leaderboard-rank {
+    background: linear-gradient(135deg, #cd7f32, #b8650a);
+    color: #fff;
+}
+
+.leaderboard-item:not(.gold):not(.silver):not(.bronze) .leaderboard-rank {
+    background: rgba(255, 255, 255, .1);
+    color: rgba(255, 255, 255, .7);
+}
+
+.leaderboard-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255, 255, 255, .2);
+    flex-shrink: 0;
+}
+
+.leaderboard-avatar-fallback {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, .1);
+    border: 2px solid rgba(255, 255, 255, .2);
+    font-weight: 900;
+    font-size: 14px;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.leaderboard-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.leaderboard-name {
+    font-weight: 700;
+    font-size: 14px;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.leaderboard-stats {
+    font-size: 11px;
+    opacity: .7;
+    color: #a0d8ff;
+    margin-top: 2px;
+}
+
+.leaderboard-rating {
+    font-weight: 900;
+    font-size: 16px;
+    color: #78c8ff;
+    flex-shrink: 0;
+}
+
+.leaderboard-item.gold .leaderboard-rating {
+    color: #ffd700;
+}
+
+.leaderboard-item.silver .leaderboard-rating {
+    color: #c0c0c0;
+}
+
+.leaderboard-item.bronze .leaderboard-rating {
+    color: #cd7f32;
+}
+
+.leaderboard-empty {
+    text-align: center;
+    padding: 20px;
+    opacity: .6;
+    font-size: 14px;
+}
+
+.leaderboard-loading {
+    display: flex;
+    justify-content: center;
+    padding: 30px;
+}
+
+.leaderboard-loading-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid rgba(120, 200, 255, .2);
+    border-top-color: #78c8ff;
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+}
+
+/* =========================
+   TOURNAMENT PAGE — Страница турниров
+   ========================= */
+.tournament-page {
+    padding: 16px;
+    max-width: min(900px, 95vw);
+    margin: 0 auto;
+    min-height: 60vh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    animation: pageSlideIn .7s cubic-bezier(.4, 0, .2, 1);
+}
+
+.tournament-header {
+    text-align: center;
+    margin-bottom: 24px;
+}
+
+.tournament-title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font-size: clamp(22px, 5vw, 32px);
+    font-weight: 900;
+    margin: 0 0 8px;
+    color: #fff;
+    animation: titleGlow 3s ease-in-out infinite;
+}
+
+.tournament-title-icon {
+    font-size: clamp(26px, 6vw, 38px);
+    animation: iconBounce 2.5s ease-in-out infinite;
+}
+
+.tournament-subtitle {
+    font-size: clamp(12px, 2.5vw, 15px);
+    opacity: .85;
+    color: #a0d8ff;
+}
+
+.tournament-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.tournament-card {
+    position: relative;
+    background: linear-gradient(135deg, rgba(20, 20, 30, .98) 0%, rgba(10, 10, 20, .98) 100%);
+    border: 2px solid rgba(255, 255, 255, .12);
+    border-radius: 18px;
+    padding: 20px;
+    overflow: hidden;
+    transition: border-color .3s, transform .3s;
+    animation: cardFadeIn .7s cubic-bezier(.4, 0, .2, 1) backwards;
+}
+
+.tournament-card:nth-child(1) {
+    animation-delay: .1s;
+}
+
+.tournament-card:nth-child(2) {
+    animation-delay: .2s;
+}
+
+.tournament-card:nth-child(3) {
+    animation-delay: .3s;
+}
+
+.tournament-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(255, 215, 0, .5);
+}
+
+.tournament-card.active {
+    border-color: rgba(100, 255, 150, .5);
+}
+
+.tournament-card.upcoming {
+    border-color: rgba(120, 200, 255, .3);
+}
+
+.tournament-card.ended {
+    opacity: .6;
+    border-color: rgba(255, 255, 255, .08);
+}
+
+.tournament-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.tournament-card-title {
+    font-size: 18px;
+    font-weight: 900;
+    color: #fff;
+}
+
+.tournament-card-badge {
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.tournament-card-badge.live {
+    background: rgba(100, 255, 150, .2);
+    border: 1px solid rgba(100, 255, 150, .5);
+    color: #a0ffc8;
+    animation: badgeGlow 1.5s ease-in-out infinite;
+}
+
+.tournament-card-badge.upcoming {
+    background: rgba(120, 200, 255, .15);
+    border: 1px solid rgba(120, 200, 255, .4);
+    color: #a0d8ff;
+}
+
+.tournament-card-badge.ended {
+    background: rgba(255, 255, 255, .08);
+    border: 1px solid rgba(255, 255, 255, .15);
+    color: rgba(255, 255, 255, .6);
+}
+
+.tournament-card-info {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.tournament-card-stat {
+    text-align: center;
+}
+
+.tournament-card-stat-value {
+    font-size: 20px;
+    font-weight: 900;
+    color: #78c8ff;
+}
+
+.tournament-card-stat-label {
+    font-size: 11px;
+    opacity: .7;
+    color: #a0d8ff;
+    margin-top: 2px;
+}
+
+.tournament-card-prize {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px;
+    background: rgba(255, 215, 0, .1);
+    border: 1px solid rgba(255, 215, 0, .3);
+    border-radius: 12px;
+    margin-bottom: 16px;
+}
+
+.tournament-card-prize-icon {
+    font-size: 24px;
+}
+
+.tournament-card-prize-value {
+    font-size: 18px;
+    font-weight: 900;
+    color: #ffd700;
+}
+
+.tournament-card-prize-label {
+    font-size: 12px;
+    opacity: .8;
+    color: #ffd700;
+}
+
+.tournament-join-btn {
+    width: 100%;
+    padding: 14px 20px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    transition: opacity .2s, transform .2s;
+}
+
+.tournament-join-btn.active {
+    background: linear-gradient(135deg, #78c8ff 0%, #5096ff 100%);
+    color: #000;
+}
+
+.tournament-join-btn.active:hover {
+    transform: scale(1.02);
+}
+
+.tournament-join-btn.upcoming {
+    background: rgba(255, 255, 255, .1);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, .2);
+}
+
+.tournament-join-btn:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.tournament-empty {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.tournament-empty-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+    opacity: .5;
+}
+
+.tournament-empty-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 8px;
+}
+
+.tournament-empty-text {
+    font-size: 14px;
+    opacity: .7;
+    color: #a0d8ff;
+}
+
+/* =========================
+   HOME — Кошелек ниже
+   ========================= */
+.wallet-connector-wrapper {
+    position: fixed;
+    top: auto;
+    bottom: calc(var(--safe-b) + var(--bottom-stack-h) + 20px);
+    right: 12px;
+    z-index: 100;
+}
+
+/* На мобильных ещё выше от навигации */
+@media (max-width: 768px) {
+    .wallet-connector-wrapper {
+        bottom: calc(var(--safe-b) + var(--bottom-stack-h) + 10px);
+        right: 10px;
     }
 }

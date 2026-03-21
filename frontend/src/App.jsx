@@ -41,6 +41,185 @@ function getStoredToken() {
     } catch (e) { return ""; }
 }
 
+/* =========================
+   LEADERBOARD COMPONENT
+   ========================= */
+function Leaderboard({ token }) {
+    var [leaders, setLeaders] = useState([]);
+    var [loading, setLoading] = useState(true);
+
+    useEffect(function () {
+        var load = async function () {
+            try {
+                var t = token || getStoredToken();
+                var res = await apiFetch("/api/leaderboard?limit=10", { token: t });
+                if (res && Array.isArray(res.leaders)) {
+                    setLeaders(res.leaders);
+                } else if (res && Array.isArray(res)) {
+                    setLeaders(res);
+                }
+            } catch (e) {
+                // если API ещё нет — показываем заглушку
+                setLeaders([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+        load();
+    }, [token]);
+
+    var medals = ["🥇", "🥈", "🥉"];
+    var medalClass = ["gold", "silver", "bronze"];
+
+    return (
+        <div className="leaderboard">
+            <div className="leaderboard-title">
+                <span className="leaderboard-title-icon">🏆</span>
+                Таблица лидеров
+            </div>
+
+            {loading ? (
+                <div className="leaderboard-loading">
+                    <div className="leaderboard-loading-spinner" />
+                </div>
+            ) : leaders.length === 0 ? (
+                <div className="leaderboard-empty">
+                    Пока нет данных.<br />Сыграй первый матч!
+                </div>
+            ) : (
+                <div className="leaderboard-list">
+                    {leaders.map(function (p, i) {
+                        var cls = "leaderboard-item" + (i < 3 ? " " + medalClass[i] : "");
+                        var name = p.username || p.first_name || ("Player #" + (i + 1));
+                        var initial = name.charAt(0).toUpperCase();
+                        return (
+                            <div key={p.user_id || i} className={cls}>
+                                <div className="leaderboard-rank">
+                                    {i < 3 ? medals[i] : i + 1}
+                                </div>
+                                {p.photo_url ? (
+                                    <img className="leaderboard-avatar" src={p.photo_url} alt={name} />
+                                ) : (
+                                    <div className="leaderboard-avatar-fallback">{initial}</div>
+                                )}
+                                <div className="leaderboard-info">
+                                    <div className="leaderboard-name">{name}</div>
+                                    <div className="leaderboard-stats">
+                                        {p.wins || 0}W / {p.losses || 0}L
+                                    </div>
+                                </div>
+                                <div className="leaderboard-rating">{p.rating || p.score || 0}</div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+}
+
+/* =========================
+   TOURNAMENT PAGE
+   ========================= */
+function TournamentPage({ onBack, token }) {
+    var tournaments = [
+        {
+            id: 1,
+            title: "Digital Bunny Cup",
+            status: "active",
+            players: 32,
+            maxPlayers: 64,
+            prize: "5 NFT",
+            startTime: "Сейчас",
+        },
+        {
+            id: 2,
+            title: "Weekly Clash",
+            status: "upcoming",
+            players: 0,
+            maxPlayers: 32,
+            prize: "3 NFT",
+            startTime: "Завтра 18:00",
+        },
+        {
+            id: 3,
+            title: "Season Finale",
+            status: "upcoming",
+            players: 0,
+            maxPlayers: 128,
+            prize: "20 NFT",
+            startTime: "Через 3 дня",
+        },
+    ];
+
+    var statusLabel = { active: "LIVE", upcoming: "Скоро", ended: "Завершён" };
+    var statusCls = { active: "live", upcoming: "upcoming", ended: "ended" };
+
+    return (
+        <div className="tournament-page">
+            <div className="tournament-header">
+                <div className="tournament-title">
+                    <span className="tournament-title-icon">🏟️</span>
+                    Турниры
+                </div>
+                <div className="tournament-subtitle">Участвуй и выигрывай NFT</div>
+            </div>
+
+            <div className="tournament-list">
+                {tournaments.map(function (t, i) {
+                    var isActive = t.status === "active";
+                    return (
+                        <div key={t.id} className={"tournament-card " + t.status} style={{ animationDelay: (i * 0.1) + "s" }}>
+                            <div className="tournament-card-header">
+                                <div className="tournament-card-title">{t.title}</div>
+                                <div className={"tournament-card-badge " + statusCls[t.status]}>
+                                    {statusLabel[t.status]}
+                                </div>
+                            </div>
+
+                            <div className="tournament-card-info">
+                                <div className="tournament-card-stat">
+                                    <div className="tournament-card-stat-value">
+                                        {t.players}/{t.maxPlayers}
+                                    </div>
+                                    <div className="tournament-card-stat-label">Игроки</div>
+                                </div>
+                                <div className="tournament-card-stat">
+                                    <div className="tournament-card-stat-value">1v1</div>
+                                    <div className="tournament-card-stat-label">Формат</div>
+                                </div>
+                                <div className="tournament-card-stat">
+                                    <div className="tournament-card-stat-value">{t.startTime}</div>
+                                    <div className="tournament-card-stat-label">Старт</div>
+                                </div>
+                            </div>
+
+                            <div className="tournament-card-prize">
+                                <span className="tournament-card-prize-icon">🎁</span>
+                                <span className="tournament-card-prize-value">{t.prize}</span>
+                                <span className="tournament-card-prize-label">Приз</span>
+                            </div>
+
+                            <button
+                                className={"tournament-join-btn " + (isActive ? "active" : "upcoming")}
+                                disabled={!isActive}
+                                onClick={function () {
+                                    if (isActive) alert("Турнирный режим скоро будет доступен!");
+                                }}
+                            >
+                                {isActive ? "Участвовать" : "Скоро"}
+                            </button>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+}
+
+/* =========================
+   APP CONTENT
+   ========================= */
 function AppContent() {
     var [screen, setScreen] = useState("home");
     var isLandscape = useIsLandscape();
@@ -211,6 +390,8 @@ function AppContent() {
                             </div>
                             <span className="play-icon"><PlayIcon /></span>
                         </button>
+
+                        <Leaderboard token={token} />
                     </div>
                 )}
 
@@ -223,7 +404,6 @@ function AppContent() {
                             setGameMode(data.mode || "ai");
                             setStage2MatchId(data.matchId || "");
 
-                            // Ensure deck is loaded
                             if (!playerDeck || playerDeck.length !== 5) {
                                 try {
                                     var t = token || getStoredToken();
@@ -250,6 +430,7 @@ function AppContent() {
                 {screen === "market" && <Market />}
                 {screen === "inventory" && <Inventory token={token || getStoredToken()} onDeckReady={onDeckReady} />}
                 {screen === "profile" && <Profile token={token || getStoredToken()} me={me} />}
+                {screen === "tournament" && <TournamentPage token={token || getStoredToken()} onBack={function () { setScreen("home"); }} />}
             </div>
 
             <div className="bottom-stack" ref={bottomStackRef}>
@@ -303,12 +484,13 @@ function SeasonBar({ title, subtitle, progress, onRefresh }) {
 function BottomNav({ active, onChange }) {
     var items = [
         { key: "home", label: "Главная", icon: <HomeIcon /> },
+        { key: "tournament", label: "Турнир", icon: <TrophyIcon /> },
         { key: "market", label: "Маркет", icon: <GemIcon /> },
         { key: "inventory", label: "Колода", icon: <BagIcon /> },
         { key: "profile", label: "Профиль", icon: <UserIcon /> },
     ];
     return (
-        <div className="bottom-nav">
+        <div className="bottom-nav" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
             {items.map(function (it) {
                 var isActive = active === it.key;
                 return (
@@ -327,6 +509,9 @@ function PlayIcon() {
 }
 function HomeIcon() {
     return (<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" stroke="white" strokeWidth="2" opacity="0.9" /></svg>);
+}
+function TrophyIcon() {
+    return (<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M8 21h8M12 17v4M5 3H3v5a4 4 0 0 0 4 4M19 3h2v5a4 4 0 0 1-4 4M7 3h10v6a5 5 0 0 1-10 0V3Z" stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.9" /></svg>);
 }
 function GemIcon() {
     return (<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2 3 9l9 13 9-13-9-7Z" stroke="white" strokeWidth="2" opacity="0.9" /><path d="M3 9h18" stroke="white" strokeWidth="2" opacity="0.6" /></svg>);
