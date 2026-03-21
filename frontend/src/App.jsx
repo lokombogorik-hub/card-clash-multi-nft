@@ -42,6 +42,38 @@ function getStoredToken() {
 }
 
 /* =========================
+   COUNTDOWN TIMER HOOK
+   ========================= */
+function useCountdown(targetDate) {
+    var calc = function () {
+        var diff = new Date(targetDate).getTime() - Date.now();
+        if (diff <= 0) return { d: 0, h: 0, m: 0, s: 0, over: true };
+        var s = Math.floor(diff / 1000);
+        var m = Math.floor(s / 60);
+        var h = Math.floor(m / 60);
+        var d = Math.floor(h / 24);
+        return { d: d, h: h % 24, m: m % 60, s: s % 60, over: false };
+    };
+    var [tick, setTick] = useState(calc);
+    useEffect(function () {
+        var id = setInterval(function () { setTick(calc()); }, 1000);
+        return function () { clearInterval(id); };
+    }, [targetDate]);
+    return tick;
+}
+
+function CountdownBadge({ targetDate }) {
+    var t = useCountdown(targetDate);
+    if (t.over) return <span className="season-sub">Завершён</span>;
+    var parts = [];
+    if (t.d > 0) parts.push(t.d + "д");
+    if (t.h > 0 || t.d > 0) parts.push(t.h + "ч");
+    parts.push((t.m < 10 ? "0" : "") + t.m + "м");
+    parts.push((t.s < 10 ? "0" : "") + t.s + "с");
+    return <span className="season-sub">Осталось: {parts.join(" ")}</span>;
+}
+
+/* =========================
    LEADERBOARD COMPONENT
    ========================= */
 function Leaderboard({ token }) {
@@ -59,7 +91,6 @@ function Leaderboard({ token }) {
                     setLeaders(res);
                 }
             } catch (e) {
-                // если API ещё нет — показываем заглушку
                 setLeaders([]);
             } finally {
                 setLoading(false);
@@ -119,9 +150,86 @@ function Leaderboard({ token }) {
 }
 
 /* =========================
+   SEASON BAR — все турниры с таймером
+   ========================= */
+var TOURNAMENTS = [
+    {
+        id: 1,
+        title: "Digital Bunny Cup",
+        endDate: "2025-08-01T18:00:00Z",
+        progress: 0.62,
+        status: "active",
+    },
+    {
+        id: 2,
+        title: "Weekly Clash",
+        endDate: "2025-07-21T18:00:00Z",
+        progress: 0.3,
+        status: "upcoming",
+    },
+    {
+        id: 3,
+        title: "Season Finale",
+        endDate: "2025-09-01T00:00:00Z",
+        progress: 0.1,
+        status: "upcoming",
+    },
+];
+
+function SeasonBar({ onGoTournament }) {
+    var [idx, setIdx] = useState(0);
+    var t = TOURNAMENTS[idx];
+
+    // авто-листание каждые 4 секунды
+    useEffect(function () {
+        var id = setInterval(function () {
+            setIdx(function (i) { return (i + 1) % TOURNAMENTS.length; });
+        }, 4000);
+        return function () { clearInterval(id); };
+    }, []);
+
+    return (
+        <div className="season-bar" style={{ cursor: "pointer" }} onClick={onGoTournament}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="season-title" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    {t.status === "active" && (
+                        <span style={{
+                            width: 8, height: 8, borderRadius: "50%",
+                            background: "#4eff91", display: "inline-block",
+                            boxShadow: "0 0 6px #4eff91", flexShrink: 0
+                        }} />
+                    )}
+                    {t.title}
+                </div>
+                <CountdownBadge targetDate={t.endDate} />
+            </div>
+            <div className="season-right">
+                <div style={{ display: "flex", gap: 5 }}>
+                    {TOURNAMENTS.map(function (_, i) {
+                        return (
+                            <div key={i} onClick={function (e) { e.stopPropagation(); setIdx(i); }} style={{
+                                width: i === idx ? 16 : 6,
+                                height: 6,
+                                borderRadius: 3,
+                                background: i === idx ? "#78c8ff" : "rgba(255,255,255,.25)",
+                                transition: "width .3s, background .3s",
+                                cursor: "pointer",
+                            }} />
+                        );
+                    })}
+                </div>
+                <div className="season-progress">
+                    <div className="season-progress-fill" style={{ width: Math.round(t.progress * 100) + "%" }} />
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/* =========================
    TOURNAMENT PAGE
    ========================= */
-function TournamentPage({ onBack, token }) {
+function TournamentPage({ token }) {
     var tournaments = [
         {
             id: 1,
@@ -130,7 +238,7 @@ function TournamentPage({ onBack, token }) {
             players: 32,
             maxPlayers: 64,
             prize: "5 NFT",
-            startTime: "Сейчас",
+            endDate: "2025-08-01T18:00:00Z",
         },
         {
             id: 2,
@@ -139,7 +247,7 @@ function TournamentPage({ onBack, token }) {
             players: 0,
             maxPlayers: 32,
             prize: "3 NFT",
-            startTime: "Завтра 18:00",
+            endDate: "2025-07-21T18:00:00Z",
         },
         {
             id: 3,
@@ -148,7 +256,7 @@ function TournamentPage({ onBack, token }) {
             players: 0,
             maxPlayers: 128,
             prize: "20 NFT",
-            startTime: "Через 3 дня",
+            endDate: "2025-09-01T00:00:00Z",
         },
     ];
 
@@ -189,8 +297,10 @@ function TournamentPage({ onBack, token }) {
                                     <div className="tournament-card-stat-label">Формат</div>
                                 </div>
                                 <div className="tournament-card-stat">
-                                    <div className="tournament-card-stat-value">{t.startTime}</div>
-                                    <div className="tournament-card-stat-label">Старт</div>
+                                    <div className="tournament-card-stat-value">
+                                        <CountdownBadge targetDate={t.endDate} />
+                                    </div>
+                                    <div className="tournament-card-stat-label">До конца</div>
                                 </div>
                             </div>
 
@@ -339,10 +449,6 @@ function AppContent() {
     var showRotate = screen === "game" && !isLandscape;
     var showWalletConnector = screen === "home";
 
-    var seasonInfo = useMemo(function () {
-        return { title: "Digitall Bunny Турнир", subtitle: "Ends in 3d 12h", progress: 0.62 };
-    }, []);
-
     if (screen === "game") {
         return (
             <div className="shell">
@@ -430,12 +536,12 @@ function AppContent() {
                 {screen === "market" && <Market />}
                 {screen === "inventory" && <Inventory token={token || getStoredToken()} onDeckReady={onDeckReady} />}
                 {screen === "profile" && <Profile token={token || getStoredToken()} me={me} />}
-                {screen === "tournament" && <TournamentPage token={token || getStoredToken()} onBack={function () { setScreen("home"); }} />}
+                {screen === "tournament" && <TournamentPage token={token || getStoredToken()} />}
             </div>
 
             <div className="bottom-stack" ref={bottomStackRef}>
                 {screen === "home" && (
-                    <SeasonBar title={seasonInfo.title} subtitle={seasonInfo.subtitle} progress={seasonInfo.progress} onRefresh={function () { }} />
+                    <SeasonBar onGoTournament={function () { setScreen("tournament"); }} />
                 )}
                 <BottomNav active={screen} onChange={setScreen} />
             </div>
@@ -459,23 +565,6 @@ function RotateGate({ onBack }) {
                 <div className="rotate-subtitle">Игра работает только в горизонтальном режиме</div>
                 <div className="rotate-phone" />
                 <button onClick={onBack}>← Меню</button>
-            </div>
-        </div>
-    );
-}
-
-function SeasonBar({ title, subtitle, progress, onRefresh }) {
-    return (
-        <div className="season-bar">
-            <div>
-                <div className="season-title">{title}</div>
-                <div className="season-sub">{subtitle}</div>
-            </div>
-            <div className="season-right">
-                <div className="season-progress">
-                    <div className="season-progress-fill" style={{ width: Math.round(progress * 100) + "%" }} />
-                </div>
-                <button className="icon-btn" onClick={onRefresh} aria-label="Refresh">⟳</button>
             </div>
         </div>
     );
