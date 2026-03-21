@@ -497,6 +497,8 @@ function AppContent() {
                             <span className="play-icon"><PlayIcon /></span>
                         </button>
 
+                        <div style={{ flex: 1 }} />
+
                         <Leaderboard token={token} />
                     </div>
                 )}
