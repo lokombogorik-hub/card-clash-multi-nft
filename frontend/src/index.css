@@ -701,6 +701,7 @@ img {
     padding-right: var(--edge-inset);
     position: relative;
     align-items: center;
+    transform: translateX(-20px);
 }
 
 .exit {
