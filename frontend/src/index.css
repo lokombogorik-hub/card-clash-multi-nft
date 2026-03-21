@@ -827,12 +827,14 @@ img {
     display: flex;
     align-items: center;
     justify-content: center;
+    height: 100%;
 }
 
 .hand-cross {
     position: relative;
-    width: calc(var(--card-w) * 3);
-    height: calc(var(--card-h) * 2 + var(--gap));
+    width: calc(var(--card-w) * 2 + var(--gap));
+    height: calc(var(--card-h) * 1.5 + var(--gap) * 2);
+    flex-shrink: 0;
 }
 
 .hand-cross-card {
@@ -841,7 +843,7 @@ img {
     height: var(--card-h);
 }
 
-/* Верхняя левая */
+/* Верхняя левая — смещена вниз на четверть */
 .hand-cross-top {
     top: 0;
     left: 0;
@@ -853,7 +855,7 @@ img {
     right: 0;
 }
 
-/* Центральная карта */
+/* Центральная карта — точно по центру */
 .hand-cross-center {
     top: 50%;
     left: 50%;
@@ -1271,22 +1273,28 @@ img {
 /* Magic buttons */
 .magic-column {
     position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    width: var(--magic-w);
+    bottom: 0;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     gap: var(--magic-gap);
     z-index: 120;
     pointer-events: auto;
+    width: auto;
+    transform: none;
+    top: auto;
 }
 
 .hand.left .magic-column {
-    left: calc(-1 * (var(--magic-w) + var(--magic-offset)));
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(-1 * (var(--magic-w) + 8px));
 }
 
 .hand.right .magic-column {
-    right: calc(-1 * (var(--magic-w) + var(--magic-offset)));
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(-1 * (var(--magic-w) + 8px));
+    right: auto;
 }
 
 .magic-btn {

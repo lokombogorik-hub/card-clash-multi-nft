@@ -1336,9 +1336,13 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                             </div>
 
                             {!isPvP && (
-                                <div style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 8, zIndex: 10 }}>
-                                    <button className="magic-btn freeze" disabled><span className="magic-ic">❄</span></button>
-                                    <button className="magic-btn reveal" disabled><span className="magic-ic">👁</span></button>
+                                <div className="magic-column enemy" aria-hidden="true">
+                                    <button className="magic-btn freeze" disabled>
+                                        <span className="magic-ic">❄</span>
+                                    </button>
+                                    <button className="magic-btn reveal" disabled>
+                                        <span className="magic-ic">👁</span>
+                                    </button>
                                 </div>
                             )}
                         </div>
@@ -1413,7 +1417,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                             </div>
 
                             {!isPvP && (
-                                <div style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", display: "flex", gap: 8, zIndex: 10 }}>
+                                <div className="magic-column player">
                                     <button
                                         className={`magic-btn freeze ${spellMode === "freeze" ? "active" : ""}`}
                                         onClick={onMagicFreeze}
