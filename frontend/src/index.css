@@ -831,7 +831,7 @@ img {
     gap: 8px;
     height: 100%;
     padding-left: 20px !important;
-    padding-right: 20px !important;
+    padding-right: 10px !important;
 }
 
 /* Обёртка карт */
@@ -904,7 +904,7 @@ img {
     padding: var(--gap);
     isolation: isolate;
     margin-left: 10px;
-    margin-right: 10px;
+    margin-right: 20px;
 }
 
 .board::before {
