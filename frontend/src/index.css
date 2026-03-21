@@ -2569,6 +2569,42 @@ img {
 }
 
 /* =========================
+   DESKTOP FIX — уменьшаем карты на больших экранах
+   ========================= */
+@media (min-width: 1024px) {
+    :root {
+        --card-w-max: 120px;
+        --hand-col-gap: 14px;
+        --row-gap: 10px;
+        --gap: 8px;
+        --edge-inset: 20px;
+        --hand-pad-x: 8px;
+    }
+}
+
+@media (min-width: 1400px) {
+    :root {
+        --card-w-max: 130px;
+        --hand-col-gap: 16px;
+        --gap: 10px;
+    }
+}
+
+/* Ограничиваем максимальную ширину игрового поля */
+@media (min-width: 1024px) {
+    .game-ui.tt-layout {
+        max-width: 1100px;
+        margin: 0 auto;
+    }
+}
+
+@media (min-width: 1400px) {
+    .game-ui.tt-layout {
+        max-width: 1300px;
+    }
+}
+
+/* =========================
    13) REDUCED MOTION
    ========================= */
 @media (prefers-reduced-motion: reduce) {
