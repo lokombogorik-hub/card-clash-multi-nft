@@ -2627,103 +2627,144 @@ img {
 }
 
 /* =========================
-   LEADERBOARD — Таблица лидеров
+   LEADERBOARD STYLES
    ========================= */
 .leaderboard {
-    margin-top: 16px;
-    margin-bottom: 10px;
-    padding: 16px;
-    background: rgba(0, 0, 0, .45);
-    border: 1px solid rgba(255, 255, 255, .12);
-    border-radius: 16px;
+    width: 100%;
     max-width: 400px;
-    width: 90vw;
-    flex-shrink: 0;
+    margin: 0 auto;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 16px;
+    padding: 16px;
+    backdrop-filter: blur(10px);
 }
 
 .leaderboard-title {
     display: flex;
     align-items: center;
-    justify-content: center;
-    gap: 10px;
+    gap: 8px;
     font-size: 18px;
-    font-weight: 900;
-    margin-bottom: 16px;
+    font-weight: 600;
     color: #fff;
+    margin-bottom: 16px;
 }
 
 .leaderboard-title-icon {
-    font-size: 24px;
+    font-size: 22px;
 }
 
-.leaderboard-list {
+.leaderboard-container {
+    display: flex;
+    flex-direction: column;
+}
+
+.leaderboard-top-three {
     display: flex;
     flex-direction: column;
     gap: 8px;
 }
 
+.leaderboard-divider {
+    display: flex;
+    align-items: center;
+    margin: 12px 0;
+    gap: 12px;
+}
+
+.leaderboard-divider::before,
+.leaderboard-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+}
+
+.leaderboard-divider-text {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+.leaderboard-scroll {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 180px;
+    overflow-y: auto;
+    padding-right: 4px;
+
+    /* Кастомный скроллбар */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+.leaderboard-scroll::-webkit-scrollbar {
+    width: 4px;
+}
+
+.leaderboard-scroll::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 2px;
+}
+
+.leaderboard-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+}
+
+.leaderboard-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
 .leaderboard-item {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.05);
     border-radius: 12px;
-    background: rgba(255, 255, 255, .05);
-    border: 1px solid rgba(255, 255, 255, .08);
-    transition: transform .2s, border-color .2s;
+    transition: transform 0.2s, background 0.2s;
 }
 
 .leaderboard-item:hover {
+    background: rgba(255, 255, 255, 0.1);
     transform: translateX(4px);
-    border-color: rgba(120, 200, 255, .3);
 }
 
-/* Топ 3 — особые стили */
+/* Топ-3 стили */
 .leaderboard-item.gold {
-    background: linear-gradient(135deg, rgba(255, 215, 0, .15) 0%, rgba(255, 180, 0, .08) 100%);
-    border-color: rgba(255, 215, 0, .4);
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.2), rgba(255, 180, 0, 0.1));
+    border: 1px solid rgba(255, 215, 0, 0.3);
 }
 
 .leaderboard-item.silver {
-    background: linear-gradient(135deg, rgba(192, 192, 192, .12) 0%, rgba(160, 160, 160, .06) 100%);
-    border-color: rgba(192, 192, 192, .35);
+    background: linear-gradient(135deg, rgba(192, 192, 192, 0.2), rgba(169, 169, 169, 0.1));
+    border: 1px solid rgba(192, 192, 192, 0.3);
 }
 
 .leaderboard-item.bronze {
-    background: linear-gradient(135deg, rgba(205, 127, 50, .12) 0%, rgba(180, 100, 40, .06) 100%);
-    border-color: rgba(205, 127, 50, .35);
+    background: linear-gradient(135deg, rgba(205, 127, 50, 0.2), rgba(184, 115, 51, 0.1));
+    border: 1px solid rgba(205, 127, 50, 0.3);
 }
 
 .leaderboard-rank {
     width: 28px;
     height: 28px;
-    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: 900;
-    font-size: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.7);
     flex-shrink: 0;
 }
 
-.leaderboard-item.gold .leaderboard-rank {
-    background: linear-gradient(135deg, #ffd700, #ffb800);
-    color: #000;
-}
-
-.leaderboard-item.silver .leaderboard-rank {
-    background: linear-gradient(135deg, #c0c0c0, #a8a8a8);
-    color: #000;
-}
-
+.leaderboard-item.gold .leaderboard-rank,
+.leaderboard-item.silver .leaderboard-rank,
 .leaderboard-item.bronze .leaderboard-rank {
-    background: linear-gradient(135deg, #cd7f32, #b8650a);
-    color: #fff;
-}
-
-.leaderboard-item:not(.gold):not(.silver):not(.bronze) .leaderboard-rank {
-    background: rgba(255, 255, 255, .1);
-    color: rgba(255, 255, 255, .7);
+    font-size: 18px;
 }
 
 .leaderboard-avatar {
@@ -2731,7 +2772,6 @@ img {
     height: 36px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid rgba(255, 255, 255, .2);
     flex-shrink: 0;
 }
 
@@ -2739,13 +2779,12 @@ img {
     width: 36px;
     height: 36px;
     border-radius: 50%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(255, 255, 255, .1);
-    border: 2px solid rgba(255, 255, 255, .2);
-    font-weight: 900;
     font-size: 14px;
+    font-weight: 600;
     color: #fff;
     flex-shrink: 0;
 }
@@ -2756,8 +2795,8 @@ img {
 }
 
 .leaderboard-name {
-    font-weight: 700;
     font-size: 14px;
+    font-weight: 500;
     color: #fff;
     white-space: nowrap;
     overflow: hidden;
@@ -2766,14 +2805,13 @@ img {
 
 .leaderboard-stats {
     font-size: 11px;
-    opacity: .7;
-    color: #a0d8ff;
+    color: rgba(255, 255, 255, 0.5);
     margin-top: 2px;
 }
 
 .leaderboard-rating {
-    font-weight: 900;
     font-size: 16px;
+    font-weight: 700;
     color: #78c8ff;
     flex-shrink: 0;
 }
@@ -2790,26 +2828,33 @@ img {
     color: #cd7f32;
 }
 
-.leaderboard-empty {
-    text-align: center;
-    padding: 20px;
-    opacity: .6;
-    font-size: 14px;
-}
-
 .leaderboard-loading {
     display: flex;
     justify-content: center;
-    padding: 30px;
+    padding: 40px 0;
 }
 
 .leaderboard-loading-spinner {
     width: 32px;
     height: 32px;
-    border: 3px solid rgba(120, 200, 255, .2);
+    border: 3px solid rgba(255, 255, 255, 0.1);
     border-top-color: #78c8ff;
     border-radius: 50%;
-    animation: spin .8s linear infinite;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.leaderboard-empty {
+    text-align: center;
+    padding: 30px 20px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 14px;
+    line-height: 1.5;
 }
 
 /* =========================

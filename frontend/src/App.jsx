@@ -84,7 +84,7 @@ function Leaderboard({ token }) {
         var load = async function () {
             try {
                 var t = token || getStoredToken();
-                var res = await apiFetch("/api/matches/leaderboard?limit=10", { token: t });
+                var res = await apiFetch("/api/matches/leaderboard?limit=50", { token: t });
                 if (res && Array.isArray(res.leaders)) {
                     setLeaders(res.leaders);
                 } else if (res && Array.isArray(res)) {
@@ -102,6 +102,35 @@ function Leaderboard({ token }) {
     var medals = ["🥇", "🥈", "🥉"];
     var medalClass = ["gold", "silver", "bronze"];
 
+    // Разделяем на топ-3 и остальных
+    var topThree = leaders.slice(0, 3);
+    var rest = leaders.slice(3);
+
+    var renderItem = function (p, i) {
+        var cls = "leaderboard-item" + (i < 3 ? " " + medalClass[i] : "");
+        var name = p.username || p.first_name || ("Player #" + (i + 1));
+        var initial = name.charAt(0).toUpperCase();
+        return (
+            <div key={p.user_id || i} className={cls}>
+                <div className="leaderboard-rank">
+                    {i < 3 ? medals[i] : i + 1}
+                </div>
+                {p.photo_url ? (
+                    <img className="leaderboard-avatar" src={p.photo_url} alt={name} />
+                ) : (
+                    <div className="leaderboard-avatar-fallback">{initial}</div>
+                )}
+                <div className="leaderboard-info">
+                    <div className="leaderboard-name">{name}</div>
+                    <div className="leaderboard-stats">
+                        {p.wins || 0}W / {p.losses || 0}L
+                    </div>
+                </div>
+                <div className="leaderboard-rating">{p.rating || p.score || 0}</div>
+            </div>
+        );
+    };
+
     return (
         <div className="leaderboard">
             <div className="leaderboard-title">
@@ -118,31 +147,27 @@ function Leaderboard({ token }) {
                     Пока нет данных.<br />Сыграй первый матч!
                 </div>
             ) : (
-                <div className="leaderboard-list">
-                    {leaders.map(function (p, i) {
-                        var cls = "leaderboard-item" + (i < 3 ? " " + medalClass[i] : "");
-                        var name = p.username || p.first_name || ("Player #" + (i + 1));
-                        var initial = name.charAt(0).toUpperCase();
-                        return (
-                            <div key={p.user_id || i} className={cls}>
-                                <div className="leaderboard-rank">
-                                    {i < 3 ? medals[i] : i + 1}
-                                </div>
-                                {p.photo_url ? (
-                                    <img className="leaderboard-avatar" src={p.photo_url} alt={name} />
-                                ) : (
-                                    <div className="leaderboard-avatar-fallback">{initial}</div>
-                                )}
-                                <div className="leaderboard-info">
-                                    <div className="leaderboard-name">{name}</div>
-                                    <div className="leaderboard-stats">
-                                        {p.wins || 0}W / {p.losses || 0}L
-                                    </div>
-                                </div>
-                                <div className="leaderboard-rating">{p.rating || p.score || 0}</div>
+                <div className="leaderboard-container">
+                    {/* Топ-3 — всегда видны */}
+                    <div className="leaderboard-top-three">
+                        {topThree.map(function (p, i) {
+                            return renderItem(p, i);
+                        })}
+                    </div>
+
+                    {/* Остальные — скроллируемый список */}
+                    {rest.length > 0 && (
+                        <>
+                            <div className="leaderboard-divider">
+                                <span className="leaderboard-divider-text">Остальные участники</span>
                             </div>
-                        );
-                    })}
+                            <div className="leaderboard-scroll">
+                                {rest.map(function (p, i) {
+                                    return renderItem(p, i + 3);
+                                })}
+                            </div>
+                        </>
+                    )}
                 </div>
             )}
         </div>
