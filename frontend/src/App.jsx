@@ -484,7 +484,7 @@ function AppContent() {
             <div className="shell-content">
                 {screen === "home" && (
                     <div className="home-center">
-                        <div style={{ flex: 2 }} />
+                        <div style={{ flex: 1 }} />
 
                         <button className="play-logo" aria-label="Play" onClick={onPlay}>
                             <div className="logo-wrap">
@@ -502,7 +502,6 @@ function AppContent() {
                         <Leaderboard token={token} />
                     </div>
                 )}
-
                 {screen === "matchmaking" && (
                     <Matchmaking
                         me={me}

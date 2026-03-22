@@ -464,8 +464,8 @@ img {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    padding-top: 60px;
+    justify-content: flex-end;
+    padding-bottom: 0;
     gap: 0;
 }
 
@@ -2630,7 +2630,7 @@ img {
    LEADERBOARD — Таблица лидеров
    ========================= */
 .leaderboard {
-    margin-top: 0;
+    margin-top: 16px;
     margin-bottom: 10px;
     padding: 16px;
     background: rgba(0, 0, 0, .45);

@@ -78,7 +78,6 @@ def is_escrow_configured() -> bool:
 
 
 async def fetch_nft_image(token_id: str, nft_contract: str) -> str:
-    """Получить реальную картинку NFT через NEAR RPC"""
     if not nft_contract or not token_id:
         return ""
     try:
@@ -158,6 +157,56 @@ async def transfer_nft_from_escrow(to_wallet: str, token_id: str, nft_contract_i
         return {"success": False, "error": str(e)}
 
 
+# =============================================================
+# СТАТИЧЕСКИЕ РОУТЫ — ОБЯЗАТЕЛЬНО ПЕРЕД /{match_id}
+# =============================================================
+
+@router.get("/leaderboard")
+async def get_leaderboard(limit: int = 10):
+    try:
+        async for session in get_session():
+            from sqlalchemy import select, desc
+
+            stmt = select(User).order_by(desc(User.elo_rating)).limit(limit)
+            result = await session.execute(stmt)
+            users = result.scalars().all()
+
+            leaders = []
+            for i, u in enumerate(users):
+                leaders.append({
+                    "rank": i + 1,
+                    "user_id": u.id,
+                    "username": u.username or u.first_name or f"Player #{u.id}",
+                    "first_name": u.first_name or "",
+                    "photo_url": getattr(u, "photo_url", None) or "",
+                    "rating": u.elo_rating or 0,
+                    "wins": u.wins or 0,
+                    "losses": u.losses or 0,
+                    "rank_name": u.rank or "Rookie",
+                })
+
+            return {"leaders": leaders, "total": len(leaders)}
+
+    except Exception as e:
+        print(f"[LEADERBOARD] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"leaders": [], "total": 0}
+
+
+@router.get("/config/status")
+async def get_escrow_status():
+    return {
+        "escrow_wallet": ESCROW_WALLET,
+        "escrow_configured": is_escrow_configured(),
+        "nft_contract": NFT_CONTRACT_ID or "NOT SET",
+    }
+
+
+# =============================================================
+# POST РОУТЫ
+# =============================================================
+
 @router.post("/create")
 async def create_match(request: CreateMatchRequest):
     match_id = str(uuid.uuid4())
@@ -188,6 +237,10 @@ async def create_match(request: CreateMatchRequest):
 
     return {"match_id": match_id, "status": "waiting", "message": "Match created"}
 
+
+# =============================================================
+# ДИНАМИЧЕСКИЕ РОУТЫ /{match_id} — ПОСЛЕ СТАТИЧЕСКИХ
+# =============================================================
 
 @router.post("/{match_id}/register_deposits")
 async def register_deposits(
@@ -225,10 +278,8 @@ async def register_deposits(
 
     deposits = []
     for i, token_id in enumerate(request.token_ids):
-        # Берём картинку с фронта
         image = request.images[i] if request.images and i < len(request.images) else None
 
-        # Если картинка не пришла — получаем с NEAR RPC
         if not image and nft_contract:
             image = await fetch_nft_image(token_id, nft_contract)
             if image:
@@ -319,7 +370,6 @@ async def confirm_escrow(match_id: str, body: dict):
             if near_wallet:
                 match_data["player2_near_wallet"] = near_wallet
 
-    # Сохраняем deposits с реальными картинками
     if token_ids:
         if match_id not in match_deposits:
             match_deposits[match_id] = {}
@@ -327,7 +377,6 @@ async def confirm_escrow(match_id: str, body: dict):
         contract = NFT_CONTRACT_ID or ""
         deposits = []
         for tid in token_ids:
-            # Получаем реальную картинку NFT
             image = await fetch_nft_image(tid, contract)
             if image:
                 print(f"[MATCHES] confirm_escrow image for {tid}: {image[:60]}...")
@@ -450,7 +499,6 @@ async def claim_card(
     token_id = picked_card.get("token_id")
     nft_contract_id = picked_card.get("nft_contract_id") or NFT_CONTRACT_ID
 
-    # Получаем картинку — сначала из сохранённых deposits, потом через RPC
     image = picked_card.get("image")
     if not image and nft_contract_id and token_id:
         image = await fetch_nft_image(token_id, nft_contract_id)
@@ -754,44 +802,3 @@ async def reconnect_to_match(match_id: str):
     if not match_data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found")
     return {"success": True, "message": "Reconnected successfully"}
-
-@router.get("/leaderboard")
-async def get_leaderboard(limit: int = 10):
-    try:
-        async for session in get_session():
-            from sqlalchemy import select, desc
-            from database.models.user import User
-
-            stmt = select(User).order_by(desc(User.elo_rating)).limit(limit)
-            result = await session.execute(stmt)
-            users = result.scalars().all()
-
-            leaders = []
-            for i, u in enumerate(users):
-                leaders.append({
-                    "rank": i + 1,
-                    "user_id": u.id,
-                    "username": u.username or u.first_name or f"Player #{u.id}",
-                    "first_name": u.first_name or "",
-                    "photo_url": getattr(u, "photo_url", None) or "",
-                    "rating": u.elo_rating or 0,
-                    "wins": u.wins or 0,
-                    "losses": u.losses or 0,
-                    "rank_name": u.rank or "Rookie",
-                })
-
-            return {"leaders": leaders, "total": len(leaders)}
-
-    except Exception as e:
-        print(f"[LEADERBOARD] Error: {e}")
-        import traceback
-        traceback.print_exc()
-        return {"leaders": [], "total": 0}
-    
-@router.get("/config/status")
-async def get_escrow_status():
-    return {
-        "escrow_wallet": ESCROW_WALLET,
-        "escrow_configured": is_escrow_configured(),
-        "nft_contract": NFT_CONTRACT_ID or "NOT SET",
-    }
