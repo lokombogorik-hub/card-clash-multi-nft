@@ -102,10 +102,6 @@ function Leaderboard({ token }) {
     var medals = ["🥇", "🥈", "🥉"];
     var medalClass = ["gold", "silver", "bronze"];
 
-    // Разделяем на топ-3 и остальных
-    var topThree = leaders.slice(0, 3);
-    var rest = leaders.slice(3);
-
     var renderItem = function (p, i) {
         var cls = "leaderboard-item" + (i < 3 ? " " + medalClass[i] : "");
         var name = p.username || p.first_name || ("Player #" + (i + 1));
@@ -135,7 +131,7 @@ function Leaderboard({ token }) {
         <div className="leaderboard">
             <div className="leaderboard-title">
                 <span className="leaderboard-title-icon">🏆</span>
-                Таблица лидеров
+                Лидеры
             </div>
 
             {loading ? (
@@ -144,36 +140,18 @@ function Leaderboard({ token }) {
                 </div>
             ) : leaders.length === 0 ? (
                 <div className="leaderboard-empty">
-                    Пока нет данных.<br />Сыграй первый матч!
+                    Пока нет данных
                 </div>
             ) : (
-                <div className="leaderboard-container">
-                    {/* Топ-3 — всегда видны */}
-                    <div className="leaderboard-top-three">
-                        {topThree.map(function (p, i) {
-                            return renderItem(p, i);
-                        })}
-                    </div>
-
-                    {/* Остальные — скроллируемый список */}
-                    {rest.length > 0 && (
-                        <>
-                            <div className="leaderboard-divider">
-                                <span className="leaderboard-divider-text">Остальные участники</span>
-                            </div>
-                            <div className="leaderboard-scroll">
-                                {rest.map(function (p, i) {
-                                    return renderItem(p, i + 3);
-                                })}
-                            </div>
-                        </>
-                    )}
+                <div className="leaderboard-scroll">
+                    {leaders.map(function (p, i) {
+                        return renderItem(p, i);
+                    })}
                 </div>
             )}
         </div>
     );
 }
-
 /* =========================
    SEASON BAR — все турниры с таймером
    ========================= */
