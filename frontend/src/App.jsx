@@ -484,7 +484,7 @@ function AppContent() {
             <div className="shell-content">
                 {screen === "home" && (
                     <div className="home-center">
-                        <div style={{ flex: 1 }} />
+                        <div style={{ flex: 2 }} />
 
                         <button className="play-logo" aria-label="Play" onClick={onPlay}>
                             <div className="logo-wrap">
