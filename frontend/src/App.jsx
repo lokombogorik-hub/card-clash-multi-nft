@@ -84,7 +84,7 @@ function Leaderboard({ token }) {
         var load = async function () {
             try {
                 var t = token || getStoredToken();
-                var res = await apiFetch("/api/leaderboard?limit=10", { token: t });
+                var res = await apiFetch("/api/matches/leaderboard?limit=10", { token: t });
                 if (res && Array.isArray(res.leaders)) {
                     setLeaders(res.leaders);
                 } else if (res && Array.isArray(res)) {

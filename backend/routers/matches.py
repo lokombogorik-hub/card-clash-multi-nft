@@ -755,7 +755,39 @@ async def reconnect_to_match(match_id: str):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found")
     return {"success": True, "message": "Reconnected successfully"}
 
+@router.get("/leaderboard")
+async def get_leaderboard(limit: int = 10):
+    try:
+        async for session in get_session():
+            from sqlalchemy import select, desc
+            from database.models.user import User
 
+            stmt = select(User).order_by(desc(User.elo_rating)).limit(limit)
+            result = await session.execute(stmt)
+            users = result.scalars().all()
+
+            leaders = []
+            for i, u in enumerate(users):
+                leaders.append({
+                    "rank": i + 1,
+                    "user_id": u.id,
+                    "username": u.username or u.first_name or f"Player #{u.id}",
+                    "first_name": u.first_name or "",
+                    "photo_url": getattr(u, "photo_url", None) or "",
+                    "rating": u.elo_rating or 0,
+                    "wins": u.wins or 0,
+                    "losses": u.losses or 0,
+                    "rank_name": u.rank or "Rookie",
+                })
+
+            return {"leaders": leaders, "total": len(leaders)}
+
+    except Exception as e:
+        print(f"[LEADERBOARD] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"leaders": [], "total": 0}
+    
 @router.get("/config/status")
 async def get_escrow_status():
     return {
