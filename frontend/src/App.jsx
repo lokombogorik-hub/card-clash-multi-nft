@@ -494,31 +494,33 @@ function AppContent() {
         <div className="shell">
             <StormBg />
 
-            {showWalletConnector ? (
-                <div className="wallet-connector-wrapper">
-                    <WalletConnector />
-                </div>
-            ) : null}
+
 
             <div className="shell-content">
                 {screen === "home" && (
                     <div className="home-center">
-                        <div style={{ flex: 1 }} />
+                        <div className="home-wallet-row">
+                            <WalletConnector />
+                        </div>
 
-                        <button className="play-logo" aria-label="Play" onClick={onPlay}>
-                            <div className="logo-wrap">
-                                {logoOk ? (
-                                    <video ref={logoRef} className="logo-video" autoPlay loop muted playsInline preload="auto" onError={function () { setLogoOk(false); }}>
-                                        <source src="/ui/logo.mp4" type="video/mp4" />
-                                    </video>
-                                ) : (
-                                    <div className="page">Logo</div>
-                                )}
-                            </div>
-                            <span className="play-icon"><PlayIcon /></span>
-                        </button>
+                        <div className="home-logo-wrap">
+                            <button className="play-logo" aria-label="Play" onClick={onPlay}>
+                                <div className="logo-wrap">
+                                    {logoOk ? (
+                                        <video ref={logoRef} className="logo-video" autoPlay loop muted playsInline preload="auto" onError={function () { setLogoOk(false); }}>
+                                            <source src="/ui/logo.mp4" type="video/mp4" />
+                                        </video>
+                                    ) : (
+                                        <div className="page">Logo</div>
+                                    )}
+                                </div>
+                                <span className="play-icon"><PlayIcon /></span>
+                            </button>
+                        </div>
 
-                        <Leaderboard token={token} />
+                        <div className="home-leaderboard-wrap">
+                            <Leaderboard token={token} />
+                        </div>
                     </div>
                 )}
                 {screen === "matchmaking" && (

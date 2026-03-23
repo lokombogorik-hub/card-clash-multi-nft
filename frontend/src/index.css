@@ -464,9 +464,32 @@ img {
     display: flex;
     flex-direction: column;
     align-items: center;
+    width: 100%;
+}
+
+/* Кошелёк — сверху справа */
+.home-wallet-row {
+    width: 100%;
+    display: flex;
     justify-content: flex-end;
-    padding-bottom: 0;
-    gap: 0;
+    padding: 8px 4px 0;
+    flex-shrink: 0;
+}
+
+/* Лого — занимает всё свободное место по центру */
+.home-logo-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+/* Лидерборд — прижат к низу, впритык к плашке турниров */
+.home-leaderboard-wrap {
+    width: 100%;
+    flex-shrink: 0;
+    padding-bottom: 8px;
 }
 
 .play-logo {
@@ -2626,18 +2649,12 @@ img {
     }
 }
 
-/* =========================
-   LEADERBOARD — FIXED SIZE
-   ========================= */
 .leaderboard {
     width: 100%;
-    max-width: 340px;
+    max-width: 400px;
     height: 200px;
+    /* фиксированная высота — никогда не прыгает */
     margin: 0 auto;
-    margin-top: auto;
-    /* Прижимаем к низу */
-    margin-bottom: 12px;
-    /* Отступ от плашки турниров */
     background: rgba(0, 0, 0, 0.5);
     border-radius: 14px;
     padding: 12px;
@@ -2662,12 +2679,15 @@ img {
     font-size: 16px;
 }
 
+/* Контент — занимает остаток, никогда не меняет размер */
 .leaderboard-content {
     flex: 1;
     position: relative;
     overflow: hidden;
+    min-height: 0;
 }
 
+/* Центрированное состояние (лоадинг / пусто) */
 .leaderboard-center-state {
     position: absolute;
     inset: 0;
@@ -2679,10 +2699,11 @@ img {
 }
 
 .leaderboard-scroll {
+    position: absolute;
+    inset: 0;
     display: flex;
     flex-direction: column;
     gap: 6px;
-    height: 100%;
     overflow-y: auto;
     padding-right: 4px;
 
@@ -2815,21 +2836,9 @@ img {
     animation: spin 1s linear infinite;
 }
 
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-/* =========================
-   WALLET CONNECTOR — НИЖЕ!!!
-   ========================= */
+/* Убираем старый wallet-connector-wrapper */
 .wallet-connector-wrapper {
-    position: fixed;
-    top: 60px;
-    /* ОПУЩЕН ВНИЗ */
-    right: 12px;
-    z-index: 100;
+    display: none;
 }
 
 /* =========================
