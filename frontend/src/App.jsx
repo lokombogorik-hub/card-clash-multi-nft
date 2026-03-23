@@ -106,16 +106,30 @@ function Leaderboard({ token }) {
         var cls = "leaderboard-item" + (i < 3 ? " " + medalClass[i] : "");
         var name = p.username || p.first_name || ("Player #" + (i + 1));
         var initial = name.charAt(0).toUpperCase();
+        var photoUrl = p.photo_url || p.photoUrl || p.avatar || p.avatar_url || null;
+
         return (
-            <div key={p.user_id || i} className={cls}>
+            <div key={p.user_id || p.id || i} className={cls}>
                 <div className="leaderboard-rank">
                     {i < 3 ? medals[i] : i + 1}
                 </div>
-                {p.photo_url ? (
-                    <img className="leaderboard-avatar" src={p.photo_url} alt={name} />
-                ) : (
-                    <div className="leaderboard-avatar-fallback">{initial}</div>
-                )}
+                {photoUrl ? (
+                    <img
+                        className="leaderboard-avatar"
+                        src={photoUrl}
+                        alt={name}
+                        onError={function (e) {
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'flex';
+                        }}
+                    />
+                ) : null}
+                <div
+                    className="leaderboard-avatar-fallback"
+                    style={{ display: photoUrl ? 'none' : 'flex' }}
+                >
+                    {initial}
+                </div>
                 <div className="leaderboard-info">
                     <div className="leaderboard-name">{name}</div>
                     <div className="leaderboard-stats">
