@@ -136,11 +136,11 @@ function Leaderboard({ token }) {
 
             <div className="leaderboard-content">
                 {loading ? (
-                    <div className="leaderboard-loading">
+                    <div className="leaderboard-center-state">
                         <div className="leaderboard-loading-spinner" />
                     </div>
                 ) : leaders.length === 0 ? (
-                    <div className="leaderboard-empty">
+                    <div className="leaderboard-center-state">
                         Пока нет данных
                     </div>
                 ) : (
