@@ -134,21 +134,23 @@ function Leaderboard({ token }) {
                 Лидеры
             </div>
 
-            {loading ? (
-                <div className="leaderboard-loading">
-                    <div className="leaderboard-loading-spinner" />
-                </div>
-            ) : leaders.length === 0 ? (
-                <div className="leaderboard-empty">
-                    Пока нет данных
-                </div>
-            ) : (
-                <div className="leaderboard-scroll">
-                    {leaders.map(function (p, i) {
-                        return renderItem(p, i);
-                    })}
-                </div>
-            )}
+            <div className="leaderboard-content">
+                {loading ? (
+                    <div className="leaderboard-loading">
+                        <div className="leaderboard-loading-spinner" />
+                    </div>
+                ) : leaders.length === 0 ? (
+                    <div className="leaderboard-empty">
+                        Пока нет данных
+                    </div>
+                ) : (
+                    <div className="leaderboard-scroll">
+                        {leaders.map(function (p, i) {
+                            return renderItem(p, i);
+                        })}
+                    </div>
+                )}
+            </div>
         </div>
     );
 }
