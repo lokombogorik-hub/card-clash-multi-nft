@@ -494,20 +494,30 @@ function AppContent() {
         <div className="shell">
             <StormBg />
 
-
-
             <div className="shell-content">
                 {screen === "home" && (
                     <div className="home-center">
+
+                        {/* ПУСТОЕ МЕСТО сверху — отступ от края */}
+                        <div className="home-top-spacer" />
+
+                        {/* КОШЕЛЁК — над лого, справа, НО НЕ В САМОМ ВЕРХУ */}
                         <div className="home-wallet-row">
                             <WalletConnector />
                         </div>
 
-                        <div className="home-logo-wrap">
+                        {/* ЛОГО — по центру */}
+                        <div className="home-logo-area">
                             <button className="play-logo" aria-label="Play" onClick={onPlay}>
                                 <div className="logo-wrap">
                                     {logoOk ? (
-                                        <video ref={logoRef} className="logo-video" autoPlay loop muted playsInline preload="auto" onError={function () { setLogoOk(false); }}>
+                                        <video
+                                            ref={logoRef}
+                                            className="logo-video"
+                                            autoPlay loop muted playsInline
+                                            preload="auto"
+                                            onError={function () { setLogoOk(false); }}
+                                        >
                                             <source src="/ui/logo.mp4" type="video/mp4" />
                                         </video>
                                     ) : (
@@ -518,11 +528,14 @@ function AppContent() {
                             </button>
                         </div>
 
-                        <div className="home-leaderboard-wrap">
+                        {/* ЛИДЕРБОРД — внизу */}
+                        <div className="home-bottom-area">
                             <Leaderboard token={token} />
                         </div>
+
                     </div>
                 )}
+
                 {screen === "matchmaking" && (
                     <Matchmaking
                         me={me}

@@ -453,40 +453,52 @@ img {
     position: relative;
     z-index: 1;
     height: 100%;
-    /* УБИРАЕМ верхний padding — он толкал всё вверх */
     padding: 0 var(--ui-pad) calc(var(--safe-b) + var(--bottom-stack-h));
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
 }
 
 .home-center {
     height: 100%;
+    width: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
-    width: 100%;
-    /* Всё содержимое прижато к НИЗУ */
-    justify-content: flex-end;
-    gap: 0;
 }
 
-/* Кошелёк — над лидербордом справа */
+.home-top-spacer {
+    flex: 1;
+    min-height: 0;
+}
+
+/* Кошелёк — самый верх, прижат к правому краю */
 .home-wallet-row {
     width: 100%;
     display: flex;
     justify-content: flex-end;
-    padding: 0 4px 8px;
+    padding: 0 4px 10px;
     flex-shrink: 0;
 }
 
-/* Лого — над кошельком по центру */
-.home-logo-wrap {
+/* Лого — занимает всё свободное пространство по центру */
+.home-logo-area {
+    flex: 2;
+    /* больше места чем сверху — лого чуть ниже центра */
     display: flex;
     align-items: center;
     justify-content: center;
     width: 100%;
-    padding-bottom: 16px;
+    min-height: 0;
+}
+
+.home-bottom-area {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-bottom: 10px;
     flex-shrink: 0;
 }
 
@@ -1438,11 +1450,7 @@ img {
 
 
 .wallet-connector-wrapper {
-    position: fixed;
-    top: auto;
-    bottom: calc(var(--safe-b) + var(--bottom-stack-h) + 20px);
-    right: 12px;
-    z-index: 100;
+    display: none !important;
 }
 
 /* =========================================================
@@ -2656,35 +2664,36 @@ img {
 
 .leaderboard {
     width: 100%;
-    max-width: 400px;
-    height: 200px;
-    /* фиксированная высота — никогда не прыгает */
+    max-width: 260px;
+    /* УЖЕ */
+    height: 192px;
+    /* ФИКСИРОВАННАЯ ВЫСОТА — 3 элемента */
     margin: 0 auto;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.55);
     border-radius: 14px;
-    padding: 12px;
+    padding: 10px;
     backdrop-filter: blur(10px);
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
+    flex-shrink: 0;
 }
 
 .leaderboard-title {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 14px;
-    font-weight: 600;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 700;
     color: #fff;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     flex-shrink: 0;
 }
 
 .leaderboard-title-icon {
-    font-size: 16px;
+    font-size: 13px;
 }
 
-/* Контент — занимает остаток, никогда не меняет размер */
 .leaderboard-content {
     flex: 1;
     position: relative;
@@ -2692,7 +2701,6 @@ img {
     min-height: 0;
 }
 
-/* Центрированное состояние (лоадинг / пусто) */
 .leaderboard-center-state {
     position: absolute;
     inset: 0;
@@ -2700,7 +2708,7 @@ img {
     align-items: center;
     justify-content: center;
     color: rgba(255, 255, 255, 0.4);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .leaderboard-scroll {
@@ -2708,16 +2716,15 @@ img {
     inset: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 5px;
     overflow-y: auto;
-    padding-right: 4px;
-
+    padding-right: 3px;
     scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
 
 .leaderboard-scroll::-webkit-scrollbar {
-    width: 3px;
+    width: 2px;
 }
 
 .leaderboard-scroll::-webkit-scrollbar-track {
@@ -2725,18 +2732,18 @@ img {
 }
 
 .leaderboard-scroll::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.2);
     border-radius: 2px;
 }
 
 .leaderboard-item {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
+    gap: 6px;
+    padding: 6px 8px;
     background: rgba(255, 255, 255, 0.06);
-    border-radius: 10px;
-    height: 46px;
+    border-radius: 8px;
+    height: 42px;
     flex-shrink: 0;
     box-sizing: border-box;
 }
@@ -2757,8 +2764,8 @@ img {
 }
 
 .leaderboard-rank {
-    width: 24px;
-    font-size: 14px;
+    width: 20px;
+    font-size: 12px;
     font-weight: 700;
     color: rgba(255, 255, 255, 0.6);
     text-align: center;
@@ -2768,26 +2775,26 @@ img {
 .leaderboard-item.gold .leaderboard-rank,
 .leaderboard-item.silver .leaderboard-rank,
 .leaderboard-item.bronze .leaderboard-rank {
-    font-size: 16px;
+    font-size: 14px;
 }
 
 .leaderboard-avatar {
-    width: 30px;
-    height: 30px;
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
 }
 
 .leaderboard-avatar-fallback {
-    width: 30px;
-    height: 30px;
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
     background: linear-gradient(135deg, #667eea, #764ba2);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     color: #fff;
     flex-shrink: 0;
@@ -2799,7 +2806,7 @@ img {
 }
 
 .leaderboard-name {
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 500;
     color: #fff;
     white-space: nowrap;
@@ -2808,13 +2815,13 @@ img {
 }
 
 .leaderboard-stats {
-    font-size: 10px;
-    color: rgba(255, 255, 255, 0.45);
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.4);
     margin-top: 1px;
 }
 
 .leaderboard-rating {
-    font-size: 14px;
+    font-size: 12px;
     font-weight: 700;
     color: #78c8ff;
     flex-shrink: 0;
@@ -2833,8 +2840,8 @@ img {
 }
 
 .leaderboard-loading-spinner {
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
     border: 2px solid rgba(255, 255, 255, 0.1);
     border-top-color: #78c8ff;
     border-radius: 50%;
