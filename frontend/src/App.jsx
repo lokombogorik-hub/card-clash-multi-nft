@@ -10,6 +10,27 @@ import Matchmaking from "./components/Stage2/Matchmaking";
 import WalletConnectProvider from "./context/WalletConnectContext";
 
 /* ── helpers ── */
+
+// Определяем мобильное устройство
+function useIsMobile() {
+    var check = function () {
+        if (typeof window === "undefined") return false;
+        // проверяем userAgent + touch + ширину
+        var ua = navigator.userAgent || "";
+        var mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+        var touch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
+        var narrow = window.innerWidth <= 1024;
+        return mobile || (touch && narrow);
+    };
+    var [isMobile, setIsMobile] = useState(check);
+    useEffect(function () {
+        var onChange = function () { setIsMobile(check()); };
+        window.addEventListener("resize", onChange);
+        return function () { window.removeEventListener("resize", onChange); };
+    }, []);
+    return isMobile;
+}
+
 function useIsLandscape() {
     var get = function () {
         var mq = window.matchMedia ? window.matchMedia("(orientation: landscape)") : null;
@@ -215,7 +236,7 @@ function TournamentPage() {
 }
 
 /* ── rotate gate — игра (нужен горизонт) ── */
-function RotateGate({ onBack }) {
+function RotateGateGame({ onBack }) {
     return (
         <div className="rotate-gate">
             <div className="rotate-gate-box">
@@ -248,6 +269,7 @@ function RotateGateMenu() {
 function AppContent() {
     var [screen, setScreen] = useState("home");
     var isLandscape = useIsLandscape();
+    var isMobile = useIsMobile();
     var [token, setToken] = useState(null);
     var [me, setMe] = useState(null);
     var [playerDeck, setPlayerDeck] = useState(null);
@@ -321,24 +343,28 @@ function AppContent() {
     };
     var onExitGame = function () { setScreen("home"); setPlayerDeck(null); setStage2MatchId(""); setGameMode("ai"); };
 
-    /* игра требует горизонталь */
-    var showRotate = screen === "game" && !isLandscape;
-    /* меню требует вертикаль */
-    var showRotateMenu = screen !== "game" && isLandscape;
+    /*
+     * Логика плашек поворота:
+     * - ПК (!isMobile): никогда не показываем плашки
+     * - Мобилка в игре (screen === "game"): нужен горизонт, если вертикаль — плашка
+     * - Мобилка в меню (screen !== "game"): нужна вертикаль, если горизонт — плашка
+     */
+    var showRotateGame = isMobile && screen === "game" && !isLandscape;
+    var showRotateMenu = isMobile && screen !== "game" && isLandscape;
 
     /* ── GAME SCREEN ── */
     if (screen === "game") {
         return (
             <div className="shell">
                 <StormBg />
-                <div className={"game-host" + (showRotate ? " is-hidden" : "")}>
+                <div className={"game-host" + (showRotateGame ? " is-hidden" : "")}>
                     {playerDeck && playerDeck.length === 5 ? (
                         <Game onExit={onExitGame} me={me} playerDeck={playerDeck} matchId={stage2MatchId} mode={gameMode} />
                     ) : (
                         <div style={{ color: "#fff", padding: 20 }}>Loading deck...</div>
                     )}
                 </div>
-                {showRotate && <RotateGate onBack={onExitGame} />}
+                {showRotateGame && <RotateGateGame onBack={onExitGame} />}
             </div>
         );
     }
@@ -348,7 +374,7 @@ function AppContent() {
         <div className="shell">
             <StormBg />
 
-            {/* меню только вертикаль */}
+            {/* меню только вертикаль на мобилке */}
             {showRotateMenu && <RotateGateMenu />}
 
             <div className="shell-content">
