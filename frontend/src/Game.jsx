@@ -1012,7 +1012,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         if (isPvP) {
             const cardIndex = hands.player.findIndex(c => c.id === selected.id);
             if (cardIndex === -1) return;
-
             if (sendPvPMove(cardIndex, cellIdx)) {
                 setSelected(null);
             }
@@ -1031,6 +1030,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         setSpellMode(null);
 
         decFrozenAfterCardMove();
+        haptic("medium"); // ← ДОБАВЛЕНА ВИБРАЦИЯ
         setTurn("enemy");
     };
 
