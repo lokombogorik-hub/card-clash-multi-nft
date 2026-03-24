@@ -6,12 +6,9 @@ export default function WalletConnector() {
     var ctx = useWalletConnect();
     var [pickerOpen, setPickerOpen] = useState(false);
 
+    /* БЕЗ position:fixed — позиционирование через родительский .home-wallet-row */
     var wrapStyle = {
-        position: "fixed",
-        top: "calc(env(safe-area-inset-top, 0px) + 25px)",
-        bottom: "auto",
-        right: 14,
-        zIndex: 9999,
+        position: "relative",
     };
 
     if (ctx.isLoading) {
