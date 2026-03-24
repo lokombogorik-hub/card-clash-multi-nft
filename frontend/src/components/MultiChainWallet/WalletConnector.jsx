@@ -7,9 +7,7 @@ export default function WalletConnector() {
     var [pickerOpen, setPickerOpen] = useState(false);
 
     /* БЕЗ position:fixed — позиционирование через родительский .home-wallet-row */
-    var wrapStyle = {
-        position: "relative",
-    };
+    var wrapStyle = {};
 
     if (ctx.isLoading) {
         return (
