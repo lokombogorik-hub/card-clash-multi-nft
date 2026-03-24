@@ -1,23 +1,21 @@
 /* =========================================================
-   Card Clash — index.css  (Part 1: Base + Game)
+   Card Clash — index.css  (Base + Game)
    ========================================================= */
 
-/* =========================
-   1) GLOBAL RESET
-   ========================= */
+/* === GLOBAL RESET === */
 *,
 *::before,
 *::after {
     box-sizing: border-box;
     margin: 0;
-    padding: 0;
+    padding: 0
 }
 
 html,
 body,
 #root {
     height: 100%;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif
 }
 
 body {
@@ -25,7 +23,7 @@ body {
     color: #fff;
     overflow: hidden;
     overscroll-behavior: none;
-    -webkit-font-smoothing: antialiased;
+    -webkit-font-smoothing: antialiased
 }
 
 button {
@@ -35,26 +33,18 @@ button {
     padding: 12px 20px;
     font-size: 16px;
     -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
+    touch-action: manipulation
 }
 
 img {
     max-width: 100%;
-    display: block;
+    display: block
 }
 
-/* =========================
-   2) KEYFRAMES
-   ========================= */
+/* === KEYFRAMES === */
 @keyframes spin {
     to {
-        transform: rotate(360deg);
-    }
-}
-
-@keyframes neonSpin {
-    to {
-        transform: rotate(360deg);
+        transform: rotate(360deg)
     }
 }
 
@@ -62,11 +52,11 @@ img {
 
     0%,
     100% {
-        transform: translateY(0) rotate(0deg);
+        transform: translateY(0) rotate(0deg)
     }
 
     50% {
-        transform: translateY(-10px) rotate(5deg);
+        transform: translateY(-10px) rotate(5deg)
     }
 }
 
@@ -74,47 +64,47 @@ img {
 
     0%,
     100% {
-        transform: translateY(0) scale(1);
+        transform: translateY(0) scale(1)
     }
 
     50% {
-        transform: translateY(-8px) scale(1.1);
+        transform: translateY(-8px) scale(1.1)
     }
 }
 
 @keyframes fadeInUp {
     0% {
         opacity: 0;
-        transform: translateY(20px);
+        transform: translateY(20px)
     }
 
     100% {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(0)
     }
 }
 
 @keyframes cardFadeIn {
     0% {
         opacity: 0;
-        transform: translateY(30px) scale(.95);
+        transform: translateY(30px) scale(.95)
     }
 
     100% {
         opacity: 1;
-        transform: translateY(0) scale(1);
+        transform: translateY(0) scale(1)
     }
 }
 
 @keyframes textSlideIn {
     0% {
         opacity: 0;
-        transform: translateY(15px);
+        transform: translateY(15px)
     }
 
     100% {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(0)
     }
 }
 
@@ -122,11 +112,11 @@ img {
 
     0%,
     100% {
-        transform: rotate(-18deg);
+        transform: rotate(-18deg)
     }
 
     50% {
-        transform: rotate(-6deg);
+        transform: rotate(-6deg)
     }
 }
 
@@ -134,47 +124,47 @@ img {
 
     0%,
     100% {
-        opacity: .5;
+        opacity: .5
     }
 
     50% {
-        opacity: .7;
+        opacity: .7
     }
 }
 
 @keyframes boardInnerGlow {
     0% {
-        opacity: .5;
+        opacity: .5
     }
 
     100% {
-        opacity: .8;
+        opacity: .8
     }
 }
 
 @keyframes placeSmooth {
     0% {
         transform: translateY(18px) scale(.96);
-        opacity: 0;
+        opacity: 0
     }
 
     100% {
         transform: translateY(0) scale(1);
-        opacity: 1;
+        opacity: 1
     }
 }
 
 @keyframes captureBounce {
     0% {
-        transform: scale(1);
+        transform: scale(1)
     }
 
     35% {
-        transform: scale(1.06);
+        transform: scale(1.06)
     }
 
     100% {
-        transform: scale(1);
+        transform: scale(1)
     }
 }
 
@@ -182,11 +172,11 @@ img {
 
     0%,
     100% {
-        transform: scale(1);
+        transform: scale(1)
     }
 
     50% {
-        transform: scale(1.1);
+        transform: scale(1.1)
     }
 }
 
@@ -194,23 +184,23 @@ img {
 
     0%,
     100% {
-        text-shadow: 0 0 20px rgba(120, 200, 255, .6);
+        text-shadow: 0 0 20px rgba(120, 200, 255, .6)
     }
 
     50% {
-        text-shadow: 0 0 40px rgba(120, 200, 255, .9), 0 0 60px rgba(255, 61, 242, .5);
+        text-shadow: 0 0 40px rgba(120, 200, 255, .9), 0 0 60px rgba(255, 61, 242, .5)
     }
 }
 
 @keyframes cardSlideIn {
     0% {
         opacity: 0;
-        transform: translateY(40px) scale(.95);
+        transform: translateY(40px) scale(.95)
     }
 
     100% {
         opacity: 1;
-        transform: translateY(0) scale(1);
+        transform: translateY(0) scale(1)
     }
 }
 
@@ -218,23 +208,23 @@ img {
 
     0%,
     100% {
-        opacity: .8;
+        opacity: .8
     }
 
     50% {
-        opacity: 1;
+        opacity: 1
     }
 }
 
 @keyframes infoSlideUp {
     0% {
         opacity: 0;
-        transform: translateY(30px);
+        transform: translateY(30px)
     }
 
     100% {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(0)
     }
 }
 
@@ -242,23 +232,23 @@ img {
 
     0%,
     100% {
-        opacity: .7;
+        opacity: .7
     }
 
     50% {
-        opacity: 1;
+        opacity: 1
     }
 }
 
 @keyframes fadeInScale {
     0% {
         opacity: 0;
-        transform: scale(.9) translateY(-20px);
+        transform: scale(.9) translateY(-20px)
     }
 
     100% {
         opacity: 1;
-        transform: scale(1) translateY(0);
+        transform: scale(1) translateY(0)
     }
 }
 
@@ -266,57 +256,57 @@ img {
 
     0%,
     100% {
-        opacity: .8;
+        opacity: .8
     }
 
     50% {
-        opacity: 1;
+        opacity: 1
     }
 }
 
 @keyframes pageSlideIn {
     0% {
         opacity: 0;
-        transform: translateY(30px);
+        transform: translateY(30px)
     }
 
     100% {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(0)
     }
 }
 
 @keyframes cardZoomIn {
     0% {
         opacity: 0;
-        transform: scale(.9);
+        transform: scale(.9)
     }
 
     100% {
         opacity: 1;
-        transform: scale(1);
+        transform: scale(1)
     }
 }
 
 @keyframes avatarPop {
     0% {
         transform: scale(0);
-        opacity: 0;
+        opacity: 0
     }
 
     60% {
-        transform: scale(1.15);
+        transform: scale(1.15)
     }
 
     100% {
         transform: scale(1);
-        opacity: 1;
+        opacity: 1
     }
 }
 
 @keyframes profileRingSpin {
     to {
-        transform: rotate(360deg);
+        transform: rotate(360deg)
     }
 }
 
@@ -324,11 +314,11 @@ img {
 
     0%,
     100% {
-        opacity: .85;
+        opacity: .85
     }
 
     50% {
-        opacity: 1;
+        opacity: 1
     }
 }
 
@@ -336,23 +326,23 @@ img {
 
     0%,
     100% {
-        opacity: .6;
+        opacity: .6
     }
 
     50% {
-        opacity: 1;
+        opacity: 1
     }
 }
 
 @keyframes inv-badge-appear {
     from {
         transform: scale(.5);
-        opacity: 0;
+        opacity: 0
     }
 
     to {
         transform: scale(1);
-        opacity: 1;
+        opacity: 1
     }
 }
 
@@ -360,11 +350,11 @@ img {
 
     0%,
     100% {
-        box-shadow: 0 0 12px rgba(0, 180, 255, .2);
+        box-shadow: 0 0 12px rgba(0, 180, 255, .2)
     }
 
     50% {
-        box-shadow: 0 0 22px rgba(0, 180, 255, .4);
+        box-shadow: 0 0 22px rgba(0, 180, 255, .4)
     }
 }
 
@@ -372,17 +362,15 @@ img {
 
     0%,
     100% {
-        box-shadow: 0 0 12px rgba(255, 80, 80, .15);
+        box-shadow: 0 0 12px rgba(255, 80, 80, .15)
     }
 
     50% {
-        box-shadow: 0 0 22px rgba(255, 80, 80, .35);
+        box-shadow: 0 0 22px rgba(255, 80, 80, .35)
     }
 }
 
-/* =========================
-   3) CSS VARIABLES
-   ========================= */
+/* === CSS VARIABLES === */
 :root {
     --app-h: 100vh;
     --safe-t: env(safe-area-inset-top, 0px);
@@ -425,13 +413,11 @@ img {
         --safe-b: max(env(safe-area-inset-bottom, 0px), 18px);
         --magic-w: 46px;
         --magic-gap: 10px;
-        --magic-offset: 10px;
+        --magic-offset: 10px
     }
 }
 
-/* =========================
-   4) SHELL / HOME
-   ========================= */
+/* === SHELL === */
 .shell {
     position: fixed;
     inset: 0;
@@ -439,53 +425,46 @@ img {
     height: var(--app-h, 100vh);
     overflow: hidden;
     background: #000;
-    color: #fff;
+    color: #fff
 }
 
 .storm-bg {
     position: absolute;
     inset: 0;
     z-index: 0;
-    pointer-events: none;
+    pointer-events: none
 }
 
 .shell-content {
     position: relative;
     z-index: 1;
     height: 100%;
-    padding: 0 var(--ui-pad) calc(var(--safe-b) + var(--bottom-stack-h));
+    padding: calc(var(--safe-t) + 12px) var(--ui-pad) calc(var(--safe-b) + var(--bottom-stack-h));
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     box-sizing: border-box;
 }
 
+/* === HOME LAYOUT === */
 .home-center {
     height: 100%;
     width: 100%;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: center
 }
 
-.home-top-spacer {
-    flex: 1;
-    min-height: 0;
-}
-
-/* Кошелёк — самый верх, прижат к правому краю */
 .home-wallet-row {
     width: 100%;
     display: flex;
     justify-content: flex-end;
-    padding: 0 4px 10px;
+    padding: 24px 4px 12px;
     flex-shrink: 0;
 }
 
-/* Лого — занимает всё свободное пространство по центру */
 .home-logo-area {
-    flex: 2;
-    /* больше места чем сверху — лого чуть ниже центра */
+    flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -498,15 +477,13 @@ img {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding-bottom: 10px;
+    padding-bottom: 0;
     flex-shrink: 0;
 }
 
-/* Лидерборд — самый низ, впритык к плашке */
-.home-leaderboard-wrap {
-    width: 100%;
-    flex-shrink: 0;
-    padding-bottom: 8px;
+/* Убираем старый wallet wrapper */
+.wallet-connector-wrapper {
+    display: none !important
 }
 
 .play-logo {
@@ -532,14 +509,14 @@ img {
     border-radius: 999px;
     overflow: hidden;
     background: rgba(255, 255, 255, .03);
-    border: 1px solid rgba(255, 255, 255, .1);
+    border: 1px solid rgba(255, 255, 255, .1)
 }
 
 .logo-video {
     width: 100%;
     height: 100%;
     object-fit: contain;
-    display: block;
+    display: block
 }
 
 .play-icon {
@@ -547,16 +524,14 @@ img {
     inset: 0;
     display: grid;
     place-items: center;
-    pointer-events: none;
+    pointer-events: none
 }
 
 .page {
-    padding: 18px;
+    padding: 18px
 }
 
-/* =========================
-   5) BOTTOM STACK / NAV
-   ========================= */
+/* === BOTTOM STACK / NAV === */
 .bottom-stack {
     position: absolute;
     left: 0;
@@ -565,7 +540,7 @@ img {
     z-index: 2;
     padding: 10px 12px calc(var(--safe-b) + 10px);
     display: grid;
-    gap: 10px;
+    gap: 10px
 }
 
 .season-bar {
@@ -577,25 +552,25 @@ img {
     background: rgba(0, 0, 0, .58);
     border: 1px solid rgba(255, 255, 255, .12);
     backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px)
 }
 
 .season-title {
     font-weight: 900;
-    font-size: 13px;
+    font-size: 13px
 }
 
 .season-sub {
     opacity: .8;
     font-size: 12px;
-    margin-top: 2px;
+    margin-top: 2px
 }
 
 .season-right {
     margin-left: auto;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 10px
 }
 
 .season-progress {
@@ -603,22 +578,12 @@ img {
     height: 8px;
     border-radius: 999px;
     background: rgba(255, 255, 255, .1);
-    overflow: hidden;
+    overflow: hidden
 }
 
 .season-progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, rgba(120, 200, 255, .85), rgba(255, 61, 242, .45));
-}
-
-.icon-btn {
-    width: 36px;
-    height: 32px;
-    border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, .12);
-    background: rgba(0, 0, 0, .45);
-    color: #fff;
-    padding: 0;
+    background: linear-gradient(90deg, rgba(120, 200, 255, .85), rgba(255, 61, 242, .45))
 }
 
 .bottom-nav {
@@ -630,7 +595,7 @@ img {
     background: rgba(0, 0, 0, .65);
     border: 1px solid rgba(255, 255, 255, .12);
     backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px)
 }
 
 .nav-item {
@@ -641,39 +606,37 @@ img {
     color: rgba(255, 255, 255, .82);
     display: grid;
     justify-items: center;
-    gap: 6px;
+    gap: 6px
 }
 
 .nav-item.active {
     color: #fff;
     border-color: rgba(120, 200, 255, .28);
-    background: rgba(120, 200, 255, .08);
+    background: rgba(120, 200, 255, .08)
 }
 
 .nav-ic {
     line-height: 0;
     display: grid;
-    place-items: center;
+    place-items: center
 }
 
 .nav-ic svg {
-    display: block;
+    display: block
 }
 
 .nav-txt {
     font-size: 11px;
     font-weight: 900;
-    letter-spacing: .2px;
+    letter-spacing: .2px
 }
 
 .game-host.is-hidden {
     opacity: 0;
-    pointer-events: none;
+    pointer-events: none
 }
 
-/* =========================
-   6) ROTATE GATE
-   ========================= */
+/* === ROTATE GATE === */
 .rotate-gate {
     position: fixed;
     inset: 0;
@@ -683,7 +646,7 @@ img {
     padding: 18px;
     background: rgba(0, 0, 0, .78);
     z-index: 30000;
-    color: #fff;
+    color: #fff
 }
 
 .rotate-gate-box {
@@ -692,19 +655,19 @@ img {
     border: 1px solid rgba(255, 255, 255, .14);
     border-radius: 16px;
     padding: 18px 16px;
-    text-align: center;
+    text-align: center
 }
 
 .rotate-title {
     font-weight: 900;
     font-size: 20px;
-    margin-bottom: 6px;
+    margin-bottom: 6px
 }
 
 .rotate-subtitle {
     opacity: .85;
     font-size: 13px;
-    margin-bottom: 14px;
+    margin-bottom: 14px
 }
 
 .rotate-phone {
@@ -714,12 +677,10 @@ img {
     border-radius: 16px;
     border: 2px solid rgba(255, 255, 255, .35);
     transform: rotate(-18deg);
-    animation: phoneWiggle 1.4s ease-in-out infinite;
+    animation: phoneWiggle 1.4s ease-in-out infinite
 }
 
-/* =========================
-   7) GAME LAYOUT
-   ========================= */
+/* === GAME LAYOUT === */
 .game-root {
     position: fixed;
     inset: 0;
@@ -729,7 +690,7 @@ img {
     padding-top: calc(var(--ui-pad) + var(--safe-t));
     padding-bottom: calc(var(--ui-pad) + var(--safe-b));
     overflow: hidden;
-    isolation: isolate;
+    isolation: isolate
 }
 
 .game-ui.tt-layout {
@@ -744,7 +705,7 @@ img {
     padding-right: var(--edge-inset);
     position: relative;
     align-items: center;
-    justify-content: center;
+    justify-content: center
 }
 
 .exit {
@@ -758,23 +719,24 @@ img {
     background: rgba(0, 0, 0, .6);
     border: 1px solid rgba(255, 255, 255, .18);
     color: #fff;
-    min-width: 92px;
+    min-width: 92px
 }
 
+/* HUD */
 .hud-corner {
     position: absolute;
     z-index: 100;
-    pointer-events: none;
+    pointer-events: none
 }
 
 .hud-near-left {
     left: calc(50% - (var(--board-w)/2) - var(--score-w) - var(--score-gap));
-    bottom: 10px;
+    bottom: 10px
 }
 
 .hud-near-right {
     left: calc(50% + (var(--board-w)/2) + var(--score-gap));
-    bottom: 10px;
+    bottom: 10px
 }
 
 .hud-score {
@@ -786,17 +748,18 @@ img {
     font-size: 12px;
     line-height: 1;
     background: rgba(0, 0, 0, .45);
-    border: 1px solid rgba(255, 255, 255, .14);
+    border: 1px solid rgba(255, 255, 255, .14)
 }
 
 .hud-score.red {
-    border-color: rgba(255, 80, 80, .4);
+    border-color: rgba(255, 80, 80, .4)
 }
 
 .hud-score.blue {
-    border-color: rgba(0, 180, 255, .4);
+    border-color: rgba(0, 180, 255, .4)
 }
 
+/* Player badges */
 .player-badge {
     position: absolute;
     z-index: 105;
@@ -810,7 +773,7 @@ img {
     border-radius: 14px;
     background: rgba(0, 0, 0, .65);
     border: 1px solid rgba(255, 255, 255, .18);
-    pointer-events: none;
+    pointer-events: none
 }
 
 .player-badge-avatar {
@@ -819,7 +782,7 @@ img {
     border-radius: 999px;
     object-fit: cover;
     flex: 0 0 auto;
-    border: 1px solid rgba(255, 255, 255, .25);
+    border: 1px solid rgba(255, 255, 255, .25)
 }
 
 .player-badge-avatar-fallback {
@@ -831,7 +794,7 @@ img {
     font-weight: 900;
     font-size: 12px;
     border: 1px solid rgba(255, 255, 255, .25);
-    background: rgba(255, 255, 255, .12);
+    background: rgba(255, 255, 255, .12)
 }
 
 .player-badge-name {
@@ -842,29 +805,30 @@ img {
     opacity: .98;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
+    text-overflow: ellipsis
 }
 
 .player-badge.active.enemy {
-    border-color: rgba(255, 80, 80, .5);
+    border-color: rgba(255, 80, 80, .5)
 }
 
 .player-badge.active.player {
-    border-color: rgba(0, 180, 255, .5);
+    border-color: rgba(0, 180, 255, .5)
 }
 
 .player-badge.enemy {
     left: calc(50% - (var(--board-w)/2) - var(--gap) - 8px);
     right: auto;
-    transform: translateX(-100%);
+    transform: translateX(-100%)
 }
 
 .player-badge.player {
     right: calc(50% - (var(--board-w)/2) - var(--gap) - 8px);
     left: auto;
-    transform: translateX(100%);
+    transform: translateX(100%)
 }
 
+/* Hands */
 .hand.left,
 .hand.right {
     background: transparent;
@@ -879,72 +843,64 @@ img {
     gap: 8px;
     height: 100%;
     padding-left: var(--hand-pad-x);
-    padding-right: var(--hand-pad-x);
+    padding-right: var(--hand-pad-x)
 }
 
 .hand.left {
-    justify-self: end;
+    justify-self: end
 }
 
 .hand.right {
-    justify-self: start;
+    justify-self: start
 }
 
-/* Обёртка карт */
 .hand-cards-wrap {
     position: relative;
-    width: calc(var(--card-w) * 2 + var(--hand-col-gap) + var(--card-w));
-    height: calc(var(--card-h) * 2 + var(--row-gap));
+    width: calc(var(--card-w)*2 + var(--hand-col-gap) + var(--card-w));
+    height: calc(var(--card-h)*2 + var(--row-gap));
     flex-shrink: 0;
     margin-top: 60px;
-    margin-bottom: 8px;
+    margin-bottom: 8px
 }
 
-/* Базовый стиль каждой позиции */
 .hc {
     position: absolute;
     width: var(--card-w);
-    height: var(--card-h);
+    height: var(--card-h)
 }
 
-/* Верхняя левая */
 .hc-top-left {
     top: 0;
-    left: 0;
+    left: 0
 }
 
-/* Верхняя правая */
 .hc-top-right {
     top: 0;
-    right: 0;
+    right: 0
 }
 
-/* Центральная — между верхними и нижними */
 .hc-center {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    z-index: 2;
+    z-index: 2
 }
 
-/* Нижняя левая */
 .hc-bot-left {
     bottom: 0;
-    left: 0;
+    left: 0
 }
 
-/* Нижняя правая */
 .hc-bot-right {
     bottom: 0;
-    right: 0;
+    right: 0
 }
 
-/* Кнопки магии — горизонтально под картами */
 .hand-magic-row {
     display: flex;
     flex-direction: row;
     gap: var(--magic-gap);
-    flex-shrink: 0;
+    flex-shrink: 0
 }
 
 /* Board */
@@ -959,7 +915,7 @@ img {
     border-radius: 16px;
     padding: var(--gap);
     isolation: isolate;
-    justify-self: center;
+    justify-self: center
 }
 
 .board::before {
@@ -971,7 +927,7 @@ img {
     z-index: 0;
     background: linear-gradient(90deg, rgba(24, 231, 255, .3) 0%, rgba(255, 61, 242, .2) 50%, rgba(24, 231, 255, .3) 100%);
     opacity: .5;
-    animation: boardNeonPulse 3s ease-in-out infinite;
+    animation: boardNeonPulse 3s ease-in-out infinite
 }
 
 .board::after {
@@ -981,15 +937,13 @@ img {
     border-radius: 16px;
     pointer-events: none;
     z-index: 0;
-    background:
-        radial-gradient(circle at 15% 20%, rgba(120, 200, 255, .08), transparent 55%),
-        radial-gradient(circle at 85% 80%, rgba(255, 61, 242, .06), transparent 55%);
-    animation: boardInnerGlow 4s ease-in-out infinite alternate;
+    background: radial-gradient(circle at 15% 20%, rgba(120, 200, 255, .08), transparent 55%), radial-gradient(circle at 85% 80%, rgba(255, 61, 242, .06), transparent 55%);
+    animation: boardInnerGlow 4s ease-in-out infinite alternate
 }
 
 .board>* {
     position: relative;
-    z-index: 1;
+    z-index: 1
 }
 
 /* Cell */
@@ -1001,17 +955,17 @@ img {
     background: rgba(10, 10, 20, .6);
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1);
     overflow: hidden;
-    contain: layout style paint;
+    contain: layout style paint
 }
 
 .cell.highlight {
     cursor: pointer;
-    box-shadow: inset 0 0 0 2px rgba(24, 231, 255, .7);
+    box-shadow: inset 0 0 0 2px rgba(24, 231, 255, .7)
 }
 
 .cell.frozen {
     background: rgba(120, 200, 255, .15);
-    box-shadow: inset 0 0 0 2px rgba(120, 200, 255, .35);
+    box-shadow: inset 0 0 0 2px rgba(120, 200, 255, .35)
 }
 
 .cell.frozen::after {
@@ -1021,10 +975,10 @@ img {
     right: 5px;
     font-size: 15px;
     opacity: .95;
-    pointer-events: none;
+    pointer-events: none
 }
 
-/* Card base */
+/* Card */
 .card {
     width: var(--card-w);
     height: var(--card-h);
@@ -1036,12 +990,12 @@ img {
     user-select: none;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
-    contain: layout style paint;
+    contain: layout style paint
 }
 
 .card-anim {
     position: absolute;
-    inset: 0;
+    inset: 0
 }
 
 .card-art-img {
@@ -1052,46 +1006,46 @@ img {
     object-fit: cover;
     object-position: center;
     border-radius: inherit;
-    z-index: 1;
+    z-index: 1
 }
 
 .hand.right .card {
-    transition: transform 200ms ease-out, border-color 200ms ease;
+    transition: transform 200ms ease-out, border-color 200ms ease
 }
 
 .hand.right .card.selected {
     transform: translateX(-4px) scale(1.03);
     z-index: 50;
-    border-color: rgba(255, 215, 0, .7) !important;
+    border-color: rgba(255, 215, 0, .7) !important
 }
 
 .card.player {
     border: 2px solid rgba(42, 107, 255, .9);
-    animation: pulseBlue 2.6s ease-in-out infinite;
+    animation: pulseBlue 2.6s ease-in-out infinite
 }
 
 .card.enemy {
     border: 2px solid rgba(255, 42, 42, .9);
-    animation: pulseRed 2.6s ease-in-out infinite;
+    animation: pulseRed 2.6s ease-in-out infinite
 }
 
 .card.disabled {
     cursor: default;
-    animation: none;
+    animation: none
 }
 
 .card.is-placed .card-anim {
-    animation: placeSmooth 300ms ease-out;
+    animation: placeSmooth 300ms ease-out
 }
 
 .card.is-captured .card-anim {
-    animation: captureBounce 250ms ease-out;
+    animation: captureBounce 250ms ease-out
 }
 
 .card.back {
     cursor: default;
     background: linear-gradient(145deg, #0f1625, #070a18);
-    border: 1px solid rgba(255, 255, 255, .14);
+    border: 1px solid rgba(255, 255, 255, .14)
 }
 
 .card-back-inner {
@@ -1100,7 +1054,7 @@ img {
     border-radius: 10px;
     background: repeating-linear-gradient(45deg, rgba(255, 255, 255, .03) 0 6px, transparent 6px 12px);
     display: grid;
-    place-items: center;
+    place-items: center
 }
 
 .card-back-logo-img {
@@ -1108,7 +1062,7 @@ img {
     height: 78%;
     object-fit: contain;
     display: block;
-    opacity: .95;
+    opacity: .95
 }
 
 .elem-bg {
@@ -1119,12 +1073,10 @@ img {
     pointer-events: none;
     z-index: 0;
     opacity: .14;
-    font-size: 32px;
+    font-size: 32px
 }
 
-/* =========================
-   GAME CARD — Stats badge (левый верхний угол)
-   ========================= */
+/* Game card stats badge */
 .tt-badge {
     position: absolute;
     top: 0;
@@ -1137,16 +1089,13 @@ img {
     z-index: 4;
     pointer-events: none;
     display: grid;
-    grid-template-areas:
-        ".   top   ."
-        "left  .  right"
-        ".  bottom .";
+    grid-template-areas: ".   top   ." "left  .  right" ".  bottom .";
     grid-template-columns: 1fr 1fr 1fr;
     grid-template-rows: 1fr 1fr 1fr;
     place-items: center;
     gap: 0;
     padding: 0;
-    overflow: visible;
+    overflow: visible
 }
 
 .card .tt-num {
@@ -1156,26 +1105,26 @@ img {
     text-shadow: 0 0 1px rgba(0, 0, 0, 1);
     line-height: 1;
     z-index: 5;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif
 }
 
 .card .tt-num.top {
-    grid-area: top;
+    grid-area: top
 }
 
 .card .tt-num.left {
-    grid-area: left;
+    grid-area: left
 }
 
 .card .tt-num.right {
-    grid-area: right;
+    grid-area: right
 }
 
 .card .tt-num.bottom {
-    grid-area: bottom;
+    grid-area: bottom
 }
 
-/* GAME CARD — Element pill */
+/* Game card element pill */
 .card-elem-pill {
     position: absolute;
     top: 0;
@@ -1190,44 +1139,41 @@ img {
     border-radius: 0;
     background: none;
     border: none;
-    pointer-events: none;
+    pointer-events: none
 }
 
 .card-elem-pill::before {
-    display: none;
+    display: none
 }
 
 .card-elem-ic {
     font-size: 3px;
     line-height: 1;
-    display: block;
+    display: block
 }
 
-/* GAME CARD — Desktop */
-@media (min-width: 768px) {
+@media (min-width:768px) {
     .tt-badge {
         width: 32px;
         height: 32px;
-        border-radius: 0 0 6px 0;
+        border-radius: 0 0 6px 0
     }
 
     .card .tt-num {
         font-size: 9px;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 1);
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 1)
     }
 
     .card-elem-pill {
-        padding: 2px;
+        padding: 2px
     }
 
     .card-elem-ic {
-        font-size: 14px;
+        font-size: 14px
     }
 }
 
-/* =========================
-   INVENTORY CARD — Stats badge
-   ========================= */
+/* Inventory card stats badge */
 .inv-tt-badge {
     position: absolute;
     top: 0;
@@ -1240,16 +1186,13 @@ img {
     z-index: 4;
     pointer-events: none;
     display: grid;
-    grid-template-areas:
-        ".   top   ."
-        "left  .  right"
-        ".  bottom .";
+    grid-template-areas: ".   top   ." "left  .  right" ".  bottom .";
     grid-template-columns: 1fr 1fr 1fr;
     grid-template-rows: 1fr 1fr 1fr;
     place-items: center;
     gap: 0;
     padding: 0;
-    overflow: visible;
+    overflow: visible
 }
 
 .inv-card-game .inv-tt-num {
@@ -1259,26 +1202,26 @@ img {
     text-shadow: 0 1px 2px rgba(0, 0, 0, 1);
     line-height: 1;
     z-index: 5;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif
 }
 
 .inv-card-game .inv-tt-num.top {
-    grid-area: top;
+    grid-area: top
 }
 
 .inv-card-game .inv-tt-num.left {
-    grid-area: left;
+    grid-area: left
 }
 
 .inv-card-game .inv-tt-num.right {
-    grid-area: right;
+    grid-area: right
 }
 
 .inv-card-game .inv-tt-num.bottom {
-    grid-area: bottom;
+    grid-area: bottom
 }
 
-/* INVENTORY CARD — Element pill */
+/* Inventory card element pill */
 .inv-card-elem-pill {
     position: absolute;
     top: 0;
@@ -1294,45 +1237,41 @@ img {
     background: none;
     border: none;
     pointer-events: none;
-    overflow: visible;
+    overflow: visible
 }
 
-.inv-card-elem-pill::before {
-    display: none;
-}
-
+.inv-card-elem-pill::before,
 .inv-card-elem-pill::after {
-    display: none;
+    display: none
 }
 
 .inv-card-elem-ic {
     font-size: 12px;
     line-height: 1;
-    display: block;
+    display: block
 }
 
 .inv-card-elem-pill span {
-    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif
 }
 
-/* INVENTORY — Desktop */
-@media (min-width: 768px) {
+@media (min-width:768px) {
     .inv-tt-badge {
         width: 36px;
         height: 36px;
-        border-radius: 0 0 6px 0;
+        border-radius: 0 0 6px 0
     }
 
     .inv-card-game .inv-tt-num {
-        font-size: 10px;
+        font-size: 10px
     }
 
     .inv-card-elem-pill {
-        padding: 4px;
+        padding: 4px
     }
 
     .inv-card-elem-ic {
-        font-size: 18px;
+        font-size: 18px
     }
 }
 
@@ -1347,20 +1286,20 @@ img {
     pointer-events: auto;
     width: auto;
     transform: none;
-    top: auto;
+    top: auto
 }
 
 .hand.left .magic-column {
     left: 50%;
     transform: translateX(-50%);
-    bottom: calc(-1 * (var(--magic-w) + 8px));
+    bottom: calc(-1*(var(--magic-w) + 8px))
 }
 
 .hand.right .magic-column {
     left: 50%;
     transform: translateX(-50%);
-    bottom: calc(-1 * (var(--magic-w) + 8px));
-    right: auto;
+    bottom: calc(-1*(var(--magic-w) + 8px));
+    right: auto
 }
 
 .magic-btn {
@@ -1371,7 +1310,7 @@ img {
     border: 1px solid rgba(255, 255, 255, .18);
     background: rgba(0, 0, 0, .55);
     position: relative;
-    overflow: hidden;
+    overflow: hidden
 }
 
 .magic-btn .magic-ic {
@@ -1382,7 +1321,7 @@ img {
     width: 100%;
     height: 100%;
     font-size: 22px;
-    line-height: 1;
+    line-height: 1
 }
 
 .magic-btn .magic-count {
@@ -1400,28 +1339,28 @@ img {
     font-weight: 900;
     color: rgba(255, 255, 255, .95);
     background: rgba(0, 0, 0, .55);
-    border: 1px solid rgba(255, 255, 255, .16);
+    border: 1px solid rgba(255, 255, 255, .16)
 }
 
 .magic-btn:active {
-    transform: translateY(1px) scale(.99);
+    transform: translateY(1px) scale(.99)
 }
 
 .magic-btn.active {
-    border-color: rgba(120, 200, 255, .6);
+    border-color: rgba(120, 200, 255, .6)
 }
 
 .magic-btn:disabled {
     opacity: .32;
-    pointer-events: none;
+    pointer-events: none
 }
 
 .magic-btn.freeze {
-    border-color: rgba(120, 220, 255, .4);
+    border-color: rgba(120, 220, 255, .4)
 }
 
 .magic-btn.reveal {
-    border-color: rgba(255, 61, 242, .4);
+    border-color: rgba(255, 61, 242, .4)
 }
 
 /* Game Over */
@@ -1432,9 +1371,8 @@ img {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 20000;
+    z-index: 20000
 }
-
 
 .game-over-box {
     background: #1e1e2f;
@@ -1445,32 +1383,210 @@ img {
     max-width: 90vw;
     border: 1px solid rgba(255, 255, 255, .12);
     position: relative;
-    z-index: 22000;
+    z-index: 22000
 }
 
+/* === LEADERBOARD === */
+.leaderboard {
+    width: 100%;
+    max-width: 260px;
+    height: 192px;
+    margin: 0 auto;
+    background: rgba(0, 0, 0, .55);
+    border-radius: 14px;
+    padding: 10px;
+    backdrop-filter: blur(10px);
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0
+}
 
-.wallet-connector-wrapper {
-    display: none !important;
+.leaderboard-title {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 8px;
+    flex-shrink: 0
+}
+
+.leaderboard-title-icon {
+    font-size: 13px
+}
+
+.leaderboard-content {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    min-height: 0
+}
+
+.leaderboard-center-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255, 255, 255, .4);
+    font-size: 11px
+}
+
+.leaderboard-scroll {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    overflow-y: auto;
+    padding-right: 3px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, .2) transparent
+}
+
+.leaderboard-scroll::-webkit-scrollbar {
+    width: 2px
+}
+
+.leaderboard-scroll::-webkit-scrollbar-track {
+    background: transparent
+}
+
+.leaderboard-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, .2);
+    border-radius: 2px
+}
+
+.leaderboard-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    background: rgba(255, 255, 255, .06);
+    border-radius: 8px;
+    height: 42px;
+    flex-shrink: 0;
+    box-sizing: border-box
+}
+
+.leaderboard-item.gold {
+    background: linear-gradient(135deg, rgba(255, 215, 0, .15), rgba(255, 180, 0, .08));
+    border: 1px solid rgba(255, 215, 0, .25)
+}
+
+.leaderboard-item.silver {
+    background: linear-gradient(135deg, rgba(192, 192, 192, .15), rgba(169, 169, 169, .08));
+    border: 1px solid rgba(192, 192, 192, .25)
+}
+
+.leaderboard-item.bronze {
+    background: linear-gradient(135deg, rgba(205, 127, 50, .15), rgba(184, 115, 51, .08));
+    border: 1px solid rgba(205, 127, 50, .25)
+}
+
+.leaderboard-rank {
+    width: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, .6);
+    text-align: center;
+    flex-shrink: 0
+}
+
+.leaderboard-item.gold .leaderboard-rank,
+.leaderboard-item.silver .leaderboard-rank,
+.leaderboard-item.bronze .leaderboard-rank {
+    font-size: 14px
+}
+
+.leaderboard-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0
+}
+
+.leaderboard-avatar-fallback {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: #fff;
+    flex-shrink: 0
+}
+
+.leaderboard-info {
+    flex: 1;
+    min-width: 0
+}
+
+.leaderboard-name {
+    font-size: 11px;
+    font-weight: 500;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis
+}
+
+.leaderboard-stats {
+    font-size: 9px;
+    color: rgba(255, 255, 255, .4);
+    margin-top: 1px
+}
+
+.leaderboard-rating {
+    font-size: 12px;
+    font-weight: 700;
+    color: #78c8ff;
+    flex-shrink: 0
+}
+
+.leaderboard-item.gold .leaderboard-rating {
+    color: #ffd700
+}
+
+.leaderboard-item.silver .leaderboard-rating {
+    color: #c0c0c0
+}
+
+.leaderboard-item.bronze .leaderboard-rating {
+    color: #cd7f32
+}
+
+.leaderboard-loading-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255, 255, 255, .1);
+    border-top-color: #78c8ff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite
 }
 
 /* =========================================================
-   Card Clash — index-pages.css  (Part 2: Pages + Responsive)
+   Card Clash — index-pages.css  (Pages + Responsive)
    ========================================================= */
 
-/* =========================
-   8) INVENTORY
-   ========================= */
+/* === INVENTORY === */
 .inventory-page {
     padding: 16px;
     max-width: 1400px;
     margin: 0 auto;
     overflow-x: hidden;
-    overflow-y: auto;
+    overflow-y: auto
 }
 
 .inv-header {
     margin-bottom: 20px;
-    text-align: center;
+    text-align: center
 }
 
 .inv-title {
@@ -1481,17 +1597,17 @@ img {
     font-size: clamp(20px, 5vw, 28px);
     font-weight: 900;
     margin: 0 0 8px;
-    color: #fff;
+    color: #fff
 }
 
 .inv-title-icon {
-    font-size: clamp(24px, 6vw, 32px);
+    font-size: clamp(24px, 6vw, 32px)
 }
 
 .inv-subtitle {
     font-size: 14px;
     opacity: .85;
-    color: #a0d8ff;
+    color: #a0d8ff
 }
 
 .inv-info-box {
@@ -1501,19 +1617,19 @@ img {
     padding: 12px 16px;
     margin-bottom: 20px;
     font-size: 12px;
-    line-height: 1.4;
+    line-height: 1.4
 }
 
 .inv-info-label {
     font-weight: 700;
     margin-bottom: 4px;
-    color: #a0d8ff;
+    color: #a0d8ff
 }
 
 .inv-info-value {
     font-family: monospace;
     opacity: .9;
-    color: #fff;
+    color: #fff
 }
 
 .inv-error {
@@ -1523,7 +1639,7 @@ img {
     padding: 12px 16px;
     margin-bottom: 20px;
     color: #ffb3b3;
-    font-size: 13px;
+    font-size: 13px
 }
 
 .inv-loading {
@@ -1533,7 +1649,7 @@ img {
     justify-content: center;
     gap: 16px;
     padding: 60px 20px;
-    opacity: .85;
+    opacity: .85
 }
 
 .inv-loading-spinner {
@@ -1542,7 +1658,7 @@ img {
     border: 3px solid rgba(120, 200, 255, .2);
     border-top-color: #78c8ff;
     border-radius: 50%;
-    animation: spin .8s linear infinite;
+    animation: spin .8s linear infinite
 }
 
 .inv-empty {
@@ -1552,31 +1668,31 @@ img {
     justify-content: center;
     gap: 16px;
     padding: 80px 20px;
-    text-align: center;
+    text-align: center
 }
 
 .inv-empty-icon {
     font-size: 64px;
-    opacity: .6;
+    opacity: .6
 }
 
 .inv-empty-title {
     font-size: 20px;
     font-weight: 700;
-    color: #fff;
+    color: #fff
 }
 
 .inv-empty-text {
     font-size: 14px;
     opacity: .75;
-    max-width: 320px;
+    max-width: 320px
 }
 
 .inv-grid-game-style {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 14px;
-    margin-bottom: 24px;
+    margin-bottom: 24px
 }
 
 .inv-actions {
@@ -1584,7 +1700,7 @@ img {
     gap: 12px;
     justify-content: center;
     flex-wrap: wrap;
-    padding: 16px 0;
+    padding: 16px 0
 }
 
 .inv-btn {
@@ -1594,36 +1710,36 @@ img {
     font-weight: 700;
     border: none;
     cursor: pointer;
-    transition: opacity .2s;
+    transition: opacity .2s
 }
 
 .inv-btn-primary {
     background: linear-gradient(135deg, #78c8ff 0%, #5096ff 100%);
-    color: #000;
+    color: #000
 }
 
 .inv-btn-primary:disabled {
     opacity: .5;
-    cursor: not-allowed;
+    cursor: not-allowed
 }
 
 .inv-btn-secondary {
     background: rgba(255, 255, 255, .1);
     color: #fff;
-    border: 1px solid rgba(255, 255, 255, .2);
+    border: 1px solid rgba(255, 255, 255, .2)
 }
 
 .inv-btn-secondary:disabled {
     opacity: .4;
-    cursor: not-allowed;
+    cursor: not-allowed
 }
 
-/* Inventory card (game style) */
+/* Inventory card */
 .inv-card-game {
     --rank: rgba(255, 255, 255, .18);
     --rankGlow: rgba(120, 200, 255, .25);
     position: relative;
-    aspect-ratio: 2.5 / 3.5;
+    aspect-ratio: 2.5/3.5;
     border-radius: 14px;
     overflow: hidden;
     cursor: pointer;
@@ -1631,18 +1747,18 @@ img {
     border: 2px solid var(--rank);
     background: #0a0e1a;
     contain: layout style paint;
-    transition: border-color .15s, transform .15s;
+    transition: border-color .15s, transform .15s
 }
 
 .inv-card-game:hover {
     transform: translateY(-4px);
-    border-color: rgba(120, 200, 255, .5);
+    border-color: rgba(120, 200, 255, .5)
 }
 
 .inv-card-game.is-selected {
     border-color: #78c8ff;
     transform: translateY(-4px);
-    box-shadow: 0 0 16px rgba(120, 200, 255, .35);
+    box-shadow: 0 0 16px rgba(120, 200, 255, .35)
 }
 
 .inv-card-art-full {
@@ -1650,7 +1766,7 @@ img {
     inset: 0;
     z-index: 1;
     overflow: hidden;
-    border-radius: inherit;
+    border-radius: inherit
 }
 
 .inv-card-art-full img,
@@ -1660,16 +1776,16 @@ img {
     object-fit: cover;
     object-position: center;
     display: block;
-    border-radius: inherit;
+    border-radius: inherit
 }
 
 .inv-card-img {
     opacity: 0;
-    transition: opacity .15s;
+    transition: opacity .15s
 }
 
 .inv-card-img.loaded {
-    opacity: 1;
+    opacity: 1
 }
 
 .inv-card-placeholder {
@@ -1681,55 +1797,7 @@ img {
     background: linear-gradient(135deg, #2d1b4e 0%, #1a0f2e 100%);
     border-radius: inherit;
     font-size: 32px;
-    opacity: .5;
-}
-
-/* INVENTORY CARD — Element pill (просто эмодзи в углу) */
-.inv-card-elem-pill {
-    position: absolute;
-    top: 0;
-    right: 0;
-    z-index: 7;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: auto;
-    height: auto;
-    padding: 2px;
-    border-radius: 0;
-    background: none;
-    border: none;
-    pointer-events: none;
-    overflow: visible;
-}
-
-.inv-card-elem-pill::before {
-    display: none;
-}
-
-.inv-card-elem-pill::after {
-    display: none;
-}
-
-.inv-card-elem-ic {
-    font-size: 12px;
-    line-height: 1;
-    display: block;
-}
-
-.inv-card-elem-pill span {
-    font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
-}
-
-/* INVENTORY — Desktop */
-@media (min-width: 768px) {
-    .inv-card-elem-pill {
-        padding: 4px;
-    }
-
-    .inv-card-elem-ic {
-        font-size: 18px;
-    }
+    opacity: .5
 }
 
 /* Pick badge */
@@ -1745,7 +1813,7 @@ img {
     align-items: center;
     justify-content: center;
     background: linear-gradient(135deg, #78c8ff, #ff3df2);
-    animation: inv-badge-appear 180ms ease-out both;
+    animation: inv-badge-appear 180ms ease-out both
 }
 
 .inv-pick-badge-inner {
@@ -1755,23 +1823,21 @@ img {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, .7);
+    background: rgba(0, 0, 0, .7)
 }
 
 .inv-pick-check {
-    display: none;
+    display: none
 }
 
 .inv-pick-no {
     font-weight: 900;
     font-size: 11px;
     line-height: 1;
-    color: #fff;
+    color: #fff
 }
 
-/* =========================
-   9) MATCHMAKING
-   ========================= */
+/* === MATCHMAKING === */
 .matchmaking-page {
     padding: 16px;
     max-width: min(900px, 95vw);
@@ -1780,13 +1846,13 @@ img {
     display: flex;
     flex-direction: column;
     justify-content: center;
-    overflow-x: hidden;
+    overflow-x: hidden
 }
 
 .matchmaking-header {
     margin-bottom: clamp(16px, 4vw, 40px);
     text-align: center;
-    position: relative;
+    position: relative
 }
 
 .matchmaking-back-btn {
@@ -1801,7 +1867,7 @@ img {
     color: #fff;
     font-size: clamp(12px, 2vw, 14px);
     cursor: pointer;
-    z-index: 10;
+    z-index: 10
 }
 
 .matchmaking-title {
@@ -1813,19 +1879,19 @@ img {
     font-weight: 900;
     margin: 0;
     color: #fff;
-    animation: titleGlow 3s ease-in-out infinite;
+    animation: titleGlow 3s ease-in-out infinite
 }
 
 .matchmaking-title-icon {
     font-size: clamp(22px, 6vw, 36px);
-    animation: iconFloat 2s ease-in-out infinite;
+    animation: iconFloat 2s ease-in-out infinite
 }
 
 .matchmaking-modes {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
     gap: clamp(12px, 3vw, 24px);
-    margin-bottom: 24px;
+    margin-bottom: 24px
 }
 
 .matchmaking-mode-card {
@@ -1838,36 +1904,36 @@ img {
     cursor: pointer;
     overflow: hidden;
     transition: border-color .3s, transform .3s;
-    animation: cardSlideIn .7s cubic-bezier(.4, 0, .2, 1) backwards;
+    animation: cardSlideIn .7s cubic-bezier(.4, 0, .2, 1) backwards
 }
 
 .matchmaking-mode-card:nth-child(1) {
-    animation-delay: .1s;
+    animation-delay: .1s
 }
 
 .matchmaking-mode-card:nth-child(2) {
-    animation-delay: .25s;
+    animation-delay: .25s
 }
 
 .matchmaking-mode-card:hover {
     transform: translateY(-6px);
-    border-color: rgba(120, 200, 255, .6);
+    border-color: rgba(120, 200, 255, .6)
 }
 
 .matchmaking-mode-card.ai {
-    border-color: rgba(120, 200, 255, .3);
+    border-color: rgba(120, 200, 255, .3)
 }
 
 .matchmaking-mode-card.ai:hover {
-    border-color: rgba(120, 200, 255, .7);
+    border-color: rgba(120, 200, 255, .7)
 }
 
 .matchmaking-mode-card.pvp {
-    border-color: rgba(255, 61, 242, .3);
+    border-color: rgba(255, 61, 242, .3)
 }
 
 .matchmaking-mode-card.pvp:hover {
-    border-color: rgba(255, 61, 242, .7);
+    border-color: rgba(255, 61, 242, .7)
 }
 
 .matchmaking-mode-icon {
@@ -1875,7 +1941,7 @@ img {
     margin-bottom: clamp(10px, 2vw, 18px);
     animation: iconBounce 2.5s ease-in-out infinite;
     position: relative;
-    z-index: 1;
+    z-index: 1
 }
 
 .matchmaking-mode-name {
@@ -1884,7 +1950,7 @@ img {
     color: #fff;
     margin-bottom: 8px;
     position: relative;
-    z-index: 1;
+    z-index: 1
 }
 
 .matchmaking-mode-desc {
@@ -1894,7 +1960,7 @@ img {
     margin-bottom: 14px;
     line-height: 1.5;
     position: relative;
-    z-index: 1;
+    z-index: 1
 }
 
 .matchmaking-mode-badge {
@@ -1909,13 +1975,13 @@ img {
     color: #a0ffc8;
     position: relative;
     z-index: 1;
-    animation: badgeGlow 2s ease-in-out infinite;
+    animation: badgeGlow 2s ease-in-out infinite
 }
 
 .matchmaking-mode-badge.coming-soon {
     background: rgba(255, 215, 0, .15);
     border-color: rgba(255, 215, 0, .4);
-    color: #ffd700;
+    color: #ffd700
 }
 
 .matchmaking-info {
@@ -1926,19 +1992,19 @@ img {
     background: rgba(120, 200, 255, .08);
     border: 1px solid rgba(120, 200, 255, .25);
     border-radius: 14px;
-    animation: infoSlideUp .8s ease-out .4s backwards;
+    animation: infoSlideUp .8s ease-out .4s backwards
 }
 
 .matchmaking-info-icon {
     font-size: clamp(16px, 4vw, 22px);
-    flex-shrink: 0;
+    flex-shrink: 0
 }
 
 .matchmaking-info-text {
     font-size: clamp(11px, 2.2vw, 14px);
     line-height: 1.6;
     opacity: .95;
-    color: #a0d8ff;
+    color: #a0d8ff
 }
 
 .matchmaking-searching {
@@ -1946,7 +2012,7 @@ img {
     flex-direction: column;
     align-items: center;
     gap: 20px;
-    padding: clamp(40px, 8vw, 80px) 20px;
+    padding: clamp(40px, 8vw, 80px) 20px
 }
 
 .matchmaking-spinner {
@@ -1955,14 +2021,14 @@ img {
     border: 4px solid rgba(120, 200, 255, .2);
     border-top-color: #78c8ff;
     border-radius: 50%;
-    animation: spin .9s linear infinite;
+    animation: spin .9s linear infinite
 }
 
 .matchmaking-searching-text {
     font-size: clamp(14px, 3vw, 18px);
     font-weight: 700;
     color: #78c8ff;
-    animation: textPulse 1.2s ease-in-out infinite;
+    animation: textPulse 1.2s ease-in-out infinite
 }
 
 .matchmaking-cancel-btn {
@@ -1973,24 +2039,22 @@ img {
     color: #fff;
     font-size: clamp(12px, 2.5vw, 15px);
     cursor: pointer;
-    z-index: 10;
+    z-index: 10
 }
 
-/* =========================
-   10) MARKET
-   ========================= */
+/* === MARKET === */
 .market-page {
     padding: 16px;
     max-width: min(1200px, 96vw);
     margin: 0 auto;
     overflow-x: hidden;
-    overflow-y: auto;
+    overflow-y: auto
 }
 
 .market-header {
     margin-bottom: clamp(16px, 4vw, 28px);
     text-align: center;
-    animation: fadeInScale .7s cubic-bezier(.4, 0, .2, 1);
+    animation: fadeInScale .7s cubic-bezier(.4, 0, .2, 1)
 }
 
 .market-title {
@@ -2001,18 +2065,18 @@ img {
     font-size: clamp(20px, 5vw, 30px);
     font-weight: 900;
     margin: 0 0 8px;
-    color: #fff;
+    color: #fff
 }
 
 .market-title-icon {
     font-size: clamp(22px, 6vw, 34px);
-    animation: iconFloat 2s ease-in-out infinite;
+    animation: iconFloat 2s ease-in-out infinite
 }
 
 .market-subtitle {
     font-size: clamp(11px, 2.5vw, 15px);
     opacity: .85;
-    color: #a0d8ff;
+    color: #a0d8ff
 }
 
 .market-warning {
@@ -2024,14 +2088,14 @@ img {
     text-align: center;
     color: #ffd700;
     font-size: clamp(11px, 2.2vw, 14px);
-    animation: warningPulse 2.5s ease-in-out infinite;
+    animation: warningPulse 2.5s ease-in-out infinite
 }
 
 .market-cases-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
     gap: clamp(12px, 3vw, 20px);
-    margin-bottom: 28px;
+    margin-bottom: 28px
 }
 
 .market-case-card {
@@ -2041,28 +2105,28 @@ img {
     border-radius: 18px;
     overflow: hidden;
     transition: border-color .3s, transform .3s;
-    animation: cardFadeIn .7s cubic-bezier(.4, 0, .2, 1) backwards;
+    animation: cardFadeIn .7s cubic-bezier(.4, 0, .2, 1) backwards
 }
 
 .market-case-card:nth-child(1) {
-    animation-delay: .1s;
+    animation-delay: .1s
 }
 
 .market-case-card:nth-child(2) {
-    animation-delay: .2s;
+    animation-delay: .2s
 }
 
 .market-case-card:nth-child(3) {
-    animation-delay: .3s;
+    animation-delay: .3s
 }
 
 .market-case-card:nth-child(4) {
-    animation-delay: .4s;
+    animation-delay: .4s
 }
 
 .market-case-card:hover {
     transform: translateY(-6px);
-    border-color: rgba(120, 200, 255, .6);
+    border-color: rgba(120, 200, 255, .6)
 }
 
 .market-case-image {
@@ -2070,18 +2134,18 @@ img {
     aspect-ratio: 1;
     overflow: hidden;
     background: rgba(0, 0, 0, .4);
-    position: relative;
+    position: relative
 }
 
 .market-case-image img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform .4s ease;
+    transition: transform .4s ease
 }
 
 .market-case-card:hover .market-case-image img {
-    transform: scale(1.05);
+    transform: scale(1.05)
 }
 
 .market-case-rarity-badge {
@@ -2096,26 +2160,26 @@ img {
     background: rgba(0, 0, 0, .8);
     border: 1px solid rgba(255, 255, 255, .25);
     color: #fff;
-    z-index: 2;
+    z-index: 2
 }
 
 .market-case-rarity-badge[data-rarity="common"] {
-    border-color: rgba(200, 200, 200, .6);
+    border-color: rgba(200, 200, 200, .6)
 }
 
 .market-case-rarity-badge[data-rarity="rare"] {
-    border-color: rgba(120, 200, 255, .6);
+    border-color: rgba(120, 200, 255, .6)
 }
 
 .market-case-rarity-badge[data-rarity="legendary"] {
-    border-color: rgba(255, 215, 0, .7);
+    border-color: rgba(255, 215, 0, .7)
 }
 
 .market-case-name {
     font-size: clamp(15px, 3vw, 19px);
     font-weight: 900;
     color: #fff;
-    padding: 14px 14px 6px;
+    padding: 14px 14px 6px
 }
 
 .market-case-desc {
@@ -2123,14 +2187,14 @@ img {
     opacity: .85;
     color: #a0d8ff;
     padding: 0 14px 10px;
-    line-height: 1.5;
+    line-height: 1.5
 }
 
 .market-case-price {
     font-size: clamp(16px, 3.5vw, 20px);
     font-weight: 900;
     color: #78c8ff;
-    padding: 0 14px 10px;
+    padding: 0 14px 10px
 }
 
 .market-case-buy-btn {
@@ -2147,12 +2211,12 @@ img {
     font-size: clamp(12px, 2.5vw, 15px);
     touch-action: manipulation;
     z-index: 5;
-    position: relative;
+    position: relative
 }
 
 .market-case-buy-btn:disabled {
     opacity: .5;
-    cursor: not-allowed;
+    cursor: not-allowed
 }
 
 .market-footer {
@@ -2164,31 +2228,29 @@ img {
     background: rgba(120, 200, 255, .06);
     border: 1px solid rgba(120, 200, 255, .15);
     border-radius: 16px;
-    animation: fadeInUp .7s ease-out .6s backwards;
+    animation: fadeInUp .7s ease-out .6s backwards
 }
 
 .market-footer-icon {
     font-size: clamp(32px, 8vw, 48px);
-    animation: iconBounce 2.5s ease-in-out infinite;
+    animation: iconBounce 2.5s ease-in-out infinite
 }
 
 .market-footer-text {
     font-size: clamp(12px, 2.5vw, 15px);
     opacity: .9;
     color: #a0d8ff;
-    text-align: center;
+    text-align: center
 }
 
-/* =========================
-   11) PROFILE
-   ========================= */
+/* === PROFILE === */
 .profile-page {
     padding: 16px;
     max-width: min(700px, 96vw);
     margin: 0 auto;
     overflow-x: hidden;
     overflow-y: auto;
-    animation: pageSlideIn .7s cubic-bezier(.4, 0, .2, 1);
+    animation: pageSlideIn .7s cubic-bezier(.4, 0, .2, 1)
 }
 
 .profile-header-card {
@@ -2198,7 +2260,7 @@ img {
     padding: clamp(20px, 4vw, 36px) clamp(16px, 3vw, 28px);
     text-align: center;
     margin-bottom: 20px;
-    animation: cardZoomIn .7s cubic-bezier(.4, 0, .2, 1);
+    animation: cardZoomIn .7s cubic-bezier(.4, 0, .2, 1)
 }
 
 .profile-avatar-wrapper {
@@ -2206,7 +2268,7 @@ img {
     width: clamp(80px, 18vw, 120px);
     height: clamp(80px, 18vw, 120px);
     margin: 0 auto clamp(12px, 2vw, 18px);
-    animation: avatarPop .8s cubic-bezier(.4, 0, .2, 1) .2s backwards;
+    animation: avatarPop .8s cubic-bezier(.4, 0, .2, 1) .2s backwards
 }
 
 .profile-avatar,
@@ -2221,7 +2283,7 @@ img {
     place-items: center;
     font-size: clamp(28px, 6vw, 48px);
     font-weight: 900;
-    color: #fff;
+    color: #fff
 }
 
 .profile-avatar-ring {
@@ -2234,7 +2296,7 @@ img {
     mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
     -webkit-mask-composite: destination-out;
     mask-composite: exclude;
-    animation: profileRingSpin 4s linear infinite;
+    animation: profileRingSpin 4s linear infinite
 }
 
 .profile-name {
@@ -2242,7 +2304,7 @@ img {
     font-weight: 900;
     color: #fff;
     margin-bottom: 6px;
-    animation: textSlideIn .6s ease-out .3s backwards;
+    animation: textSlideIn .6s ease-out .3s backwards
 }
 
 .profile-tg-id {
@@ -2250,7 +2312,7 @@ img {
     opacity: .75;
     color: #a0d8ff;
     margin-bottom: 14px;
-    animation: textSlideIn .6s ease-out .4s backwards;
+    animation: textSlideIn .6s ease-out .4s backwards
 }
 
 .profile-wallet-box {
@@ -2259,7 +2321,7 @@ img {
     border-radius: 12px;
     padding: clamp(8px, 2vw, 14px);
     margin-top: 14px;
-    animation: textSlideIn .6s ease-out .5s backwards;
+    animation: textSlideIn .6s ease-out .5s backwards
 }
 
 .profile-wallet-label {
@@ -2267,7 +2329,7 @@ img {
     font-weight: 700;
     opacity: .75;
     margin-bottom: 6px;
-    color: #a0d8ff;
+    color: #a0d8ff
 }
 
 .profile-wallet-account {
@@ -2275,27 +2337,27 @@ img {
     font-size: clamp(10px, 2vw, 12px);
     color: #fff;
     margin-bottom: 4px;
-    word-break: break-all;
+    word-break: break-all
 }
 
 .profile-wallet-balance {
     font-size: clamp(12px, 2.5vw, 15px);
     font-weight: 700;
     color: #78c8ff;
-    animation: balancePulse 2.5s ease-in-out infinite;
+    animation: balancePulse 2.5s ease-in-out infinite
 }
 
 .profile-wallet-disconnected {
     font-size: clamp(11px, 2.2vw, 13px);
     opacity: .75;
-    color: #ffb3b3;
+    color: #ffb3b3
 }
 
 .profile-stats-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: clamp(8px, 2vw, 14px);
-    margin-bottom: 20px;
+    margin-bottom: 20px
 }
 
 .profile-stat-card {
@@ -2304,42 +2366,42 @@ img {
     border-radius: 14px;
     padding: clamp(12px, 2.5vw, 20px) clamp(10px, 2vw, 16px);
     text-align: center;
-    animation: cardFadeIn .7s cubic-bezier(.4, 0, .2, 1) backwards;
+    animation: cardFadeIn .7s cubic-bezier(.4, 0, .2, 1) backwards
 }
 
 .profile-stat-card:nth-child(1) {
-    animation-delay: .1s;
+    animation-delay: .1s
 }
 
 .profile-stat-card:nth-child(2) {
-    animation-delay: .2s;
+    animation-delay: .2s
 }
 
 .profile-stat-card:nth-child(3) {
-    animation-delay: .3s;
+    animation-delay: .3s
 }
 
 .profile-stat-card:nth-child(4) {
-    animation-delay: .4s;
+    animation-delay: .4s
 }
 
 .profile-stat-icon {
     font-size: clamp(24px, 5vw, 34px);
     margin-bottom: clamp(4px, 1vw, 8px);
-    animation: iconBounce 2.5s ease-in-out infinite;
+    animation: iconBounce 2.5s ease-in-out infinite
 }
 
 .profile-stat-value {
     font-size: clamp(20px, 4vw, 28px);
     font-weight: 900;
     color: #78c8ff;
-    margin-bottom: 4px;
+    margin-bottom: 4px
 }
 
 .profile-stat-label {
     font-size: clamp(10px, 2vw, 12px);
     opacity: .75;
-    color: #a0d8ff;
+    color: #a0d8ff
 }
 
 .profile-loading {
@@ -2348,7 +2410,7 @@ img {
     align-items: center;
     gap: 16px;
     padding: clamp(30px, 6vw, 50px) 20px;
-    opacity: .75;
+    opacity: .75
 }
 
 .profile-loading-spinner {
@@ -2357,25 +2419,25 @@ img {
     border: 3px solid rgba(120, 200, 255, .25);
     border-top-color: #78c8ff;
     border-radius: 50%;
-    animation: spin .9s linear infinite;
+    animation: spin .9s linear infinite
 }
 
 .profile-achievements {
     margin-top: 20px;
-    animation: fadeInUp .7s ease-out .6s backwards;
+    animation: fadeInUp .7s ease-out .6s backwards
 }
 
 .profile-section-title {
     font-size: clamp(15px, 3vw, 19px);
     font-weight: 900;
     margin-bottom: 12px;
-    color: #fff;
+    color: #fff
 }
 
 .profile-achievements-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: clamp(6px, 1.5vw, 12px);
+    gap: clamp(6px, 1.5vw, 12px)
 }
 
 .profile-achievement {
@@ -2383,33 +2445,31 @@ img {
     border: 1px solid rgba(255, 255, 255, .12);
     border-radius: 12px;
     padding: clamp(10px, 2vw, 16px) clamp(8px, 1.5vw, 12px);
-    text-align: center;
+    text-align: center
 }
 
 .profile-achievement.locked {
-    opacity: .5;
+    opacity: .5
 }
 
 .profile-achievement-icon {
     font-size: clamp(20px, 4vw, 28px);
-    margin-bottom: 4px;
+    margin-bottom: 4px
 }
 
 .profile-achievement-name {
     font-size: clamp(9px, 1.8vw, 11px);
     font-weight: 700;
-    color: #fff;
+    color: #fff
 }
 
-/* =========================
-   PROFILE — Rank Section
-   ========================= */
+/* Profile rank */
 .profile-rank-section {
     margin-top: 16px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
+    gap: 12px
 }
 
 .profile-rank-badge {
@@ -2419,71 +2479,71 @@ img {
     padding: 10px 20px;
     border-radius: 12px;
     background: rgba(0, 0, 0, .4);
-    border: 2px solid;
+    border: 2px solid
 }
 
 .profile-rank-icon {
-    font-size: 24px;
+    font-size: 24px
 }
 
 .profile-rank-name {
     font-size: 18px;
     font-weight: 900;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 1px
 }
 
 .profile-rating {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: center
 }
 
 .profile-rating-value {
     font-size: 32px;
     font-weight: 900;
-    color: #fff;
+    color: #fff
 }
 
 .profile-rating-label {
     font-size: 12px;
     opacity: .7;
-    text-transform: uppercase;
+    text-transform: uppercase
 }
 
 .profile-rank-progress {
     width: 100%;
-    max-width: 280px;
+    max-width: 280px
 }
 
 .profile-rank-progress-bar {
     height: 6px;
     background: rgba(255, 255, 255, .1);
     border-radius: 3px;
-    overflow: hidden;
+    overflow: hidden
 }
 
 .profile-rank-progress-fill {
     height: 100%;
     border-radius: 3px;
-    transition: width .3s ease;
+    transition: width .3s ease
 }
 
 .profile-rank-progress-text {
     font-size: 11px;
     opacity: .7;
     margin-top: 6px;
-    text-align: center;
+    text-align: center
 }
 
 .profile-ranks-info {
-    margin-top: 20px;
+    margin-top: 20px
 }
 
 .profile-ranks-list {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
+    gap: 10px
 }
 
 .profile-rank-item {
@@ -2494,368 +2554,30 @@ img {
     border-radius: 10px;
     background: rgba(0, 0, 0, .3);
     border: 1px solid rgba(255, 255, 255, .1);
-    opacity: .6;
+    opacity: .6
 }
 
 .profile-rank-item.current {
     opacity: 1;
-    background: rgba(0, 0, 0, .5);
+    background: rgba(0, 0, 0, .5)
 }
 
 .profile-rank-item .rank-icon {
-    font-size: 18px;
+    font-size: 18px
 }
 
 .profile-rank-item .rank-name {
     font-size: 13px;
     font-weight: 700;
-    flex: 1;
+    flex: 1
 }
 
 .profile-rank-item .rank-range {
     font-size: 11px;
-    opacity: .6;
+    opacity: .6
 }
 
-/* =========================
-   12) RESPONSIVE
-   ========================= */
-@media (hover:none) and (pointer:coarse),
-(max-height:520px) and (orientation:landscape) {
-    .exit {
-        top: auto !important;
-        bottom: calc(var(--safe-b) + 12px) !important;
-        left: 12px !important;
-    }
-}
-
-@media (hover:none) and (pointer:coarse),
-(max-height:600px) and (orientation:landscape) {
-    .player-badge {
-        max-width: 160px !important;
-    }
-
-    .player-badge-name {
-        font-size: 11px !important;
-    }
-
-    .player-badge-avatar,
-    .player-badge-avatar-fallback {
-        width: 26px !important;
-        height: 26px !important;
-    }
-
-    .player-badge-avatar-fallback {
-        font-size: 10px !important;
-    }
-}
-
-@media (hover:none) and (pointer:coarse) {
-    .board::before {
-        animation: none;
-        opacity: .4;
-    }
-
-    .board::after {
-        animation: none;
-    }
-}
-
-@media (max-width: 768px) {
-    .inv-grid-game-style {
-        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-        gap: 10px;
-    }
-
-    .market-cases-grid {
-        grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
-    }
-}
-
-@media (max-width: 640px) {
-    .matchmaking-back-btn {
-        position: static;
-        transform: none;
-        margin-bottom: 12px;
-        width: 100%;
-    }
-
-    .profile-achievements-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-@media (max-width: 480px) {
-    .market-cases-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .inv-grid-game-style {
-        grid-template-columns: repeat(3, 1fr);
-        gap: 8px;
-    }
-
-    .matchmaking-modes {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 360px) {
-    .inv-grid-game-style {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 6px;
-    }
-}
-
-/* =========================
-   DESKTOP FIX — уменьшаем карты на больших экранах
-   ========================= */
-@media (min-width: 1024px) {
-    :root {
-        --card-w-max: 150px;
-        --hand-col-gap: 14px;
-        --row-gap: 10px;
-        --gap: 8px;
-        --edge-inset: 20px;
-        --hand-pad-x: 8px;
-    }
-}
-
-@media (min-width: 1400px) {
-    :root {
-        --card-w-max: 150px;
-        --hand-col-gap: 16px;
-        --gap: 10px;
-    }
-}
-
-/* Ограничиваем максимальную ширину игрового поля */
-@media (min-width: 1024px) {
-    .game-ui.tt-layout {
-        max-width: 1100px;
-        margin: 0 auto;
-    }
-}
-
-@media (min-width: 1400px) {
-    .game-ui.tt-layout {
-        max-width: 1300px;
-    }
-}
-
-/* =========================
-   13) REDUCED MOTION
-   ========================= */
-@media (prefers-reduced-motion: reduce) {
-
-    *,
-    *::before,
-    *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-    }
-
-    .inv-card-game {
-        opacity: 1 !important;
-        transform: none !important;
-    }
-}
-
-.leaderboard {
-    width: 100%;
-    max-width: 260px;
-    /* УЖЕ */
-    height: 192px;
-    /* ФИКСИРОВАННАЯ ВЫСОТА — 3 элемента */
-    margin: 0 auto;
-    background: rgba(0, 0, 0, 0.55);
-    border-radius: 14px;
-    padding: 10px;
-    backdrop-filter: blur(10px);
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-}
-
-.leaderboard-title {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 12px;
-    font-weight: 700;
-    color: #fff;
-    margin-bottom: 8px;
-    flex-shrink: 0;
-}
-
-.leaderboard-title-icon {
-    font-size: 13px;
-}
-
-.leaderboard-content {
-    flex: 1;
-    position: relative;
-    overflow: hidden;
-    min-height: 0;
-}
-
-.leaderboard-center-state {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: rgba(255, 255, 255, 0.4);
-    font-size: 11px;
-}
-
-.leaderboard-scroll {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    overflow-y: auto;
-    padding-right: 3px;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-}
-
-.leaderboard-scroll::-webkit-scrollbar {
-    width: 2px;
-}
-
-.leaderboard-scroll::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.leaderboard-scroll::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 2px;
-}
-
-.leaderboard-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 8px;
-    background: rgba(255, 255, 255, 0.06);
-    border-radius: 8px;
-    height: 42px;
-    flex-shrink: 0;
-    box-sizing: border-box;
-}
-
-.leaderboard-item.gold {
-    background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 180, 0, 0.08));
-    border: 1px solid rgba(255, 215, 0, 0.25);
-}
-
-.leaderboard-item.silver {
-    background: linear-gradient(135deg, rgba(192, 192, 192, 0.15), rgba(169, 169, 169, 0.08));
-    border: 1px solid rgba(192, 192, 192, 0.25);
-}
-
-.leaderboard-item.bronze {
-    background: linear-gradient(135deg, rgba(205, 127, 50, 0.15), rgba(184, 115, 51, 0.08));
-    border: 1px solid rgba(205, 127, 50, 0.25);
-}
-
-.leaderboard-rank {
-    width: 20px;
-    font-size: 12px;
-    font-weight: 700;
-    color: rgba(255, 255, 255, 0.6);
-    text-align: center;
-    flex-shrink: 0;
-}
-
-.leaderboard-item.gold .leaderboard-rank,
-.leaderboard-item.silver .leaderboard-rank,
-.leaderboard-item.bronze .leaderboard-rank {
-    font-size: 14px;
-}
-
-.leaderboard-avatar {
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    object-fit: cover;
-    flex-shrink: 0;
-}
-
-.leaderboard-avatar-fallback {
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    font-weight: 600;
-    color: #fff;
-    flex-shrink: 0;
-}
-
-.leaderboard-info {
-    flex: 1;
-    min-width: 0;
-}
-
-.leaderboard-name {
-    font-size: 11px;
-    font-weight: 500;
-    color: #fff;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.leaderboard-stats {
-    font-size: 9px;
-    color: rgba(255, 255, 255, 0.4);
-    margin-top: 1px;
-}
-
-.leaderboard-rating {
-    font-size: 12px;
-    font-weight: 700;
-    color: #78c8ff;
-    flex-shrink: 0;
-}
-
-.leaderboard-item.gold .leaderboard-rating {
-    color: #ffd700;
-}
-
-.leaderboard-item.silver .leaderboard-rating {
-    color: #c0c0c0;
-}
-
-.leaderboard-item.bronze .leaderboard-rating {
-    color: #cd7f32;
-}
-
-.leaderboard-loading-spinner {
-    width: 20px;
-    height: 20px;
-    border: 2px solid rgba(255, 255, 255, 0.1);
-    border-top-color: #78c8ff;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-/* Убираем старый wallet-connector-wrapper */
-.wallet-connector-wrapper {
-    display: none;
-}
-
-/* =========================
-   TOURNAMENT PAGE — Страница турниров
-   ========================= */
+/* === TOURNAMENTS === */
 .tournament-page {
     padding: 16px;
     max-width: min(900px, 95vw);
@@ -2863,12 +2585,12 @@ img {
     min-height: 60vh;
     overflow-x: hidden;
     overflow-y: auto;
-    animation: pageSlideIn .7s cubic-bezier(.4, 0, .2, 1);
+    animation: pageSlideIn .7s cubic-bezier(.4, 0, .2, 1)
 }
 
 .tournament-header {
     text-align: center;
-    margin-bottom: 24px;
+    margin-bottom: 24px
 }
 
 .tournament-title {
@@ -2880,25 +2602,25 @@ img {
     font-weight: 900;
     margin: 0 0 8px;
     color: #fff;
-    animation: titleGlow 3s ease-in-out infinite;
+    animation: titleGlow 3s ease-in-out infinite
 }
 
 .tournament-title-icon {
     font-size: clamp(26px, 6vw, 38px);
-    animation: iconBounce 2.5s ease-in-out infinite;
+    animation: iconBounce 2.5s ease-in-out infinite
 }
 
 .tournament-subtitle {
     font-size: clamp(12px, 2.5vw, 15px);
     opacity: .85;
-    color: #a0d8ff;
+    color: #a0d8ff
 }
 
 .tournament-list {
     display: flex;
     flex-direction: column;
     gap: 16px;
-    margin-bottom: 24px;
+    margin-bottom: 24px
 }
 
 .tournament-card {
@@ -2909,50 +2631,50 @@ img {
     padding: 20px;
     overflow: hidden;
     transition: border-color .3s, transform .3s;
-    animation: cardFadeIn .7s cubic-bezier(.4, 0, .2, 1) backwards;
+    animation: cardFadeIn .7s cubic-bezier(.4, 0, .2, 1) backwards
 }
 
 .tournament-card:nth-child(1) {
-    animation-delay: .1s;
+    animation-delay: .1s
 }
 
 .tournament-card:nth-child(2) {
-    animation-delay: .2s;
+    animation-delay: .2s
 }
 
 .tournament-card:nth-child(3) {
-    animation-delay: .3s;
+    animation-delay: .3s
 }
 
 .tournament-card:hover {
     transform: translateY(-4px);
-    border-color: rgba(255, 215, 0, .5);
+    border-color: rgba(255, 215, 0, .5)
 }
 
 .tournament-card.active {
-    border-color: rgba(100, 255, 150, .5);
+    border-color: rgba(100, 255, 150, .5)
 }
 
 .tournament-card.upcoming {
-    border-color: rgba(120, 200, 255, .3);
+    border-color: rgba(120, 200, 255, .3)
 }
 
 .tournament-card.ended {
     opacity: .6;
-    border-color: rgba(255, 255, 255, .08);
+    border-color: rgba(255, 255, 255, .08)
 }
 
 .tournament-card-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 12px;
+    margin-bottom: 12px
 }
 
 .tournament-card-title {
     font-size: 18px;
     font-weight: 900;
-    color: #fff;
+    color: #fff
 }
 
 .tournament-card-badge {
@@ -2960,50 +2682,50 @@ img {
     border-radius: 8px;
     font-size: 11px;
     font-weight: 900;
-    text-transform: uppercase;
+    text-transform: uppercase
 }
 
 .tournament-card-badge.live {
     background: rgba(100, 255, 150, .2);
     border: 1px solid rgba(100, 255, 150, .5);
     color: #a0ffc8;
-    animation: badgeGlow 1.5s ease-in-out infinite;
+    animation: badgeGlow 1.5s ease-in-out infinite
 }
 
 .tournament-card-badge.upcoming {
     background: rgba(120, 200, 255, .15);
     border: 1px solid rgba(120, 200, 255, .4);
-    color: #a0d8ff;
+    color: #a0d8ff
 }
 
 .tournament-card-badge.ended {
     background: rgba(255, 255, 255, .08);
     border: 1px solid rgba(255, 255, 255, .15);
-    color: rgba(255, 255, 255, .6);
+    color: rgba(255, 255, 255, .6)
 }
 
 .tournament-card-info {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 12px;
-    margin-bottom: 16px;
+    margin-bottom: 16px
 }
 
 .tournament-card-stat {
-    text-align: center;
+    text-align: center
 }
 
 .tournament-card-stat-value {
     font-size: 20px;
     font-weight: 900;
-    color: #78c8ff;
+    color: #78c8ff
 }
 
 .tournament-card-stat-label {
     font-size: 11px;
     opacity: .7;
     color: #a0d8ff;
-    margin-top: 2px;
+    margin-top: 2px
 }
 
 .tournament-card-prize {
@@ -3015,23 +2737,23 @@ img {
     background: rgba(255, 215, 0, .1);
     border: 1px solid rgba(255, 215, 0, .3);
     border-radius: 12px;
-    margin-bottom: 16px;
+    margin-bottom: 16px
 }
 
 .tournament-card-prize-icon {
-    font-size: 24px;
+    font-size: 24px
 }
 
 .tournament-card-prize-value {
     font-size: 18px;
     font-weight: 900;
-    color: #ffd700;
+    color: #ffd700
 }
 
 .tournament-card-prize-label {
     font-size: 12px;
     opacity: .8;
-    color: #ffd700;
+    color: #ffd700
 }
 
 .tournament-join-btn {
@@ -3042,50 +2764,158 @@ img {
     font-weight: 700;
     border: none;
     cursor: pointer;
-    transition: opacity .2s, transform .2s;
+    transition: opacity .2s, transform .2s
 }
 
 .tournament-join-btn.active {
     background: linear-gradient(135deg, #78c8ff 0%, #5096ff 100%);
-    color: #000;
+    color: #000
 }
 
 .tournament-join-btn.active:hover {
-    transform: scale(1.02);
+    transform: scale(1.02)
 }
 
 .tournament-join-btn.upcoming {
     background: rgba(255, 255, 255, .1);
     color: #fff;
-    border: 1px solid rgba(255, 255, 255, .2);
+    border: 1px solid rgba(255, 255, 255, .2)
 }
 
 .tournament-join-btn:disabled {
     opacity: .5;
     cursor: not-allowed;
-    transform: none;
+    transform: none
 }
 
-.tournament-empty {
-    text-align: center;
-    padding: 60px 20px;
+/* === RESPONSIVE === */
+@media (hover:none) and (pointer:coarse),
+(max-height:520px) and (orientation:landscape) {
+    .exit {
+        top: auto !important;
+        bottom: calc(var(--safe-b) + 12px) !important;
+        left: 12px !important
+    }
 }
 
-.tournament-empty-icon {
-    font-size: 64px;
-    margin-bottom: 16px;
-    opacity: .5;
+@media (hover:none) and (pointer:coarse),
+(max-height:600px) and (orientation:landscape) {
+    .player-badge {
+        max-width: 160px !important
+    }
+
+    .player-badge-name {
+        font-size: 11px !important
+    }
+
+    .player-badge-avatar,
+    .player-badge-avatar-fallback {
+        width: 26px !important;
+        height: 26px !important
+    }
+
+    .player-badge-avatar-fallback {
+        font-size: 10px !important
+    }
 }
 
-.tournament-empty-title {
-    font-size: 20px;
-    font-weight: 700;
-    color: #fff;
-    margin-bottom: 8px;
+@media (hover:none) and (pointer:coarse) {
+    .board::before {
+        animation: none;
+        opacity: .4
+    }
+
+    .board::after {
+        animation: none
+    }
 }
 
-.tournament-empty-text {
-    font-size: 14px;
-    opacity: .7;
-    color: #a0d8ff;
+@media (max-width:768px) {
+    .inv-grid-game-style {
+        grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+        gap: 10px
+    }
+
+    .market-cases-grid {
+        grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr))
+    }
+}
+
+@media (max-width:640px) {
+    .matchmaking-back-btn {
+        position: static;
+        transform: none;
+        margin-bottom: 12px;
+        width: 100%
+    }
+
+    .profile-achievements-grid {
+        grid-template-columns: repeat(2, 1fr)
+    }
+}
+
+@media (max-width:480px) {
+    .market-cases-grid {
+        grid-template-columns: 1fr
+    }
+
+    .inv-grid-game-style {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px
+    }
+
+    .matchmaking-modes {
+        grid-template-columns: 1fr
+    }
+}
+
+@media (max-width:360px) {
+    .inv-grid-game-style {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 6px
+    }
+}
+
+@media (min-width:1024px) {
+    :root {
+        --card-w-max: 150px;
+        --hand-col-gap: 14px;
+        --row-gap: 10px;
+        --gap: 8px;
+        --edge-inset: 20px;
+        --hand-pad-x: 8px
+    }
+
+    .game-ui.tt-layout {
+        max-width: 1100px;
+        margin: 0 auto
+    }
+}
+
+@media (min-width:1400px) {
+    :root {
+        --card-w-max: 150px;
+        --hand-col-gap: 16px;
+        --gap: 10px
+    }
+
+    .game-ui.tt-layout {
+        max-width: 1300px
+    }
+}
+
+@media (prefers-reduced-motion:reduce) {
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important
+    }
+
+    .inv-card-game {
+        opacity: 1 !important;
+        transform: none !important
+    }
 }
