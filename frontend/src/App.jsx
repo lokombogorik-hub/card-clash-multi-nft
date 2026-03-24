@@ -96,7 +96,6 @@ function Leaderboard({ token }) {
         var name = p.username || p.first_name || ("Player #" + (i + 1));
         var initial = name.charAt(0).toUpperCase();
         var photoUrl = p.photo_url || p.photoUrl || p.avatar || p.avatar_url || null;
-
         return (
             <div key={p.user_id || p.id || i} className={cls}>
                 <div className="leaderboard-rank">{i < 3 ? medals[i] : i + 1}</div>
@@ -142,12 +141,10 @@ var TOURNAMENTS = [
 function SeasonBar({ onGoTournament }) {
     var [idx, setIdx] = useState(0);
     var t = TOURNAMENTS[idx];
-
     useEffect(function () {
         var id = setInterval(function () { setIdx(function (i) { return (i + 1) % TOURNAMENTS.length; }); }, 4000);
         return function () { clearInterval(id); };
     }, []);
-
     return (
         <div className="season-bar" style={{ cursor: "pointer" }} onClick={onGoTournament}>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -184,7 +181,6 @@ function TournamentPage() {
     ];
     var statusLabel = { active: "LIVE", upcoming: "Скоро", ended: "Завершён" };
     var statusCls = { active: "live", upcoming: "upcoming", ended: "ended" };
-
     return (
         <div className="tournament-page">
             <div className="tournament-header">
@@ -218,6 +214,36 @@ function TournamentPage() {
     );
 }
 
+/* ── rotate gate — игра (нужен горизонт) ── */
+function RotateGate({ onBack }) {
+    return (
+        <div className="rotate-gate">
+            <div className="rotate-gate-box">
+                <div className="rotate-title">Поверни телефон</div>
+                <div className="rotate-subtitle">Игра работает только в горизонтальном режиме</div>
+                <div className="rotate-phone" />
+                <button onClick={onBack}>← Меню</button>
+            </div>
+        </div>
+    );
+}
+
+/* ── rotate gate — меню (нужна вертикаль) ── */
+function RotateGateMenu() {
+    return (
+        <div className="rotate-gate" style={{ zIndex: 99999 }}>
+            <div className="rotate-gate-box">
+                <div className="rotate-title">Поверни телефон</div>
+                <div className="rotate-subtitle">Меню работает только в вертикальном режиме</div>
+                <div className="rotate-phone" style={{
+                    transform: "rotate(90deg)",
+                    animation: "phoneWiggle 1.4s ease-in-out infinite",
+                }} />
+            </div>
+        </div>
+    );
+}
+
 /* ── app content ── */
 function AppContent() {
     var [screen, setScreen] = useState("home");
@@ -232,13 +258,11 @@ function AppContent() {
     var bottomStackRef = useRef(null);
     var [authState, setAuthState] = useState({ status: "idle", error: "" });
 
-    /* auth — stored token */
     useEffect(function () {
         var t = getStoredToken();
         if (t) { setToken(t); setAuthState(function (s) { return s.status === "idle" ? { status: "ok", error: "" } : s; }); }
     }, []);
 
-    /* auth — telegram */
     useEffect(function () {
         var tg = window.Telegram?.WebApp;
         if (!tg) { setMe(null); return; }
@@ -272,7 +296,6 @@ function AppContent() {
         return function () { try { window.Telegram?.WebApp?.enableVerticalSwipes?.(); } catch (_) { } };
     }, []);
 
-    /* bottom-stack height */
     useLayoutEffect(function () {
         var el = bottomStackRef.current;
         if (!el) return;
@@ -282,7 +305,6 @@ function AppContent() {
         return function () { ro.disconnect(); };
     }, [screen]);
 
-    /* logo autoplay */
     useEffect(function () { if (screen === "home") try { logoRef.current?.play?.(); } catch (_) { } }, [screen]);
 
     var requestFullscreen = async function () {
@@ -293,15 +315,16 @@ function AppContent() {
     };
 
     var onPlay = function () { requestFullscreen(); setScreen("inventory"); };
-
     var onDeckReady = function (selectedNfts) {
         if (Array.isArray(selectedNfts) && selectedNfts.length === 5) setPlayerDeck(selectedNfts);
         setScreen("matchmaking");
     };
-
     var onExitGame = function () { setScreen("home"); setPlayerDeck(null); setStage2MatchId(""); setGameMode("ai"); };
 
+    /* игра требует горизонталь */
     var showRotate = screen === "game" && !isLandscape;
+    /* меню требует вертикаль */
+    var showRotateMenu = screen !== "game" && isLandscape;
 
     /* ── GAME SCREEN ── */
     if (screen === "game") {
@@ -324,8 +347,11 @@ function AppContent() {
     return (
         <div className="shell">
             <StormBg />
-            <div className="shell-content">
 
+            {/* меню только вертикаль */}
+            {showRotateMenu && <RotateGateMenu />}
+
+            <div className="shell-content">
                 {screen === "home" && (
                     <div className="home-center">
                         <div className="home-wallet-row">
@@ -386,18 +412,6 @@ function AppContent() {
 
 export default function App() {
     return <WalletConnectProvider><AppContent /></WalletConnectProvider>;
-}
-
-/* ── subcomponents ── */
-function RotateGate({ onBack }) {
-    return (
-        <div className="rotate-gate"><div className="rotate-gate-box">
-            <div className="rotate-title">Поверни телефон</div>
-            <div className="rotate-subtitle">Игра работает только в горизонтальном режиме</div>
-            <div className="rotate-phone" />
-            <button onClick={onBack}>← Меню</button>
-        </div></div>
-    );
 }
 
 function BottomNav({ active, onChange }) {
