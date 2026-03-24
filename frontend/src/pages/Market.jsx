@@ -3,10 +3,50 @@ import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
 
 var CASES = [
-    { id: "starter", name: "Starter Case", price: 0.1, displayPrice: "1 Card", image: "/ui/case-starter.png", rarity: "common", description: "1 random card", type: "single" },
-    { id: "premium", name: "Premium Case", price: 2, displayPrice: "5 Cards", image: "/ui/case-premium.png", rarity: "rare", description: "5 random cards pack", type: "pack" },
-    { id: "legendary", name: "Legendary Case", price: 5, displayPrice: "5 Epic Cards", image: "/ui/case-legendary.png", rarity: "epic", description: "5 Epic cards guaranteed", type: "pack" },
-    { id: "ultimate", name: "Ultimate Case", price: 10, displayPrice: "5 Legendary", image: "/ui/case-ultimate.png", rarity: "legendary", description: "5 Legendary cards guaranteed", type: "pack" },
+    {
+        id: "starter",
+        name: "Starter Case",
+        price: 0.01,
+        displayPrice: "1 Card",
+        image: "/ui/case-starter.png",
+        video: "/ui/case-starter.mp4", // видео с чёрным фоном
+        rarity: "common",
+        description: "1 random card",
+        type: "single"
+    },
+    {
+        id: "premium",
+        name: "Premium Case",
+        price: 0.01,
+        displayPrice: "5 Cards",
+        image: "/ui/case-premium.png",
+        video: "/ui/case-premium.mp4",
+        rarity: "rare",
+        description: "5 random cards pack",
+        type: "pack"
+    },
+    {
+        id: "legendary",
+        name: "Legendary Case",
+        price: 0.01,
+        displayPrice: "5 Epic Cards",
+        image: "/ui/case-legendary.png",
+        video: "/ui/case-legendary.mp4",
+        rarity: "epic",
+        description: "5 Epic cards guaranteed",
+        type: "pack"
+    },
+    {
+        id: "ultimate",
+        name: "Ultimate Case",
+        price: 0.01,
+        displayPrice: "5 Legendary",
+        image: "/ui/case-ultimate.png",
+        video: "/ui/case-ultimate.mp4",
+        rarity: "legendary",
+        description: "5 Legendary cards guaranteed",
+        type: "pack"
+    },
 ];
 
 var RARITY_COLORS = {
@@ -18,6 +58,49 @@ var RARITY_COLORS = {
 
 var TREASURY = "retardo-s.near";
 
+// Компонент для отображения изображения или видео кейса
+function CaseMedia({ caseItem, style, className }) {
+    var [videoError, setVideoError] = useState(false);
+
+    // Если есть видео и оно не сломалось — показываем видео
+    if (caseItem.video && !videoError) {
+        return (
+            <video
+                src={caseItem.video}
+                autoPlay
+                loop
+                muted
+                playsInline
+                className={className}
+                style={{
+                    ...style,
+                    // Убираем чёрный фон через blend mode
+                    mixBlendMode: "screen",
+                    background: "transparent",
+                }}
+                onError={function () { setVideoError(true); }}
+            >
+                {/* mp4 и webm оба поддерживаются */}
+                <source src={caseItem.video} type="video/mp4" />
+                <source src={caseItem.video.replace(".mp4", ".webm")} type="video/webm" />
+            </video>
+        );
+    }
+
+    // Fallback на картинку
+    return (
+        <img
+            src={caseItem.image}
+            alt={caseItem.name}
+            className={className}
+            style={style}
+            draggable="false"
+            loading="lazy"
+            onError={function (e) { e.currentTarget.src = "/cards/card.jpg"; }}
+        />
+    );
+}
+
 // Анимация открытия кейса
 function CaseOpenModal({ caseItem, cards, onClose }) {
     var [revealed, setRevealed] = useState(false);
@@ -25,7 +108,6 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
 
     var handleReveal = function () {
         setRevealed(true);
-        // Открываем карты по одной с задержкой
         cards.forEach(function (card, i) {
             setTimeout(function () {
                 setRevealedCards(function (prev) { return [...prev, card]; });
@@ -57,22 +139,23 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
 
                 {!revealed ? (
                     <>
-                        {/* Анимация кейса до открытия */}
                         <div style={{
-                            width: 120, height: 120,
+                            width: 140, height: 140,
                             margin: "0 auto 24px",
                             position: "relative",
+                            // Тёмный фон под видео чтобы screen blend работал
+                            background: "#0a0e1a",
+                            borderRadius: 16,
+                            overflow: "hidden",
                         }}>
-                            <img
-                                src={caseItem.image}
-                                alt=""
+                            <CaseMedia
+                                caseItem={caseItem}
                                 style={{
                                     width: "100%", height: "100%",
                                     objectFit: "contain",
                                     animation: "iconBounce 1s ease-in-out infinite",
                                     filter: "drop-shadow(0 0 20px rgba(120,200,255,0.5))",
                                 }}
-                                onError={function (e) { e.currentTarget.src = "/cards/card.jpg"; }}
                             />
                         </div>
 
@@ -93,7 +176,6 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                     </>
                 ) : (
                     <>
-                        {/* Карты появляются по одной */}
                         <div style={{
                             display: "flex",
                             gap: 8,
@@ -123,7 +205,6 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                                             flexShrink: 0,
                                         }}
                                     >
-                                        {/* Картинка карты */}
                                         {card.image_url || card.imageUrl ? (
                                             <img
                                                 src={card.image_url || card.imageUrl}
@@ -148,7 +229,6 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                                             </div>
                                         )}
 
-                                        {/* Rarity badge */}
                                         <div style={{
                                             position: "absolute",
                                             bottom: 0, left: 0, right: 0,
@@ -198,7 +278,7 @@ export default function Market() {
 
     var [buying, setBuying] = useState(null);
     var [error, setError] = useState("");
-    var [openModal, setOpenModal] = useState(null); // { caseItem, cards }
+    var [openModal, setOpenModal] = useState(null);
 
     var token = "";
     try {
@@ -219,7 +299,6 @@ export default function Market() {
         setError("");
 
         try {
-            // 1. Оплата
             var pay = await sendNear({
                 receiverId: TREASURY,
                 amount: String(c.price),
@@ -230,7 +309,6 @@ export default function Market() {
                 throw new Error("Transaction failed — no txHash returned");
             }
 
-            // 2. Открытие кейса на бэкенде
             var open = await apiFetch("/api/cases/open", {
                 method: "POST",
                 token: token,
@@ -239,7 +317,6 @@ export default function Market() {
 
             var cards = open.cards || [];
 
-            // 3. Показываем модалку с анимацией
             setOpenModal({ caseItem: c, cards: cards });
 
             try {
@@ -259,7 +336,6 @@ export default function Market() {
 
     return (
         <div className="market-page">
-            {/* Модалка открытия кейса */}
             {openModal && (
                 <CaseOpenModal
                     caseItem={openModal.caseItem}
@@ -312,13 +388,19 @@ export default function Market() {
 
                     return (
                         <div key={c.id} className="market-case-card">
-                            <div className="market-case-image">
-                                <img
-                                    src={c.image}
-                                    alt={c.name}
-                                    draggable="false"
-                                    loading="lazy"
-                                    onError={function (e) { e.currentTarget.src = "/cards/card.jpg"; }}
+                            <div className="market-case-image" style={{
+                                // Фон для blend mode
+                                background: "#0a0e1a",
+                                borderRadius: 12,
+                                overflow: "hidden",
+                            }}>
+                                <CaseMedia
+                                    caseItem={c}
+                                    style={{
+                                        width: "100%",
+                                        height: "100%",
+                                        objectFit: "contain",
+                                    }}
                                 />
                             </div>
                             <div className="market-case-rarity-badge" data-rarity={c.rarity}>
