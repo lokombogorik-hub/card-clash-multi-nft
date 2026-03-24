@@ -34,7 +34,6 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
         });
     };
 
-    /* ── видео закончилось → показываем карты ── */
     var handleVideoEnd = function () {
         setVideoEnded(true);
         handleReveal();
@@ -65,13 +64,13 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                 {/* ── ДО reveal: видео ── */}
                 {!revealed && (
                     <>
-                        {/* Контейнер видео — чёрный фон убирается через mixBlendMode */}
                         <div style={{
                             width: "100%",
                             aspectRatio: "16/9",
                             margin: "0 auto 20px",
                             borderRadius: 16,
                             overflow: "hidden",
+                            /* чёрный фон — на нём mixBlendMode:screen убирает чёрные пиксели видео */
                             background: "#000",
                             position: "relative",
                         }}>
@@ -80,14 +79,12 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                                     key={caseItem.id}
                                     autoPlay
                                     playsInline
-                                    muted={false}
                                     style={{
                                         width: "100%",
                                         height: "100%",
                                         objectFit: "contain",
                                         display: "block",
                                         mixBlendMode: "screen",
-                                        background: "transparent",
                                     }}
                                     onEnded={handleVideoEnd}
                                     onError={function () { setVideoError(true); }}
@@ -95,7 +92,6 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                                     <source src={caseItem.video} type="video/mp4" />
                                 </video>
                             ) : (
-                                /* fallback картинка если видео не загрузилось */
                                 <img
                                     src={caseItem.image}
                                     alt=""
@@ -110,7 +106,6 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                             )}
                         </div>
 
-                        {/* Кнопка — пропустить видео или открыть если видео нет */}
                         <button
                             onClick={handleVideoEnd}
                             style={{
@@ -128,7 +123,7 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                     </>
                 )}
 
-                {/* ── ПОСЛЕ reveal: реальные карты ── */}
+                {/* ── ПОСЛЕ reveal: реальные карты с бэкенда ── */}
                 {revealed && (
                     <>
                         <div style={{
@@ -160,63 +155,41 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                                             flexShrink: 0,
                                         }}
                                     >
-                                        {/* Реальное фото NFT */}
                                         {card.image_url || card.imageUrl ? (
                                             <img
                                                 src={card.image_url || card.imageUrl}
                                                 alt={card.name || ""}
-                                                style={{
-                                                    width: "100%", height: "100%",
-                                                    objectFit: "cover",
-                                                }}
-                                                onError={function (e) {
-                                                    e.currentTarget.src = "/cards/card.jpg";
-                                                }}
+                                                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                                onError={function (e) { e.currentTarget.src = "/cards/card.jpg"; }}
                                             />
                                         ) : (
                                             <div style={{
                                                 width: "100%", height: "100%",
-                                                display: "flex", alignItems: "center",
-                                                justifyContent: "center",
+                                                display: "flex", alignItems: "center", justifyContent: "center",
                                                 background: "linear-gradient(135deg, #1a2232, #0f1625)",
                                                 fontSize: 32,
-                                            }}>
-                                                🎴
-                                            </div>
+                                            }}>🎴</div>
                                         )}
 
-                                        {/* Rarity badge */}
+                                        {card.name && (
+                                            <div style={{
+                                                position: "absolute", top: 0, left: 0, right: 0,
+                                                padding: "3px 4px",
+                                                background: "rgba(0,0,0,0.6)",
+                                                fontSize: 7, fontWeight: 700, color: "#fff",
+                                                textAlign: "center",
+                                                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                                            }}>{card.name}</div>
+                                        )}
+
                                         <div style={{
-                                            position: "absolute",
-                                            bottom: 0, left: 0, right: 0,
-                                            padding: "4px 4px",
+                                            position: "absolute", bottom: 0, left: 0, right: 0,
+                                            padding: "4px",
                                             background: "rgba(0,0,0,0.8)",
                                             fontSize: 8, fontWeight: 900,
                                             color: rarityColor,
-                                            textAlign: "center",
-                                            textTransform: "uppercase",
-                                            letterSpacing: 0.5,
-                                        }}>
-                                            {card.rarity}
-                                        </div>
-
-                                        {/* Имя карты если есть */}
-                                        {card.name && (
-                                            <div style={{
-                                                position: "absolute",
-                                                top: 0, left: 0, right: 0,
-                                                padding: "3px 4px",
-                                                background: "rgba(0,0,0,0.6)",
-                                                fontSize: 7, fontWeight: 700,
-                                                color: "#fff",
-                                                textAlign: "center",
-                                                whiteSpace: "nowrap",
-                                                overflow: "hidden",
-                                                textOverflow: "ellipsis",
-                                            }}>
-                                                {card.name}
-                                            </div>
-                                        )}
+                                            textAlign: "center", textTransform: "uppercase", letterSpacing: 0.5,
+                                        }}>{card.rarity}</div>
                                     </div>
                                 );
                             })}
@@ -234,9 +207,7 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                                     width: "100%",
                                     boxShadow: "0 4px 20px rgba(34,197,94,0.35)",
                                 }}
-                            >
-                                ✅ В инвентарь!
-                            </button>
+                            >✅ В инвентарь!</button>
                         )}
                     </>
                 )}
@@ -275,7 +246,7 @@ export default function Market() {
         setError("");
 
         try {
-            // 1. Оплата
+            // 1. Оплата — логику не трогаем
             var pay = await sendNear({
                 receiverId: TREASURY,
                 amount: String(c.price),
@@ -286,7 +257,7 @@ export default function Market() {
                 throw new Error("Transaction failed — no txHash returned");
             }
 
-            // 2. Открытие кейса на бэкенде
+            // 2. Открытие кейса на бэкенде — логику не трогаем
             var open = await apiFetch("/api/cases/open", {
                 method: "POST",
                 token: token,
@@ -295,12 +266,10 @@ export default function Market() {
 
             var cards = open.cards || [];
 
-            // 3. Показываем модалку с анимацией
+            // 3. Модалка с видео → карты
             setOpenModal({ caseItem: c, cards: cards });
 
-            try {
-                window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("success");
-            } catch (e) { }
+            try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("success"); } catch (e) { }
 
         } catch (e) {
             setError("Ошибка: " + (e.message || e));
@@ -309,17 +278,13 @@ export default function Market() {
         }
     };
 
-    var handleCloseModal = function () {
-        setOpenModal(null);
-    };
-
     return (
         <div className="market-page">
             {openModal && (
                 <CaseOpenModal
                     caseItem={openModal.caseItem}
                     cards={openModal.cards}
-                    onClose={handleCloseModal}
+                    onClose={function () { setOpenModal(null); }}
                 />
             )}
 
@@ -367,33 +332,15 @@ export default function Market() {
 
                     return (
                         <div key={c.id} className="market-case-card">
-                            <div className="market-case-image" style={{
-                                background: "#000",
-                                borderRadius: 12,
-                                overflow: "hidden",
-                            }}>
-                                {c.video ? (
-                                    <video
-                                        autoPlay loop muted playsInline
-                                        style={{
-                                            width: "100%", height: "100%",
-                                            objectFit: "contain",
-                                            display: "block",
-                                            mixBlendMode: "screen",
-                                        }}
-                                    >
-                                        <source src={c.video} type="video/mp4" />
-                                    </video>
-                                ) : (
-                                    <img
-                                        src={c.image}
-                                        alt={c.name}
-                                        draggable="false"
-                                        loading="lazy"
-                                        style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                                        onError={function (e) { e.currentTarget.src = "/cards/card.jpg"; }}
-                                    />
-                                )}
+                            {/* в меню только картинка — без видео */}
+                            <div className="market-case-image">
+                                <img
+                                    src={c.image}
+                                    alt={c.name}
+                                    draggable="false"
+                                    loading="lazy"
+                                    onError={function (e) { e.currentTarget.src = "/cards/card.jpg"; }}
+                                />
                             </div>
                             <div className="market-case-rarity-badge" data-rarity={c.rarity}>
                                 {c.rarity}
