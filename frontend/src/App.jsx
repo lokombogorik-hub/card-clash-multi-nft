@@ -354,9 +354,15 @@ function AppContent() {
             <div className="shell-content">
                 {screen === "home" && (
                     <div className="home-center">
+                        {/* кошелёк — сверху */}
                         <div className="home-wallet-row">
                             <WalletConnector />
                         </div>
+
+                        {/* распорка — толкает лого вниз */}
+                        <div className="home-spacer" />
+
+                        {/* лого — над лидербордом */}
                         <div className="home-logo-area">
                             <button className="play-logo" aria-label="Play" onClick={onPlay}>
                                 <div className="logo-wrap">
@@ -371,6 +377,8 @@ function AppContent() {
                                 <span className="play-icon"><PlayIcon /></span>
                             </button>
                         </div>
+
+                        {/* лидерборд — впритык к плашке */}
                         <div className="home-bottom-area">
                             <Leaderboard token={token} />
                         </div>
