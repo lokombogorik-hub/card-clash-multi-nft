@@ -3,10 +3,10 @@ import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
 
 var CASES = [
-    { id: "starter", name: "Starter Case", price: 0.01, displayPrice: "1 Card", image: "/ui/case-starter.png", rarity: "common", description: "1 random card", type: "single" },
-    { id: "premium", name: "Premium Case", price: 0.01, displayPrice: "5 Cards", image: "/ui/case-premium.png", rarity: "rare", description: "5 random cards pack", type: "pack" },
-    { id: "legendary", name: "Legendary Case", price: 0.01, displayPrice: "5 Epic Cards", image: "/ui/case-legendary.png", rarity: "epic", description: "5 Epic cards guaranteed", type: "pack" },
-    { id: "ultimate", name: "Ultimate Case", price: 0.01, displayPrice: "5 Legendary", image: "/ui/case-ultimate.png", rarity: "legendary", description: "5 Legendary cards guaranteed", type: "pack" },
+    { id: "starter", name: "Starter Case", price: 0.01, displayPrice: "1 Card", image: "/ui/case-starter.png", video: "/ui/case-starter.mp4", rarity: "common", description: "1 random card", type: "single" },
+    { id: "premium", name: "Premium Case", price: 0.01, displayPrice: "5 Cards", image: "/ui/case-premium.png", video: "/ui/case-premium.mp4", rarity: "rare", description: "5 random cards pack", type: "pack" },
+    { id: "legendary", name: "Legendary Case", price: 0.01, displayPrice: "5 Epic Cards", image: "/ui/case-legendary.png", video: "/ui/case-legendary.mp4", rarity: "epic", description: "5 Epic cards guaranteed", type: "pack" },
+    { id: "ultimate", name: "Ultimate Case", price: 0.01, displayPrice: "5 Legendary", image: "/ui/case-ultimate.png", video: "/ui/case-ultimate.mp4", rarity: "legendary", description: "5 Legendary cards guaranteed", type: "pack" },
 ];
 
 var RARITY_COLORS = {
@@ -18,14 +18,14 @@ var RARITY_COLORS = {
 
 var TREASURY = "retardo-s.near";
 
-// Анимация открытия кейса
 function CaseOpenModal({ caseItem, cards, onClose }) {
     var [revealed, setRevealed] = useState(false);
     var [revealedCards, setRevealedCards] = useState([]);
+    var [videoEnded, setVideoEnded] = useState(false);
+    var [videoError, setVideoError] = useState(false);
 
     var handleReveal = function () {
         setRevealed(true);
-        // Открываем карты по одной с задержкой
         cards.forEach(function (card, i) {
             setTimeout(function () {
                 setRevealedCards(function (prev) { return [...prev, card]; });
@@ -34,53 +34,88 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
         });
     };
 
+    /* ── видео закончилось → показываем карты ── */
+    var handleVideoEnd = function () {
+        setVideoEnded(true);
+        handleReveal();
+    };
+
     return (
         <div style={{
             position: "fixed", inset: 0, zIndex: 99999,
-            background: "rgba(0,0,0,0.95)",
+            background: "rgba(0,0,0,0.97)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            padding: 16, flexDirection: "column",
+            padding: 12, flexDirection: "column",
         }}>
             <div style={{
-                width: "100%", maxWidth: 420,
+                width: "100%", maxWidth: 500,
                 background: "linear-gradient(145deg, #1a1a2e, #0f0f1a)",
                 border: "2px solid rgba(120,200,255,0.3)",
-                borderRadius: 24, padding: "28px 20px",
+                borderRadius: 24, padding: "24px 20px",
                 textAlign: "center",
+                boxShadow: "0 0 60px rgba(120,200,255,0.15)",
             }}>
-                <h3 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 900, color: "#fff" }}>
+                <h3 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 900, color: "#fff" }}>
                     🎁 {caseItem.name}
                 </h3>
-                <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 20, color: "#a0d8ff" }}>
-                    {cards.length} карт получено!
+                <div style={{ fontSize: 13, opacity: 0.6, marginBottom: 16, color: "#a0d8ff" }}>
+                    {cards.length} {cards.length === 1 ? "карта" : "карт"} получено!
                 </div>
 
-                {!revealed ? (
+                {/* ── ДО reveal: видео ── */}
+                {!revealed && (
                     <>
-                        {/* Анимация кейса до открытия */}
+                        {/* Контейнер видео — чёрный фон убирается через mixBlendMode */}
                         <div style={{
-                            width: 120, height: 120,
-                            margin: "0 auto 24px",
+                            width: "100%",
+                            aspectRatio: "16/9",
+                            margin: "0 auto 20px",
+                            borderRadius: 16,
+                            overflow: "hidden",
+                            background: "#000",
                             position: "relative",
                         }}>
-                            <img
-                                src={caseItem.image}
-                                alt=""
-                                style={{
-                                    width: "100%", height: "100%",
-                                    objectFit: "contain",
-                                    animation: "iconBounce 1s ease-in-out infinite",
-                                    filter: "drop-shadow(0 0 20px rgba(120,200,255,0.5))",
-                                }}
-                                onError={function (e) { e.currentTarget.src = "/cards/card.jpg"; }}
-                            />
+                            {caseItem.video && !videoError ? (
+                                <video
+                                    key={caseItem.id}
+                                    autoPlay
+                                    playsInline
+                                    muted={false}
+                                    style={{
+                                        width: "100%",
+                                        height: "100%",
+                                        objectFit: "contain",
+                                        display: "block",
+                                        mixBlendMode: "screen",
+                                        background: "transparent",
+                                    }}
+                                    onEnded={handleVideoEnd}
+                                    onError={function () { setVideoError(true); }}
+                                >
+                                    <source src={caseItem.video} type="video/mp4" />
+                                </video>
+                            ) : (
+                                /* fallback картинка если видео не загрузилось */
+                                <img
+                                    src={caseItem.image}
+                                    alt=""
+                                    style={{
+                                        width: "100%", height: "100%",
+                                        objectFit: "contain",
+                                        animation: "iconBounce 1s ease-in-out infinite",
+                                        filter: "drop-shadow(0 0 20px rgba(120,200,255,0.5))",
+                                    }}
+                                    onError={function (e) { e.currentTarget.src = "/cards/card.jpg"; }}
+                                />
+                            )}
                         </div>
 
+                        {/* Кнопка — пропустить видео или открыть если видео нет */}
                         <button
-                            onClick={handleReveal}
+                            onClick={handleVideoEnd}
                             style={{
-                                padding: "14px 32px",
-                                fontSize: 17, fontWeight: 900,
+                                padding: "13px 32px",
+                                fontSize: 16, fontWeight: 900,
                                 borderRadius: 16, border: "none",
                                 background: "linear-gradient(135deg, #78c8ff, #5096ff)",
                                 color: "#000", cursor: "pointer",
@@ -88,19 +123,21 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                                 width: "100%",
                             }}
                         >
-                            ✨ Открыть!
+                            {videoError ? "✨ Открыть!" : "⏭ Пропустить"}
                         </button>
                     </>
-                ) : (
+                )}
+
+                {/* ── ПОСЛЕ reveal: реальные карты ── */}
+                {revealed && (
                     <>
-                        {/* Карты появляются по одной */}
                         <div style={{
                             display: "flex",
-                            gap: 8,
+                            gap: 10,
                             justifyContent: "center",
                             flexWrap: "wrap",
                             marginBottom: 20,
-                            minHeight: 110,
+                            minHeight: 130,
                         }}>
                             {cards.map(function (card, i) {
                                 var isVisible = revealedCards.length > i;
@@ -112,22 +149,22 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                                         style={{
                                             opacity: isVisible ? 1 : 0,
                                             transform: isVisible ? "scale(1) translateY(0)" : "scale(0.5) translateY(20px)",
-                                            transition: "all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)",
-                                            width: 72, height: 100,
-                                            borderRadius: 10,
+                                            transition: "all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                                            width: 80, height: 112,
+                                            borderRadius: 12,
                                             overflow: "hidden",
                                             border: "3px solid " + rarityColor,
-                                            boxShadow: isVisible ? "0 0 16px " + rarityColor + "80" : "none",
+                                            boxShadow: isVisible ? "0 0 20px " + rarityColor + "90" : "none",
                                             background: "#0a0e1a",
                                             position: "relative",
                                             flexShrink: 0,
                                         }}
                                     >
-                                        {/* Картинка карты */}
+                                        {/* Реальное фото NFT */}
                                         {card.image_url || card.imageUrl ? (
                                             <img
                                                 src={card.image_url || card.imageUrl}
-                                                alt=""
+                                                alt={card.name || ""}
                                                 style={{
                                                     width: "100%", height: "100%",
                                                     objectFit: "cover",
@@ -142,7 +179,7 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                                                 display: "flex", alignItems: "center",
                                                 justifyContent: "center",
                                                 background: "linear-gradient(135deg, #1a2232, #0f1625)",
-                                                fontSize: 28,
+                                                fontSize: 32,
                                             }}>
                                                 🎴
                                             </div>
@@ -152,15 +189,34 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                                         <div style={{
                                             position: "absolute",
                                             bottom: 0, left: 0, right: 0,
-                                            padding: "3px 4px",
-                                            background: "rgba(0,0,0,0.7)",
-                                            fontSize: 9, fontWeight: 900,
+                                            padding: "4px 4px",
+                                            background: "rgba(0,0,0,0.8)",
+                                            fontSize: 8, fontWeight: 900,
                                             color: rarityColor,
                                             textAlign: "center",
                                             textTransform: "uppercase",
+                                            letterSpacing: 0.5,
                                         }}>
                                             {card.rarity}
                                         </div>
+
+                                        {/* Имя карты если есть */}
+                                        {card.name && (
+                                            <div style={{
+                                                position: "absolute",
+                                                top: 0, left: 0, right: 0,
+                                                padding: "3px 4px",
+                                                background: "rgba(0,0,0,0.6)",
+                                                fontSize: 7, fontWeight: 700,
+                                                color: "#fff",
+                                                textAlign: "center",
+                                                whiteSpace: "nowrap",
+                                                overflow: "hidden",
+                                                textOverflow: "ellipsis",
+                                            }}>
+                                                {card.name}
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}
@@ -170,7 +226,7 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                             <button
                                 onClick={onClose}
                                 style={{
-                                    padding: "12px 24px",
+                                    padding: "13px 24px",
                                     fontSize: 15, fontWeight: 700,
                                     borderRadius: 14, border: "none",
                                     background: "linear-gradient(135deg, #22c55e, #16a34a)",
@@ -198,7 +254,7 @@ export default function Market() {
 
     var [buying, setBuying] = useState(null);
     var [error, setError] = useState("");
-    var [openModal, setOpenModal] = useState(null); // { caseItem, cards }
+    var [openModal, setOpenModal] = useState(null);
 
     var token = "";
     try {
@@ -259,7 +315,6 @@ export default function Market() {
 
     return (
         <div className="market-page">
-            {/* Модалка открытия кейса */}
             {openModal && (
                 <CaseOpenModal
                     caseItem={openModal.caseItem}
@@ -312,14 +367,33 @@ export default function Market() {
 
                     return (
                         <div key={c.id} className="market-case-card">
-                            <div className="market-case-image">
-                                <img
-                                    src={c.image}
-                                    alt={c.name}
-                                    draggable="false"
-                                    loading="lazy"
-                                    onError={function (e) { e.currentTarget.src = "/cards/card.jpg"; }}
-                                />
+                            <div className="market-case-image" style={{
+                                background: "#000",
+                                borderRadius: 12,
+                                overflow: "hidden",
+                            }}>
+                                {c.video ? (
+                                    <video
+                                        autoPlay loop muted playsInline
+                                        style={{
+                                            width: "100%", height: "100%",
+                                            objectFit: "contain",
+                                            display: "block",
+                                            mixBlendMode: "screen",
+                                        }}
+                                    >
+                                        <source src={c.video} type="video/mp4" />
+                                    </video>
+                                ) : (
+                                    <img
+                                        src={c.image}
+                                        alt={c.name}
+                                        draggable="false"
+                                        loading="lazy"
+                                        style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                                        onError={function (e) { e.currentTarget.src = "/cards/card.jpg"; }}
+                                    />
+                                )}
                             </div>
                             <div className="market-case-rarity-badge" data-rarity={c.rarity}>
                                 {c.rarity}
