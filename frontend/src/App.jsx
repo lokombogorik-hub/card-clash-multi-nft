@@ -385,10 +385,7 @@ function AppContent() {
                             <WalletConnector />
                         </div>
 
-                        {/* распорка — толкает лого вниз */}
-                        <div className="home-spacer" />
-
-                        {/* лого — над лидербордом */}
+                        {/* лого — по центру свободного пространства */}
                         <div className="home-logo-area">
                             <button className="play-logo" aria-label="Play" onClick={onPlay}>
                                 <div className="logo-wrap">
