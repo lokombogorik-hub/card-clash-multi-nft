@@ -131,7 +131,6 @@ var nftCache = {
     timestamp: 0
 };
 
-// Функция для инвалидации кэша (вызывается после escrow)
 export function invalidateNftCache() {
     nftCache.accountId = null;
     nftCache.items = [];
@@ -140,7 +139,6 @@ export function invalidateNftCache() {
 
 var imageCache = new Map();
 
-// Оптимизированный NftImage — без лишних эффектов
 var NftImage = memo(function NftImage({ src, originalSrc, alt, cacheKey }) {
     var cached = imageCache.get(cacheKey);
     var [loaded, setLoaded] = useState(cached ? true : false);
@@ -185,12 +183,12 @@ var NftImage = memo(function NftImage({ src, originalSrc, alt, cacheKey }) {
     return prev.cacheKey === next.cacheKey;
 });
 
-// КЛЮЧЕВАЯ ОПТИМИЗАЦИЯ: memo с правильным сравнением
 var InventoryCard = memo(function InventoryCard({
     nft,
     isSelected,
     pickNo,
-    onToggle
+    onToggle,
+    index
 }) {
     var k = useMemo(function () { return nftKey(nft); }, [nft]);
 
@@ -222,12 +220,22 @@ var InventoryCard = memo(function InventoryCard({
         <button
             type="button"
             onClick={handleClick}
-            className={"inv-card-game" + (isSelected ? " is-selected" : "")}
+            className={
+                "inv-card-game" +
+                (isSelected ? " is-selected" : "") +
+                " rarity-" + rarity.key
+            }
             style={{
                 "--rank": rarity.border,
-                "--rankGlow": rarity.glow
+                "--rankGlow": rarity.glow,
+                "--enter-delay": (index % 20) * 35 + "ms"
             }}
         >
+            {/* Голографический блик для legendary/epic */}
+            {(rarity.key === "legendary" || rarity.key === "epic") && (
+                <div className="inv-card-holo" />
+            )}
+
             <div className="inv-card-art-full">
                 <NftImage
                     src={nft.imageUrl}
@@ -248,6 +256,11 @@ var InventoryCard = memo(function InventoryCard({
                 <span className="inv-tt-num bottom">{stats.bottom}</span>
             </div>
 
+            {/* Имя карты */}
+            <div className="inv-card-nameplate">
+                {nft.name || "Card"}
+            </div>
+
             {isSelected && (
                 <div className="inv-pick-badge">
                     <span className="inv-pick-no">{pickNo}</span>
@@ -256,13 +269,14 @@ var InventoryCard = memo(function InventoryCard({
         </button>
     );
 }, function (prev, next) {
-    // Перерендерим ТОЛЬКО если изменились важные props
     return (
         prev.isSelected === next.isSelected &&
         prev.pickNo === next.pickNo &&
+        prev.index === next.index &&
         nftKey(prev.nft) === nftKey(next.nft)
     );
 });
+
 export default function Inventory({ token, onDeckReady }) {
     var ctx = useWalletConnect();
     var accountId = ctx.accountId;
@@ -278,12 +292,10 @@ export default function Inventory({ token, onDeckReady }) {
 
     var nftContractId = (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim();
 
-    // Оптимизация: стабильный массив ключей
     var selectedArr = useMemo(function () {
         return Array.from(selected);
     }, [selected]);
 
-    // Оптимизация: Map создаётся только при изменении selected
     var orderMap = useMemo(function () {
         var m = new Map();
         selectedArr.forEach(function (k, i) { m.set(k, i + 1); });
@@ -296,11 +308,9 @@ export default function Inventory({ token, onDeckReady }) {
         }).filter(Boolean);
     }, [selectedArr, nfts]);
 
-    // Auto-refresh при возврате на страницу (после escrow refund)
     useEffect(function () {
         var handleVisibilityChange = function () {
             if (document.visibilityState === 'visible' && connected && accountId) {
-                // Инвалидируем кэш при возврате если прошло больше 10 секунд
                 var now = Date.now();
                 if (nftCache.timestamp && (now - nftCache.timestamp) > 10000) {
                     nftCache.timestamp = 0;
@@ -316,7 +326,6 @@ export default function Inventory({ token, onDeckReady }) {
         };
     }, [connected, accountId]);
 
-    // Функция для принудительного обновления
     var forceRefresh = useCallback(function () {
         invalidateNftCache();
         setRefreshKey(function (k) { return k + 1; });
@@ -399,7 +408,6 @@ export default function Inventory({ token, onDeckReady }) {
         return function () { alive = false; };
     }, [token, accountId, connected, nftContractId, refreshKey]);
 
-    // Стабильная функция toggle
     var toggle = useCallback(function (k) {
         setSelected(function (prev) {
             var next = new Set(prev);
@@ -474,38 +482,39 @@ export default function Inventory({ token, onDeckReady }) {
                     Выбери колоду
                 </h2>
                 <div className="inv-subtitle">
-                    Выбери 5 карт для игры • {selected.size}/5
+                    Выбери 5 карт для игры
+                </div>
+                {/* Прогресс-бар выбора */}
+                <div className="inv-progress-bar">
+                    <div
+                        className={"inv-progress-fill" + (selected.size === 5 ? " complete" : "")}
+                        style={{ width: (selected.size / 5 * 100) + "%" }}
+                    />
+                    <span className="inv-progress-text">{selected.size} / 5</span>
                 </div>
             </div>
 
             {connected && accountId ? (
                 <div className="inv-info-box">
                     <div className="inv-info-label" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span>🔗 {accountId.length > 20 ? accountId.slice(0, 10) + "…" + accountId.slice(-6) : accountId}</span>
+                        <span className="inv-wallet-line">
+                            <span className="inv-wallet-dot" />
+                            {accountId.length > 20 ? accountId.slice(0, 10) + "…" + accountId.slice(-6) : accountId}
+                        </span>
                         <button
                             onClick={forceRefresh}
                             disabled={loading}
-                            style={{
-                                padding: "4px 10px",
-                                fontSize: 11,
-                                borderRadius: 8,
-                                border: "1px solid rgba(120,200,255,0.3)",
-                                background: "rgba(120,200,255,0.1)",
-                                color: "#78c8ff",
-                                cursor: loading ? "not-allowed" : "pointer",
-                                opacity: loading ? 0.5 : 1,
-                            }}
+                            className="inv-refresh-btn"
                         >
                             🔄 Обновить
                         </button>
                     </div>
                     {source && (
                         <div
-                            className="inv-info-value"
-                            style={{
-                                marginTop: 4,
-                                color: source.startsWith("✅") ? "#22c55e" : source.startsWith("❌") ? "#ff6b6b" : "#f59e0b"
-                            }}
+                            className={
+                                "inv-info-value" +
+                                (source.startsWith("✅") ? " status-ok" : source.startsWith("❌") ? " status-err" : " status-warn")
+                            }
                         >
                             {source}
                         </div>
@@ -545,16 +554,8 @@ export default function Inventory({ token, onDeckReady }) {
                     {connected && (
                         <button
                             onClick={forceRefresh}
-                            style={{
-                                marginTop: 16,
-                                padding: "10px 20px",
-                                fontSize: 14,
-                                borderRadius: 10,
-                                border: "1px solid rgba(120,200,255,0.4)",
-                                background: "rgba(120,200,255,0.15)",
-                                color: "#78c8ff",
-                                cursor: "pointer",
-                            }}
+                            className="inv-btn inv-btn-secondary"
+                            style={{ marginTop: 16 }}
                         >
                             🔄 Обновить
                         </button>
@@ -564,7 +565,7 @@ export default function Inventory({ token, onDeckReady }) {
 
             {nfts.length > 0 && (
                 <div className="inv-grid-game-style">
-                    {nfts.map(function (n) {
+                    {nfts.map(function (n, i) {
                         var k = nftKey(n);
                         var isSelected = selected.has(k);
                         var pickNo = orderMap.get(k) || 0;
@@ -575,6 +576,7 @@ export default function Inventory({ token, onDeckReady }) {
                                 isSelected={isSelected}
                                 pickNo={pickNo}
                                 onToggle={toggle}
+                                index={i}
                             />
                         );
                     })}
@@ -582,7 +584,7 @@ export default function Inventory({ token, onDeckReady }) {
             )}
 
             {nfts.length > 0 && (
-                <div className="inv-actions">
+                <div className={"inv-actions" + (selected.size === 5 ? " ready" : "")}>
                     <button
                         className="inv-btn inv-btn-secondary"
                         onClick={resetSelection}
@@ -591,11 +593,11 @@ export default function Inventory({ token, onDeckReady }) {
                         Сбросить
                     </button>
                     <button
-                        className="inv-btn inv-btn-primary"
+                        className={"inv-btn inv-btn-primary" + (selected.size === 5 ? " glow-pulse" : "")}
                         disabled={selected.size !== 5 || saving}
                         onClick={saveDeck}
                     >
-                        {saving ? "Сохранение..." : selected.size === 5 ? "Играть! →" : "Выбери " + (5 - selected.size) + " карт"}
+                        {saving ? "Сохранение..." : selected.size === 5 ? "⚔️ Играть!" : "Выбери " + (5 - selected.size) + " карт"}
                     </button>
                 </div>
             )}
