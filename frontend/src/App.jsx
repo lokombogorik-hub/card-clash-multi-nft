@@ -132,7 +132,7 @@ var TOURNAMENTS = [
         prize: "1000 USDT",
         prizePool: ["500 USDT", "300 USDT", "200 USDT"],
         format: "1v1 Single Elimination",
-        avatar: "https://images.unsplash.com/photo-1614680376593-902f74cf0d41?w=200&h=200&fit=crop&crop=face",
+        avatar: "https://bafybeibqzbodfn3xczppxh2k2ek3bgvojhivqy4ntbkprcxesulth3yy5e.ipfs.w3s.link/326.png",
         gradient: ["#667eea", "#764ba2"]
     },
     {
