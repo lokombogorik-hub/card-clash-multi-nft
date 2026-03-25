@@ -11,11 +11,9 @@ import WalletConnectProvider from "./context/WalletConnectContext";
 
 /* ── helpers ── */
 
-// Определяем мобильное устройство
 function useIsMobile() {
     var check = function () {
         if (typeof window === "undefined") return false;
-        // проверяем userAgent + touch + ширину
         var ua = navigator.userAgent || "";
         var mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
         var touch = "ontouchstart" in window || navigator.maxTouchPoints > 0;
@@ -61,36 +59,6 @@ function getStoredToken() {
     try {
         return localStorage.getItem("token") || localStorage.getItem("accessToken") || localStorage.getItem("access_token") || "";
     } catch (_) { return ""; }
-}
-
-/* ── countdown ── */
-function useCountdown(targetDate) {
-    var calc = function () {
-        var diff = new Date(targetDate).getTime() - Date.now();
-        if (diff <= 0) return { d: 0, h: 0, m: 0, s: 0, over: true };
-        var s = Math.floor(diff / 1000);
-        var m = Math.floor(s / 60);
-        var h = Math.floor(m / 60);
-        var d = Math.floor(h / 24);
-        return { d: d, h: h % 24, m: m % 60, s: s % 60, over: false };
-    };
-    var [tick, setTick] = useState(calc);
-    useEffect(function () {
-        var id = setInterval(function () { setTick(calc()); }, 1000);
-        return function () { clearInterval(id); };
-    }, [targetDate]);
-    return tick;
-}
-
-function CountdownBadge({ targetDate }) {
-    var t = useCountdown(targetDate);
-    if (t.over) return <span className="season-sub">Завершён</span>;
-    var parts = [];
-    if (t.d > 0) parts.push(t.d + "д");
-    if (t.h > 0 || t.d > 0) parts.push(t.h + "ч");
-    parts.push((t.m < 10 ? "0" : "") + t.m + "м");
-    parts.push((t.s < 10 ? "0" : "") + t.s + "с");
-    return <span className="season-sub">Осталось: {parts.join(" ")}</span>;
 }
 
 /* ── leaderboard ── */
@@ -152,31 +120,71 @@ function Leaderboard({ token }) {
     );
 }
 
-/* ── season bar ── */
+/* ── tournament data ── */
 var TOURNAMENTS = [
-    { id: 1, title: "Digital Bunny Cup", endDate: "2025-08-01T18:00:00Z", progress: 0.62, status: "active" },
-    { id: 2, title: "Weekly Clash", endDate: "2025-07-21T18:00:00Z", progress: 0.3, status: "upcoming" },
-    { id: 3, title: "Season Finale", endDate: "2025-09-01T00:00:00Z", progress: 0.1, status: "upcoming" },
+    {
+        id: 1,
+        title: "Digital Bunny Cup",
+        subtitle: "Главный турнир сезона",
+        status: "soon",
+        players: 0,
+        maxPlayers: 64,
+        prize: "10 000 USDT",
+        prizePool: ["5000 USDT", "3000 USDT", "2000 USDT"],
+        format: "1v1 Single Elimination",
+        avatar: "https://images.unsplash.com/photo-1614680376593-902f74cf0d41?w=200&h=200&fit=crop&crop=face",
+        gradient: ["#667eea", "#764ba2"]
+    },
+    {
+        id: 2,
+        title: "Weekly Clash",
+        subtitle: "Еженедельные битвы",
+        status: "soon",
+        players: 0,
+        maxPlayers: 32,
+        prize: "500 TON",
+        prizePool: ["250 TON", "150 TON", "100 TON"],
+        format: "1v1 Best of 3",
+        avatar: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&h=200&fit=crop",
+        gradient: ["#f093fb", "#f5576c"]
+    },
+    {
+        id: 3,
+        title: "Season Finale",
+        subtitle: "Финал сезона",
+        status: "soon",
+        players: 0,
+        maxPlayers: 128,
+        prize: "50 NFT + 25K USDT",
+        prizePool: ["10K + 20 NFT", "8K + 15 NFT", "7K + 15 NFT"],
+        format: "1v1 Double Elimination",
+        avatar: "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=200&h=200&fit=crop",
+        gradient: ["#4facfe", "#00f2fe"]
+    }
 ];
 
+/* ── season bar ── */
 function SeasonBar({ onGoTournament }) {
     var [idx, setIdx] = useState(0);
     var t = TOURNAMENTS[idx];
+
     useEffect(function () {
         var id = setInterval(function () { setIdx(function (i) { return (i + 1) % TOURNAMENTS.length; }); }, 4000);
         return function () { clearInterval(id); };
     }, []);
+
     return (
         <div className="season-bar" style={{ cursor: "pointer" }} onClick={onGoTournament}>
+            <div className="season-bar-avatar" style={{ background: "linear-gradient(135deg, " + t.gradient[0] + ", " + t.gradient[1] + ")" }}>
+                <img src={t.avatar} alt={t.title} onError={function (e) { e.target.style.display = "none"; }} />
+            </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="season-title" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    {t.status === "active" && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#4eff91", display: "inline-block", boxShadow: "0 0 6px #4eff91", flexShrink: 0 }} />}
-                    {t.title}
-                </div>
-                <CountdownBadge targetDate={t.endDate} />
+                <div className="season-title">{t.title}</div>
+                <div className="season-sub">{t.subtitle}</div>
             </div>
             <div className="season-right">
-                <div style={{ display: "flex", gap: 5 }}>
+                <div className="season-soon-badge">SOON</div>
+                <div style={{ display: "flex", gap: 5, marginTop: 6 }}>
                     {TOURNAMENTS.map(function (_, i) {
                         return <div key={i} onClick={function (e) { e.stopPropagation(); setIdx(i); }} style={{
                             width: i === idx ? 16 : 6, height: 6, borderRadius: 3,
@@ -185,9 +193,6 @@ function SeasonBar({ onGoTournament }) {
                         }} />;
                     })}
                 </div>
-                <div className="season-progress">
-                    <div className="season-progress-fill" style={{ width: Math.round(t.progress * 100) + "%" }} />
-                </div>
             </div>
         </div>
     );
@@ -195,47 +200,153 @@ function SeasonBar({ onGoTournament }) {
 
 /* ── tournament page ── */
 function TournamentPage() {
-    var tournaments = [
-        { id: 1, title: "Digital Bunny Cup", status: "active", players: 32, maxPlayers: 64, prize: "5 NFT", endDate: "2025-08-01T18:00:00Z" },
-        { id: 2, title: "Weekly Clash", status: "upcoming", players: 0, maxPlayers: 32, prize: "3 NFT", endDate: "2025-07-21T18:00:00Z" },
-        { id: 3, title: "Season Finale", status: "upcoming", players: 0, maxPlayers: 128, prize: "20 NFT", endDate: "2025-09-01T00:00:00Z" },
-    ];
-    var statusLabel = { active: "LIVE", upcoming: "Скоро", ended: "Завершён" };
-    var statusCls = { active: "live", upcoming: "upcoming", ended: "ended" };
+    var [expandedId, setExpandedId] = useState(null);
+
     return (
-        <div className="tournament-page">
-            <div className="tournament-header">
-                <div className="tournament-title"><span className="tournament-title-icon">🏟️</span> Турниры</div>
-                <div className="tournament-subtitle">Участвуй и выигрывай NFT</div>
+        <div className="tournament-page-v2">
+            {/* Header */}
+            <div className="tournament-header-v2">
+                <div className="tournament-header-bg" />
+                <div className="tournament-header-content">
+                    <div className="tournament-header-icon">🏆</div>
+                    <div className="tournament-header-text">
+                        <h1>Турниры</h1>
+                        <p>Участвуй в турнирах и выигрывай призы</p>
+                    </div>
+                </div>
+                <div className="tournament-stats-row">
+                    <div className="tournament-stat-chip">
+                        <span className="stat-chip-icon">🎮</span>
+                        <span>{TOURNAMENTS.length} турниров</span>
+                    </div>
+                    <div className="tournament-stat-chip">
+                        <span className="stat-chip-icon">💎</span>
+                        <span>60K+ призов</span>
+                    </div>
+                </div>
             </div>
-            <div className="tournament-list">
-                {tournaments.map(function (t, i) {
-                    var isActive = t.status === "active";
+
+            {/* Tournament List */}
+            <div className="tournament-list-v2">
+                {TOURNAMENTS.map(function (t, i) {
+                    var isExpanded = expandedId === t.id;
                     return (
-                        <div key={t.id} className={"tournament-card " + t.status} style={{ animationDelay: (i * 0.1) + "s" }}>
-                            <div className="tournament-card-header">
-                                <div className="tournament-card-title">{t.title}</div>
-                                <div className={"tournament-card-badge " + statusCls[t.status]}>{statusLabel[t.status]}</div>
+                        <div
+                            key={t.id}
+                            className={"tournament-card-v2" + (isExpanded ? " expanded" : "")}
+                            style={{ animationDelay: (i * 0.1) + "s" }}
+                            onClick={function () { setExpandedId(isExpanded ? null : t.id); }}
+                        >
+                            {/* Card Glow */}
+                            <div className="tournament-card-glow" style={{ background: "linear-gradient(135deg, " + t.gradient[0] + "40, " + t.gradient[1] + "40)" }} />
+
+                            {/* Main Content */}
+                            <div className="tournament-card-main">
+                                {/* Avatar */}
+                                <div className="tournament-avatar-wrap">
+                                    <div className="tournament-avatar-ring" style={{ background: "linear-gradient(135deg, " + t.gradient[0] + ", " + t.gradient[1] + ")" }}>
+                                        <div className="tournament-avatar">
+                                            <img src={t.avatar} alt={t.title} onError={function (e) { e.target.src = "https://via.placeholder.com/80"; }} />
+                                        </div>
+                                    </div>
+                                    <div className="tournament-avatar-badge">SOON</div>
+                                </div>
+
+                                {/* Info */}
+                                <div className="tournament-card-info">
+                                    <div className="tournament-card-title-row">
+                                        <h3>{t.title}</h3>
+                                    </div>
+                                    <p className="tournament-card-subtitle">{t.subtitle}</p>
+
+                                    {/* Quick Stats */}
+                                    <div className="tournament-quick-stats">
+                                        <div className="quick-stat">
+                                            <span className="quick-stat-icon">👥</span>
+                                            <span>{t.players}/{t.maxPlayers}</span>
+                                        </div>
+                                        <div className="quick-stat">
+                                            <span className="quick-stat-icon">🎯</span>
+                                            <span>{t.format.split(" ")[0]}</span>
+                                        </div>
+                                        <div className="quick-stat prize">
+                                            <span className="quick-stat-icon">💰</span>
+                                            <span>{t.prize}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Expand Arrow */}
+                                <div className={"tournament-expand-arrow" + (isExpanded ? " rotated" : "")}>
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                        <path d="M6 9l6 6 6-6" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                                    </svg>
+                                </div>
                             </div>
-                            <div className="tournament-card-info">
-                                <div className="tournament-card-stat"><div className="tournament-card-stat-value">{t.players}/{t.maxPlayers}</div><div className="tournament-card-stat-label">Игроки</div></div>
-                                <div className="tournament-card-stat"><div className="tournament-card-stat-value">1v1</div><div className="tournament-card-stat-label">Формат</div></div>
-                                <div className="tournament-card-stat"><div className="tournament-card-stat-value"><CountdownBadge targetDate={t.endDate} /></div><div className="tournament-card-stat-label">До конца</div></div>
-                            </div>
-                            <div className="tournament-card-prize"><span className="tournament-card-prize-icon">🎁</span><span className="tournament-card-prize-value">{t.prize}</span><span className="tournament-card-prize-label">Приз</span></div>
-                            <button className={"tournament-join-btn " + (isActive ? "active" : "upcoming")} disabled={!isActive}
-                                onClick={function () { if (isActive) alert("Турнирный режим скоро будет доступен!"); }}>
-                                {isActive ? "Участвовать" : "Скоро"}
-                            </button>
+
+                            {/* Expanded Details */}
+                            {isExpanded && (
+                                <div className="tournament-expanded">
+                                    <div className="tournament-divider" />
+
+                                    {/* Prize Pool */}
+                                    <div className="tournament-prize-section">
+                                        <div className="prize-section-title">Призовой фонд</div>
+                                        <div className="prize-places">
+                                            {t.prizePool.map(function (prize, pi) {
+                                                var placeIcons = ["🥇", "🥈", "🥉"];
+                                                return (
+                                                    <div key={pi} className={"prize-place place-" + (pi + 1)}>
+                                                        <span className="place-icon">{placeIcons[pi]}</span>
+                                                        <span className="place-prize">{prize}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* Format Info */}
+                                    <div className="tournament-format-section">
+                                        <div className="format-item">
+                                            <span className="format-icon">📋</span>
+                                            <span className="format-label">Формат:</span>
+                                            <span className="format-value">{t.format}</span>
+                                        </div>
+                                        <div className="format-item">
+                                            <span className="format-icon">👥</span>
+                                            <span className="format-label">Участники:</span>
+                                            <span className="format-value">до {t.maxPlayers} игроков</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Action Button */}
+                                    <button
+                                        className="tournament-action-btn"
+                                        style={{ background: "linear-gradient(135deg, " + t.gradient[0] + ", " + t.gradient[1] + ")" }}
+                                        onClick={function (e) { e.stopPropagation(); alert("Регистрация скоро откроется!"); }}
+                                    >
+                                        <span className="btn-icon">🔔</span>
+                                        <span>Уведомить о старте</span>
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     );
                 })}
+            </div>
+
+            {/* Bottom Info */}
+            <div className="tournament-bottom-info">
+                <div className="bottom-info-icon">💡</div>
+                <div className="bottom-info-text">
+                    Нажми на турнир, чтобы узнать подробности
+                </div>
             </div>
         </div>
     );
 }
 
-/* ── rotate gate — игра (нужен горизонт) ── */
+/* ── rotate gates ── */
 function RotateGateGame({ onBack }) {
     return (
         <div className="rotate-gate">
@@ -249,17 +360,13 @@ function RotateGateGame({ onBack }) {
     );
 }
 
-/* ── rotate gate — меню (нужна вертикаль) ── */
 function RotateGateMenu() {
     return (
         <div className="rotate-gate" style={{ zIndex: 99999 }}>
             <div className="rotate-gate-box">
                 <div className="rotate-title">Поверни телефон</div>
                 <div className="rotate-subtitle">Меню работает только в вертикальном режиме</div>
-                <div className="rotate-phone" style={{
-                    transform: "rotate(90deg)",
-                    animation: "phoneWiggle 1.4s ease-in-out infinite",
-                }} />
+                <div className="rotate-phone" style={{ transform: "rotate(90deg)", animation: "phoneWiggle 1.4s ease-in-out infinite" }} />
             </div>
         </div>
     );
@@ -343,16 +450,9 @@ function AppContent() {
     };
     var onExitGame = function () { setScreen("home"); setPlayerDeck(null); setStage2MatchId(""); setGameMode("ai"); };
 
-    /*
-     * Логика плашек поворота:
-     * - ПК (!isMobile): никогда не показываем плашки
-     * - Мобилка в игре (screen === "game"): нужен горизонт, если вертикаль — плашка
-     * - Мобилка в меню (screen !== "game"): нужна вертикаль, если горизонт — плашка
-     */
     var showRotateGame = isMobile && screen === "game" && !isLandscape;
     var showRotateMenu = isMobile && screen !== "game" && isLandscape;
 
-    /* ── GAME SCREEN ── */
     if (screen === "game") {
         return (
             <div className="shell">
@@ -369,26 +469,16 @@ function AppContent() {
         );
     }
 
-    /* ── MAIN SHELL ── */
     return (
         <div className="shell">
             <StormBg />
-
-            {/* меню только вертикаль на мобилке */}
             {showRotateMenu && <RotateGateMenu />}
 
             <div className="shell-content">
                 {screen === "home" && (
                     <div className="home-center">
-                        {/* кошелёк — сверху */}
-                        <div className="home-wallet-row">
-                            <WalletConnector />
-                        </div>
-
-                        {/* распорка — толкает лого вниз */}
+                        <div className="home-wallet-row"><WalletConnector /></div>
                         <div className="home-spacer" />
-
-                        {/* лого — над лидербордом */}
                         <div className="home-logo-area">
                             <button className="play-logo" aria-label="Play" onClick={onPlay}>
                                 <div className="logo-wrap">
@@ -403,11 +493,7 @@ function AppContent() {
                                 <span className="play-icon"><PlayIcon /></span>
                             </button>
                         </div>
-
-                        {/* лидерборд — впритык к плашке */}
-                        <div className="home-bottom-area">
-                            <Leaderboard token={token} />
-                        </div>
+                        <div className="home-bottom-area"><Leaderboard token={token} /></div>
                     </div>
                 )}
 
