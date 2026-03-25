@@ -2605,71 +2605,41 @@ img {
     }
 }
 
-/* ── Header ── */
-.tournament-header-v2 {
-    position: relative;
+/* ── Header — как в Market ── */
+.tournament-header {
+    text-align: center;
     padding: 24px 0 16px;
-    margin-bottom: 20px;
-    overflow: hidden;
+    margin-bottom: 16px;
 }
 
-.tournament-header-bg {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.15), rgba(118, 75, 162, 0.15));
-    border-radius: 20px;
-    z-index: 0;
-}
-
-.tournament-header-content {
-    position: relative;
-    z-index: 1;
+.tournament-title {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 900;
+    color: #fff;
     display: flex;
     align-items: center;
-    gap: 16px;
-    padding: 0 16px;
-}
-
-.tournament-header-icon {
-    font-size: 48px;
-    filter: drop-shadow(0 4px 12px rgba(255, 215, 0, 0.4));
-    animation: pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-
-    0%,
-    100% {
-        transform: scale(1);
-    }
-
-    50% {
-        transform: scale(1.05);
-    }
-}
-
-.tournament-header-text h1 {
-    margin: 0;
-    font-size: 28px;
-    font-weight: 800;
-    background: linear-gradient(135deg, #fff, #a8c0ff);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-.tournament-header-text p {
-    margin: 4px 0 0;
-    font-size: 14px;
-    color: rgba(255, 255, 255, 0.6);
-}
-
-.tournament-stats-row {
-    position: relative;
-    z-index: 1;
-    display: flex;
+    justify-content: center;
     gap: 10px;
-    padding: 16px 16px 0;
+}
+
+.tournament-title-icon {
+    font-size: 28px;
+    filter: drop-shadow(0 2px 8px rgba(255, 215, 0, 0.4));
+}
+
+.tournament-subtitle {
+    margin: 8px 0 0;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* ── Stats Row ── */
+.tournament-stats-row {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
 }
 
 .tournament-stat-chip {

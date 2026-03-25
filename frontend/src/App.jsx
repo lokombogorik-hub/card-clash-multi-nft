@@ -204,25 +204,23 @@ function TournamentPage() {
 
     return (
         <div className="tournament-page-v2">
-            {/* Header */}
-            <div className="tournament-header-v2">
-                <div className="tournament-header-bg" />
-                <div className="tournament-header-content">
-                    <div className="tournament-header-icon">🏆</div>
-                    <div className="tournament-header-text">
-                        <h1>Турниры</h1>
-                        <p>Участвуй в турнирах и выигрывай призы</p>
-                    </div>
+            {/* Header — как в Market */}
+            <div className="tournament-header">
+                <h2 className="tournament-title">
+                    <span className="tournament-title-icon">🏆</span>Турниры
+                </h2>
+                <div className="tournament-subtitle">Участвуй в турнирах и выигрывай призы</div>
+            </div>
+
+            {/* Stats chips */}
+            <div className="tournament-stats-row">
+                <div className="tournament-stat-chip">
+                    <span className="stat-chip-icon">🎮</span>
+                    <span>{TOURNAMENTS.length} турниров</span>
                 </div>
-                <div className="tournament-stats-row">
-                    <div className="tournament-stat-chip">
-                        <span className="stat-chip-icon">🎮</span>
-                        <span>{TOURNAMENTS.length} турниров</span>
-                    </div>
-                    <div className="tournament-stat-chip">
-                        <span className="stat-chip-icon">💎</span>
-                        <span>60K+ призов</span>
-                    </div>
+                <div className="tournament-stat-chip">
+                    <span className="stat-chip-icon">💎</span>
+                    <span>60K+ призов</span>
                 </div>
             </div>
 
