@@ -129,8 +129,8 @@ var TOURNAMENTS = [
         status: "soon",
         players: 0,
         maxPlayers: 64,
-        prize: "10 000 USDT",
-        prizePool: ["5000 USDT", "3000 USDT", "2000 USDT"],
+        prize: "1000 USDT",
+        prizePool: ["500 USDT", "300 USDT", "200 USDT"],
         format: "1v1 Single Elimination",
         avatar: "https://images.unsplash.com/photo-1614680376593-902f74cf0d41?w=200&h=200&fit=crop&crop=face",
         gradient: ["#667eea", "#764ba2"]
@@ -142,8 +142,8 @@ var TOURNAMENTS = [
         status: "soon",
         players: 0,
         maxPlayers: 32,
-        prize: "500 TON",
-        prizePool: ["250 TON", "150 TON", "100 TON"],
+        prize: "50 NEAR",
+        prizePool: ["25 NEAR", "15 NEAR", "10 NEAR"],
         format: "1v1 Best of 3",
         avatar: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&h=200&fit=crop",
         gradient: ["#f093fb", "#f5576c"]
@@ -155,8 +155,8 @@ var TOURNAMENTS = [
         status: "soon",
         players: 0,
         maxPlayers: 128,
-        prize: "50 NFT + 25K USDT",
-        prizePool: ["10K + 20 NFT", "8K + 15 NFT", "7K + 15 NFT"],
+        prize: "17 NFT + 250 USDT",
+        prizePool: ["100 USDT + 10 NFT", "80 USDT + 5 NFT", "70 USDT + 2 NFT"],
         format: "1v1 Double Elimination",
         avatar: "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=200&h=200&fit=crop",
         gradient: ["#4facfe", "#00f2fe"]
@@ -216,11 +216,11 @@ function TournamentPage() {
             <div className="tournament-stats-row">
                 <div className="tournament-stat-chip">
                     <span className="stat-chip-icon">🎮</span>
-                    <span>{TOURNAMENTS.length} турниров</span>
+                    <span>{TOURNAMENTS.length} турнира</span>
                 </div>
                 <div className="tournament-stat-chip">
                     <span className="stat-chip-icon">💎</span>
-                    <span>60K+ призов</span>
+                    <span>Много призов</span>
                 </div>
             </div>
 
