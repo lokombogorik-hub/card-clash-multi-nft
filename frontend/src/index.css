@@ -1581,217 +1581,371 @@ img {
    Card Clash — index-pages.css  (Pages + Responsive)
    ========================================================= */
 
-/* === INVENTORY === */
-.inventory-page {
-    padding: 16px;
-    max-width: 1400px;
-    margin: 0 auto;
-    overflow-x: hidden;
-    overflow-y: auto
+/* ═══════════════════════════════════════════════════
+   INVENTORY — улучшенные стили
+   Только визуал, layout карт не меняется
+   ═══════════════════════════════════════════════════ */
+
+/* --- Keyframes --- */
+@keyframes inv-fadeUp {
+    from {
+        opacity: 0;
+        transform: translateY(18px) scale(0.96);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }
 
+@keyframes inv-pickPop {
+    0% {
+        transform: scale(0) rotate(-12deg);
+    }
+
+    55% {
+        transform: scale(1.25) rotate(3deg);
+    }
+
+    100% {
+        transform: scale(1) rotate(0);
+    }
+}
+
+@keyframes inv-glowPulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+    }
+
+    50% {
+        box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+    }
+}
+
+@keyframes inv-borderGlow {
+
+    0%,
+    100% {
+        opacity: 0.4;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}
+
+@keyframes inv-holoShift {
+    0% {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+@keyframes inv-floatY {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-4px);
+    }
+}
+
+@keyframes inv-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes inv-shimmer {
+    0% {
+        left: -100%;
+    }
+
+    100% {
+        left: 200%;
+    }
+}
+
+/* --- Scrollbar --- */
+.inventory-page {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(120, 200, 255, 0.1) transparent;
+}
+
+.inventory-page::-webkit-scrollbar {
+    width: 5px;
+}
+
+.inventory-page::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.inventory-page::-webkit-scrollbar-thumb {
+    background: rgba(120, 200, 255, 0.1);
+    border-radius: 3px;
+}
+
+/* --- Header --- */
 .inv-header {
-    margin-bottom: 20px;
-    text-align: center
+    text-align: center;
+    padding: 28px 16px 10px;
 }
 
 .inv-title {
+    font-size: 26px;
+    font-weight: 800;
+    color: #e2e8f0;
+    margin: 0 0 6px;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
-    font-size: clamp(20px, 5vw, 28px);
-    font-weight: 900;
-    margin: 0 0 8px;
-    color: #fff
+    gap: 10px;
+    letter-spacing: -0.3px;
 }
 
 .inv-title-icon {
-    font-size: clamp(24px, 6vw, 32px)
+    font-size: 28px;
+    display: inline-block;
+    animation: inv-floatY 3s ease-in-out infinite;
 }
 
 .inv-subtitle {
     font-size: 14px;
-    opacity: .85;
-    color: #a0d8ff
+    color: #64748b;
+    letter-spacing: 0.3px;
 }
 
+/* --- Info box --- */
 .inv-info-box {
-    background: rgba(120, 200, 255, .08);
-    border: 1px solid rgba(120, 200, 255, .2);
-    border-radius: 12px;
-    padding: 12px 16px;
-    margin-bottom: 20px;
-    font-size: 12px;
-    line-height: 1.4
+    margin: 10px 16px 12px;
+    padding: 12px 14px;
+    background: rgba(15, 23, 42, 0.55);
+    border: 1px solid rgba(120, 200, 255, 0.08);
+    border-radius: 14px;
+    backdrop-filter: blur(8px);
+    transition: border-color 0.3s;
+}
+
+.inv-info-box:hover {
+    border-color: rgba(120, 200, 255, 0.15);
 }
 
 .inv-info-label {
-    font-weight: 700;
-    margin-bottom: 4px;
-    color: #a0d8ff
+    font-size: 13px;
+    color: #94a3b8;
 }
 
 .inv-info-value {
-    font-family: monospace;
-    opacity: .9;
-    color: #fff
+    margin-top: 6px;
+    font-size: 12px;
+    font-weight: 600;
 }
 
+/* --- Error --- */
 .inv-error {
-    background: rgba(255, 80, 80, .15);
-    border: 1px solid rgba(255, 80, 80, .3);
+    margin: 8px 16px;
+    padding: 10px 14px;
     border-radius: 12px;
-    padding: 12px 16px;
-    margin-bottom: 20px;
-    color: #ffb3b3;
-    font-size: 13px
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    font-size: 13px;
+    font-weight: 500;
+    backdrop-filter: blur(4px);
 }
 
+/* --- Loading --- */
 .inv-loading {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: 16px;
-    padding: 60px 20px;
-    opacity: .85
+    gap: 14px;
+    padding: 52px 16px;
+    color: #94a3b8;
+    font-size: 15px;
 }
 
 .inv-loading-spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid rgba(120, 200, 255, .2);
+    width: 36px;
+    height: 36px;
+    border: 3px solid rgba(120, 200, 255, 0.1);
     border-top-color: #78c8ff;
     border-radius: 50%;
-    animation: spin .8s linear infinite
+    animation: inv-spin 0.75s linear infinite;
 }
 
+/* --- Empty --- */
 .inv-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    padding: 80px 20px;
-    text-align: center
+    text-align: center;
+    padding: 52px 16px;
+    color: #64748b;
 }
 
 .inv-empty-icon {
-    font-size: 64px;
-    opacity: .6
+    font-size: 52px;
+    margin-bottom: 14px;
+    animation: inv-floatY 3s ease-in-out infinite;
 }
 
 .inv-empty-title {
     font-size: 20px;
     font-weight: 700;
-    color: #fff
+    color: #94a3b8;
+    margin-bottom: 6px;
 }
 
 .inv-empty-text {
     font-size: 14px;
-    opacity: .75;
-    max-width: 320px
+    max-width: 300px;
+    margin: 0 auto;
+    line-height: 1.5;
 }
 
+/* ═══════════════════════════════════════════════
+   GRID
+   ═══════════════════════════════════════════════ */
 .inv-grid-game-style {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 14px;
-    margin-bottom: 24px
+    padding: 8px 16px 24px;
 }
 
-.inv-actions {
-    display: flex;
-    gap: 12px;
-    justify-content: center;
-    flex-wrap: wrap;
-    padding: 16px 0
+@media (min-width: 640px) {
+    .inv-grid-game-style {
+        grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+        gap: 16px;
+    }
 }
 
-.inv-btn {
-    padding: 14px 28px;
-    border-radius: 14px;
-    font-size: 15px;
-    font-weight: 700;
-    border: none;
-    cursor: pointer;
-    transition: opacity .2s
-}
-
-.inv-btn-primary {
-    background: linear-gradient(135deg, #78c8ff 0%, #5096ff 100%);
-    color: #000
-}
-
-.inv-btn-primary:disabled {
-    opacity: .5;
-    cursor: not-allowed
-}
-
-.inv-btn-secondary {
-    background: rgba(255, 255, 255, .1);
-    color: #fff;
-    border: 1px solid rgba(255, 255, 255, .2)
-}
-
-.inv-btn-secondary:disabled {
-    opacity: .4;
-    cursor: not-allowed
-}
-
-/* Inventory card */
+/* ═══════════════════════════════════════════════
+   CARD
+   ═══════════════════════════════════════════════ */
 .inv-card-game {
-    --rank: rgba(255, 255, 255, .18);
-    --rankGlow: rgba(120, 200, 255, .25);
     position: relative;
-    aspect-ratio: 2.5/3.5;
+    aspect-ratio: 3 / 4;
     border-radius: 14px;
+    border: 2px solid var(--rank, #6b7280);
+    background: linear-gradient(160deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.90));
     overflow: hidden;
     cursor: pointer;
     padding: 0;
-    border: 2px solid var(--rank);
-    background: #0a0e1a;
-    contain: layout style paint;
-    transition: border-color .15s, transform .15s
+    font: inherit;
+    text-align: left;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+
+    /* Плавные переходы */
+    transition:
+        transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+        box-shadow 0.3s ease,
+        border-color 0.3s ease;
+
+    /* Каскадное появление */
+    animation: inv-fadeUp 0.4s ease-out both;
 }
 
+/* Внутреннее свечение по рамке */
+.inv-card-game::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 12px;
+    box-shadow: inset 0 0 20px var(--rankGlow, transparent);
+    pointer-events: none;
+    opacity: 0.3;
+    transition: opacity 0.3s;
+    z-index: 3;
+}
+
+/* Shimmer-полоска на ховере */
+.inv-card-game::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(90deg,
+            transparent,
+            rgba(255, 255, 255, 0.06),
+            transparent);
+    pointer-events: none;
+    z-index: 4;
+    transition: none;
+}
+
+.inv-card-game:hover::after {
+    animation: inv-shimmer 0.7s ease-out;
+}
+
+/* Hover */
 .inv-card-game:hover {
-    transform: translateY(-4px);
-    border-color: rgba(120, 200, 255, .5)
+    transform: translateY(-7px) scale(1.04);
+    box-shadow:
+        0 16px 40px rgba(0, 0, 0, 0.5),
+        0 0 28px var(--rankGlow, transparent);
+    z-index: 10;
 }
 
+.inv-card-game:hover::before {
+    opacity: 0.6;
+}
+
+/* Active/tap */
+.inv-card-game:active {
+    transform: translateY(-2px) scale(0.97);
+    transition-duration: 0.1s;
+}
+
+/* --- Selected --- */
 .inv-card-game.is-selected {
-    border-color: #78c8ff;
-    transform: translateY(-4px);
-    box-shadow: 0 0 16px rgba(120, 200, 255, .35)
+    border-color: #22c55e;
+    box-shadow:
+        0 0 0 3px rgba(34, 197, 94, 0.22),
+        0 10px 30px rgba(34, 197, 94, 0.15);
 }
 
+.inv-card-game.is-selected::before {
+    box-shadow: inset 0 0 24px rgba(34, 197, 94, 0.2);
+    opacity: 0.5;
+}
+
+/* ═══════════════════════════════════════════════
+   CARD INTERNALS — позиции НЕ ТРОГАЕМ
+   Только улучшаем визуал (тени, фон, переходы)
+   ═══════════════════════════════════════════════ */
+
+/* Art */
 .inv-card-art-full {
     position: absolute;
     inset: 0;
-    z-index: 1;
-    overflow: hidden;
-    border-radius: inherit
+    z-index: 0;
 }
 
-.inv-card-art-full img,
 .inv-card-img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    object-position: center;
-    display: block;
-    border-radius: inherit
-}
-
-.inv-card-img {
     opacity: 0;
-    transition: opacity .15s
+    transition: opacity 0.5s ease;
 }
 
 .inv-card-img.loaded {
-    opacity: 1
+    opacity: 1;
 }
 
 .inv-card-placeholder {
@@ -1800,47 +1954,138 @@ img {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, #2d1b4e 0%, #1a0f2e 100%);
-    border-radius: inherit;
-    font-size: 32px;
-    opacity: .5
+    background: rgba(30, 41, 59, 0.85);
+    font-size: 34px;
 }
 
-/* Pick badge */
+/* Element pill — позиция оригинальная, только красивее */
+.inv-card-elem-pill {
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(6px);
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s;
+}
+
+.inv-card-game:hover .inv-card-elem-pill {
+    transform: scale(1.12);
+    background: rgba(0, 0, 0, 0.65);
+}
+
+/* Stats numbers — позиция не трогается, улучшаем читаемость */
+.inv-tt-num {
+    text-shadow:
+        0 0 8px rgba(0, 0, 0, 1),
+        0 0 4px rgba(0, 0, 0, 0.9),
+        0 1px 3px rgba(0, 0, 0, 0.8) !important;
+    transition: transform 0.2s;
+}
+
+.inv-card-game:hover .inv-tt-num {
+    transform: scale(1.08);
+}
+
+/* Pick badge — позиция оригинальная, добавляем анимацию */
 .inv-pick-badge {
-    position: absolute;
-    right: 4px;
-    bottom: 4px;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    z-index: 9;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, #78c8ff, #ff3df2);
-    animation: inv-badge-appear 180ms ease-out both
-}
-
-.inv-pick-badge-inner {
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, .7)
-}
-
-.inv-pick-check {
-    display: none
+    animation: inv-pickPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 2px 12px rgba(34, 197, 94, 0.4);
+    background: linear-gradient(135deg, #22c55e, #16a34a) !important;
 }
 
 .inv-pick-no {
-    font-weight: 900;
-    font-size: 11px;
-    line-height: 1;
-    color: #fff
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* ═══════════════════════════════════════════════
+   ACTIONS
+   ═══════════════════════════════════════════════ */
+.inv-actions {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    padding: 18px 16px 24px;
+    background: linear-gradient(transparent 0%, rgba(2, 6, 23, 0.97) 40%);
+    backdrop-filter: blur(10px);
+    z-index: 20;
+}
+
+.inv-btn {
+    padding: 12px 26px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    letter-spacing: 0.2px;
+    transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.inv-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* Primary */
+.inv-btn-primary {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: #fff;
+    box-shadow: 0 4px 18px rgba(59, 130, 246, 0.25);
+}
+
+.inv-btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 8px 28px rgba(59, 130, 246, 0.35);
+}
+
+.inv-btn-primary:active:not(:disabled) {
+    transform: translateY(0) scale(0.98);
+    transition-duration: 0.1s;
+}
+
+/* Когда 5 карт выбраны — кнопка пульсирует зелёным */
+.inv-btn-primary:not(:disabled)[class*="primary"] {
+    /* Подхватывается когда selected.size === 5 через текст кнопки */
+}
+
+/* Secondary */
+.inv-btn-secondary {
+    background: rgba(100, 116, 139, 0.1);
+    border: 1px solid rgba(100, 116, 139, 0.2) !important;
+    color: #94a3b8;
+}
+
+.inv-btn-secondary:hover:not(:disabled) {
+    background: rgba(100, 116, 139, 0.2);
+    color: #e2e8f0;
+    transform: translateY(-1px);
+    border-color: rgba(100, 116, 139, 0.35) !important;
+}
+
+/* ═══════════════════════════════════════════════
+   Reduced motion
+   ═══════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+
+    .inv-card-game,
+    .inv-pick-badge,
+    .inv-title-icon,
+    .inv-empty-icon,
+    .inv-loading-spinner {
+        animation: none !important;
+    }
+
+    .inv-card-game {
+        transition-duration: 0.01s !important;
+    }
+
+    .inv-card-game::after {
+        display: none;
+    }
 }
 
 /* === MATCHMAKING === */
