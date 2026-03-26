@@ -3,6 +3,22 @@ import { apiFetch } from "../api";
 import { useWalletConnect } from "../context/WalletConnectContext";
 import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from "../libs/nearNft";
 
+// Миграция: сбросить старые статы чтобы пересчитать с Ace
+(function migrateAce() {
+    try {
+        if (localStorage.getItem("cc_ace_migrated_v2")) return;
+        var keys = Object.keys(localStorage);
+        for (var i = 0; i < keys.length; i++) {
+            if (keys[i].startsWith("cc_card_")) {
+                localStorage.removeItem(keys[i]);
+            }
+        }
+        localStorage.setItem("cc_ace_migrated_v2", "1");
+    } catch (e) { }
+})();
+
+var ACE_VALUE = 10;
+
 function nftKey(n) {
     if (n.key) return n.key;
     if (n.chain && n.contractId && n.tokenId) return n.chain + ":" + n.contractId + ":" + n.tokenId;
@@ -81,7 +97,9 @@ function genStats(tokenId, rarity) {
     var stored = getStoredCardData(tokenId);
     if (stored && stored.stats && typeof stored.stats.top === "number") {
         var s = stored.stats;
-        if (s.top <= 9 && s.right <= 9 && s.bottom <= 9 && s.left <= 9) {
+        // Принимаем значения до 10 (Ace)
+        if (s.top <= 10 && s.right <= 10 && s.bottom <= 10 && s.left <= 10 &&
+            s.top >= 1 && s.right >= 1 && s.bottom >= 1 && s.left >= 1) {
             return s;
         }
     }
@@ -98,6 +116,20 @@ function genStats(tokenId, rarity) {
         bottom: Math.min(9, Math.max(1, Math.floor(rng() * (max - min + 1)) + min)),
         left: Math.min(9, Math.max(1, Math.floor(rng() * (max - min + 1)) + min))
     };
+
+    // Ace для legendary (40%) и epic (15%)
+    var aceChance = 0;
+    if (rarity.key === "legendary") aceChance = 0.4;
+    else if (rarity.key === "epic") aceChance = 0.15;
+
+    if (aceChance > 0) {
+        var aceRng = mulberry32(createSeed(tokenId, "ace_v1"));
+        if (aceRng() < aceChance) {
+            var sides = ["top", "right", "bottom", "left"];
+            var aceSide = sides[Math.floor(aceRng() * sides.length)];
+            stats[aceSide] = ACE_VALUE;
+        }
+    }
 
     var data = stored || {};
     data.stats = stats;
@@ -125,13 +157,24 @@ function genElement(tokenId) {
     return element;
 }
 
+/** Отображение значения: 10 → "A", остальное как есть */
+function displayStatValue(val) {
+    if (val === ACE_VALUE) return "A";
+    return val;
+}
+
+/** Стиль для значения: Ace — золотой */
+function statStyle(val) {
+    if (val === ACE_VALUE) return { color: "#ffd700", fontWeight: 900, textShadow: "0 0 6px rgba(255,215,0,0.6)" };
+    return undefined;
+}
+
 var nftCache = {
     accountId: null,
     items: [],
     timestamp: 0
 };
 
-// Функция для инвалидации кэша (вызывается после escrow)
 export function invalidateNftCache() {
     nftCache.accountId = null;
     nftCache.items = [];
@@ -140,7 +183,6 @@ export function invalidateNftCache() {
 
 var imageCache = new Map();
 
-// Оптимизированный NftImage — без лишних эффектов
 var NftImage = memo(function NftImage({ src, originalSrc, alt, cacheKey }) {
     var cached = imageCache.get(cacheKey);
     var [loaded, setLoaded] = useState(cached ? true : false);
@@ -185,7 +227,6 @@ var NftImage = memo(function NftImage({ src, originalSrc, alt, cacheKey }) {
     return prev.cacheKey === next.cacheKey;
 });
 
-// КЛЮЧЕВАЯ ОПТИМИЗАЦИЯ: memo с правильным сравнением
 var InventoryCard = memo(function InventoryCard({
     nft,
     isSelected,
@@ -197,10 +238,10 @@ var InventoryCard = memo(function InventoryCard({
     var stats = useMemo(function () {
         var s = nft.stats || { top: 5, right: 5, bottom: 5, left: 5 };
         return {
-            top: Math.min(9, Math.max(1, s.top || 5)),
-            right: Math.min(9, Math.max(1, s.right || 5)),
-            bottom: Math.min(9, Math.max(1, s.bottom || 5)),
-            left: Math.min(9, Math.max(1, s.left || 5))
+            top: s.top === ACE_VALUE ? ACE_VALUE : Math.min(9, Math.max(1, s.top || 5)),
+            right: s.right === ACE_VALUE ? ACE_VALUE : Math.min(9, Math.max(1, s.right || 5)),
+            bottom: s.bottom === ACE_VALUE ? ACE_VALUE : Math.min(9, Math.max(1, s.bottom || 5)),
+            left: s.left === ACE_VALUE ? ACE_VALUE : Math.min(9, Math.max(1, s.left || 5))
         };
     }, [nft.stats]);
 
@@ -242,10 +283,18 @@ var InventoryCard = memo(function InventoryCard({
             </div>
 
             <div className="inv-tt-badge">
-                <span className="inv-tt-num top">{stats.top}</span>
-                <span className="inv-tt-num left">{stats.left}</span>
-                <span className="inv-tt-num right">{stats.right}</span>
-                <span className="inv-tt-num bottom">{stats.bottom}</span>
+                <span className="inv-tt-num top" style={statStyle(stats.top)}>
+                    {displayStatValue(stats.top)}
+                </span>
+                <span className="inv-tt-num left" style={statStyle(stats.left)}>
+                    {displayStatValue(stats.left)}
+                </span>
+                <span className="inv-tt-num right" style={statStyle(stats.right)}>
+                    {displayStatValue(stats.right)}
+                </span>
+                <span className="inv-tt-num bottom" style={statStyle(stats.bottom)}>
+                    {displayStatValue(stats.bottom)}
+                </span>
             </div>
 
             {isSelected && (
@@ -256,13 +305,13 @@ var InventoryCard = memo(function InventoryCard({
         </button>
     );
 }, function (prev, next) {
-    // Перерендерим ТОЛЬКО если изменились важные props
     return (
         prev.isSelected === next.isSelected &&
         prev.pickNo === next.pickNo &&
         nftKey(prev.nft) === nftKey(next.nft)
     );
 });
+
 export default function Inventory({ token, onDeckReady }) {
     var ctx = useWalletConnect();
     var accountId = ctx.accountId;
@@ -278,12 +327,10 @@ export default function Inventory({ token, onDeckReady }) {
 
     var nftContractId = (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim();
 
-    // Оптимизация: стабильный массив ключей
     var selectedArr = useMemo(function () {
         return Array.from(selected);
     }, [selected]);
 
-    // Оптимизация: Map создаётся только при изменении selected
     var orderMap = useMemo(function () {
         var m = new Map();
         selectedArr.forEach(function (k, i) { m.set(k, i + 1); });
@@ -296,11 +343,9 @@ export default function Inventory({ token, onDeckReady }) {
         }).filter(Boolean);
     }, [selectedArr, nfts]);
 
-    // Auto-refresh при возврате на страницу (после escrow refund)
     useEffect(function () {
         var handleVisibilityChange = function () {
             if (document.visibilityState === 'visible' && connected && accountId) {
-                // Инвалидируем кэш при возврате если прошло больше 10 секунд
                 var now = Date.now();
                 if (nftCache.timestamp && (now - nftCache.timestamp) > 10000) {
                     nftCache.timestamp = 0;
@@ -316,7 +361,6 @@ export default function Inventory({ token, onDeckReady }) {
         };
     }, [connected, accountId]);
 
-    // Функция для принудительного обновления
     var forceRefresh = useCallback(function () {
         invalidateNftCache();
         setRefreshKey(function (k) { return k + 1; });
@@ -399,7 +443,6 @@ export default function Inventory({ token, onDeckReady }) {
         return function () { alive = false; };
     }, [token, accountId, connected, nftContractId, refreshKey]);
 
-    // Стабильная функция toggle
     var toggle = useCallback(function (k) {
         setSelected(function (prev) {
             var next = new Set(prev);
@@ -422,11 +465,14 @@ export default function Inventory({ token, onDeckReady }) {
         try {
             var cardsPayload = selectedNfts.map(function (nft) {
                 var elem = nft.element || genElement(nft.tokenId || nft.token_id || nft.id);
+                var rawStats = nft.stats || { top: 5, right: 5, bottom: 5, left: 5 };
+
+                // Сохраняем Ace (10) как есть, остальное clamp 1-9
                 var safeStats = {
-                    top: Math.min(9, Math.max(1, (nft.stats && nft.stats.top) || 5)),
-                    right: Math.min(9, Math.max(1, (nft.stats && nft.stats.right) || 5)),
-                    bottom: Math.min(9, Math.max(1, (nft.stats && nft.stats.bottom) || 5)),
-                    left: Math.min(9, Math.max(1, (nft.stats && nft.stats.left) || 5))
+                    top: rawStats.top === ACE_VALUE ? ACE_VALUE : Math.min(9, Math.max(1, rawStats.top || 5)),
+                    right: rawStats.right === ACE_VALUE ? ACE_VALUE : Math.min(9, Math.max(1, rawStats.right || 5)),
+                    bottom: rawStats.bottom === ACE_VALUE ? ACE_VALUE : Math.min(9, Math.max(1, rawStats.bottom || 5)),
+                    left: rawStats.left === ACE_VALUE ? ACE_VALUE : Math.min(9, Math.max(1, rawStats.left || 5))
                 };
 
                 return {
