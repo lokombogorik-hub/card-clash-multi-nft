@@ -2048,9 +2048,9 @@ img {
 }
 
 /* Когда 5 карт выбраны — кнопка пульсирует зелёным */
-.inv-btn-primary:not(:disabled)[class*="primary"] {
-    /* Подхватывается когда selected.size === 5 через текст кнопки */
-}
+.inv-btn-primary:not(:disabled)[class*="primary"]
+/* Подхватывается когда selected.size === 5 через текст кнопки */
+
 
 /* Secondary */
 .inv-btn-secondary {

@@ -3,6 +3,10 @@ import confetti from "canvas-confetti";
 import { apiFetch } from "./api.js";
 import { useWalletConnect } from "./context/WalletConnectContext";
 
+/* ═══════════════════════════════════════════════
+   CONSTANTS
+   ═══════════════════════════════════════════════ */
+
 const DIRS = [
     { dx: 0, dy: -1, a: "top", b: "bottom" },
     { dx: 1, dy: 0, a: "right", b: "left" },
@@ -10,10 +14,8 @@ const DIRS = [
     { dx: -1, dy: 0, a: "left", b: "right" },
 ];
 
+// Убраны same, plus, combo — остаётся только прямой захват крестом
 const RULES = {
-    same: true,
-    plus: true,
-    combo: true,
     elementalSquares: true,
     elementalBattle: true,
 };
@@ -56,20 +58,27 @@ const BEATS = {
     Holy: ["Earth"],
 };
 
+// Ace value — выше любой цифры (внутренне = 10)
+const ACE_VALUE = 10;
+
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const randInt = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
 const pick = (arr) => arr[(Math.random() * arr.length) | 0];
 const randomFirstTurn = () => (Math.random() < 0.5 ? "player" : "enemy");
 
 const RANKS = [
-    { key: "common", label: "C", weight: 50, min: 1, max: 5, elemChance: 1.0 },
-    { key: "rare", label: "R", weight: 30, min: 2, max: 7, elemChance: 1.0 },
-    { key: "epic", label: "E", weight: 15, min: 3, max: 8, elemChance: 1.0 },
-    { key: "legendary", label: "L", weight: 5, min: 4, max: 9, elemChance: 1.0 },
+    { key: "common", label: "C", weight: 50, min: 1, max: 5, elemChance: 1.0, aceChance: 0 },
+    { key: "rare", label: "R", weight: 30, min: 2, max: 7, elemChance: 1.0, aceChance: 0 },
+    { key: "epic", label: "E", weight: 15, min: 3, max: 8, elemChance: 1.0, aceChance: 0.15 },
+    { key: "legendary", label: "L", weight: 5, min: 4, max: 9, elemChance: 1.0, aceChance: 0.4 },
 ];
 
 const FREEZE_DURATION_MOVES = 2;
 const REVEAL_MS = 3000;
+
+/* ═══════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════ */
 
 function weightedPick(defs) {
     const total = defs.reduce((s, d) => s + d.weight, 0);
@@ -81,6 +90,26 @@ function weightedPick(defs) {
     return defs[defs.length - 1];
 }
 
+/**
+ * Проверяет, является ли значение стороны Ace.
+ * Ace хранится как ACE_VALUE (10) внутри values.
+ */
+function isAce(val) {
+    return val === ACE_VALUE;
+}
+
+/**
+ * Отображаемое значение: "A" для Ace, цифра для остальных
+ */
+function displayVal(val) {
+    if (isAce(val)) return "A";
+    return val;
+}
+
+/**
+ * Генерация карты. Для legendary/epic есть шанс получить Ace (значение A)
+ * на одну из сторон. Ace = 10 внутри, отображается как "A".
+ */
 function genCard(owner, id) {
     const r = weightedPick(RANKS);
     const maxVal = Math.min(r.max, 9);
@@ -92,6 +121,13 @@ function genCard(owner, id) {
         bottom: randInt(minVal, maxVal),
         left: randInt(minVal, maxVal),
     };
+
+    // Шанс на Ace для одной случайной стороны
+    if (r.aceChance > 0 && Math.random() < r.aceChance) {
+        const sides = ["top", "right", "bottom", "left"];
+        const aceSide = pick(sides);
+        values[aceSide] = ACE_VALUE;
+    }
 
     const element = pick(ELEMENTS);
 
@@ -147,109 +183,85 @@ function battleElementDelta(attackerElement, defenderElement) {
     return 0;
 }
 
-function valueForSamePlus(card, side, idx, boardElems) {
+/**
+ * Эффективное значение стороны для боя.
+ * Ace (10) НЕ меняется от элементальных бонусов.
+ * Обычные значения (1-9) модифицируются, но 9 не становится A.
+ */
+function getEffectiveValue(card, side, cellIdx, boardElems, opponentCard) {
     const base = card.values[side];
-    const d = squareDelta(card.element, boardElems[idx]);
-    return clamp(base + d, 1, 9);
+
+    // Ace не меняется ни от чего
+    if (isAce(base)) return ACE_VALUE;
+
+    // Square bonus (элемент клетки)
+    const sqDelta = squareDelta(card.element, boardElems[cellIdx]);
+
+    // Battle element bonus (элемент противника)
+    const elDelta = opponentCard
+        ? battleElementDelta(card.element, opponentCard.element)
+        : 0;
+
+    // Clamp 1-9, НЕ может стать 10 (Ace)
+    return clamp(base + sqDelta + elDelta, 1, 9);
 }
 
-function attackerValueForBattle(attacker, side, aIdx, defender, boardElems) {
-    const base = valueForSamePlus(attacker, side, aIdx, boardElems);
-    const ed = battleElementDelta(attacker.element, defender.element);
-    return clamp(base + ed, 1, 9);
-}
-
-function resolvePlacementTT(placedIdx, grid, boardElems) {
+/**
+ * ОСНОВНАЯ ЛОГИКА ЗАХВАТА.
+ * 
+ * Правила:
+ * - Только крестом (4 стороны от положенной карты)
+ * - Только прямой захват — БЕЗ цепочек
+ * - Захват если атакующее значение СТРОГО БОЛЬШЕ защитного
+ * - Ace (A=10) бьёт всё, не меняется от бонусов
+ */
+function resolvePlacement(placedIdx, grid, boardElems) {
     const placed = grid[placedIdx];
-    if (!placed) return { flippedAll: [], flippedSpecial: [] };
+    if (!placed) return [];
 
-    const adj = neighborsOf(placedIdx)
-        .map(({ ni, a, b }) => {
-            const t = grid[ni];
-            if (!t) return null;
-
-            const pSP = valueForSamePlus(placed, a, placedIdx, boardElems);
-            const tSP = valueForSamePlus(t, b, ni, boardElems);
-            const sum = pSP + tSP;
-            const pBattle = attackerValueForBattle(placed, a, placedIdx, t, boardElems);
-
-            return { ni, a, b, target: t, pSP, tSP, sum, pBattle };
-        })
-        .filter(Boolean);
-
-    const basicSet = new Set();
-    const sameSet = new Set();
-    const plusSet = new Set();
-
-    for (const i of adj) {
-        if (i.target.owner !== placed.owner && i.pBattle > i.tSP) basicSet.add(i.ni);
-    }
-
-    if (RULES.same) {
-        const eq = adj.filter((i) => i.pSP === i.tSP);
-        if (eq.length >= 2) eq.forEach((i) => sameSet.add(i.ni));
-    }
-
-    if (RULES.plus) {
-        const groups = new Map();
-        for (const i of adj) {
-            const arr = groups.get(i.sum) || [];
-            arr.push(i);
-            groups.set(i.sum, arr);
-        }
-        for (const [, arr] of groups) if (arr.length >= 2) arr.forEach((i) => plusSet.add(i.ni));
-    }
-
-    const specialSet = new Set([...sameSet, ...plusSet]);
-    const toFlip = new Set([...basicSet, ...specialSet]);
-
-    const flippedAll = [];
-    const flippedSpecial = [];
-
-    for (const ni of toFlip) {
-        if (flipToOwner(grid, ni, placed.owner)) {
-            flippedAll.push(ni);
-            if (specialSet.has(ni)) flippedSpecial.push(ni);
-        }
-    }
-
-    return { flippedAll, flippedSpecial };
-}
-
-function captureByPowerFrom(idx, grid, boardElems) {
-    const src = grid[idx];
-    if (!src) return [];
     const flipped = [];
+    const neighbors = neighborsOf(placedIdx);
 
-    for (const { ni, a, b } of neighborsOf(idx)) {
-        const t = grid[ni];
-        if (!t) continue;
-        if (t.owner === src.owner) continue;
+    for (const { ni, a, b } of neighbors) {
+        const target = grid[ni];
+        if (!target) continue;
+        if (target.owner === placed.owner) continue;
 
-        const atk = attackerValueForBattle(src, a, idx, t, boardElems);
-        const def = valueForSamePlus(t, b, ni, boardElems);
+        // Значение атакующей стороны положенной карты
+        const attackVal = getEffectiveValue(placed, a, placedIdx, boardElems, target);
 
-        if (atk > def) {
-            if (flipToOwner(grid, ni, src.owner)) flipped.push(ni);
+        // Значение защитной стороны целевой карты
+        const defendVal = getEffectiveValue(target, b, ni, boardElems, placed);
+
+        // Строго больше — захват
+        if (attackVal > defendVal) {
+            if (flipToOwner(grid, ni, placed.owner)) {
+                flipped.push(ni);
+            }
         }
     }
+
     return flipped;
 }
 
-function resolveCombo(queue, grid, boardElems) {
-    if (!RULES.combo) return;
-    const q = [...queue];
-    while (q.length) {
-        const idx = q.shift();
-        const more = captureByPowerFrom(idx, grid, boardElems);
-        if (more.length) q.push(...more);
-    }
+/**
+ * Значение для отображения на карте (с учётом элемента клетки).
+ * Ace не меняется.
+ */
+function getDisplayValueForCard(card, side, cellElement) {
+    const base = card.values[side];
+    if (isAce(base)) return ACE_VALUE; // Ace не меняется
+
+    if (!card.element || !cellElement) return base;
+
+    const delta = card.element === cellElement ? +1 : -1;
+    return clamp(base + delta, 1, 9); // Не может стать 10
 }
 
 const posForHandIndex = (i) => {
-    // Не используется для grid, используем абсолютное позиционирование
     return { col: 1, row: 1 };
 };
+
 function getPlayerName(me) {
     if (!me) return "Guest";
     const u = me.username ? `@${me.username}` : "";
@@ -287,13 +299,38 @@ function nftToCard(nft, idx) {
         element = ELEMENTS[hash % ELEMENTS.length];
     }
 
+    // Определяем рарность для шанса на Ace
+    const rankKey = nft.rank || nft.rarity || "common";
+    const rankDef = RANKS.find(r => r.key === rankKey) || RANKS[0];
+
+    const rawValues = nft.values || nft.stats || { top: 5, right: 5, bottom: 5, left: 5 };
+
+    // Проверяем есть ли уже Ace в значениях (если NFT пришла с A)
+    const values = { ...rawValues };
+
+    // Если карта legendary/epic и нет Ace — даём шанс
+    if (rankDef.aceChance > 0) {
+        const hasAce = Object.values(values).some(v => v === ACE_VALUE);
+        if (!hasAce) {
+            // Детерминированный шанс на основе id чтобы было стабильно
+            const id = nft.id || nft.key || nft.tokenId || nft.token_id || `nft_${idx}`;
+            const hash = String(id).split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+            const pseudoRandom = (hash % 100) / 100;
+            if (pseudoRandom < rankDef.aceChance) {
+                const sides = ["top", "right", "bottom", "left"];
+                const aceSide = sides[hash % 4];
+                values[aceSide] = ACE_VALUE;
+            }
+        }
+    }
+
     return {
         id: nft.id || nft.key || nft.tokenId || nft.token_id || `nft_${idx}`,
         owner: "player",
-        values: nft.values || nft.stats || { top: 5, right: 5, bottom: 5, left: 5 },
+        values,
         imageUrl: nft.imageUrl || nft.image || ART[0],
-        rank: nft.rank || nft.rarity || "common",
-        rankLabel: nft.rankLabel || "C",
+        rank: rankKey,
+        rankLabel: nft.rankLabel || rankKey[0].toUpperCase(),
         element: element,
         placeKey: 0,
         captureKey: 0,
@@ -318,6 +355,10 @@ function getFallbackEnemyDeck() {
     return Array.from({ length: 5 }, (_, i) => genCard("enemy", `e${i}`));
 }
 
+/* ═══════════════════════════════════════════════
+   GAME COMPONENT
+   ═══════════════════════════════════════════════ */
+
 export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const revealTimerRef = useRef(null);
     const wsRef = useRef(null);
@@ -341,7 +382,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
     const isPvP = mode === "pvp" && Boolean(matchId);
 
-    // ==================== Claim State (unified for AI and PvP) ====================
     const [claimCards, setClaimCards] = useState([]);
     const [claimPickIndex, setClaimPickIndex] = useState(null);
     const [claimRevealed, setClaimRevealed] = useState(false);
@@ -687,12 +727,10 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
         if (iWon) {
             confetti({ zIndex: 99999, particleCount: 50, spread: 80, origin: { y: 0.4 } });
-            // Подготовить карты для claim
             prepareClaimCards();
         }
     };
 
-    // Подготовка карт для claim (5 перевёрнутых карт)
     const prepareClaimCards = async () => {
         if (isPvP && matchId) {
             try {
@@ -714,7 +752,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                 console.error("[Game] Failed to load opponent deposits:", e);
             }
 
-            // Fallback если deposits не пришли
             setClaimCards(Array.from({ length: 5 }, (_, i) => ({
                 id: `claim_${i}`,
                 index: i,
@@ -722,7 +759,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                 imageUrl: null,
             })));
         } else {
-            // AI: используем enemyDeck
             setClaimCards(enemyDeck.map((c, i) => ({
                 ...c,
                 index: i,
@@ -731,6 +767,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             })));
         }
     };
+
     const sendPvPMove = (cardIndex, cellIndex) => {
         if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
             setWsError("Connection lost, reconnecting...");
@@ -768,9 +805,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             const pickedCard = claimCards[claimPickIndex] || {};
 
             if (isPvP && matchId) {
-                // PvP: сначала finish, потом claim
-
-                // 1. Finish match
                 await apiFetch(`/api/matches/${matchId}/finish`, {
                     method: "POST",
                     token,
@@ -780,7 +814,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                     }),
                 });
 
-                // 2. Получаем реальные deposits противника для картинки
                 let realImage = pickedCard?.image || pickedCard?.imageUrl;
 
                 try {
@@ -793,7 +826,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                     console.warn("[Claim] Could not fetch deposits for image:", e);
                 }
 
-                // 3. Claim card
                 const res = await apiFetch(`/api/matches/${matchId}/claim`, {
                     method: "POST",
                     token,
@@ -804,7 +836,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                     }),
                 });
 
-                // Сохраняем выбранную карту с реальной картинкой
                 setClaimedCard({
                     ...pickedCard,
                     ...res.claimed_card,
@@ -812,7 +843,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                     imageUrl: res.claimed_card?.imageUrl || realImage,
                 });
             } else {
-                // AI mode - используем enemyDeck
                 const aiCard = enemyDeck[claimPickIndex];
                 setClaimedCard({
                     ...aiCard,
@@ -821,14 +851,11 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                 });
             }
 
-            // Переворачиваем карту
             setClaimRevealed(true);
             haptic("medium");
 
-            // Небольшая задержка для анимации
             await new Promise(r => setTimeout(r, 800));
 
-            // Успех
             setClaimDone(true);
             confetti({ zIndex: 99999, particleCount: 40, spread: 70, origin: { y: 0.5 } });
 
@@ -955,7 +982,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         clearReveal();
         setPlayerSpells({ freeze: 1, reveal: 1 });
 
-        // Reset claim state
         setClaimCards([]);
         setClaimPickIndex(null);
         setClaimRevealed(false);
@@ -1002,6 +1028,10 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
     const canUseMagic = turn === "player" && !roundOver && !matchOver && !isPvP;
 
+    /**
+     * РАЗМЕЩЕНИЕ КАРТЫ — использует новый resolvePlacement
+     * (только крестом, без цепочек, строго >)
+     */
     const placeCard = (cellIdx) => {
         if (roundOver || matchOver) return;
         if (turn !== "player") return;
@@ -1021,8 +1051,8 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         const next = [...board];
         next[cellIdx] = { ...selected, owner: "player", placeKey: (selected.placeKey || 0) + 1 };
 
-        const { flippedSpecial } = resolvePlacementTT(cellIdx, next, boardElems);
-        resolveCombo(flippedSpecial, next, boardElems);
+        // Новая логика: только прямой захват крестом, без цепочек
+        resolvePlacement(cellIdx, next, boardElems);
 
         setBoard(next);
         setHands((h) => ({ ...h, player: h.player.filter((c) => c.id !== selected.id) }));
@@ -1030,7 +1060,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         setSpellMode(null);
 
         decFrozenAfterCardMove();
-        haptic("medium"); // ← ДОБАВЛЕНА ВИБРАЦИЯ
+        haptic("medium");
         setTurn("enemy");
     };
 
@@ -1090,7 +1120,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         setTurn("enemy");
     };
 
-    // AI turn
+    // AI turn — использует новый resolvePlacement
     useEffect(() => {
         if (isPvP) return;
         if (turn !== "enemy" || roundOver || matchOver) return;
@@ -1116,8 +1146,8 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             const next = [...curBoard];
             next[cell] = { ...card, owner: "enemy", placeKey: (card.placeKey || 0) + 1 };
 
-            const { flippedSpecial } = resolvePlacementTT(cell, next, curElems);
-            resolveCombo(flippedSpecial, next, curElems);
+            // Новая логика: только прямой захват крестом, без цепочек
+            resolvePlacement(cell, next, curElems);
 
             setBoard(next);
             setHands((h) => ({ ...h, enemy: h.enemy.filter((c) => c.id !== card.id) }));
@@ -1164,7 +1194,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         if (series.player >= MATCH_WINS_TARGET || series.enemy >= MATCH_WINS_TARGET) {
             setMatchOver(true);
 
-            // Prepare claim cards
             if (series.player >= MATCH_WINS_TARGET) {
                 prepareClaimCards();
             }
@@ -1202,7 +1231,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
     // ==================== RENDER ====================
 
-    // PvP: Waiting/connecting screen
     if (isPvP && (!wsConnected || waitingForOpponent)) {
         return (
             <div className="game-root">
@@ -1242,7 +1270,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         );
     }
 
-    // PvP: Opponent disconnected
     if (isPvP && reconnectDeadline && !opponentConnected) {
         const remainingMs = reconnectDeadline.getTime() - Date.now();
         const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
@@ -1412,12 +1439,10 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                             </div>
                         ) : null}
 
-                        {/* ==================== GAME OVER / CLAIM MODAL ==================== */}
                         {(roundOver || matchOver) && (
                             <div className="game-over">
                                 <div className="game-over-box" style={{ minWidth: 340, maxWidth: 420 }}>
 
-                                    {/* Title */}
                                     <h2 style={{ marginBottom: 12, fontSize: 22 }}>
                                         {matchOver ? (
                                             (isPvP ? roundWinner : matchWinner) === "player"
@@ -1428,7 +1453,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                         )}
                                     </h2>
 
-                                    {/* Score info */}
                                     <div style={{ opacity: 0.85, fontSize: 13, marginBottom: 16 }}>
                                         {isPvP ? (
                                             <>Поле: Вы {boardScore.blue} - {boardScore.red} Противник</>
@@ -1437,7 +1461,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                         )}
                                     </div>
 
-                                    {/* ==================== CLAIM SECTION ==================== */}
                                     {matchOver && (isPvP ? roundWinner : matchWinner) === "player" && !claimDone && (
                                         <>
                                             <div style={{
@@ -1457,7 +1480,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                                 Карты скрыты — выбирай наугад!
                                             </div>
 
-                                            {/* 5 cards */}
                                             <div style={{
                                                 display: "flex",
                                                 gap: 8,
@@ -1469,7 +1491,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                                     const isSelected = claimPickIndex === idx;
                                                     const showCard = claimRevealed && isSelected;
 
-                                                    // Получаем реальную картинку из claimedCard или из deposits
                                                     const realImage = claimedCard?.image
                                                         || claimedCard?.imageUrl
                                                         || card?.image
@@ -1488,7 +1509,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                                             }}
                                                         >
                                                             {showCard ? (
-                                                                // Показываем РЕАЛЬНУЮ карту из deposits
                                                                 <div style={{
                                                                     width: 64,
                                                                     height: 88,
@@ -1512,7 +1532,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                                                     />
                                                                 </div>
                                                             ) : (
-                                                                // Рубашка карты (как в игре)
                                                                 <div
                                                                     className="card back"
                                                                     style={{
@@ -1546,7 +1565,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                                 })}
                                             </div>
 
-                                            {/* Claim button */}
                                             {!claimRevealed && (
                                                 <button
                                                     onClick={onClaimConfirm}
@@ -1572,7 +1590,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                                 </button>
                                             )}
 
-                                            {/* After reveal - waiting */}
                                             {claimRevealed && claimBusy && (
                                                 <div style={{
                                                     fontSize: 14,
@@ -1583,7 +1600,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                                 </div>
                                             )}
 
-                                            {/* Error */}
                                             {claimError && (
                                                 <div style={{
                                                     fontSize: 12,
@@ -1599,7 +1615,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                             )}
                                         </>
                                     )}
-                                    {/* Claim done */}
+
                                     {matchOver && (isPvP ? roundWinner : matchWinner) === "player" && claimDone && (
                                         <div style={{
                                             fontSize: 15,
@@ -1614,7 +1630,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                         </div>
                                     )}
 
-                                    {/* Loser message */}
                                     {matchOver && (isPvP ? roundWinner : matchWinner) === "enemy" && (
                                         <div style={{
                                             fontSize: 13,
@@ -1628,7 +1643,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                         </div>
                                     )}
 
-                                    {/* Buttons */}
                                     <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 8, flexWrap: "wrap" }}>
                                         {!matchOver && !isPvP && (
                                             <button onClick={onNextRound}>Следующий раунд</button>
@@ -1649,6 +1663,10 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         </div>
     );
 }
+
+/* ═══════════════════════════════════════════════
+   SUB-COMPONENTS
+   ═══════════════════════════════════════════════ */
 
 function PlayerBadge({ side, name, avatarUrl, active }) {
     const [imgOk, setImgOk] = useState(Boolean(avatarUrl));
@@ -1707,13 +1725,19 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
         ? (card.element === cellElement ? +1 : -1)
         : 0;
 
-    const getDisplayValue = (base) => {
+    /**
+     * Отображаемое значение на карте.
+     * Ace (10) всегда показывается как "A", не меняется от бонусов.
+     * 9 + бонус НЕ становится A (clamp до 9).
+     */
+    const getCardDisplayValue = (base) => {
+        if (isAce(base)) return "A";
         if (elemBonus === 0) return base;
-        const result = base + elemBonus;
-        return clamp(result, 1, 9);
+        return clamp(base + elemBonus, 1, 9);
     };
 
     const getNumStyle = (base) => {
+        if (isAce(base)) return { color: "#ffd700", fontWeight: 900 }; // Ace — золотой
         if (elemBonus === 0) return {};
         const result = base + elemBonus;
         const clamped = clamp(result, 1, 9);
@@ -1756,16 +1780,16 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
 
                 <div className="tt-badge">
                     <span className="tt-num top" style={getNumStyle(cardValues.top)}>
-                        {getDisplayValue(cardValues.top)}
+                        {getCardDisplayValue(cardValues.top)}
                     </span>
                     <span className="tt-num left" style={getNumStyle(cardValues.left)}>
-                        {getDisplayValue(cardValues.left)}
+                        {getCardDisplayValue(cardValues.left)}
                     </span>
                     <span className="tt-num right" style={getNumStyle(cardValues.right)}>
-                        {getDisplayValue(cardValues.right)}
+                        {getCardDisplayValue(cardValues.right)}
                     </span>
                     <span className="tt-num bottom" style={getNumStyle(cardValues.bottom)}>
-                        {getDisplayValue(cardValues.bottom)}
+                        {getCardDisplayValue(cardValues.bottom)}
                     </span>
                 </div>
             </div>
