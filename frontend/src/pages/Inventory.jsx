@@ -567,18 +567,18 @@ export default function Inventory({ token, onDeckReady }) {
                 if (connected && accountId && nftContractId) {
                     try {
                         var tokens = await nearNftTokensForOwner(nftContractId, accountId);
-                        // ВРЕМЕННЫЙ ДЕБАГ — удалить после проверки
-                        var firstToken = tokens[0];
-                        var debugInfo = {
-                            token_id: firstToken?.token_id,
-                            metadata_keys: firstToken?.metadata ? Object.keys(firstToken.metadata) : [],
-                            has_extra: !!firstToken?.metadata?.extra,
-                            extra_preview: firstToken?.metadata?.extra
-                                ? String(firstToken.metadata.extra).slice(0, 200)
-                                : null,
-                            has_attributes: !!firstToken?.metadata?.attributes,
-                        };
-                        setSource("DEBUG: " + JSON.stringify(debugInfo));
+                        // ДЕБАГ — выведет красным текстом
+                        if (tokens && tokens.length > 0) {
+                            var t0 = tokens[0];
+                            var mk = t0.metadata ? Object.keys(t0.metadata).join(",") : "NO_META";
+                            var ex = t0.metadata?.extra ? String(t0.metadata.extra).slice(0, 100) : "NO_EXTRA";
+                            setError("DBG id=" + t0.token_id + " | keys=" + mk + " | extra=" + ex);
+                        } else {
+                            setError("DBG: tokens empty or null, count=" + (tokens?.length ?? "null"));
+                        }
+
+                        // Остановить выполнение временно чтобы увидеть дебаг
+                        return; // ← ВРЕМЕННО, убрать после проверки
 
                         items = tokens.map(function (t) {
                             var attributes = null;
