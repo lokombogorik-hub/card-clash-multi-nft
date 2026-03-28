@@ -468,26 +468,35 @@ export default function Inventory({ token, onDeckReady }) {
 
                                 try {
                                     var url = IPFS_GATEWAY + "/" + tid + ".json";
+
+                                    // Безопасный fetch без AbortSignal.timeout
+                                    var controller = new AbortController();
+                                    var timeoutId = setTimeout(function () { controller.abort(); }, 10000);
+
                                     var resp = await fetch(url, {
-                                        signal: AbortSignal.timeout(6000)
+                                        signal: controller.signal
                                     });
+                                    clearTimeout(timeoutId);
+
                                     if (resp.ok) {
                                         var json = await resp.json();
                                         if (json.attributes && Array.isArray(json.attributes)) {
                                             attributesMap[tid] = json.attributes;
                                             loadedCount++;
-                                            // Кэшируем атрибуты в localStorage
                                             var data = cached || {};
                                             data.attributes = json.attributes;
                                             storeCardData(tid, data);
                                         } else {
                                             failedCount++;
+                                            console.warn("IPFS no attributes for", tid, Object.keys(json));
                                         }
                                     } else {
                                         failedCount++;
+                                        console.warn("IPFS HTTP error for", tid, resp.status, resp.statusText);
                                     }
                                 } catch (e) {
                                     failedCount++;
+                                    console.warn("IPFS fetch error for", tid, e.name, e.message);
                                 }
                             })
                         );
