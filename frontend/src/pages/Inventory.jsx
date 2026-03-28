@@ -6,23 +6,21 @@ import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from 
 // Миграция: сбросить старые данные для новой системы рарности
 (function migrateRarity() {
     try {
-        if (localStorage.getItem("cc_rarity_v6_final")) return;
+        if (localStorage.getItem("cc_rarity_v7_ipfs")) return;
         var keys = Object.keys(localStorage);
         for (var i = 0; i < keys.length; i++) {
             if (keys[i].startsWith("cc_card_")) {
                 localStorage.removeItem(keys[i]);
             }
         }
-        localStorage.setItem("cc_rarity_v6_final", "1");
+        localStorage.setItem("cc_rarity_v7_ipfs", "1");
     } catch (e) { }
 })();
 
 var ACE_VALUE = 10;
 var TOTAL_SUPPLY = 2129;
+var IPFS_GATEWAY = "https://bafybeibqzbodfn3xczppxh2k2ek3bgvojhivqy4ntbkprcxesulth3yy5e.ipfs.w3s.link";
 
-/* ═══════════════════════════════════════════════════
-   TRAIT RARITY TABLE — точные проценты из коллекции
-   ═══════════════════════════════════════════════════ */
 var TRAIT_RARITY = {
     "Background": {
         "Ancient ruins": 0.05, "Apocalypse": 0.05, "Aristocrat's house": 0.05, "Ashes": 0.05,
@@ -116,98 +114,38 @@ var TRAIT_RARITY = {
     },
 };
 
-/* ═══════════════════════════════════════════════════
-   RARITY SCORE — формула Hotcraft: Σ(1/percentage)
-   
-   Откалибровано по реальным данным:
-   - Ранг 1-3:     score 120+ (все 0.05% трейты)
-   - Ранг 57-59:   score ~2.15-2.28
-   - Ранг 150-250: score ~1.94-2.04
-   - Ранг 700-950: score ~1.58-1.69
-   - Ранг 1600+:   score ~1.31-1.40
-   
-   Пороги:
-   - Legendary: score >= 10 (1/1 NFT с уникальными трейтами)
-   - Epic:      score >= 1.90 (топ ~300, ранг <300)
-   - Rare:      score >= 1.55 (ранг <1000)
-   - Common:    score < 1.55 (ранг 1000+)
-   ═══════════════════════════════════════════════════ */
-
 function calculateRarityScore(attributes) {
-    if (!attributes || !Array.isArray(attributes) || attributes.length === 0) {
-        return 0;
-    }
-
+    if (!attributes || !Array.isArray(attributes) || attributes.length === 0) return 0;
     var score = 0;
     for (var i = 0; i < attributes.length; i++) {
         var attr = attributes[i];
-        var traitType = attr.trait_type;
-        var traitValue = attr.value;
-
-        var percentage = 5; // default для неизвестных
-        if (TRAIT_RARITY[traitType] && TRAIT_RARITY[traitType][traitValue] !== undefined) {
-            percentage = TRAIT_RARITY[traitType][traitValue];
+        var pct = 5;
+        if (TRAIT_RARITY[attr.trait_type] && TRAIT_RARITY[attr.trait_type][attr.value] !== undefined) {
+            pct = TRAIT_RARITY[attr.trait_type][attr.value];
         }
-
-        if (percentage > 0) {
-            score += 1 / percentage;
-        }
+        if (pct > 0) score += 1 / pct;
     }
-
     return score;
 }
 
 function getRarityFromScore(score) {
-    // Legendary: 1/1 NFT с супер-редкими трейтами (все 0.05%)
-    // Score 120 = все 6 трейтов по 0.05%
-    // Score >= 10 = минимум 1-2 трейта 0.05%
-    if (score >= 10) {
-        return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 7, max: 9 };
-    }
-
-    // Epic: топ ~300 (ранг < 300), score ~1.90+
-    if (score >= 1.90) {
-        return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 5, max: 9 };
-    }
-
-    // Rare: ранг 300-1000, score 1.55-1.90
-    if (score >= 1.55) {
-        return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 3, max: 7 };
-    }
-
-    // Common: ранг 1000+, score < 1.55
+    if (score >= 10) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 7, max: 9 };
+    if (score >= 1.90) return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 5, max: 9 };
+    if (score >= 1.55) return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 3, max: 7 };
     return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 5 };
 }
 
 function getRarityFromTraits(attributes) {
-    var score = calculateRarityScore(attributes);
-    return getRarityFromScore(score);
+    return getRarityFromScore(calculateRarityScore(attributes));
 }
 
-// Fallback если нет атрибутов — по позиции token_id
 function getRarityFallback(tokenId) {
     var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
-
-    // Первые ~17 NFT (1-17) — это 1/1 легендарки
-    if (num <= 17) {
-        return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 7, max: 9 };
-    }
-
-    // ~14% Epic (300 NFT)
-    if (num <= 320) {
-        return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 5, max: 9 };
-    }
-
-    // ~33% Rare (700 NFT)
-    if (num <= 1020) {
-        return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 3, max: 7 };
-    }
-
-    // Остальные Common
+    if (num <= 17) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 7, max: 9 };
+    if (num <= 320) return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 5, max: 9 };
+    if (num <= 1020) return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 3, max: 7 };
     return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 5 };
 }
-
-/* ═══════════════════════════════════════════════════ */
 
 function nftKey(n) {
     if (n.key) return n.key;
@@ -217,14 +155,8 @@ function nftKey(n) {
 }
 
 var ELEM_ICON = {
-    Earth: "🌍",
-    Fire: "🔥",
-    Water: "💧",
-    Poison: "☠️",
-    Holy: "✨",
-    Thunder: "⚡",
-    Wind: "🌪️",
-    Ice: "❄️"
+    Earth: "🌍", Fire: "🔥", Water: "💧", Poison: "☠️",
+    Holy: "✨", Thunder: "⚡", Wind: "🌪️", Ice: "❄️"
 };
 
 var ELEMENTS = ["Earth", "Fire", "Water", "Poison", "Holy", "Thunder", "Wind", "Ice"];
@@ -233,8 +165,7 @@ function hashCode(str) {
     var hash = 0;
     var str2 = String(str);
     for (var i = 0; i < str2.length; i++) {
-        var char = str2.charCodeAt(i);
-        hash = ((hash << 5) - hash) + char;
+        hash = ((hash << 5) - hash) + str2.charCodeAt(i);
         hash = hash & hash;
     }
     return Math.abs(hash);
@@ -250,25 +181,20 @@ function mulberry32(seed) {
 }
 
 function createSeed(tokenId, salt) {
-    var combined = String(tokenId) + "_" + String(salt || "default");
-    return hashCode(combined);
+    return hashCode(String(tokenId) + "_" + String(salt || "default"));
 }
 
 function getStoredCardData(tokenId) {
     try {
-        var key = "cc_card_" + String(tokenId);
-        var stored = localStorage.getItem(key);
-        if (stored) {
-            return JSON.parse(stored);
-        }
+        var stored = localStorage.getItem("cc_card_" + String(tokenId));
+        if (stored) return JSON.parse(stored);
     } catch (e) { }
     return null;
 }
 
 function storeCardData(tokenId, data) {
     try {
-        var key = "cc_card_" + String(tokenId);
-        localStorage.setItem(key, JSON.stringify(data));
+        localStorage.setItem("cc_card_" + String(tokenId), JSON.stringify(data));
     } catch (e) { }
 }
 
@@ -282,9 +208,7 @@ function genStats(tokenId, rarity) {
         }
     }
 
-    var seed = createSeed(tokenId, "stats_v7");
-    var rng = mulberry32(seed);
-
+    var rng = mulberry32(createSeed(tokenId, "stats_v7"));
     var min = Math.max(1, rarity.min);
     var max = Math.min(9, rarity.max);
 
@@ -295,49 +219,36 @@ function genStats(tokenId, rarity) {
         left: Math.min(9, Math.max(1, Math.floor(rng() * (max - min + 1)) + min))
     };
 
-    // Ace для legendary (50%) и epic (20%)
-    var aceChance = 0;
-    if (rarity.key === "legendary") aceChance = 0.5;
-    else if (rarity.key === "epic") aceChance = 0.2;
-
+    var aceChance = rarity.key === "legendary" ? 0.5 : rarity.key === "epic" ? 0.2 : 0;
     if (aceChance > 0) {
         var aceRng = mulberry32(createSeed(tokenId, "ace_v4"));
         if (aceRng() < aceChance) {
             var sides = ["top", "right", "bottom", "left"];
-            var aceSide = sides[Math.floor(aceRng() * sides.length)];
-            stats[aceSide] = ACE_VALUE;
+            stats[sides[Math.floor(aceRng() * sides.length)]] = ACE_VALUE;
         }
     }
 
     var data = stored || {};
     data.stats = stats;
     storeCardData(tokenId, data);
-
     return stats;
 }
 
 function genElement(tokenId) {
     var stored = getStoredCardData(tokenId);
-    if (stored && stored.element) {
-        return stored.element;
-    }
+    if (stored && stored.element) return stored.element;
 
-    var seed = createSeed(tokenId, "element_v3");
-    var rng = mulberry32(seed);
-
-    var elemIdx = Math.floor(rng() * ELEMENTS.length);
-    var element = ELEMENTS[elemIdx];
+    var rng = mulberry32(createSeed(tokenId, "element_v3"));
+    var element = ELEMENTS[Math.floor(rng() * ELEMENTS.length)];
 
     var data = stored || {};
     data.element = element;
     storeCardData(tokenId, data);
-
     return element;
 }
 
 function displayStatValue(val) {
-    if (val === ACE_VALUE) return "A";
-    return val;
+    return val === ACE_VALUE ? "A" : val;
 }
 
 function statStyle(val) {
@@ -345,11 +256,7 @@ function statStyle(val) {
     return undefined;
 }
 
-var nftCache = {
-    accountId: null,
-    items: [],
-    timestamp: 0
-};
+var nftCache = { accountId: null, items: [], timestamp: 0 };
 
 export function invalidateNftCache() {
     nftCache.accountId = null;
@@ -381,11 +288,7 @@ var NftImage = memo(function NftImage({ src, originalSrc, alt, cacheKey }) {
     }, [cacheKey, imgSrc]);
 
     if (failed || !imgSrc) {
-        return (
-            <div className="inv-card-placeholder">
-                <span>🎴</span>
-            </div>
-        );
+        return <div className="inv-card-placeholder"><span>🎴</span></div>;
     }
 
     return (
@@ -403,12 +306,7 @@ var NftImage = memo(function NftImage({ src, originalSrc, alt, cacheKey }) {
     return prev.cacheKey === next.cacheKey;
 });
 
-var InventoryCard = memo(function InventoryCard({
-    nft,
-    isSelected,
-    pickNo,
-    onToggle
-}) {
+var InventoryCard = memo(function InventoryCard({ nft, isSelected, pickNo, onToggle }) {
     var k = useMemo(function () { return nftKey(nft); }, [nft]);
 
     var stats = useMemo(function () {
@@ -423,27 +321,21 @@ var InventoryCard = memo(function InventoryCard({
 
     var element = useMemo(function () {
         if (nft.element) return nft.element;
-        var tokenId = nft.tokenId || nft.token_id || nft.id || k;
-        return genElement(tokenId);
+        return genElement(nft.tokenId || nft.token_id || nft.id || k);
     }, [nft.element, nft.tokenId, nft.token_id, nft.id, k]);
 
     var rarity = useMemo(function () {
         return nft.rarity || getRarityFallback(nft.tokenId);
     }, [nft.rarity, nft.tokenId]);
 
-    var handleClick = useCallback(function () {
-        onToggle(k);
-    }, [onToggle, k]);
+    var handleClick = useCallback(function () { onToggle(k); }, [onToggle, k]);
 
     return (
         <button
             type="button"
             onClick={handleClick}
             className={"inv-card-game" + (isSelected ? " is-selected" : "")}
-            style={{
-                "--rank": rarity.border,
-                "--rankGlow": rarity.glow
-            }}
+            style={{ "--rank": rarity.border, "--rankGlow": rarity.glow }}
         >
             <div className="inv-card-art-full">
                 <NftImage
@@ -459,18 +351,10 @@ var InventoryCard = memo(function InventoryCard({
             </div>
 
             <div className="inv-tt-badge">
-                <span className="inv-tt-num top" style={statStyle(stats.top)}>
-                    {displayStatValue(stats.top)}
-                </span>
-                <span className="inv-tt-num left" style={statStyle(stats.left)}>
-                    {displayStatValue(stats.left)}
-                </span>
-                <span className="inv-tt-num right" style={statStyle(stats.right)}>
-                    {displayStatValue(stats.right)}
-                </span>
-                <span className="inv-tt-num bottom" style={statStyle(stats.bottom)}>
-                    {displayStatValue(stats.bottom)}
-                </span>
+                <span className="inv-tt-num top" style={statStyle(stats.top)}>{displayStatValue(stats.top)}</span>
+                <span className="inv-tt-num left" style={statStyle(stats.left)}>{displayStatValue(stats.left)}</span>
+                <span className="inv-tt-num right" style={statStyle(stats.right)}>{displayStatValue(stats.right)}</span>
+                <span className="inv-tt-num bottom" style={statStyle(stats.bottom)}>{displayStatValue(stats.bottom)}</span>
             </div>
 
             {isSelected && (
@@ -530,9 +414,7 @@ export default function Inventory({ token, onDeckReady }) {
             }
         };
         document.addEventListener('visibilitychange', handleVisibilityChange);
-        return function () {
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
-        };
+        return function () { document.removeEventListener('visibilitychange', handleVisibilityChange); };
     }, [connected, accountId]);
 
     var forceRefresh = useCallback(function () {
@@ -567,36 +449,43 @@ export default function Inventory({ token, onDeckReady }) {
                 if (connected && accountId && nftContractId) {
                     try {
                         var tokens = await nearNftTokensForOwner(nftContractId, accountId);
-                        var t0 = tokens[0];
-                        var extraRaw = t0.metadata?.extra;
-                        var extraType = typeof extraRaw;
-                        var extraStr = extraRaw === null ? "NULL" :
-                            extraRaw === undefined ? "UNDEFINED" :
-                                extraType === "string" ? ("STR:" + extraRaw.slice(0, 200)) :
-                                    ("OBJ:" + JSON.stringify(extraRaw).slice(0, 200));
-                        setError("id=" + t0.token_id + " | extraType=" + extraType + " | extra=" + extraStr);
-                        return;
+
+                        // Загружаем атрибуты с IPFS параллельно
+                        var attributesMap = {};
+                        await Promise.allSettled(
+                            tokens.map(async function (t) {
+                                var tid = t.token_id;
+
+                                // Проверяем кэш
+                                var cached = getStoredCardData(tid);
+                                if (cached && cached.attributes) {
+                                    attributesMap[tid] = cached.attributes;
+                                    return;
+                                }
+
+                                try {
+                                    var url = IPFS_GATEWAY + "/" + tid + ".json";
+                                    var resp = await fetch(url, {
+                                        signal: AbortSignal.timeout(6000)
+                                    });
+                                    if (resp.ok) {
+                                        var json = await resp.json();
+                                        if (json.attributes && Array.isArray(json.attributes)) {
+                                            attributesMap[tid] = json.attributes;
+                                            // Кэшируем атрибуты в localStorage
+                                            var data = cached || {};
+                                            data.attributes = json.attributes;
+                                            storeCardData(tid, data);
+                                        }
+                                    }
+                                } catch (e) {
+                                    // Нет атрибутов — используем fallback
+                                }
+                            })
+                        );
 
                         items = tokens.map(function (t) {
-                            var attributes = null;
-                            if (t.metadata) {
-                                if (t.metadata.extra) {
-                                    try {
-                                        var extra = typeof t.metadata.extra === "string"
-                                            ? JSON.parse(t.metadata.extra)
-                                            : t.metadata.extra;
-                                        if (extra && Array.isArray(extra.attributes)) {
-                                            attributes = extra.attributes;
-                                        } else if (extra && Array.isArray(extra)) {
-                                            attributes = extra;
-                                        }
-                                    } catch (e) { }
-                                }
-                                if (!attributes && t.metadata.attributes) {
-                                    attributes = t.metadata.attributes;
-                                }
-                            }
-
+                            var attributes = attributesMap[t.token_id] || null;
                             var r = attributes
                                 ? getRarityFromTraits(attributes)
                                 : getRarityFallback(t.token_id);
@@ -652,19 +541,14 @@ export default function Inventory({ token, onDeckReady }) {
     var toggle = useCallback(function (k) {
         setSelected(function (prev) {
             var next = new Set(prev);
-            if (next.has(k)) {
-                next.delete(k);
-            } else {
-                if (next.size >= 5) return prev;
-                next.add(k);
-            }
+            if (next.has(k)) { next.delete(k); }
+            else { if (next.size >= 5) return prev; next.add(k); }
             return next;
         });
     }, []);
 
     var saveDeck = useCallback(async function () {
-        if (selected.size !== 5) return;
-        if (selectedNfts.length !== 5) return;
+        if (selected.size !== 5 || selectedNfts.length !== 5) return;
 
         setSaving(true);
         setError("");
@@ -672,14 +556,12 @@ export default function Inventory({ token, onDeckReady }) {
             var cardsPayload = selectedNfts.map(function (nft) {
                 var elem = nft.element || genElement(nft.tokenId || nft.token_id || nft.id);
                 var rawStats = nft.stats || { top: 5, right: 5, bottom: 5, left: 5 };
-
                 var safeStats = {
                     top: rawStats.top === ACE_VALUE ? ACE_VALUE : Math.min(9, Math.max(1, rawStats.top || 5)),
                     right: rawStats.right === ACE_VALUE ? ACE_VALUE : Math.min(9, Math.max(1, rawStats.right || 5)),
                     bottom: rawStats.bottom === ACE_VALUE ? ACE_VALUE : Math.min(9, Math.max(1, rawStats.bottom || 5)),
                     left: rawStats.left === ACE_VALUE ? ACE_VALUE : Math.min(9, Math.max(1, rawStats.left || 5))
                 };
-
                 return {
                     id: nft.key || nft.tokenId || nft.token_id,
                     token_id: nft.tokenId || nft.token_id,
@@ -698,10 +580,7 @@ export default function Inventory({ token, onDeckReady }) {
             var result = await apiFetch("/api/decks/save", {
                 token: token,
                 method: "POST",
-                body: JSON.stringify({
-                    cards: selectedArr,
-                    full_cards: cardsPayload
-                })
+                body: JSON.stringify({ cards: selectedArr, full_cards: cardsPayload })
             });
             console.log("Deck saved:", result);
             setSaving(false);
@@ -713,9 +592,7 @@ export default function Inventory({ token, onDeckReady }) {
         }
     }, [selected.size, selectedNfts, selectedArr, token, onDeckReady]);
 
-    var resetSelection = useCallback(function () {
-        setSelected(new Set());
-    }, []);
+    var resetSelection = useCallback(function () { setSelected(new Set()); }, []);
 
     return (
         <div className="page inventory-page">
@@ -737,12 +614,9 @@ export default function Inventory({ token, onDeckReady }) {
                             onClick={forceRefresh}
                             disabled={loading}
                             style={{
-                                padding: "4px 10px",
-                                fontSize: 11,
-                                borderRadius: 8,
+                                padding: "4px 10px", fontSize: 11, borderRadius: 8,
                                 border: "1px solid rgba(120,200,255,0.3)",
-                                background: "rgba(120,200,255,0.1)",
-                                color: "#78c8ff",
+                                background: "rgba(120,200,255,0.1)", color: "#78c8ff",
                                 cursor: loading ? "not-allowed" : "pointer",
                                 opacity: loading ? 0.5 : 1,
                             }}
@@ -751,13 +625,10 @@ export default function Inventory({ token, onDeckReady }) {
                         </button>
                     </div>
                     {source && (
-                        <div
-                            className="inv-info-value"
-                            style={{
-                                marginTop: 4,
-                                color: source.startsWith("✅") ? "#22c55e" : source.startsWith("❌") ? "#ff6b6b" : "#f59e0b"
-                            }}
-                        >
+                        <div className="inv-info-value" style={{
+                            marginTop: 4,
+                            color: source.startsWith("✅") ? "#22c55e" : source.startsWith("❌") ? "#ff6b6b" : "#f59e0b"
+                        }}>
                             {source}
                         </div>
                     )}
@@ -794,19 +665,11 @@ export default function Inventory({ token, onDeckReady }) {
                         {connected ? "NFT не найдены для " + accountId : "Подключи кошелёк на главной странице"}
                     </div>
                     {connected && (
-                        <button
-                            onClick={forceRefresh}
-                            style={{
-                                marginTop: 16,
-                                padding: "10px 20px",
-                                fontSize: 14,
-                                borderRadius: 10,
-                                border: "1px solid rgba(120,200,255,0.4)",
-                                background: "rgba(120,200,255,0.15)",
-                                color: "#78c8ff",
-                                cursor: "pointer",
-                            }}
-                        >
+                        <button onClick={forceRefresh} style={{
+                            marginTop: 16, padding: "10px 20px", fontSize: 14,
+                            borderRadius: 10, border: "1px solid rgba(120,200,255,0.4)",
+                            background: "rgba(120,200,255,0.15)", color: "#78c8ff", cursor: "pointer",
+                        }}>
                             🔄 Обновить
                         </button>
                     )}
