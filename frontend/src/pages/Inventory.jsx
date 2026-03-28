@@ -6,14 +6,14 @@ import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from 
 // Миграция: сбросить старые данные для новой системы рарности
 (function migrateRarity() {
     try {
-        if (localStorage.getItem("cc_rarity_v4_hotcraft")) return;
+        if (localStorage.getItem("cc_rarity_v5_hotcraft")) return;
         var keys = Object.keys(localStorage);
         for (var i = 0; i < keys.length; i++) {
             if (keys[i].startsWith("cc_card_")) {
                 localStorage.removeItem(keys[i]);
             }
         }
-        localStorage.setItem("cc_rarity_v4_hotcraft", "1");
+        localStorage.setItem("cc_rarity_v5_hotcraft", "1");
     } catch (e) { }
 })();
 
@@ -25,313 +25,112 @@ var TOTAL_SUPPLY = 2129;
    ═══════════════════════════════════════════════════ */
 var TRAIT_RARITY = {
     "Background": {
-        "Ancient ruins": 0.05,
-        "Apocalypse": 0.05,
-        "Aristocrat's house": 0.05,
-        "Ashes": 0.05,
-        "Autumn evening": 2.44,
-        "Black Wall": 2.02,
-        "Blue paints": 2.11,
-        "Blue rings": 2.11,
-        "City": 1.32,
-        "City of Ashes": 1.74,
-        "Cold morning": 1.74,
-        "Country evening": 1.46,
-        "Cracked ball": 1.97,
-        "Crypt": 1.36,
-        "Dark forest": 1.88,
-        "Darkforest": 1.88,
-        "Dragon spirit": 0.05,
-        "Evening field": 2.02,
-        "Evening light": 2.02,
-        "Forest": 1.6,
-        "Forest of Oblivion": 1.93,
-        "Future": 0.05,
-        "Gears": 1.88,
-        "Ghost": 1.88,
-        "Golden Radiance": 1.69,
-        "Golden age": 1.64,
-        "Graffiti wall": 0.05,
-        "Green ball": 1.64,
-        "Green wall": 1.5,
-        "Laboratory": 1.64,
-        "Lake shore": 1.97,
-        "Lunar oblivion": 2.25,
-        "Meteor shower": 1.55,
-        "Midway park": 0.05,
-        "Moon": 2.11,
-        "Morning forest": 1.64,
-        "Mountain beach": 1.78,
-        "Near factory": 0.05,
-        "Necromancer's Abode": 0.05,
-        "Neon circle": 2.11,
-        "Neon city": 1.83,
-        "Neon diamond": 1.74,
-        "Night": 1.6,
-        "Night city": 0.05,
-        "Night street": 1.55,
-        "Night trail": 2.58,
-        "Old castle": 0.05,
-        "Olympus": 0.05,
-        "Orange canvas": 1.93,
-        "Overcast clouds": 1.74,
-        "Paris": 1.88,
-        "Pink bubbles": 2.11,
-        "Pixel landscape": 1.64,
-        "Purple style": 2.02,
-        "Pyramid": 2.25,
-        "Quiet Sun": 0.05,
-        "Radiation": 1.55,
-        "Reading room": 1.6,
-        "Road forest": 1.46,
-        "Room": 2.54,
-        "Rotten Grove": 1.97,
-        "Ruins": 1.36,
-        "Slanting rain": 1.74,
-        "Sorcerer Forest": 0.05,
-        "Spring forest": 2.16,
-        "Street Lanterns": 2.07,
-        "Through the Twilight": 0.05,
-        "Twilight": 1.83,
-        "Vampire house": 0.05,
-        "Winter forest": 1.6,
-        "evening lights": 1.55,
+        "Ancient ruins": 0.05, "Apocalypse": 0.05, "Aristocrat's house": 0.05, "Ashes": 0.05,
+        "Autumn evening": 2.44, "Black Wall": 2.02, "Blue paints": 2.11, "Blue rings": 2.11,
+        "City": 1.32, "City of Ashes": 1.74, "Cold morning": 1.74, "Country evening": 1.46,
+        "Cracked ball": 1.97, "Crypt": 1.36, "Dark forest": 1.88, "Darkforest": 1.88,
+        "Dragon spirit": 0.05, "Evening field": 2.02, "Evening light": 2.02, "Forest": 1.6,
+        "Forest of Oblivion": 1.93, "Future": 0.05, "Gears": 1.88, "Ghost": 1.88,
+        "Golden Radiance": 1.69, "Golden age": 1.64, "Graffiti wall": 0.05, "Green ball": 1.64,
+        "Green wall": 1.5, "Laboratory": 1.64, "Lake shore": 1.97, "Lunar oblivion": 2.25,
+        "Meteor shower": 1.55, "Midway park": 0.05, "Moon": 2.11, "Morning forest": 1.64,
+        "Mountain beach": 1.78, "Near factory": 0.05, "Necromancer's Abode": 0.05,
+        "Neon circle": 2.11, "Neon city": 1.83, "Neon diamond": 1.74, "Night": 1.6,
+        "Night city": 0.05, "Night street": 1.55, "Night trail": 2.58, "Old castle": 0.05,
+        "Olympus": 0.05, "Orange canvas": 1.93, "Overcast clouds": 1.74, "Paris": 1.88,
+        "Pink bubbles": 2.11, "Pixel landscape": 1.64, "Purple style": 2.02, "Pyramid": 2.25,
+        "Quiet Sun": 0.05, "Radiation": 1.55, "Reading room": 1.6, "Road forest": 1.46,
+        "Room": 2.54, "Rotten Grove": 1.97, "Ruins": 1.36, "Slanting rain": 1.74,
+        "Sorcerer Forest": 0.05, "Spring forest": 2.16, "Street Lanterns": 2.07,
+        "Through the Twilight": 0.05, "Twilight": 1.83, "Vampire house": 0.05,
+        "Winter forest": 1.6, "evening lights": 1.55,
     },
     "Body": {
-        "Ash Whirlwind": 0.05,
-        "Ash gray haze": 0.05,
-        "Ashes of Time": 0.05,
-        "Black": 9.53,
-        "Blue": 9.3,
-        "Bluish gray": 0.05,
-        "Cloud smoke": 0.05,
-        "Coal smoke": 0.05,
-        "Cosmic reflection": 0.05,
-        "Dusty obsidian": 0.05,
-        "Gray": 9.91,
-        "Grayish": 0.05,
-        "Grey Stream": 0.05,
-        "Infernal Violet": 0.05,
-        "Light gray": 8.88,
-        "Lilac": 10.8,
-        "Lunar ash": 0.05,
-        "Midnight gray": 0.05,
-        "Orange": 10.29,
-        "Pink": 9.86,
-        "Purple gray": 0.05,
-        "Red": 10.33,
-        "Redhead": 0.05,
-        "Salad green": 9.53,
-        "Thundercloud": 0.05,
-        "Warhammer": 0.05,
-        "White": 10.76,
+        "Ash Whirlwind": 0.05, "Ash gray haze": 0.05, "Ashes of Time": 0.05, "Black": 9.53,
+        "Blue": 9.3, "Bluish gray": 0.05, "Cloud smoke": 0.05, "Coal smoke": 0.05,
+        "Cosmic reflection": 0.05, "Dusty obsidian": 0.05, "Gray": 9.91, "Grayish": 0.05,
+        "Grey Stream": 0.05, "Infernal Violet": 0.05, "Light gray": 8.88, "Lilac": 10.8,
+        "Lunar ash": 0.05, "Midnight gray": 0.05, "Orange": 10.29, "Pink": 9.86,
+        "Purple gray": 0.05, "Red": 10.33, "Redhead": 0.05, "Salad green": 9.53,
+        "Thundercloud": 0.05, "Warhammer": 0.05, "White": 10.76,
     },
     "Eyes": {
-        "Amber Ember Eyes": 0.05,
-        "Ash Phantom": 0.05,
-        "Blood": 9.07,
-        "Bloody eye": 0.05,
-        "Crystal glint": 0.05,
-        "Ghost eyes": 0.05,
-        "Hi Tech": 8.92,
-        "Honeycombs": 10.29,
-        "Hot eyes": 0.05,
-        "Hypnosis": 8.08,
-        "Jester's Eyes": 0.05,
-        "Legion g": 0.05,
-        "Moon Shadow": 0.05,
-        "Necromancer's Eyes": 0.05,
-        "Omni eye": 0.05,
-        "Pink": 8.27,
-        "Pink glare": 8.97,
-        "Purple": 9.35,
-        "Red": 9.49,
-        "Sandy": 0.05,
-        "Shining Stream": 0.05,
-        "Sorcerer eye": 0.05,
-        "Thunderbolt Glow": 0.05,
-        "Venom": 9.11,
-        "Volcanic heat": 0.05,
-        "White": 8.97,
-        "Yellow highlights": 0.05,
+        "Amber Ember Eyes": 0.05, "Ash Phantom": 0.05, "Blood": 9.07, "Bloody eye": 0.05,
+        "Crystal glint": 0.05, "Ghost eyes": 0.05, "Hi Tech": 8.92, "Honeycombs": 10.29,
+        "Hot eyes": 0.05, "Hypnosis": 8.08, "Jester's Eyes": 0.05, "Legion g": 0.05,
+        "Moon Shadow": 0.05, "Necromancer's Eyes": 0.05, "Omni eye": 0.05, "Pink": 8.27,
+        "Pink glare": 8.97, "Purple": 9.35, "Red": 9.49, "Sandy": 0.05,
+        "Shining Stream": 0.05, "Sorcerer eye": 0.05, "Thunderbolt Glow": 0.05,
+        "Venom": 9.11, "Volcanic heat": 0.05, "White": 8.97, "Yellow highlights": 0.05,
         "Zombie": 8.69,
     },
     "Head": {
-        "Barber Broo": 2.96,
-        "Biker hairstyle": 2.54,
-        "Bogocha glasses": 2.68,
-        "Brown fashionable": 2.72,
-        "CC": 2.72,
-        "Cedar": 2.87,
-        "Chef's hat": 2.35,
-        "Corey": 0.05,
-        "Crown Kings": 2.49,
-        "Curly hair": 2.63,
-        "Cyber detective hat": 3.62,
-        "Cyclops": 3.1,
-        "Deep Shadow": 0.05,
-        "Diamond glasses": 2.82,
-        "Didi": 1.69,
-        "Digital glasses": 2.49,
-        "Dir": 2.72,
-        "Dragon helmet": 0.05,
-        "Dreamer's cap": 0.05,
-        "Earflap hat": 0.05,
-        "Easter hat": 2.96,
-        "Fashion glass": 2.4,
-        "Fool's cap": 0.05,
-        "Goggles": 3.15,
-        "Golden wreath": 0.05,
-        "Hermes": 2.72,
-        "Hockey helmet": 3.05,
-        "Horns of the Abyss": 0.05,
-        "Hot cylinder": 0.05,
-        "Jacket hat": 3.62,
-        "Lab glasses": 2.68,
-        "Mafia hat": 2.49,
-        "Magnetus helmet": 3.29,
-        "Major's cap": 2.3,
-        "Mechanical glasses": 0.05,
-        "Morning Mist Helmet": 0.05,
-        "Neon glasses": 2.77,
-        "Nightcap": 2.58,
-        "Omni hair": 0.05,
-        "Pork": 2.35,
-        "Robocop helmet": 2.63,
-        "Rose-colored glasses": 2.87,
-        "Sand cape": 0.05,
-        "Shadow Necromancer": 0.05,
-        "Sharp visor": 2.68,
-        "Shiny hat": 2.72,
-        "Short hairstyle": 2.49,
-        "Snow goggles": 2.96,
-        "Sorcerer hair": 0.05,
-        "Straw hat": 3.48,
-        "Transparent wool": 0.05,
-        "Warhammer helmet": 0.05,
-        "Yellow 75 glasses": 2.63,
+        "Barber Broo": 2.96, "Biker hairstyle": 2.54, "Bogocha glasses": 2.68,
+        "Brown fashionable": 2.72, "CC": 2.72, "Cedar": 2.87, "Chef's hat": 2.35,
+        "Corey": 0.05, "Crown Kings": 2.49, "Curly hair": 2.63, "Cyber detective hat": 3.62,
+        "Cyclops": 3.1, "Deep Shadow": 0.05, "Diamond glasses": 2.82, "Didi": 1.69,
+        "Digital glasses": 2.49, "Dir": 2.72, "Dragon helmet": 0.05, "Dreamer's cap": 0.05,
+        "Earflap hat": 0.05, "Easter hat": 2.96, "Fashion glass": 2.4, "Fool's cap": 0.05,
+        "Goggles": 3.15, "Golden wreath": 0.05, "Hermes": 2.72, "Hockey helmet": 3.05,
+        "Horns of the Abyss": 0.05, "Hot cylinder": 0.05, "Jacket hat": 3.62,
+        "Lab glasses": 2.68, "Mafia hat": 2.49, "Magnetus helmet": 3.29, "Major's cap": 2.3,
+        "Mechanical glasses": 0.05, "Morning Mist Helmet": 0.05, "Neon glasses": 2.77,
+        "Nightcap": 2.58, "Omni hair": 0.05, "Pork": 2.35, "Robocop helmet": 2.63,
+        "Rose-colored glasses": 2.87, "Sand cape": 0.05, "Shadow Necromancer": 0.05,
+        "Sharp visor": 2.68, "Shiny hat": 2.72, "Short hairstyle": 2.49, "Snow goggles": 2.96,
+        "Sorcerer hair": 0.05, "Straw hat": 3.48, "Transparent wool": 0.05,
+        "Warhammer helmet": 0.05, "Yellow 75 glasses": 2.63,
     },
     "Suits": {
-        "Abibas": 1.69,
-        "Astartes Space Marines": 0.05,
-        "Balenci": 2.11,
-        "Balenciaga": 1.41,
-        "Belivera raincoat": 1.46,
-        "Biker vest": 1.78,
-        "Bottega Veneta": 1.41,
-        "CC": 1.36,
-        "Celine": 1.97,
-        "Cloak of Near legion": 0.05,
-        "Cook": 1.69,
-        "Cyber detective": 1.6,
-        "DG": 1.46,
-        "Desert nomad": 0.05,
-        "Didi": 1.64,
-        "Dies": 1.78,
-        "Digital down": 1.46,
-        "Doctor": 1.83,
-        "Dreamer": 0.05,
-        "Easter costume": 1.13,
-        "Exo suit": 1.46,
-        "Exoskeleton": 1.46,
-        "Farmer's shirt": 1.13,
-        "Fire jacket": 1.64,
-        "Ghost": 0.05,
-        "Glamorous puffer": 1.6,
-        "Glitch": 1.69,
-        "Green acid": 1.5,
-        "Green poison": 1.46,
-        "Gucci jacket": 1.46,
-        "Hawaiian shirt": 1.5,
-        "Hermes coat": 1.41,
-        "Hockey player": 1.55,
-        "Hole time": 1.22,
-        "Ice armor": 1.36,
-        "Infected": 1.32,
-        "Iron captain": 1.5,
-        "Iron lava": 1.13,
-        "Jacket": 1.32,
-        "Jester's motley": 0.05,
-        "Jordan": 1.74,
-        "Kayvin Klein": 1.64,
-        "LV": 1.32,
-        "Louis Vuitton": 1.5,
-        "Lvs": 1.17,
-        "Mafia": 1.64,
-        "Magic costume": 1.5,
-        "Magnetus": 1.6,
-        "Maki": 1.74,
-        "Mantle Kings": 1.13,
-        "Mechanical": 1.27,
-        "Mechanical armor": 0.05,
-        "Neon chains": 1.6,
-        "Neon windbreaker": 1.55,
-        "Nightgown": 1.22,
-        "Nike": 1.32,
-        "Obsidian Chain of Power": 0.05,
-        "OmniBlinks": 0.05,
-        "Peaked cap": 2.02,
-        "Pearl jacket": 0.05,
-        "Pink armor": 1.27,
-        "Prada": 1.97,
-        "Pulsar of Eternity": 1.08,
-        "Raincoat": 1.32,
-        "Red techno": 1.36,
-        "Robocop": 1.5,
-        "Robot": 1.41,
-        "Saint L": 2.07,
-        "Samurai": 0.05,
-        "Samurai Ashigaru": 1.46,
-        "Shadow Necromancer": 0.05,
-        "Smoky ashes": 1.17,
-        "Sorcerer": 0.05,
-        "Summer shirt": 1.69,
-        "Tailcoat suit": 0.05,
-        "Vampire": 0.05,
-        "Venom": 0.05,
-        "White Fur Coat": 1.17,
-        "White roba": 1.41,
-        "Winter coat": 1.78,
-        "Zeus": 0.05,
-        "Zombie": 1.27,
-        "jacket rhinestones": 1.83,
+        "Abibas": 1.69, "Astartes Space Marines": 0.05, "Balenci": 2.11, "Balenciaga": 1.41,
+        "Belivera raincoat": 1.46, "Biker vest": 1.78, "Bottega Veneta": 1.41, "CC": 1.36,
+        "Celine": 1.97, "Cloak of Near legion": 0.05, "Cook": 1.69, "Cyber detective": 1.6,
+        "DG": 1.46, "Desert nomad": 0.05, "Didi": 1.64, "Dies": 1.78, "Digital down": 1.46,
+        "Doctor": 1.83, "Dreamer": 0.05, "Easter costume": 1.13, "Exo suit": 1.46,
+        "Exoskeleton": 1.46, "Farmer's shirt": 1.13, "Fire jacket": 1.64, "Ghost": 0.05,
+        "Glamorous puffer": 1.6, "Glitch": 1.69, "Green acid": 1.5, "Green poison": 1.46,
+        "Gucci jacket": 1.46, "Hawaiian shirt": 1.5, "Hermes coat": 1.41, "Hockey player": 1.55,
+        "Hole time": 1.22, "Ice armor": 1.36, "Infected": 1.32, "Iron captain": 1.5,
+        "Iron lava": 1.13, "Jacket": 1.32, "Jester's motley": 0.05, "Jordan": 1.74,
+        "Kayvin Klein": 1.64, "LV": 1.32, "Louis Vuitton": 1.5, "Lvs": 1.17, "Mafia": 1.64,
+        "Magic costume": 1.5, "Magnetus": 1.6, "Maki": 1.74, "Mantle Kings": 1.13,
+        "Mechanical": 1.27, "Mechanical armor": 0.05, "Neon chains": 1.6,
+        "Neon windbreaker": 1.55, "Nightgown": 1.22, "Nike": 1.32,
+        "Obsidian Chain of Power": 0.05, "OmniBlinks": 0.05, "Peaked cap": 2.02,
+        "Pearl jacket": 0.05, "Pink armor": 1.27, "Prada": 1.97, "Pulsar of Eternity": 1.08,
+        "Raincoat": 1.32, "Red techno": 1.36, "Robocop": 1.5, "Robot": 1.41, "Saint L": 2.07,
+        "Samurai": 0.05, "Samurai Ashigaru": 1.46, "Shadow Necromancer": 0.05,
+        "Smoky ashes": 1.17, "Sorcerer": 0.05, "Summer shirt": 1.69, "Tailcoat suit": 0.05,
+        "Vampire": 0.05, "Venom": 0.05, "White Fur Coat": 1.17, "White roba": 1.41,
+        "Winter coat": 1.78, "Zeus": 0.05, "Zombie": 1.27, "jacket rhinestones": 1.83,
     },
     "Teeth": {
-        "Alabaster tone": 0.09,
-        "Amber spark": 0.05,
-        "Echo of Ashes": 0.05,
-        "Ethereal shine": 0.05,
-        "Frozen teeth": 8.45,
-        "Ghostly blue": 0.05,
-        "Glint": 0.05,
-        "Golden": 7.05,
-        "Golden Fag": 0.05,
-        "Gray": 8.03,
-        "Jester's Teeth": 0.05,
-        "Lava": 8.92,
-        "Mechanical": 8.03,
-        "Opal light": 0.05,
-        "Orange": 8.41,
-        "Palette": 8.27,
-        "Purable white": 0.05,
-        "Purple teeth": 0.05,
-        "Rainbow": 9.39,
-        "Raleigh RR-32": 8.41,
-        "Reddish glow": 0.05,
-        "Runes": 8.45,
-        "Salad greens": 0.05,
-        "Snow-white": 0.05,
-        "Stone ruins": 8.45,
-        "Titanium glitter": 0.05,
-        "Vampire fangs": 0.05,
-        "White": 7.33,
+        "Alabaster tone": 0.09, "Amber spark": 0.05, "Echo of Ashes": 0.05,
+        "Ethereal shine": 0.05, "Frozen teeth": 8.45, "Ghostly blue": 0.05, "Glint": 0.05,
+        "Golden": 7.05, "Golden Fag": 0.05, "Gray": 8.03, "Jester's Teeth": 0.05,
+        "Lava": 8.92, "Mechanical": 8.03, "Opal light": 0.05, "Orange": 8.41,
+        "Palette": 8.27, "Purable white": 0.05, "Purple teeth": 0.05, "Rainbow": 9.39,
+        "Raleigh RR-32": 8.41, "Reddish glow": 0.05, "Runes": 8.45, "Salad greens": 0.05,
+        "Snow-white": 0.05, "Stone ruins": 8.45, "Titanium glitter": 0.05,
+        "Vampire fangs": 0.05, "White": 7.33,
     },
 };
 
 /* ═══════════════════════════════════════════════════
-   RARITY SCORE CALCULATION — формула Hotcraft
-   Score = Σ (1 / trait_percentage)
-   Чем выше score — тем реже NFT
+   RARITY SCORE — формула Hotcraft: Σ(1/percentage)
+   
+   Откалибровано по реальным данным:
+   - Ранг 1-3:     score 120+ (все 0.05% трейты)
+   - Ранг 57-59:   score ~2.15-2.28
+   - Ранг 150-250: score ~1.94-2.04
+   - Ранг 700-950: score ~1.58-1.69
+   - Ранг 1600+:   score ~1.31-1.40
+   
+   Пороги:
+   - Legendary: score >= 10 (1/1 NFT с уникальными трейтами)
+   - Epic:      score >= 1.90 (топ ~300, ранг <300)
+   - Rare:      score >= 1.55 (ранг <1000)
+   - Common:    score < 1.55 (ранг 1000+)
    ═══════════════════════════════════════════════════ */
 
 function calculateRarityScore(attributes) {
@@ -345,12 +144,11 @@ function calculateRarityScore(attributes) {
         var traitType = attr.trait_type;
         var traitValue = attr.value;
 
-        var percentage = 5; // default для неизвестных трейтов
+        var percentage = 5; // default для неизвестных
         if (TRAIT_RARITY[traitType] && TRAIT_RARITY[traitType][traitValue] !== undefined) {
             percentage = TRAIT_RARITY[traitType][traitValue];
         }
 
-        // Защита от деления на 0
         if (percentage > 0) {
             score += 1 / percentage;
         }
@@ -359,21 +157,25 @@ function calculateRarityScore(attributes) {
     return score;
 }
 
-// Примерный маппинг score → ранг (на основе данных)
-// Score ~2.2+ = ранг <100 (top 5%) = Legendary
-// Score ~1.9-2.2 = ранг 100-500 (5-25%) = Epic
-// Score ~1.6-1.9 = ранг 500-1500 (25-70%) = Rare
-// Score <1.6 = ранг 1500+ (70%+) = Common
 function getRarityFromScore(score) {
-    if (score >= 2.2) {
-        return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 6, max: 9 };
+    // Legendary: 1/1 NFT с супер-редкими трейтами (все 0.05%)
+    // Score 120 = все 6 трейтов по 0.05%
+    // Score >= 10 = минимум 1-2 трейта 0.05%
+    if (score >= 10) {
+        return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 7, max: 9 };
     }
-    if (score >= 1.9) {
+
+    // Epic: топ ~300 (ранг < 300), score ~1.90+
+    if (score >= 1.90) {
         return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 5, max: 9 };
     }
-    if (score >= 1.6) {
+
+    // Rare: ранг 300-1000, score 1.55-1.90
+    if (score >= 1.55) {
         return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 3, max: 7 };
     }
+
+    // Common: ранг 1000+, score < 1.55
     return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 5 };
 }
 
@@ -382,14 +184,26 @@ function getRarityFromTraits(attributes) {
     return getRarityFromScore(score);
 }
 
-// Fallback если нет атрибутов
+// Fallback если нет атрибутов — по позиции token_id
 function getRarityFallback(tokenId) {
     var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
-    var pct = (num / TOTAL_SUPPLY) * 100;
 
-    if (pct <= 5) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 6, max: 9 };
-    if (pct <= 25) return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 5, max: 9 };
-    if (pct <= 70) return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 3, max: 7 };
+    // Первые ~17 NFT (1-17) — это 1/1 легендарки
+    if (num <= 17) {
+        return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 7, max: 9 };
+    }
+
+    // ~14% Epic (300 NFT)
+    if (num <= 320) {
+        return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 5, max: 9 };
+    }
+
+    // ~33% Rare (700 NFT)
+    if (num <= 1020) {
+        return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 3, max: 7 };
+    }
+
+    // Остальные Common
     return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 5 };
 }
 
@@ -468,7 +282,7 @@ function genStats(tokenId, rarity) {
         }
     }
 
-    var seed = createSeed(tokenId, "stats_v5");
+    var seed = createSeed(tokenId, "stats_v6");
     var rng = mulberry32(seed);
 
     var min = Math.max(1, rarity.min);
@@ -481,13 +295,13 @@ function genStats(tokenId, rarity) {
         left: Math.min(9, Math.max(1, Math.floor(rng() * (max - min + 1)) + min))
     };
 
-    // Ace для legendary (40%) и epic (15%)
+    // Ace для legendary (50%) и epic (20%)
     var aceChance = 0;
-    if (rarity.key === "legendary") aceChance = 0.4;
-    else if (rarity.key === "epic") aceChance = 0.15;
+    if (rarity.key === "legendary") aceChance = 0.5;
+    else if (rarity.key === "epic") aceChance = 0.2;
 
     if (aceChance > 0) {
-        var aceRng = mulberry32(createSeed(tokenId, "ace_v2"));
+        var aceRng = mulberry32(createSeed(tokenId, "ace_v3"));
         if (aceRng() < aceChance) {
             var sides = ["top", "right", "bottom", "left"];
             var aceSide = sides[Math.floor(aceRng() * sides.length)];
@@ -715,9 +529,7 @@ export default function Inventory({ token, onDeckReady }) {
                 }
             }
         };
-
         document.addEventListener('visibilitychange', handleVisibilityChange);
-
         return function () {
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
@@ -757,10 +569,8 @@ export default function Inventory({ token, onDeckReady }) {
                         var tokens = await nearNftTokensForOwner(nftContractId, accountId);
 
                         items = tokens.map(function (t) {
-                            // Извлекаем атрибуты из метаданных
                             var attributes = null;
                             if (t.metadata) {
-                                // Проверяем extra
                                 if (t.metadata.extra) {
                                     try {
                                         var extra = typeof t.metadata.extra === "string"
@@ -773,13 +583,11 @@ export default function Inventory({ token, onDeckReady }) {
                                         }
                                     } catch (e) { }
                                 }
-                                // Проверяем прямые attributes
                                 if (!attributes && t.metadata.attributes) {
                                     attributes = t.metadata.attributes;
                                 }
                             }
 
-                            // Рарность по атрибутам (формула Hotcraft) или fallback
                             var r = attributes
                                 ? getRarityFromTraits(attributes)
                                 : getRarityFallback(t.token_id);
