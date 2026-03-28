@@ -449,9 +449,11 @@ export default function Inventory({ token, onDeckReady }) {
                 if (connected && accountId && nftContractId) {
                     try {
                         var tokens = await nearNftTokensForOwner(nftContractId, accountId);
-
                         // Загружаем атрибуты с IPFS параллельно
                         var attributesMap = {};
+                        var loadedCount = 0;
+                        var failedCount = 0;
+
                         await Promise.allSettled(
                             tokens.map(async function (t) {
                                 var tid = t.token_id;
@@ -460,6 +462,7 @@ export default function Inventory({ token, onDeckReady }) {
                                 var cached = getStoredCardData(tid);
                                 if (cached && cached.attributes) {
                                     attributesMap[tid] = cached.attributes;
+                                    loadedCount++;
                                     return;
                                 }
 
@@ -472,17 +475,25 @@ export default function Inventory({ token, onDeckReady }) {
                                         var json = await resp.json();
                                         if (json.attributes && Array.isArray(json.attributes)) {
                                             attributesMap[tid] = json.attributes;
+                                            loadedCount++;
                                             // Кэшируем атрибуты в localStorage
                                             var data = cached || {};
                                             data.attributes = json.attributes;
                                             storeCardData(tid, data);
+                                        } else {
+                                            failedCount++;
                                         }
+                                    } else {
+                                        failedCount++;
                                     }
                                 } catch (e) {
-                                    // Нет атрибутов — используем fallback
+                                    failedCount++;
                                 }
                             })
                         );
+
+                        // ДЕБАГ — покажет сколько загрузилось
+                        setError("IPFS: loaded=" + loadedCount + " failed=" + failedCount + " total=" + tokens.length);
 
                         items = tokens.map(function (t) {
                             var attributes = attributesMap[t.token_id] || null;
