@@ -568,14 +568,13 @@ export default function Inventory({ token, onDeckReady }) {
                     try {
                         var tokens = await nearNftTokensForOwner(nftContractId, accountId);
                         var t0 = tokens[0];
-                        var mk = t0.metadata ? Object.keys(t0.metadata).join(",") : "NO_META";
-                        var ref = t0.metadata?.reference
-                            ? String(t0.metadata.reference).slice(0, 150)
-                            : "NO_REF";
-                        var media = t0.metadata?.media
-                            ? String(t0.metadata.media).slice(0, 100)
-                            : "NO_MEDIA";
-                        setError("id=" + t0.token_id + " | keys=" + mk + " | ref=" + ref + " | media=" + media);
+                        var extraRaw = t0.metadata?.extra;
+                        var extraType = typeof extraRaw;
+                        var extraStr = extraRaw === null ? "NULL" :
+                            extraRaw === undefined ? "UNDEFINED" :
+                                extraType === "string" ? ("STR:" + extraRaw.slice(0, 200)) :
+                                    ("OBJ:" + JSON.stringify(extraRaw).slice(0, 200));
+                        setError("id=" + t0.token_id + " | extraType=" + extraType + " | extra=" + extraStr);
                         return;
 
                         items = tokens.map(function (t) {
