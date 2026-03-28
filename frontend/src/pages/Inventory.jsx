@@ -3,17 +3,17 @@ import { apiFetch } from "../api";
 import { useWalletConnect } from "../context/WalletConnectContext";
 import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from "../libs/nearNft";
 
-// Миграция: сбросить старые статы чтобы пересчитать с Ace
-(function migrateAce() {
+// Миграция: сбросить старые статы чтобы пересчитать с новой рарностью
+(function migrateRarity() {
     try {
-        if (localStorage.getItem("cc_ace_migrated_v2")) return;
+        if (localStorage.getItem("cc_rarity_v3")) return;
         var keys = Object.keys(localStorage);
         for (var i = 0; i < keys.length; i++) {
             if (keys[i].startsWith("cc_card_")) {
                 localStorage.removeItem(keys[i]);
             }
         }
-        localStorage.setItem("cc_ace_migrated_v2", "1");
+        localStorage.setItem("cc_rarity_v3", "1");
     } catch (e) { }
 })();
 
@@ -64,16 +64,164 @@ function createSeed(tokenId, salt) {
     return hashCode(combined);
 }
 
-function getRarityFromTokenId(tokenId, totalSupply) {
-    totalSupply = totalSupply || 2000;
+/* ═══════════════════════════════════════════════════
+   RARITY SYSTEM — основана на реальной статистике
+   коллекции из 2129 NFT
+   ═══════════════════════════════════════════════════ */
+
+// Вес редкости трейта: чем меньше встречается, тем больше очков
+// 1/1 уникальные = 100 очков
+// Редкие (<2%) = 30 очков  
+// Необычные (2-5%) = 10 очков
+// Обычные (>5%) = 1 очко
+function traitRarityScore(traitType, traitValue) {
+    // Все 1/1 уникальные трейты (встречаются 1 раз из 2129)
+    var UNIQUE_TRAITS = {
+        Background: [
+            "Graffiti wall", "Near factory", "Midway park", "Night city",
+            "Aristocrat's house", "Old castle", "Necromancer's Abode", "Quiet Sun",
+            "Sorcerer Forest", "Dragon spirit", "Apocalypse", "Future",
+            "Olympus", "Through the Twilight", "Vampire house", "Ancient ruins", "Ashes"
+        ],
+        Body: [
+            "Grey Stream", "Grayish", "Lunar ash", "Cosmic reflection",
+            "Redhead", "Bluish gray", "Ashes of Time", "Dusty obsidian",
+            "Purple gray", "Ash Whirlwind", "Warhammer", "Midnight gray",
+            "Coal smoke", "Ash gray haze", "Thundercloud", "Cloud smoke",
+            "Infernal Violet"
+        ],
+        Eyes: [
+            "Thunderbolt Glow", "Yellow highlights", "Jester's Eyes", "Moon Shadow",
+            "Hot eyes", "Ghost eyes", "Necromancer's Eyes", "Sandy",
+            "Sorcerer eye", "Ash Phantom", "Volcanic heat", "Shining Stream",
+            "Crystal glint", "Omni eye", "Bloody eye", "Legion g", "Amber Ember Eyes"
+        ],
+        Teeth: [
+            "Opal light", "Jester's Teeth", "Reddish glow", "Ghostly blue",
+            "Ethereal shine", "Snow-white", "Purple teeth", "Amber spark",
+            "Echo of Ashes", "Glint", "Titanium glitter", "Purable white",
+            "Vampire fangs", "Salad greens", "Golden Fag"
+        ],
+        Suits: [
+            "Pearl jacket", "Mechanical armor", "Jester's motley", "Venom",
+            "Tailcoat suit", "Ghost", "Shadow Necromancer", "Desert nomad",
+            "Sorcerer", "Samurai", "Astartes Space Marines", "Dreamer",
+            "Zeus", "OmniBlinks", "Vampire", "Cloak of Near legion",
+            "Obsidian Chain of Power"
+        ],
+        Head: [
+            "Earflap hat", "Mechanical glasses", "Fool's cap", "Deep Shadow",
+            "Hot cylinder", "Transparent wool", "Shadow Necromancer", "Sand cape",
+            "Sorcerer hair", "Morning Mist Helmet", "Warhammer helmet",
+            "Dreamer's cap", "Golden wreath", "Omni hair", "Corey",
+            "Dragon helmet", "Horns of the Abyss"
+        ]
+    };
+
+    // Редкие трейты (<2% = менее ~43 из 2129)
+    var RARE_TRAITS = {
+        Background: ["Ruins", "Crypt", "City", "Country evening", "Road forest"],
+        Body: [], // все обычные body >= 8.9%
+        Eyes: [], // все обычные eyes >= 8.1%
+        Teeth: ["Alabaster tone"], // 2 из 2129
+        Suits: [
+            "Pulsar of Eternity", "Easter costume", "Iron lava", "Farmer's shirt",
+            "Mantle Kings", "Lvs", "White Fur Coat", "Smoky ashes",
+            "Nightgown", "Hole time"
+        ],
+        Head: ["Didi"] // 36 из 2129 = 1.7%
+    };
+
+    // Необычные (2-5%)
+    var UNCOMMON_TRAITS = {
+        Background: [
+            "Night street", "Radiation", "evening lights", "Meteor shower",
+            "Green wall", "Reading room", "Winter forest", "Forest", "Night",
+            "Morning forest", "Pixel landscape", "Laboratory", "Golden age",
+            "Green ball", "Golden Radiance", "City of Ashes", "Neon diamond",
+            "Slanting rain", "Overcast clouds", "Cold morning", "Mountain beach"
+        ],
+        Body: [],
+        Eyes: [],
+        Teeth: ["Golden"], // 7.0% — на грани, но ценный трейт
+        Suits: [
+            "Mechanical", "Pink armor", "Zombie", "Raincoat", "Nike", "LV",
+            "Infected", "Jacket", "CC", "Red techno", "Ice armor",
+            "Hermes coat", "Bottega Veneta", "Robot", "White roba", "Balenciaga"
+        ],
+        Head: [
+            "Major's cap", "Chef's hat", "Pork", "Fashion glass",
+            "Mafia hat", "Crown Kings", "Digital glasses", "Short hairstyle",
+            "Biker hairstyle", "Nightcap", "Yellow 75 glasses", "Curly hair",
+            "Robocop helmet"
+        ]
+    };
+
+    var uniqueList = UNIQUE_TRAITS[traitType] || [];
+    if (uniqueList.indexOf(traitValue) !== -1) return 100;
+
+    var rareList = RARE_TRAITS[traitType] || [];
+    if (rareList.indexOf(traitValue) !== -1) return 30;
+
+    var uncommonList = UNCOMMON_TRAITS[traitType] || [];
+    if (uncommonList.indexOf(traitValue) !== -1) return 10;
+
+    return 1; // Common
+}
+
+// Подсчёт рарности NFT по сумме очков всех трейтов
+function getRarityFromTraits(attributes) {
+    if (!attributes || !Array.isArray(attributes) || attributes.length === 0) {
+        return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 5 };
+    }
+
+    var totalScore = 0;
+    var hasUnique = false;
+    var uniqueCount = 0;
+
+    for (var i = 0; i < attributes.length; i++) {
+        var attr = attributes[i];
+        var score = traitRarityScore(attr.trait_type, attr.value);
+        totalScore += score;
+        if (score === 100) {
+            hasUnique = true;
+            uniqueCount++;
+        }
+    }
+
+    // Legendary: 3+ уникальных трейта ИЛИ суммарный скор >= 400
+    // (полные 1/1 — все 6 трейтов уникальны = 600 очков)
+    if (uniqueCount >= 3 || totalScore >= 400) {
+        return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 6, max: 9 };
+    }
+
+    // Epic: 1-2 уникальных трейта ИЛИ суммарный скор >= 120
+    if (hasUnique || totalScore >= 120) {
+        return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 5, max: 9 };
+    }
+
+    // Rare: скор >= 30 (несколько необычных или 1 редкий)
+    if (totalScore >= 30) {
+        return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 3, max: 7 };
+    }
+
+    // Common: всё остальное
+    return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 5 };
+}
+
+// Fallback если нет метаданных — по token_id (старая логика)
+function getRarityFallback(tokenId, totalSupply) {
+    totalSupply = totalSupply || 2131;
     var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
     var pct = (num / totalSupply) * 100;
 
-    if (pct <= 10) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 6, max: 9 };
-    if (pct <= 30) return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 5, max: 9 };
-    if (pct <= 60) return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 3, max: 7 };
+    if (pct <= 5) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 6, max: 9 };
+    if (pct <= 20) return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 5, max: 9 };
+    if (pct <= 50) return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 3, max: 7 };
     return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 5 };
 }
+
+/* ═══════════════════════════════════════════════════ */
 
 function getStoredCardData(tokenId) {
     try {
@@ -97,7 +245,6 @@ function genStats(tokenId, rarity) {
     var stored = getStoredCardData(tokenId);
     if (stored && stored.stats && typeof stored.stats.top === "number") {
         var s = stored.stats;
-        // Принимаем значения до 10 (Ace)
         if (s.top <= 10 && s.right <= 10 && s.bottom <= 10 && s.left <= 10 &&
             s.top >= 1 && s.right >= 1 && s.bottom >= 1 && s.left >= 1) {
             return s;
@@ -157,13 +304,11 @@ function genElement(tokenId) {
     return element;
 }
 
-/** Отображение значения: 10 → "A", остальное как есть */
 function displayStatValue(val) {
     if (val === ACE_VALUE) return "A";
     return val;
 }
 
-/** Стиль для значения: Ace — золотой */
 function statStyle(val) {
     if (val === ACE_VALUE) return { color: "#ffd700", fontWeight: 900, textShadow: "0 0 6px rgba(255,215,0,0.6)" };
     return undefined;
@@ -252,7 +397,7 @@ var InventoryCard = memo(function InventoryCard({
     }, [nft.element, nft.tokenId, nft.token_id, nft.id, k]);
 
     var rarity = useMemo(function () {
-        return nft.rarity || getRarityFromTokenId(nft.tokenId, 2000);
+        return nft.rarity || getRarityFallback(nft.tokenId, 2131);
     }, [nft.rarity, nft.tokenId]);
 
     var handleClick = useCallback(function () {
@@ -395,7 +540,30 @@ export default function Inventory({ token, onDeckReady }) {
                         var tokens = await nearNftTokensForOwner(nftContractId, accountId);
 
                         items = tokens.map(function (t) {
-                            var r = getRarityFromTokenId(t.token_id, 2000);
+                            // Извлекаем атрибуты из метаданных для рарности
+                            var attributes = null;
+                            if (t.metadata && t.metadata.extra) {
+                                try {
+                                    var extra = typeof t.metadata.extra === "string"
+                                        ? JSON.parse(t.metadata.extra)
+                                        : t.metadata.extra;
+                                    if (extra && Array.isArray(extra.attributes)) {
+                                        attributes = extra.attributes;
+                                    } else if (extra && Array.isArray(extra)) {
+                                        attributes = extra;
+                                    }
+                                } catch (e) { }
+                            }
+                            // Также проверяем reference метаданные
+                            if (!attributes && t.metadata && t.metadata.attributes) {
+                                attributes = t.metadata.attributes;
+                            }
+
+                            // Определяем рарность по трейтам или fallback по ID
+                            var r = attributes
+                                ? getRarityFromTraits(attributes)
+                                : getRarityFallback(t.token_id, 2131);
+
                             var st = genStats(t.token_id, r);
                             var elem = genElement(t.token_id);
 
@@ -413,6 +581,7 @@ export default function Inventory({ token, onDeckReady }) {
                                 rarity: r,
                                 rank: r.key,
                                 rankLabel: r.key[0].toUpperCase(),
+                                attributes: attributes,
                             };
                         });
 
@@ -467,7 +636,6 @@ export default function Inventory({ token, onDeckReady }) {
                 var elem = nft.element || genElement(nft.tokenId || nft.token_id || nft.id);
                 var rawStats = nft.stats || { top: 5, right: 5, bottom: 5, left: 5 };
 
-                // Сохраняем Ace (10) как есть, остальное clamp 1-9
                 var safeStats = {
                     top: rawStats.top === ACE_VALUE ? ACE_VALUE : Math.min(9, Math.max(1, rawStats.top || 5)),
                     right: rawStats.right === ACE_VALUE ? ACE_VALUE : Math.min(9, Math.max(1, rawStats.right || 5)),
