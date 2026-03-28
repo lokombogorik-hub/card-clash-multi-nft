@@ -3,21 +3,397 @@ import { apiFetch } from "../api";
 import { useWalletConnect } from "../context/WalletConnectContext";
 import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from "../libs/nearNft";
 
-// Миграция: сбросить старые статы чтобы пересчитать с новой рарностью
+// Миграция: сбросить старые данные для новой системы рарности
 (function migrateRarity() {
     try {
-        if (localStorage.getItem("cc_rarity_v3")) return;
+        if (localStorage.getItem("cc_rarity_v4_hotcraft")) return;
         var keys = Object.keys(localStorage);
         for (var i = 0; i < keys.length; i++) {
             if (keys[i].startsWith("cc_card_")) {
                 localStorage.removeItem(keys[i]);
             }
         }
-        localStorage.setItem("cc_rarity_v3", "1");
+        localStorage.setItem("cc_rarity_v4_hotcraft", "1");
     } catch (e) { }
 })();
 
 var ACE_VALUE = 10;
+var TOTAL_SUPPLY = 2129;
+
+/* ═══════════════════════════════════════════════════
+   TRAIT RARITY TABLE — точные проценты из коллекции
+   ═══════════════════════════════════════════════════ */
+var TRAIT_RARITY = {
+    "Background": {
+        "Ancient ruins": 0.05,
+        "Apocalypse": 0.05,
+        "Aristocrat's house": 0.05,
+        "Ashes": 0.05,
+        "Autumn evening": 2.44,
+        "Black Wall": 2.02,
+        "Blue paints": 2.11,
+        "Blue rings": 2.11,
+        "City": 1.32,
+        "City of Ashes": 1.74,
+        "Cold morning": 1.74,
+        "Country evening": 1.46,
+        "Cracked ball": 1.97,
+        "Crypt": 1.36,
+        "Dark forest": 1.88,
+        "Darkforest": 1.88,
+        "Dragon spirit": 0.05,
+        "Evening field": 2.02,
+        "Evening light": 2.02,
+        "Forest": 1.6,
+        "Forest of Oblivion": 1.93,
+        "Future": 0.05,
+        "Gears": 1.88,
+        "Ghost": 1.88,
+        "Golden Radiance": 1.69,
+        "Golden age": 1.64,
+        "Graffiti wall": 0.05,
+        "Green ball": 1.64,
+        "Green wall": 1.5,
+        "Laboratory": 1.64,
+        "Lake shore": 1.97,
+        "Lunar oblivion": 2.25,
+        "Meteor shower": 1.55,
+        "Midway park": 0.05,
+        "Moon": 2.11,
+        "Morning forest": 1.64,
+        "Mountain beach": 1.78,
+        "Near factory": 0.05,
+        "Necromancer's Abode": 0.05,
+        "Neon circle": 2.11,
+        "Neon city": 1.83,
+        "Neon diamond": 1.74,
+        "Night": 1.6,
+        "Night city": 0.05,
+        "Night street": 1.55,
+        "Night trail": 2.58,
+        "Old castle": 0.05,
+        "Olympus": 0.05,
+        "Orange canvas": 1.93,
+        "Overcast clouds": 1.74,
+        "Paris": 1.88,
+        "Pink bubbles": 2.11,
+        "Pixel landscape": 1.64,
+        "Purple style": 2.02,
+        "Pyramid": 2.25,
+        "Quiet Sun": 0.05,
+        "Radiation": 1.55,
+        "Reading room": 1.6,
+        "Road forest": 1.46,
+        "Room": 2.54,
+        "Rotten Grove": 1.97,
+        "Ruins": 1.36,
+        "Slanting rain": 1.74,
+        "Sorcerer Forest": 0.05,
+        "Spring forest": 2.16,
+        "Street Lanterns": 2.07,
+        "Through the Twilight": 0.05,
+        "Twilight": 1.83,
+        "Vampire house": 0.05,
+        "Winter forest": 1.6,
+        "evening lights": 1.55,
+    },
+    "Body": {
+        "Ash Whirlwind": 0.05,
+        "Ash gray haze": 0.05,
+        "Ashes of Time": 0.05,
+        "Black": 9.53,
+        "Blue": 9.3,
+        "Bluish gray": 0.05,
+        "Cloud smoke": 0.05,
+        "Coal smoke": 0.05,
+        "Cosmic reflection": 0.05,
+        "Dusty obsidian": 0.05,
+        "Gray": 9.91,
+        "Grayish": 0.05,
+        "Grey Stream": 0.05,
+        "Infernal Violet": 0.05,
+        "Light gray": 8.88,
+        "Lilac": 10.8,
+        "Lunar ash": 0.05,
+        "Midnight gray": 0.05,
+        "Orange": 10.29,
+        "Pink": 9.86,
+        "Purple gray": 0.05,
+        "Red": 10.33,
+        "Redhead": 0.05,
+        "Salad green": 9.53,
+        "Thundercloud": 0.05,
+        "Warhammer": 0.05,
+        "White": 10.76,
+    },
+    "Eyes": {
+        "Amber Ember Eyes": 0.05,
+        "Ash Phantom": 0.05,
+        "Blood": 9.07,
+        "Bloody eye": 0.05,
+        "Crystal glint": 0.05,
+        "Ghost eyes": 0.05,
+        "Hi Tech": 8.92,
+        "Honeycombs": 10.29,
+        "Hot eyes": 0.05,
+        "Hypnosis": 8.08,
+        "Jester's Eyes": 0.05,
+        "Legion g": 0.05,
+        "Moon Shadow": 0.05,
+        "Necromancer's Eyes": 0.05,
+        "Omni eye": 0.05,
+        "Pink": 8.27,
+        "Pink glare": 8.97,
+        "Purple": 9.35,
+        "Red": 9.49,
+        "Sandy": 0.05,
+        "Shining Stream": 0.05,
+        "Sorcerer eye": 0.05,
+        "Thunderbolt Glow": 0.05,
+        "Venom": 9.11,
+        "Volcanic heat": 0.05,
+        "White": 8.97,
+        "Yellow highlights": 0.05,
+        "Zombie": 8.69,
+    },
+    "Head": {
+        "Barber Broo": 2.96,
+        "Biker hairstyle": 2.54,
+        "Bogocha glasses": 2.68,
+        "Brown fashionable": 2.72,
+        "CC": 2.72,
+        "Cedar": 2.87,
+        "Chef's hat": 2.35,
+        "Corey": 0.05,
+        "Crown Kings": 2.49,
+        "Curly hair": 2.63,
+        "Cyber detective hat": 3.62,
+        "Cyclops": 3.1,
+        "Deep Shadow": 0.05,
+        "Diamond glasses": 2.82,
+        "Didi": 1.69,
+        "Digital glasses": 2.49,
+        "Dir": 2.72,
+        "Dragon helmet": 0.05,
+        "Dreamer's cap": 0.05,
+        "Earflap hat": 0.05,
+        "Easter hat": 2.96,
+        "Fashion glass": 2.4,
+        "Fool's cap": 0.05,
+        "Goggles": 3.15,
+        "Golden wreath": 0.05,
+        "Hermes": 2.72,
+        "Hockey helmet": 3.05,
+        "Horns of the Abyss": 0.05,
+        "Hot cylinder": 0.05,
+        "Jacket hat": 3.62,
+        "Lab glasses": 2.68,
+        "Mafia hat": 2.49,
+        "Magnetus helmet": 3.29,
+        "Major's cap": 2.3,
+        "Mechanical glasses": 0.05,
+        "Morning Mist Helmet": 0.05,
+        "Neon glasses": 2.77,
+        "Nightcap": 2.58,
+        "Omni hair": 0.05,
+        "Pork": 2.35,
+        "Robocop helmet": 2.63,
+        "Rose-colored glasses": 2.87,
+        "Sand cape": 0.05,
+        "Shadow Necromancer": 0.05,
+        "Sharp visor": 2.68,
+        "Shiny hat": 2.72,
+        "Short hairstyle": 2.49,
+        "Snow goggles": 2.96,
+        "Sorcerer hair": 0.05,
+        "Straw hat": 3.48,
+        "Transparent wool": 0.05,
+        "Warhammer helmet": 0.05,
+        "Yellow 75 glasses": 2.63,
+    },
+    "Suits": {
+        "Abibas": 1.69,
+        "Astartes Space Marines": 0.05,
+        "Balenci": 2.11,
+        "Balenciaga": 1.41,
+        "Belivera raincoat": 1.46,
+        "Biker vest": 1.78,
+        "Bottega Veneta": 1.41,
+        "CC": 1.36,
+        "Celine": 1.97,
+        "Cloak of Near legion": 0.05,
+        "Cook": 1.69,
+        "Cyber detective": 1.6,
+        "DG": 1.46,
+        "Desert nomad": 0.05,
+        "Didi": 1.64,
+        "Dies": 1.78,
+        "Digital down": 1.46,
+        "Doctor": 1.83,
+        "Dreamer": 0.05,
+        "Easter costume": 1.13,
+        "Exo suit": 1.46,
+        "Exoskeleton": 1.46,
+        "Farmer's shirt": 1.13,
+        "Fire jacket": 1.64,
+        "Ghost": 0.05,
+        "Glamorous puffer": 1.6,
+        "Glitch": 1.69,
+        "Green acid": 1.5,
+        "Green poison": 1.46,
+        "Gucci jacket": 1.46,
+        "Hawaiian shirt": 1.5,
+        "Hermes coat": 1.41,
+        "Hockey player": 1.55,
+        "Hole time": 1.22,
+        "Ice armor": 1.36,
+        "Infected": 1.32,
+        "Iron captain": 1.5,
+        "Iron lava": 1.13,
+        "Jacket": 1.32,
+        "Jester's motley": 0.05,
+        "Jordan": 1.74,
+        "Kayvin Klein": 1.64,
+        "LV": 1.32,
+        "Louis Vuitton": 1.5,
+        "Lvs": 1.17,
+        "Mafia": 1.64,
+        "Magic costume": 1.5,
+        "Magnetus": 1.6,
+        "Maki": 1.74,
+        "Mantle Kings": 1.13,
+        "Mechanical": 1.27,
+        "Mechanical armor": 0.05,
+        "Neon chains": 1.6,
+        "Neon windbreaker": 1.55,
+        "Nightgown": 1.22,
+        "Nike": 1.32,
+        "Obsidian Chain of Power": 0.05,
+        "OmniBlinks": 0.05,
+        "Peaked cap": 2.02,
+        "Pearl jacket": 0.05,
+        "Pink armor": 1.27,
+        "Prada": 1.97,
+        "Pulsar of Eternity": 1.08,
+        "Raincoat": 1.32,
+        "Red techno": 1.36,
+        "Robocop": 1.5,
+        "Robot": 1.41,
+        "Saint L": 2.07,
+        "Samurai": 0.05,
+        "Samurai Ashigaru": 1.46,
+        "Shadow Necromancer": 0.05,
+        "Smoky ashes": 1.17,
+        "Sorcerer": 0.05,
+        "Summer shirt": 1.69,
+        "Tailcoat suit": 0.05,
+        "Vampire": 0.05,
+        "Venom": 0.05,
+        "White Fur Coat": 1.17,
+        "White roba": 1.41,
+        "Winter coat": 1.78,
+        "Zeus": 0.05,
+        "Zombie": 1.27,
+        "jacket rhinestones": 1.83,
+    },
+    "Teeth": {
+        "Alabaster tone": 0.09,
+        "Amber spark": 0.05,
+        "Echo of Ashes": 0.05,
+        "Ethereal shine": 0.05,
+        "Frozen teeth": 8.45,
+        "Ghostly blue": 0.05,
+        "Glint": 0.05,
+        "Golden": 7.05,
+        "Golden Fag": 0.05,
+        "Gray": 8.03,
+        "Jester's Teeth": 0.05,
+        "Lava": 8.92,
+        "Mechanical": 8.03,
+        "Opal light": 0.05,
+        "Orange": 8.41,
+        "Palette": 8.27,
+        "Purable white": 0.05,
+        "Purple teeth": 0.05,
+        "Rainbow": 9.39,
+        "Raleigh RR-32": 8.41,
+        "Reddish glow": 0.05,
+        "Runes": 8.45,
+        "Salad greens": 0.05,
+        "Snow-white": 0.05,
+        "Stone ruins": 8.45,
+        "Titanium glitter": 0.05,
+        "Vampire fangs": 0.05,
+        "White": 7.33,
+    },
+};
+
+/* ═══════════════════════════════════════════════════
+   RARITY SCORE CALCULATION — формула Hotcraft
+   Score = Σ (1 / trait_percentage)
+   Чем выше score — тем реже NFT
+   ═══════════════════════════════════════════════════ */
+
+function calculateRarityScore(attributes) {
+    if (!attributes || !Array.isArray(attributes) || attributes.length === 0) {
+        return 0;
+    }
+
+    var score = 0;
+    for (var i = 0; i < attributes.length; i++) {
+        var attr = attributes[i];
+        var traitType = attr.trait_type;
+        var traitValue = attr.value;
+
+        var percentage = 5; // default для неизвестных трейтов
+        if (TRAIT_RARITY[traitType] && TRAIT_RARITY[traitType][traitValue] !== undefined) {
+            percentage = TRAIT_RARITY[traitType][traitValue];
+        }
+
+        // Защита от деления на 0
+        if (percentage > 0) {
+            score += 1 / percentage;
+        }
+    }
+
+    return score;
+}
+
+// Примерный маппинг score → ранг (на основе данных)
+// Score ~2.2+ = ранг <100 (top 5%) = Legendary
+// Score ~1.9-2.2 = ранг 100-500 (5-25%) = Epic
+// Score ~1.6-1.9 = ранг 500-1500 (25-70%) = Rare
+// Score <1.6 = ранг 1500+ (70%+) = Common
+function getRarityFromScore(score) {
+    if (score >= 2.2) {
+        return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 6, max: 9 };
+    }
+    if (score >= 1.9) {
+        return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 5, max: 9 };
+    }
+    if (score >= 1.6) {
+        return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 3, max: 7 };
+    }
+    return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 5 };
+}
+
+function getRarityFromTraits(attributes) {
+    var score = calculateRarityScore(attributes);
+    return getRarityFromScore(score);
+}
+
+// Fallback если нет атрибутов
+function getRarityFallback(tokenId) {
+    var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
+    var pct = (num / TOTAL_SUPPLY) * 100;
+
+    if (pct <= 5) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 6, max: 9 };
+    if (pct <= 25) return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 5, max: 9 };
+    if (pct <= 70) return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 3, max: 7 };
+    return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 5 };
+}
+
+/* ═══════════════════════════════════════════════════ */
 
 function nftKey(n) {
     if (n.key) return n.key;
@@ -64,165 +440,6 @@ function createSeed(tokenId, salt) {
     return hashCode(combined);
 }
 
-/* ═══════════════════════════════════════════════════
-   RARITY SYSTEM — основана на реальной статистике
-   коллекции из 2129 NFT
-   ═══════════════════════════════════════════════════ */
-
-// Вес редкости трейта: чем меньше встречается, тем больше очков
-// 1/1 уникальные = 100 очков
-// Редкие (<2%) = 30 очков  
-// Необычные (2-5%) = 10 очков
-// Обычные (>5%) = 1 очко
-function traitRarityScore(traitType, traitValue) {
-    // Все 1/1 уникальные трейты (встречаются 1 раз из 2129)
-    var UNIQUE_TRAITS = {
-        Background: [
-            "Graffiti wall", "Near factory", "Midway park", "Night city",
-            "Aristocrat's house", "Old castle", "Necromancer's Abode", "Quiet Sun",
-            "Sorcerer Forest", "Dragon spirit", "Apocalypse", "Future",
-            "Olympus", "Through the Twilight", "Vampire house", "Ancient ruins", "Ashes"
-        ],
-        Body: [
-            "Grey Stream", "Grayish", "Lunar ash", "Cosmic reflection",
-            "Redhead", "Bluish gray", "Ashes of Time", "Dusty obsidian",
-            "Purple gray", "Ash Whirlwind", "Warhammer", "Midnight gray",
-            "Coal smoke", "Ash gray haze", "Thundercloud", "Cloud smoke",
-            "Infernal Violet"
-        ],
-        Eyes: [
-            "Thunderbolt Glow", "Yellow highlights", "Jester's Eyes", "Moon Shadow",
-            "Hot eyes", "Ghost eyes", "Necromancer's Eyes", "Sandy",
-            "Sorcerer eye", "Ash Phantom", "Volcanic heat", "Shining Stream",
-            "Crystal glint", "Omni eye", "Bloody eye", "Legion g", "Amber Ember Eyes"
-        ],
-        Teeth: [
-            "Opal light", "Jester's Teeth", "Reddish glow", "Ghostly blue",
-            "Ethereal shine", "Snow-white", "Purple teeth", "Amber spark",
-            "Echo of Ashes", "Glint", "Titanium glitter", "Purable white",
-            "Vampire fangs", "Salad greens", "Golden Fag"
-        ],
-        Suits: [
-            "Pearl jacket", "Mechanical armor", "Jester's motley", "Venom",
-            "Tailcoat suit", "Ghost", "Shadow Necromancer", "Desert nomad",
-            "Sorcerer", "Samurai", "Astartes Space Marines", "Dreamer",
-            "Zeus", "OmniBlinks", "Vampire", "Cloak of Near legion",
-            "Obsidian Chain of Power"
-        ],
-        Head: [
-            "Earflap hat", "Mechanical glasses", "Fool's cap", "Deep Shadow",
-            "Hot cylinder", "Transparent wool", "Shadow Necromancer", "Sand cape",
-            "Sorcerer hair", "Morning Mist Helmet", "Warhammer helmet",
-            "Dreamer's cap", "Golden wreath", "Omni hair", "Corey",
-            "Dragon helmet", "Horns of the Abyss"
-        ]
-    };
-
-    // Редкие трейты (<2% = менее ~43 из 2129)
-    var RARE_TRAITS = {
-        Background: ["Ruins", "Crypt", "City", "Country evening", "Road forest"],
-        Body: [], // все обычные body >= 8.9%
-        Eyes: [], // все обычные eyes >= 8.1%
-        Teeth: ["Alabaster tone"], // 2 из 2129
-        Suits: [
-            "Pulsar of Eternity", "Easter costume", "Iron lava", "Farmer's shirt",
-            "Mantle Kings", "Lvs", "White Fur Coat", "Smoky ashes",
-            "Nightgown", "Hole time"
-        ],
-        Head: ["Didi"] // 36 из 2129 = 1.7%
-    };
-
-    // Необычные (2-5%)
-    var UNCOMMON_TRAITS = {
-        Background: [
-            "Night street", "Radiation", "evening lights", "Meteor shower",
-            "Green wall", "Reading room", "Winter forest", "Forest", "Night",
-            "Morning forest", "Pixel landscape", "Laboratory", "Golden age",
-            "Green ball", "Golden Radiance", "City of Ashes", "Neon diamond",
-            "Slanting rain", "Overcast clouds", "Cold morning", "Mountain beach"
-        ],
-        Body: [],
-        Eyes: [],
-        Teeth: ["Golden"], // 7.0% — на грани, но ценный трейт
-        Suits: [
-            "Mechanical", "Pink armor", "Zombie", "Raincoat", "Nike", "LV",
-            "Infected", "Jacket", "CC", "Red techno", "Ice armor",
-            "Hermes coat", "Bottega Veneta", "Robot", "White roba", "Balenciaga"
-        ],
-        Head: [
-            "Major's cap", "Chef's hat", "Pork", "Fashion glass",
-            "Mafia hat", "Crown Kings", "Digital glasses", "Short hairstyle",
-            "Biker hairstyle", "Nightcap", "Yellow 75 glasses", "Curly hair",
-            "Robocop helmet"
-        ]
-    };
-
-    var uniqueList = UNIQUE_TRAITS[traitType] || [];
-    if (uniqueList.indexOf(traitValue) !== -1) return 100;
-
-    var rareList = RARE_TRAITS[traitType] || [];
-    if (rareList.indexOf(traitValue) !== -1) return 30;
-
-    var uncommonList = UNCOMMON_TRAITS[traitType] || [];
-    if (uncommonList.indexOf(traitValue) !== -1) return 10;
-
-    return 1; // Common
-}
-
-// Подсчёт рарности NFT по сумме очков всех трейтов
-function getRarityFromTraits(attributes) {
-    if (!attributes || !Array.isArray(attributes) || attributes.length === 0) {
-        return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 5 };
-    }
-
-    var totalScore = 0;
-    var hasUnique = false;
-    var uniqueCount = 0;
-
-    for (var i = 0; i < attributes.length; i++) {
-        var attr = attributes[i];
-        var score = traitRarityScore(attr.trait_type, attr.value);
-        totalScore += score;
-        if (score === 100) {
-            hasUnique = true;
-            uniqueCount++;
-        }
-    }
-
-    // Legendary: 3+ уникальных трейта ИЛИ суммарный скор >= 400
-    // (полные 1/1 — все 6 трейтов уникальны = 600 очков)
-    if (uniqueCount >= 3 || totalScore >= 400) {
-        return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 6, max: 9 };
-    }
-
-    // Epic: 1-2 уникальных трейта ИЛИ суммарный скор >= 120
-    if (hasUnique || totalScore >= 120) {
-        return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 5, max: 9 };
-    }
-
-    // Rare: скор >= 30 (несколько необычных или 1 редкий)
-    if (totalScore >= 30) {
-        return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 3, max: 7 };
-    }
-
-    // Common: всё остальное
-    return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 5 };
-}
-
-// Fallback если нет метаданных — по token_id (старая логика)
-function getRarityFallback(tokenId, totalSupply) {
-    totalSupply = totalSupply || 2131;
-    var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
-    var pct = (num / totalSupply) * 100;
-
-    if (pct <= 5) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 6, max: 9 };
-    if (pct <= 20) return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 5, max: 9 };
-    if (pct <= 50) return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 3, max: 7 };
-    return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 5 };
-}
-
-/* ═══════════════════════════════════════════════════ */
-
 function getStoredCardData(tokenId) {
     try {
         var key = "cc_card_" + String(tokenId);
@@ -251,7 +468,7 @@ function genStats(tokenId, rarity) {
         }
     }
 
-    var seed = createSeed(tokenId, "stats_v4");
+    var seed = createSeed(tokenId, "stats_v5");
     var rng = mulberry32(seed);
 
     var min = Math.max(1, rarity.min);
@@ -270,7 +487,7 @@ function genStats(tokenId, rarity) {
     else if (rarity.key === "epic") aceChance = 0.15;
 
     if (aceChance > 0) {
-        var aceRng = mulberry32(createSeed(tokenId, "ace_v1"));
+        var aceRng = mulberry32(createSeed(tokenId, "ace_v2"));
         if (aceRng() < aceChance) {
             var sides = ["top", "right", "bottom", "left"];
             var aceSide = sides[Math.floor(aceRng() * sides.length)];
@@ -397,7 +614,7 @@ var InventoryCard = memo(function InventoryCard({
     }, [nft.element, nft.tokenId, nft.token_id, nft.id, k]);
 
     var rarity = useMemo(function () {
-        return nft.rarity || getRarityFallback(nft.tokenId, 2131);
+        return nft.rarity || getRarityFallback(nft.tokenId);
     }, [nft.rarity, nft.tokenId]);
 
     var handleClick = useCallback(function () {
@@ -540,29 +757,32 @@ export default function Inventory({ token, onDeckReady }) {
                         var tokens = await nearNftTokensForOwner(nftContractId, accountId);
 
                         items = tokens.map(function (t) {
-                            // Извлекаем атрибуты из метаданных для рарности
+                            // Извлекаем атрибуты из метаданных
                             var attributes = null;
-                            if (t.metadata && t.metadata.extra) {
-                                try {
-                                    var extra = typeof t.metadata.extra === "string"
-                                        ? JSON.parse(t.metadata.extra)
-                                        : t.metadata.extra;
-                                    if (extra && Array.isArray(extra.attributes)) {
-                                        attributes = extra.attributes;
-                                    } else if (extra && Array.isArray(extra)) {
-                                        attributes = extra;
-                                    }
-                                } catch (e) { }
-                            }
-                            // Также проверяем reference метаданные
-                            if (!attributes && t.metadata && t.metadata.attributes) {
-                                attributes = t.metadata.attributes;
+                            if (t.metadata) {
+                                // Проверяем extra
+                                if (t.metadata.extra) {
+                                    try {
+                                        var extra = typeof t.metadata.extra === "string"
+                                            ? JSON.parse(t.metadata.extra)
+                                            : t.metadata.extra;
+                                        if (extra && Array.isArray(extra.attributes)) {
+                                            attributes = extra.attributes;
+                                        } else if (extra && Array.isArray(extra)) {
+                                            attributes = extra;
+                                        }
+                                    } catch (e) { }
+                                }
+                                // Проверяем прямые attributes
+                                if (!attributes && t.metadata.attributes) {
+                                    attributes = t.metadata.attributes;
+                                }
                             }
 
-                            // Определяем рарность по трейтам или fallback по ID
+                            // Рарность по атрибутам (формула Hotcraft) или fallback
                             var r = attributes
                                 ? getRarityFromTraits(attributes)
-                                : getRarityFallback(t.token_id, 2131);
+                                : getRarityFallback(t.token_id);
 
                             var st = genStats(t.token_id, r);
                             var elem = genElement(t.token_id);
