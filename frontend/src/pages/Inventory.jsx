@@ -502,7 +502,18 @@ export default function Inventory({ token, onDeckReady }) {
                         );
 
                         // ДЕБАГ — покажет сколько загрузилось
-                        setError("IPFS: loaded=" + loadedCount + " failed=" + failedCount + " total=" + tokens.length);
+                        // Дебаг: показать score каждого токена
+                        var debugScores = tokens.map(function (t) {
+                            var attrs = attributesMap[t.token_id];
+                            var score = attrs ? calculateRarityScore(attrs) : -1;
+                            var r = attrs ? getRarityFromTraits(attrs) : getRarityFallback(t.token_id);
+                            return t.token_id + ":" + score.toFixed(2) + "(" + r.key[0] + ")";
+                        }).sort(function (a, b) {
+                            var sa = parseFloat(a.split(":")[1]);
+                            var sb = parseFloat(b.split(":")[1]);
+                            return sb - sa;
+                        });
+                        setError(debugScores.join(" | "));
 
                         items = tokens.map(function (t) {
                             var attributes = attributesMap[t.token_id] || null;
