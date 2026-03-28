@@ -6,14 +6,14 @@ import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from 
 // Миграция: сбросить старые данные для новой системы рарности
 (function migrateRarity() {
     try {
-        if (localStorage.getItem("cc_rarity_v5_hotcraft")) return;
+        if (localStorage.getItem("cc_rarity_v6_final")) return;
         var keys = Object.keys(localStorage);
         for (var i = 0; i < keys.length; i++) {
             if (keys[i].startsWith("cc_card_")) {
                 localStorage.removeItem(keys[i]);
             }
         }
-        localStorage.setItem("cc_rarity_v5_hotcraft", "1");
+        localStorage.setItem("cc_rarity_v6_final", "1");
     } catch (e) { }
 })();
 
@@ -282,7 +282,7 @@ function genStats(tokenId, rarity) {
         }
     }
 
-    var seed = createSeed(tokenId, "stats_v6");
+    var seed = createSeed(tokenId, "stats_v7");
     var rng = mulberry32(seed);
 
     var min = Math.max(1, rarity.min);
@@ -301,7 +301,7 @@ function genStats(tokenId, rarity) {
     else if (rarity.key === "epic") aceChance = 0.2;
 
     if (aceChance > 0) {
-        var aceRng = mulberry32(createSeed(tokenId, "ace_v3"));
+        var aceRng = mulberry32(createSeed(tokenId, "ace_v4"));
         if (aceRng() < aceChance) {
             var sides = ["top", "right", "bottom", "left"];
             var aceSide = sides[Math.floor(aceRng() * sides.length)];
