@@ -471,7 +471,8 @@ export default function Inventory({ token, onDeckReady }) {
                                 }
 
                                 try {
-                                    var url = IPFS_GATEWAY + "/" + tid + ".json";
+                                    var nftNumber = parseInt(tid, 10) + 1;
+                                    var url = IPFS_GATEWAY + "/" + nftNumber + ".json";
 
                                     // Безопасный fetch без AbortSignal.timeout
                                     var controller = new AbortController();
