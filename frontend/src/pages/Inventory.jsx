@@ -272,7 +272,7 @@ function displayStatValue(val) {
 }
 
 function statStyle(val) {
-    if (val === ACE_VALUE) return { color: "#ffd700", fontWeight: 900, textShadow: "0 0 6px rgba(255,215,0,0.6)" };
+    if (val === ACE_VALUE) return { color: "#ffffff", fontWeight: 900 };
     return undefined;
 }
 
@@ -493,46 +493,77 @@ export default function Inventory({ token, onDeckReady }) {
                         var loadedCount = 0;
                         var failedCount = 0;
 
-                        await Promise.allSettled(
-                            tokens.map(async function (t) {
-                                var tid = t.token_id;
+                        // Сначала берём что есть в кэше — показываем мгновенно
+                        tokens.forEach(function (t) {
+                            var tid = t.token_id;
+                            var cached = getStoredCardData(tid);
+                            if (cached && cached.attributes) {
+                                attributesMap[tid] = cached.attributes;
+                                loadedCount++;
+                            }
+                        });
 
-                                var cached = getStoredCardData(tid);
-                                if (cached && cached.attributes) {
-                                    attributesMap[tid] = cached.attributes;
-                                    loadedCount++;
-                                    return;
-                                }
+                        // Показываем карты из кэша сразу не дожидаясь IPFS
+                        if (loadedCount > 0 && alive) {
+                            var quickItems = tokens.map(function (t) {
+                                var attributes = attributesMap[t.token_id] || null;
+                                var score = attributes ? calculateRarityScore(attributes) : 0;
+                                var r = attributes ? getRarityFromTraits(attributes) : getRarityFallback(t.token_id);
+                                var st = genStats(t.token_id, r);
+                                var elem = genElement(t.token_id);
+                                return {
+                                    key: "near:" + nftContractId + ":" + t.token_id,
+                                    chain: "near", contractId: nftContractId,
+                                    tokenId: t.token_id, token_id: t.token_id,
+                                    name: (t.metadata && t.metadata.title) || ("Card #" + t.token_id),
+                                    imageUrl: (t.metadata && t.metadata.media) || "",
+                                    originalImageUrl: (t.metadata && t.metadata.originalMedia) || "",
+                                    stats: st, element: elem, rarity: r,
+                                    rank: r.key, rankLabel: r.key[0].toUpperCase(),
+                                    attributes: attributes, score: score,
+                                };
+                            });
+                            quickItems.sort(function (a, b) {
+                                var ra = RARITY_ORDER[a.rarity.key] !== undefined ? RARITY_ORDER[a.rarity.key] : 99;
+                                var rb = RARITY_ORDER[b.rarity.key] !== undefined ? RARITY_ORDER[b.rarity.key] : 99;
+                                if (ra !== rb) return ra - rb;
+                                return (b.score || 0) - (a.score || 0);
+                            });
+                            setNfts(quickItems);
+                            setLoading(false);
+                            setSource("✅ " + tokens.length + " NFTs (загрузка...)");
+                        }
 
-                                try {
-                                    var nftNumber = parseInt(tid, 10) + 1;
-                                    var url = IPFS_GATEWAY + "/" + nftNumber + ".json";
-
-                                    var controller = new AbortController();
-                                    var timeoutId = setTimeout(function () { controller.abort(); }, 10000);
-                                    var resp = await fetch(url, { signal: controller.signal });
-                                    clearTimeout(timeoutId);
-
-                                    if (resp.ok) {
-                                        var json = await resp.json();
-                                        if (json.attributes && Array.isArray(json.attributes)) {
-                                            attributesMap[tid] = json.attributes;
-                                            loadedCount++;
-                                            var data = cached || {};
-                                            data.attributes = json.attributes;
-                                            storeCardData(tid, data);
-                                        } else {
-                                            failedCount++;
-                                        }
-                                    } else {
+                        // Догружаем недостающие с IPFS в фоне
+                        var missing = tokens.filter(function (t) { return !attributesMap[t.token_id]; });
+                        if (missing.length > 0) {
+                            await Promise.allSettled(
+                                missing.map(async function (t) {
+                                    var tid = t.token_id;
+                                    try {
+                                        var nftNumber = parseInt(tid, 10) + 1;
+                                        var url = IPFS_GATEWAY + "/" + nftNumber + ".json";
+                                        var controller = new AbortController();
+                                        var timeoutId = setTimeout(function () { controller.abort(); }, 8000);
+                                        var resp = await fetch(url, { signal: controller.signal });
+                                        clearTimeout(timeoutId);
+                                        if (resp.ok) {
+                                            var json = await resp.json();
+                                            if (json.attributes && Array.isArray(json.attributes)) {
+                                                attributesMap[tid] = json.attributes;
+                                                loadedCount++;
+                                                var data = getStoredCardData(tid) || {};
+                                                data.attributes = json.attributes;
+                                                storeCardData(tid, data);
+                                            } else { failedCount++; }
+                                        } else { failedCount++; }
+                                    } catch (e) {
                                         failedCount++;
+                                        console.warn("IPFS fetch error for", tid, e.name, e.message);
                                     }
-                                } catch (e) {
-                                    failedCount++;
-                                    console.warn("IPFS fetch error for", tid, e.name, e.message);
-                                }
-                            })
-                        );
+                                })
+                            );
+                        }
 
                         items = tokens.map(function (t) {
                             var attributes = attributesMap[t.token_id] || null;
