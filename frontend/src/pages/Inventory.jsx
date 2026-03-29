@@ -5,7 +5,7 @@ import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from 
 
 (function migrateRarity() {
     try {
-        if (localStorage.getItem("cc_rarity_v16_force")) return;
+        if (localStorage.getItem("cc_rarity_v17_force")) return;
         var keys = Object.keys(localStorage);
         for (var i = 0; i < keys.length; i++) {
             if (keys[i].startsWith("cc_card_")) {
@@ -23,7 +23,8 @@ import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from 
                 localStorage.removeItem(keys[i]);
             }
         }
-        localStorage.setItem("cc_rarity_v16_force", "1");
+        localStorage.removeItem("cc_nft_cache");
+        localStorage.setItem("cc_rarity_v17_force", "1");
     } catch (e) { }
 })();
 
@@ -138,8 +139,7 @@ function calculateRarityScore(attributes) {
 }
 
 function getRarityFromScore(score) {
-    // common=зелёный, uncommon=рыжий, rare=розовый, epic=фиолетовый, legendary=золотой
-    if (score >= 10.0) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 8, max: 9 };
+    if (score >= 5.0) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 8, max: 9 };
     if (score >= 2.05) return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 7, max: 9 };
     if (score >= 1.98) return { key: "rare", border: "#f472b6", glow: "rgba(244,114,182,0.55)", min: 5, max: 7 };
     if (score >= 1.80) return { key: "uncommon", border: "#f97316", glow: "rgba(249,115,22,0.55)", min: 3, max: 5 };
@@ -152,7 +152,7 @@ function getRarityFromTraits(attributes) {
 
 function getRarityFallback(tokenId) {
     var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
-    if (num <= 17) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 8, max: 9 };
+    if (num <= 16) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 8, max: 9 };
     if (num <= 320) return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 7, max: 9 };
     if (num <= 1020) return { key: "rare", border: "#f472b6", glow: "rgba(244,114,182,0.55)", min: 5, max: 7 };
     if (num <= 1600) return { key: "uncommon", border: "#f97316", glow: "rgba(249,115,22,0.55)", min: 3, max: 5 };
@@ -211,7 +211,7 @@ function storeCardData(tokenId, data) {
 }
 
 function genStats(tokenId, rarity) {
-    var STATS_VERSION = "v16";
+    var STATS_VERSION = "v17";
     var stored = getStoredCardData(tokenId);
     if (stored && stored.stats && stored.statsVersion === STATS_VERSION && stored.rarityKey === rarity.key) {
         var s = stored.stats;
@@ -221,7 +221,7 @@ function genStats(tokenId, rarity) {
         }
     }
 
-    var rng = mulberry32(createSeed(tokenId, "stats_v16"));
+    var rng = mulberry32(createSeed(tokenId, "stats_v17"));
     var min = Math.max(1, rarity.min);
     var max = Math.min(9, rarity.max);
 
@@ -232,12 +232,17 @@ function genStats(tokenId, rarity) {
         left: Math.min(9, Math.max(1, Math.floor(rng() * (max - min + 1)) + min))
     };
 
-    var aceChance = rarity.key === "legendary" ? 0.5 : rarity.key === "epic" ? 0.2 : 0;
-    if (aceChance > 0) {
-        var aceRng = mulberry32(createSeed(tokenId, "ace_v16"));
-        if (aceRng() < aceChance) {
-            var sides = ["top", "right", "bottom", "left"];
-            stats[sides[Math.floor(aceRng() * sides.length)]] = ACE_VALUE;
+    // Legendary гарантированно получает A на одной стороне
+    // Epic — 30% шанс на A
+    if (rarity.key === "legendary") {
+        var sides = ["top", "right", "bottom", "left"];
+        var aceRng = mulberry32(createSeed(tokenId, "ace_v17"));
+        stats[sides[Math.floor(aceRng() * sides.length)]] = ACE_VALUE;
+    } else if (rarity.key === "epic") {
+        var aceRng2 = mulberry32(createSeed(tokenId, "ace_v17"));
+        if (aceRng2() < 0.30) {
+            var sides2 = ["top", "right", "bottom", "left"];
+            stats[sides2[Math.floor(aceRng2() * sides2.length)]] = ACE_VALUE;
         }
     }
 
@@ -271,7 +276,6 @@ function statStyle(val) {
     return undefined;
 }
 
-// Порядок сортировки по rarity (лучшие первые)
 var RARITY_ORDER = { legendary: 0, epic: 1, rare: 2, uncommon: 3, common: 4 };
 
 var nftCache = { accountId: null, items: [], timestamp: 0 };
@@ -280,6 +284,7 @@ export function invalidateNftCache() {
     nftCache.accountId = null;
     nftCache.items = [];
     nftCache.timestamp = 0;
+    try { localStorage.removeItem("cc_nft_cache"); } catch (e) { }
 }
 
 var imageCache = new Map();
@@ -425,7 +430,7 @@ export default function Inventory({ token, onDeckReady }) {
         var handleVisibilityChange = function () {
             if (document.visibilityState === 'visible' && connected && accountId) {
                 var now = Date.now();
-                if (nftCache.timestamp && (now - nftCache.timestamp) > 10000) {
+                if (nftCache.timestamp && (now - nftCache.timestamp) > 300000) {
                     nftCache.timestamp = 0;
                     setRefreshKey(function (k) { return k + 1; });
                 }
@@ -444,15 +449,32 @@ export default function Inventory({ token, onDeckReady }) {
         if (!token) return;
 
         var now = Date.now();
+
+        // 1. Memory cache
         var cacheValid = nftCache.accountId === accountId &&
             nftCache.items.length > 0 &&
-            (now - nftCache.timestamp) < 60000;
+            (now - nftCache.timestamp) < 300000;
 
         if (cacheValid) {
             setNfts(nftCache.items);
             setSource("✅ " + nftCache.items.length + " NFTs (cached)");
             return;
         }
+
+        // 2. localStorage cache
+        try {
+            var lsCache = JSON.parse(localStorage.getItem("cc_nft_cache") || "null");
+            if (lsCache && lsCache.accountId === accountId &&
+                lsCache.items && lsCache.items.length > 0 &&
+                (now - lsCache.timestamp) < 300000) {
+                nftCache.accountId = lsCache.accountId;
+                nftCache.items = lsCache.items;
+                nftCache.timestamp = lsCache.timestamp;
+                setNfts(lsCache.items);
+                setSource("✅ " + lsCache.items.length + " NFTs (cached)");
+                return;
+            }
+        } catch (e) { }
 
         var alive = true;
 
@@ -483,7 +505,6 @@ export default function Inventory({ token, onDeckReady }) {
                                 }
 
                                 try {
-                                    // token_id в контракте = номер NFT - 1
                                     var nftNumber = parseInt(tid, 10) + 1;
                                     var url = IPFS_GATEWAY + "/" + nftNumber + ".json";
 
@@ -542,7 +563,6 @@ export default function Inventory({ token, onDeckReady }) {
                             };
                         });
 
-                        // Сортировка: лучшие (higher score) первые
                         items.sort(function (a, b) {
                             var ra = RARITY_ORDER[a.rarity.key] !== undefined ? RARITY_ORDER[a.rarity.key] : 99;
                             var rb = RARITY_ORDER[b.rarity.key] !== undefined ? RARITY_ORDER[b.rarity.key] : 99;
@@ -554,7 +574,18 @@ export default function Inventory({ token, onDeckReady }) {
                         nftCache.items = items;
                         nftCache.timestamp = Date.now();
 
-                        setSource(items.length > 0 ? "✅ " + items.length + " NFTs" : "⚠️ 0 NFTs");
+                        // Сохраняем в localStorage
+                        try {
+                            localStorage.setItem("cc_nft_cache", JSON.stringify({
+                                accountId: accountId,
+                                timestamp: nftCache.timestamp,
+                                items: items
+                            }));
+                        } catch (e) { }
+
+                        setSource(items.length > 0
+                            ? "✅ " + items.length + " NFTs"
+                            : "⚠️ 0 NFTs");
                     } catch (e) {
                         setSource("❌ " + (e.message || e));
                     }
