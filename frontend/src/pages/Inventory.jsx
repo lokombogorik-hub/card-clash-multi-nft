@@ -5,7 +5,7 @@ import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from 
 
 (function migrateRarity() {
     try {
-        if (localStorage.getItem("cc_rarity_v17_force")) return;
+        if (localStorage.getItem("cc_rarity_v18_force")) return;
         var keys = Object.keys(localStorage);
         for (var i = 0; i < keys.length; i++) {
             if (keys[i].startsWith("cc_card_")) {
@@ -24,7 +24,7 @@ import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from 
             }
         }
         localStorage.removeItem("cc_nft_cache");
-        localStorage.setItem("cc_rarity_v17_force", "1");
+        localStorage.setItem("cc_rarity_v18_force", "1");
     } catch (e) { }
 })();
 
@@ -139,11 +139,18 @@ function calculateRarityScore(attributes) {
 }
 
 function getRarityFromScore(score) {
-    if (score >= 5.0) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 8, max: 9 };
-    if (score >= 2.05) return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 7, max: 9 };
-    if (score >= 1.98) return { key: "rare", border: "#f472b6", glow: "rgba(244,114,182,0.55)", min: 5, max: 7 };
-    if (score >= 1.80) return { key: "uncommon", border: "#f97316", glow: "rgba(249,115,22,0.55)", min: 3, max: 5 };
-    return { key: "common", border: "#22c55e", glow: "rgba(34,197,94,0.50)", min: 1, max: 3 };
+    // Legendary — трейты 0.05% → score 5+
+    if (score >= 5.0) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.70)", min: 8, max: 9 };
+    // top 0-20% — рыжий
+    if (score >= 2.05) return { key: "epic", border: "#f97316", glow: "rgba(249,115,22,0.65)", min: 7, max: 9 };
+    // top 20-40% — фиолетовый
+    if (score >= 1.97) return { key: "rare", border: "#a855f7", glow: "rgba(168,85,247,0.60)", min: 5, max: 7 };
+    // top 40-60% — синий
+    if (score >= 1.78) return { key: "uncommon", border: "#3b82f6", glow: "rgba(59,130,246,0.60)", min: 3, max: 5 };
+    // top 60-80% — коричневый
+    if (score >= 1.73) return { key: "poor", border: "#92400e", glow: "rgba(146,64,14,0.60)", min: 2, max: 4 };
+    // top 80-100% — серый
+    return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 3 };
 }
 
 function getRarityFromTraits(attributes) {
@@ -152,11 +159,12 @@ function getRarityFromTraits(attributes) {
 
 function getRarityFallback(tokenId) {
     var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
-    if (num <= 16) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 8, max: 9 };
-    if (num <= 320) return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 7, max: 9 };
-    if (num <= 1020) return { key: "rare", border: "#f472b6", glow: "rgba(244,114,182,0.55)", min: 5, max: 7 };
-    if (num <= 1600) return { key: "uncommon", border: "#f97316", glow: "rgba(249,115,22,0.55)", min: 3, max: 5 };
-    return { key: "common", border: "#22c55e", glow: "rgba(34,197,94,0.50)", min: 1, max: 3 };
+    if (num <= 16) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.70)", min: 8, max: 9 };
+    if (num <= 441) return { key: "epic", border: "#f97316", glow: "rgba(249,115,22,0.65)", min: 7, max: 9 };
+    if (num <= 882) return { key: "rare", border: "#a855f7", glow: "rgba(168,85,247,0.60)", min: 5, max: 7 };
+    if (num <= 1323) return { key: "uncommon", border: "#3b82f6", glow: "rgba(59,130,246,0.60)", min: 3, max: 5 };
+    if (num <= 1764) return { key: "poor", border: "#92400e", glow: "rgba(146,64,14,0.60)", min: 2, max: 4 };
+    return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 3 };
 }
 
 function nftKey(n) {
@@ -211,7 +219,7 @@ function storeCardData(tokenId, data) {
 }
 
 function genStats(tokenId, rarity) {
-    var STATS_VERSION = "v17";
+    var STATS_VERSION = "v18";
     var stored = getStoredCardData(tokenId);
     if (stored && stored.stats && stored.statsVersion === STATS_VERSION && stored.rarityKey === rarity.key) {
         var s = stored.stats;
@@ -221,7 +229,7 @@ function genStats(tokenId, rarity) {
         }
     }
 
-    var rng = mulberry32(createSeed(tokenId, "stats_v17"));
+    var rng = mulberry32(createSeed(tokenId, "stats_v18"));
     var min = Math.max(1, rarity.min);
     var max = Math.min(9, rarity.max);
 
@@ -232,14 +240,12 @@ function genStats(tokenId, rarity) {
         left: Math.min(9, Math.max(1, Math.floor(rng() * (max - min + 1)) + min))
     };
 
-    // Legendary гарантированно получает A на одной стороне
-    // Epic — 30% шанс на A
     if (rarity.key === "legendary") {
+        var aceRng = mulberry32(createSeed(tokenId, "ace_v18"));
         var sides = ["top", "right", "bottom", "left"];
-        var aceRng = mulberry32(createSeed(tokenId, "ace_v17"));
         stats[sides[Math.floor(aceRng() * sides.length)]] = ACE_VALUE;
     } else if (rarity.key === "epic") {
-        var aceRng2 = mulberry32(createSeed(tokenId, "ace_v17"));
+        var aceRng2 = mulberry32(createSeed(tokenId, "ace_v18"));
         if (aceRng2() < 0.30) {
             var sides2 = ["top", "right", "bottom", "left"];
             stats[sides2[Math.floor(aceRng2() * sides2.length)]] = ACE_VALUE;
@@ -276,7 +282,7 @@ function statStyle(val) {
     return undefined;
 }
 
-var RARITY_ORDER = { legendary: 0, epic: 1, rare: 2, uncommon: 3, common: 4 };
+var RARITY_ORDER = { legendary: 0, epic: 1, rare: 2, uncommon: 3, poor: 4, common: 5 };
 
 var nftCache = { accountId: null, items: [], timestamp: 0 };
 
@@ -410,9 +416,7 @@ export default function Inventory({ token, onDeckReady }) {
 
     var nftContractId = (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim();
 
-    var selectedArr = useMemo(function () {
-        return Array.from(selected);
-    }, [selected]);
+    var selectedArr = useMemo(function () { return Array.from(selected); }, [selected]);
 
     var orderMap = useMemo(function () {
         var m = new Map();
@@ -451,11 +455,7 @@ export default function Inventory({ token, onDeckReady }) {
         var now = Date.now();
 
         // 1. Memory cache
-        var cacheValid = nftCache.accountId === accountId &&
-            nftCache.items.length > 0 &&
-            (now - nftCache.timestamp) < 300000;
-
-        if (cacheValid) {
+        if (nftCache.accountId === accountId && nftCache.items.length > 0 && (now - nftCache.timestamp) < 300000) {
             setNfts(nftCache.items);
             setSource("✅ " + nftCache.items.length + " NFTs (cached)");
             return;
@@ -493,48 +493,24 @@ export default function Inventory({ token, onDeckReady }) {
                         var loadedCount = 0;
                         var failedCount = 0;
 
-                        // Сначала берём что есть в кэше — показываем мгновенно
+                        // Сначала берём всё что есть в кэше
                         tokens.forEach(function (t) {
-                            var tid = t.token_id;
-                            var cached = getStoredCardData(tid);
+                            var cached = getStoredCardData(t.token_id);
                             if (cached && cached.attributes) {
-                                attributesMap[tid] = cached.attributes;
+                                attributesMap[t.token_id] = cached.attributes;
                                 loadedCount++;
                             }
                         });
 
-                        // Показываем карты из кэша сразу не дожидаясь IPFS
+                        // Показываем карты из кэша сразу
                         if (loadedCount > 0 && alive) {
-                            var quickItems = tokens.map(function (t) {
-                                var attributes = attributesMap[t.token_id] || null;
-                                var score = attributes ? calculateRarityScore(attributes) : 0;
-                                var r = attributes ? getRarityFromTraits(attributes) : getRarityFallback(t.token_id);
-                                var st = genStats(t.token_id, r);
-                                var elem = genElement(t.token_id);
-                                return {
-                                    key: "near:" + nftContractId + ":" + t.token_id,
-                                    chain: "near", contractId: nftContractId,
-                                    tokenId: t.token_id, token_id: t.token_id,
-                                    name: (t.metadata && t.metadata.title) || ("Card #" + t.token_id),
-                                    imageUrl: (t.metadata && t.metadata.media) || "",
-                                    originalImageUrl: (t.metadata && t.metadata.originalMedia) || "",
-                                    stats: st, element: elem, rarity: r,
-                                    rank: r.key, rankLabel: r.key[0].toUpperCase(),
-                                    attributes: attributes, score: score,
-                                };
-                            });
-                            quickItems.sort(function (a, b) {
-                                var ra = RARITY_ORDER[a.rarity.key] !== undefined ? RARITY_ORDER[a.rarity.key] : 99;
-                                var rb = RARITY_ORDER[b.rarity.key] !== undefined ? RARITY_ORDER[b.rarity.key] : 99;
-                                if (ra !== rb) return ra - rb;
-                                return (b.score || 0) - (a.score || 0);
-                            });
+                            var quickItems = buildItems(tokens, attributesMap, nftContractId);
                             setNfts(quickItems);
                             setLoading(false);
-                            setSource("✅ " + tokens.length + " NFTs (загрузка...)");
+                            setSource("✅ " + tokens.length + " NFTs (загрузка атрибутов...)");
                         }
 
-                        // Догружаем недостающие с IPFS в фоне
+                        // Догружаем недостающие с IPFS
                         var missing = tokens.filter(function (t) { return !attributesMap[t.token_id]; });
                         if (missing.length > 0) {
                             await Promise.allSettled(
@@ -565,47 +541,12 @@ export default function Inventory({ token, onDeckReady }) {
                             );
                         }
 
-                        items = tokens.map(function (t) {
-                            var attributes = attributesMap[t.token_id] || null;
-                            var score = attributes ? calculateRarityScore(attributes) : 0;
-                            var r = attributes
-                                ? getRarityFromTraits(attributes)
-                                : getRarityFallback(t.token_id);
-
-                            var st = genStats(t.token_id, r);
-                            var elem = genElement(t.token_id);
-
-                            return {
-                                key: "near:" + nftContractId + ":" + t.token_id,
-                                chain: "near",
-                                contractId: nftContractId,
-                                tokenId: t.token_id,
-                                token_id: t.token_id,
-                                name: (t.metadata && t.metadata.title) || ("Card #" + t.token_id),
-                                imageUrl: (t.metadata && t.metadata.media) || "",
-                                originalImageUrl: (t.metadata && t.metadata.originalMedia) || "",
-                                stats: st,
-                                element: elem,
-                                rarity: r,
-                                rank: r.key,
-                                rankLabel: r.key[0].toUpperCase(),
-                                attributes: attributes,
-                                score: score,
-                            };
-                        });
-
-                        items.sort(function (a, b) {
-                            var ra = RARITY_ORDER[a.rarity.key] !== undefined ? RARITY_ORDER[a.rarity.key] : 99;
-                            var rb = RARITY_ORDER[b.rarity.key] !== undefined ? RARITY_ORDER[b.rarity.key] : 99;
-                            if (ra !== rb) return ra - rb;
-                            return (b.score || 0) - (a.score || 0);
-                        });
+                        items = buildItems(tokens, attributesMap, nftContractId);
 
                         nftCache.accountId = accountId;
                         nftCache.items = items;
                         nftCache.timestamp = Date.now();
 
-                        // Сохраняем в localStorage
                         try {
                             localStorage.setItem("cc_nft_cache", JSON.stringify({
                                 accountId: accountId,
@@ -614,20 +555,17 @@ export default function Inventory({ token, onDeckReady }) {
                             }));
                         } catch (e) { }
 
-                        setSource(items.length > 0
-                            ? "✅ " + items.length + " NFTs"
-                            : "⚠️ 0 NFTs");
+                        if (!alive) return;
+                        setNfts(items);
+                        setSource("✅ " + items.length + " NFTs");
                     } catch (e) {
-                        setSource("❌ " + (e.message || e));
+                        if (alive) setSource("❌ " + (e.message || e));
                     }
                 }
 
                 if (items.length === 0 && !connected) {
                     setSource("Подключи кошелёк для загрузки NFT");
                 }
-
-                if (!alive) return;
-                setNfts(items);
             } catch (e) {
                 if (!alive) return;
                 setError(e.message || "Error");
@@ -650,7 +588,6 @@ export default function Inventory({ token, onDeckReady }) {
 
     var saveDeck = useCallback(async function () {
         if (selected.size !== 5 || selectedNfts.length !== 5) return;
-
         setSaving(true);
         setError("");
         try {
@@ -677,7 +614,6 @@ export default function Inventory({ token, onDeckReady }) {
                     contract_id: nft.contractId
                 };
             });
-
             var result = await apiFetch("/api/decks/save", {
                 token: token,
                 method: "POST",
@@ -702,43 +638,30 @@ export default function Inventory({ token, onDeckReady }) {
                     <span className="inv-title-icon">🎴</span>
                     Выбери колоду
                 </h2>
-                <div className="inv-subtitle">
-                    Выбери 5 карт для игры • {selected.size}/5
-                </div>
+                <div className="inv-subtitle">Выбери 5 карт для игры • {selected.size}/5</div>
             </div>
 
             {connected && accountId ? (
                 <div className="inv-info-box">
                     <div className="inv-info-label" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span>🔗 {accountId.length > 20 ? accountId.slice(0, 10) + "…" + accountId.slice(-6) : accountId}</span>
-                        <button
-                            onClick={forceRefresh}
-                            disabled={loading}
-                            style={{
-                                padding: "4px 10px", fontSize: 11, borderRadius: 8,
-                                border: "1px solid rgba(120,200,255,0.3)",
-                                background: "rgba(120,200,255,0.1)", color: "#78c8ff",
-                                cursor: loading ? "not-allowed" : "pointer",
-                                opacity: loading ? 0.5 : 1,
-                            }}
-                        >
-                            🔄 Обновить
-                        </button>
+                        <button onClick={forceRefresh} disabled={loading} style={{
+                            padding: "4px 10px", fontSize: 11, borderRadius: 8,
+                            border: "1px solid rgba(120,200,255,0.3)",
+                            background: "rgba(120,200,255,0.1)", color: "#78c8ff",
+                            cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1,
+                        }}>🔄 Обновить</button>
                     </div>
                     {source && (
                         <div className="inv-info-value" style={{
                             marginTop: 4,
                             color: source.startsWith("✅") ? "#22c55e" : source.startsWith("❌") ? "#ff6b6b" : "#f59e0b"
-                        }}>
-                            {source}
-                        </div>
+                        }}>{source}</div>
                     )}
                 </div>
             ) : (
                 <div className="inv-info-box">
-                    <div className="inv-info-label" style={{ color: "#f59e0b" }}>
-                        ⚠️ Подключи кошелёк на главной
-                    </div>
+                    <div className="inv-info-label" style={{ color: "#f59e0b" }}>⚠️ Подключи кошелёк на главной</div>
                 </div>
             )}
 
@@ -770,9 +693,7 @@ export default function Inventory({ token, onDeckReady }) {
                             marginTop: 16, padding: "10px 20px", fontSize: 14,
                             borderRadius: 10, border: "1px solid rgba(120,200,255,0.4)",
                             background: "rgba(120,200,255,0.15)", color: "#78c8ff", cursor: "pointer",
-                        }}>
-                            🔄 Обновить
-                        </button>
+                        }}>🔄 Обновить</button>
                     )}
                 </div>
             )}
@@ -784,13 +705,7 @@ export default function Inventory({ token, onDeckReady }) {
                         var isSelected = selected.has(k);
                         var pickNo = orderMap.get(k) || 0;
                         return (
-                            <InventoryCard
-                                key={k}
-                                nft={n}
-                                isSelected={isSelected}
-                                pickNo={pickNo}
-                                onToggle={toggle}
-                            />
+                            <InventoryCard key={k} nft={n} isSelected={isSelected} pickNo={pickNo} onToggle={toggle} />
                         );
                     })}
                 </div>
@@ -798,22 +713,50 @@ export default function Inventory({ token, onDeckReady }) {
 
             {nfts.length > 0 && (
                 <div className="inv-actions">
-                    <button
-                        className="inv-btn inv-btn-secondary"
-                        onClick={resetSelection}
-                        disabled={!selected.size || saving}
-                    >
+                    <button className="inv-btn inv-btn-secondary" onClick={resetSelection} disabled={!selected.size || saving}>
                         Сбросить
                     </button>
-                    <button
-                        className="inv-btn inv-btn-primary"
-                        disabled={selected.size !== 5 || saving}
-                        onClick={saveDeck}
-                    >
+                    <button className="inv-btn inv-btn-primary" disabled={selected.size !== 5 || saving} onClick={saveDeck}>
                         {saving ? "Сохранение..." : selected.size === 5 ? "Играть! →" : "Выбери " + (5 - selected.size) + " карт"}
                     </button>
                 </div>
             )}
         </div>
     );
+}
+
+function buildItems(tokens, attributesMap, nftContractId) {
+    var items = tokens.map(function (t) {
+        var attributes = attributesMap[t.token_id] || null;
+        var score = attributes ? calculateRarityScore(attributes) : 0;
+        var r = attributes ? getRarityFromTraits(attributes) : getRarityFallback(t.token_id);
+        var st = genStats(t.token_id, r);
+        var elem = genElement(t.token_id);
+        return {
+            key: "near:" + nftContractId + ":" + t.token_id,
+            chain: "near",
+            contractId: nftContractId,
+            tokenId: t.token_id,
+            token_id: t.token_id,
+            name: (t.metadata && t.metadata.title) || ("Card #" + t.token_id),
+            imageUrl: (t.metadata && t.metadata.media) || "",
+            originalImageUrl: (t.metadata && t.metadata.originalMedia) || "",
+            stats: st,
+            element: elem,
+            rarity: r,
+            rank: r.key,
+            rankLabel: r.key[0].toUpperCase(),
+            attributes: attributes,
+            score: score,
+        };
+    });
+
+    items.sort(function (a, b) {
+        var ra = RARITY_ORDER[a.rarity.key] !== undefined ? RARITY_ORDER[a.rarity.key] : 99;
+        var rb = RARITY_ORDER[b.rarity.key] !== undefined ? RARITY_ORDER[b.rarity.key] : 99;
+        if (ra !== rb) return ra - rb;
+        return (b.score || 0) - (a.score || 0);
+    });
+
+    return items;
 }

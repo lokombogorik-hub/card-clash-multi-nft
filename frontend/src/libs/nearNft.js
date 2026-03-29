@@ -2,17 +2,17 @@ var DIRECT_RPC_URL = "https://rpc.mainnet.near.org";
 
 var API_BASE = (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_BASE_URL) || "";
 
-// RPC через бэкенд прокси (для мобилки)
 var PROXY_RPC_URL = API_BASE ? API_BASE + "/api/near/rpc" : "";
 
+// Для картинок — только быстрые гейтвеи, без прокси
 var IPFS_GATEWAYS = [
-    function (cid, path) { return "https://ipfs.near.social/ipfs/" + cid + path; },
+    function (cid, path) { return "https://" + cid + ".ipfs.w3s.link" + path; },
     function (cid, path) { return "https://cloudflare-ipfs.com/ipfs/" + cid + path; },
     function (cid, path) { return "https://nftstorage.link/ipfs/" + cid + path; },
-    function (cid, path) { return "https://" + cid + ".ipfs.dweb.link" + path; },
-    function (cid, path) { return "https://gateway.pinata.cloud/ipfs/" + cid + path; },
-    function (cid, path) { return "https://" + cid + ".ipfs.w3s.link" + path; },
+    function (cid, path) { return "https://ipfs.near.social/ipfs/" + cid + path; },
     function (cid, path) { return "https://w3s.link/ipfs/" + cid + path; },
+    function (cid, path) { return "https://gateway.pinata.cloud/ipfs/" + cid + path; },
+    function (cid, path) { return "https://" + cid + ".ipfs.dweb.link" + path; },
     function (cid, path) { return "https://ipfs.io/ipfs/" + cid + path; },
 ];
 
@@ -26,6 +26,7 @@ function toB64(str) {
 function fixProto(url) {
     if (!url) return "";
     var s = String(url).trim();
+    // Сразу на w3s.link — самый быстрый для этой коллекции
     if (s.startsWith("ipfs://")) return "https://ipfs.near.social/ipfs/" + s.slice(7);
     if (s.startsWith("ar://")) return "https://arweave.net/" + s.slice(5);
     return s;
@@ -52,7 +53,6 @@ async function getJson(url) {
     } catch (e) { return null; }
 }
 
-// Пробуем сначала через прокси, потом напрямую
 async function rpc(contractId, method, args) {
     var payload = {
         jsonrpc: "2.0", id: "q", method: "query",
@@ -63,7 +63,7 @@ async function rpc(contractId, method, args) {
         },
     };
 
-    // Сначала через бэкенд прокси (работает на мобилке)
+    // Сначала через бэкенд прокси
     if (PROXY_RPC_URL) {
         try {
             var proxyRes = await fetch(PROXY_RPC_URL, {
@@ -77,12 +77,10 @@ async function rpc(contractId, method, args) {
                     return JSON.parse(new TextDecoder().decode(new Uint8Array(proxyJ.result.result)));
                 }
             }
-        } catch (e) {
-            // Fallback на прямой RPC
-        }
+        } catch (e) { }
     }
 
-    // Прямой RPC (работает на ПК)
+    // Прямой RPC
     var res = await fetch(DIRECT_RPC_URL, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -105,14 +103,10 @@ export function parseIpfs(url) {
     }
 
     var subMatch = s.match(/^https?:\/\/([a-zA-Z0-9]{20,})\.ipfs\.[^/]+(\/.*)?$/);
-    if (subMatch) {
-        return { cid: subMatch[1], path: subMatch[2] || "" };
-    }
+    if (subMatch) return { cid: subMatch[1], path: subMatch[2] || "" };
 
     var pathMatch = s.match(/\/ipfs\/([a-zA-Z0-9]{20,})(\/.*)?/);
-    if (pathMatch) {
-        return { cid: pathMatch[1], path: pathMatch[2] || "" };
-    }
+    if (pathMatch) return { cid: pathMatch[1], path: pathMatch[2] || "" };
 
     return null;
 }
@@ -131,7 +125,34 @@ export function ipfsGatewayUrl(originalUrl, gatewayIndex) {
 export function proxyImageUrl(originalUrl) {
     if (!originalUrl) return "";
     if (!API_BASE) return originalUrl;
-    return API_BASE + "/api/proxy/image?url=" + originalUrl;
+    return API_BASE + "/api/proxy/image?url=" + encodeURIComponent(originalUrl);
+}
+
+// Кэш картинок — чтобы не пересчитывать URL каждый раз
+var resolvedImageCache = new Map();
+
+function resolveMediaUrl(media, originalMedia) {
+    if (!media) return { display: "", original: "" };
+
+    var cacheKey = originalMedia || media;
+    if (resolvedImageCache.has(cacheKey)) return resolvedImageCache.get(cacheKey);
+
+    var result;
+
+    // Если это IPFS URL — используем прямой gateway (не прокси)
+    // Это быстрее и работает везде включая ПК
+    if (isIpfsUrl(originalMedia || media)) {
+        var directUrl = ipfsGatewayUrl(originalMedia || media, 0);
+        result = { display: directUrl, original: originalMedia || media };
+    } else if (media && !media.startsWith("http") && API_BASE) {
+        // Не-IPFS, не-http — через прокси
+        result = { display: proxyImageUrl(media), original: originalMedia || media };
+    } else {
+        result = { display: media, original: originalMedia || media };
+    }
+
+    resolvedImageCache.set(cacheKey, result);
+    return result;
 }
 
 export async function nearNftTokensForOwner(contractId, accountId) {
@@ -214,6 +235,7 @@ export async function nearNftTokensForOwner(contractId, accountId) {
         }
     }
 
+    // Дедупликация
     var seen = {};
     var deduped = [];
     for (var d = 0; d < all.length; d++) {
@@ -252,9 +274,8 @@ export async function nearNftTokensForOwner(contractId, accountId) {
 
     debugLog.push("total_tokens=" + all.length);
 
-    var out = [];
-    for (var i = 0; i < all.length; i++) {
-        var t = all[i];
+    // Обрабатываем токены параллельно вместо последовательно
+    var out = await Promise.all(all.map(async function (t, i) {
         var md = t.metadata || {};
         var bUri = md.base_uri || cBaseUri || "";
 
@@ -263,26 +284,19 @@ export async function nearNftTokensForOwner(contractId, accountId) {
         var desc = md.description || "";
         var extra = md.extra || null;
 
-        if (i < 5) {
-            debugLog.push("token_" + t.token_id + "_raw=" + JSON.stringify(md).substring(0, 300));
-        }
-
         if (md.media) {
             media = join(bUri, md.media);
         }
 
-        if (!media && md.reference) {
+        // reference грузим только если нет media
+        if (!media && md.reference && md.reference !== "NO_REF") {
             var refUrl = join(bUri, md.reference);
-            if (i < 5) debugLog.push("token_" + t.token_id + "_refUrl=" + refUrl);
             var rj = await getJson(refUrl);
             if (rj) {
                 media = join(bUri, rj.media || rj.image || rj.animation_url || rj.icon || "");
                 if (!title) title = rj.title || rj.name || "";
                 if (!desc) desc = rj.description || "";
                 if (!extra) extra = rj.extra || null;
-                if (i < 5) debugLog.push("token_" + t.token_id + "_refMedia=" + (media || "(empty)"));
-            } else {
-                if (i < 5) debugLog.push("token_" + t.token_id + "_refFailed");
             }
         }
 
@@ -296,18 +310,12 @@ export async function nearNftTokensForOwner(contractId, accountId) {
 
         var originalMedia = media;
 
-        if (media && API_BASE) {
-            media = proxyImageUrl(originalMedia);
-            if (i < 5) debugLog.push("token_" + t.token_id + "_proxied=" + media);
-        } else if (media && isIpfsUrl(media)) {
-            var parsed = parseIpfs(media);
-            if (parsed) {
-                media = IPFS_GATEWAYS[0](parsed.cid, parsed.path);
-                if (i < 5) debugLog.push("token_" + t.token_id + "_rewritten=" + media);
-            }
-        }
+        // Резолвим URL картинки — IPFS идёт напрямую, не через прокси
+        var resolved = resolveMediaUrl(media, originalMedia);
+        media = resolved.display;
+        originalMedia = resolved.original;
 
-        out.push({
+        return {
             token_id: t.token_id,
             owner_id: t.owner_id,
             metadata: {
@@ -317,8 +325,8 @@ export async function nearNftTokensForOwner(contractId, accountId) {
                 originalMedia: originalMedia,
                 extra: extra,
             },
-        });
-    }
+        };
+    }));
 
     out._debug = debugLog;
     return out;
