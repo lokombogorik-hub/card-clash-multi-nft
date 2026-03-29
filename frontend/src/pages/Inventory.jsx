@@ -6,15 +6,26 @@ import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from 
 // Миграция: сбросить старые данные для новой системы рарности
 (function migrateRarity() {
     try {
-        if (localStorage.getItem("cc_rarity_v15_force")) return;
-        // Сбрасываем ВСЁ включая element и stats
+        if (localStorage.getItem("cc_rarity_v15_final")) return;
         var keys = Object.keys(localStorage);
         for (var i = 0; i < keys.length; i++) {
-            if (keys[i].startsWith("cc_card_") || keys[i].startsWith("cc_rarity_")) {
+            // Сбрасываем только stats, НЕ трогаем attributes
+            if (keys[i].startsWith("cc_card_")) {
+                try {
+                    var val = JSON.parse(localStorage.getItem(keys[i]));
+                    if (val) {
+                        delete val.stats;
+                        delete val.statsVersion;
+                        delete val.rarityKey;
+                        localStorage.setItem(keys[i], JSON.stringify(val));
+                    }
+                } catch (e) { }
+            }
+            if (keys[i].startsWith("cc_rarity_")) {
                 localStorage.removeItem(keys[i]);
             }
         }
-        localStorage.setItem("cc_rarity_v15_force", "1");
+        localStorage.setItem("cc_rarity_v15_final", "1");
     } catch (e) { }
 })();
 
