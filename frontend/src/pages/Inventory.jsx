@@ -206,8 +206,12 @@ function storeCardData(tokenId, data) {
 }
 
 function genStats(tokenId, rarity) {
+    // Ключ версии — при изменении rarity системы меняем версию
+    var STATS_VERSION = "v10";
     var stored = getStoredCardData(tokenId);
-    if (stored && stored.stats && typeof stored.stats.top === "number") {
+
+    // Проверяем что статы есть И версия совпадает И rarity.key совпадает
+    if (stored && stored.stats && stored.statsVersion === STATS_VERSION && stored.rarityKey === rarity.key) {
         var s = stored.stats;
         if (s.top <= 10 && s.right <= 10 && s.bottom <= 10 && s.left <= 10 &&
             s.top >= 1 && s.right >= 1 && s.bottom >= 1 && s.left >= 1) {
@@ -215,7 +219,8 @@ function genStats(tokenId, rarity) {
         }
     }
 
-    var rng = mulberry32(createSeed(tokenId, "stats_v7"));
+    // Генерируем новые статы
+    var rng = mulberry32(createSeed(tokenId, "stats_" + STATS_VERSION));
     var min = Math.max(1, rarity.min);
     var max = Math.min(9, rarity.max);
 
@@ -226,18 +231,23 @@ function genStats(tokenId, rarity) {
         left: Math.min(9, Math.max(1, Math.floor(rng() * (max - min + 1)) + min))
     };
 
+    // Ace только для legendary/epic
     var aceChance = rarity.key === "legendary" ? 0.5 : rarity.key === "epic" ? 0.2 : 0;
     if (aceChance > 0) {
-        var aceRng = mulberry32(createSeed(tokenId, "ace_v4"));
+        var aceRng = mulberry32(createSeed(tokenId, "ace_" + STATS_VERSION));
         if (aceRng() < aceChance) {
             var sides = ["top", "right", "bottom", "left"];
             stats[sides[Math.floor(aceRng() * sides.length)]] = ACE_VALUE;
         }
     }
 
+    // Сохраняем с версией и ключом rarity
     var data = stored || {};
     data.stats = stats;
+    data.statsVersion = STATS_VERSION;
+    data.rarityKey = rarity.key;
     storeCardData(tokenId, data);
+
     return stats;
 }
 
