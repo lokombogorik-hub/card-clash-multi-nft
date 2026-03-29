@@ -6,7 +6,7 @@ import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from 
 // Миграция: сбросить старые данные для новой системы рарности
 (function migrateRarity() {
     try {
-        if (localStorage.getItem("cc_rarity_v14_force")) return;
+        if (localStorage.getItem("cc_rarity_v15_force")) return;
         // Сбрасываем ВСЁ включая element и stats
         var keys = Object.keys(localStorage);
         for (var i = 0; i < keys.length; i++) {
@@ -14,7 +14,7 @@ import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from 
                 localStorage.removeItem(keys[i]);
             }
         }
-        localStorage.setItem("cc_rarity_v14_force", "1");
+        localStorage.setItem("cc_rarity_v15_force", "1");
     } catch (e) { }
 })();
 
@@ -131,9 +131,9 @@ function calculateRarityScore(attributes) {
 
 function getRarityFromScore(score) {
     if (score >= 10.0) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 8, max: 9 };
-    if (score >= 2.05) return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 6, max: 9 };
-    if (score >= 1.95) return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 4, max: 7 };
-    if (score >= 1.75) return { key: "uncommon", border: "#22c55e", glow: "rgba(34,197,94,0.50)", min: 2, max: 5 };
+    if (score >= 2.05) return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 7, max: 9 };
+    if (score >= 1.98) return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 5, max: 7 };
+    if (score >= 1.80) return { key: "uncommon", border: "#22c55e", glow: "rgba(34,197,94,0.50)", min: 3, max: 5 };
     return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 3 };
 }
 function getRarityFromTraits(attributes) {
@@ -200,7 +200,7 @@ function storeCardData(tokenId, data) {
 }
 
 function genStats(tokenId, rarity) {
-    var STATS_VERSION = "v12";
+    var STATS_VERSION = "v15";
     var stored = getStoredCardData(tokenId);
     if (stored && stored.stats && stored.statsVersion === STATS_VERSION && stored.rarityKey === rarity.key) {
         var s = stored.stats;
@@ -210,7 +210,7 @@ function genStats(tokenId, rarity) {
         }
     }
 
-    var rng = mulberry32(createSeed(tokenId, "stats_v12"));
+    var rng = mulberry32(createSeed(tokenId, "stats_v15"));
     var min = Math.max(1, rarity.min);
     var max = Math.min(9, rarity.max);
 
@@ -223,7 +223,7 @@ function genStats(tokenId, rarity) {
 
     var aceChance = rarity.key === "legendary" ? 0.5 : rarity.key === "epic" ? 0.2 : 0;
     if (aceChance > 0) {
-        var aceRng = mulberry32(createSeed(tokenId, "ace_v12"));
+        var aceRng = mulberry32(createSeed(tokenId, "ace_v15"));
         if (aceRng() < aceChance) {
             var sides = ["top", "right", "bottom", "left"];
             stats[sides[Math.floor(aceRng() * sides.length)]] = ACE_VALUE;
