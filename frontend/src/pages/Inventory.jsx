@@ -129,18 +129,13 @@ function calculateRarityScore(attributes) {
 }
 
 function getRarityFromScore(score) {
-    // Пороги откалиброваны по реальным rank Hotcraft:
-    // rank 1-50     → legendary (score 10+, это 1-of-1 трейты)
-    // rank 51-250   → epic (score ~2.0+)
-    // rank 251-600  → rare (score ~1.85+)
-    // rank 601-1200 → uncommon (score ~1.70+)
-    // rank 1200+    → common
-
-    if (score >= 10) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 8, max: 9 };
-    if (score >= 2.00) return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 6, max: 9 };
-    if (score >= 1.85) return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 5, max: 8 };
-    if (score >= 1.70) return { key: "uncommon", border: "#22c55e", glow: "rgba(34,197,94,0.50)", min: 3, max: 6 };
-    return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 4 };
+    // Диапазон коллекции: 1.64 — 2.19
+    // Пороги по реальному распределению коллекции bunny.nfts.tg
+    if (score >= 10.0) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.60)", min: 8, max: 9 };
+    if (score >= 2.05) return { key: "epic", border: "#a855f7", glow: "rgba(168,85,247,0.55)", min: 6, max: 9 };
+    if (score >= 1.85) return { key: "rare", border: "#3b82f6", glow: "rgba(59,130,246,0.55)", min: 4, max: 7 };
+    if (score >= 1.74) return { key: "uncommon", border: "#22c55e", glow: "rgba(34,197,94,0.50)", min: 2, max: 5 };
+    return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 3 };
 }
 function getRarityFromTraits(attributes) {
     return getRarityFromScore(calculateRarityScore(attributes));
@@ -207,7 +202,7 @@ function storeCardData(tokenId, data) {
 
 function genStats(tokenId, rarity) {
     // Ключ версии — при изменении rarity системы меняем версию
-    var STATS_VERSION = "v10";
+    var STATS_VERSION = "v11";
     var stored = getStoredCardData(tokenId);
 
     // Проверяем что статы есть И версия совпадает И rarity.key совпадает
