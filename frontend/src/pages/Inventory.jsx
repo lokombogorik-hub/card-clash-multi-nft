@@ -510,7 +510,8 @@ export default function Inventory({ token, onDeckReady }) {
                             var attrs = attributesMap[t.token_id];
                             var score = attrs ? calculateRarityScore(attrs) : -1;
                             var r = attrs ? getRarityFromTraits(attrs) : getRarityFallback(t.token_id);
-                            return t.token_id + ":" + score.toFixed(2) + "(" + r.key[0] + ")";
+                            var st = genStats(t.token_id, r);
+                            return t.token_id + ":" + score.toFixed(2) + "(" + r.key[0] + ")" + st.top + "-" + st.right + "-" + st.bottom + "-" + st.left;
                         }).sort(function (a, b) {
                             var sa = parseFloat(a.split(":")[1]);
                             var sb = parseFloat(b.split(":")[1]);
