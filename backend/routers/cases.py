@@ -275,6 +275,12 @@ async def open_case(
     near_account = getattr(user, "near_account_id", None)
     transfers = []
 
+    print(f"[CASES] near_account={near_account}")
+    print(f"[CASES] is_configured={is_configured()}")
+    print(f"[CASES] NFT_CONTRACT_ID={NFT_CONTRACT_ID}")
+    print(f"[CASES] POOL_KEYS={POOL_KEYS}")
+    print(f"[CASES] cards from_pool={[c['from_pool'] for c in cards]}")
+
     if near_account and is_configured():
         for card in cards:
             if card["from_pool"]:
@@ -287,8 +293,9 @@ async def open_case(
                 )
                 transfers.append(result)
                 card["transferred"] = result.get("success", False)
-
-    print(f"[CASES] User {user_id} opened {data.case_id}: {[c['token_id'] for c in cards]}")
+                print(f"[CASES] Transfer result: {result}")
+    else:
+        print(f"[CASES] SKIP transfer: near_account={near_account}, configured={is_configured()}")
 
     return {
         "success": True,
