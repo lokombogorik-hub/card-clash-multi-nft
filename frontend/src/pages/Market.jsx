@@ -33,10 +33,6 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
         });
     };
 
-    var handleVideoEnd = function () {
-        handleReveal();
-    };
-
     var card = cards[0];
     var rarityColor = RARITY_COLORS[(card && card.rarity)] || "#6b7280";
 
@@ -45,23 +41,23 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
             position: "fixed", inset: 0, zIndex: 99999,
             background: "rgba(0,0,0,0.98)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            padding: 0,
-            flexDirection: "column",
+            padding: "16px",
         }}>
             <div style={{
                 width: "100%",
-                height: "100%",
-                maxWidth: 600,
+                maxWidth: 360,
+                maxHeight: "90vh",
                 background: "linear-gradient(145deg, #1a1a2e, #0f0f1a)",
+                borderRadius: 24,
+                border: "1px solid rgba(120,200,255,0.2)",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
-                justifyContent: "center",
-                padding: "24px 16px",
-                textAlign: "center",
-                gap: 16,
+                padding: "20px 16px",
+                gap: 12,
+                overflowY: "auto",
             }}>
-                <h3 style={{ margin: 0, fontSize: 24, fontWeight: 900, color: "#fff" }}>
+                <h3 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: "#fff" }}>
                     🎁 {caseItem.name}
                 </h3>
 
@@ -70,26 +66,26 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                     <>
                         <div style={{
                             width: "100%",
-                            maxWidth: 480,
                             aspectRatio: "1/1",
-                            borderRadius: 24,
+                            borderRadius: 16,
                             overflow: "hidden",
                             background: "#000",
-                            boxShadow: "0 0 60px rgba(120,200,255,0.25)",
+                            boxShadow: "0 0 40px rgba(120,200,255,0.2)",
+                            flexShrink: 0,
                         }}>
                             {caseItem.video && !videoError ? (
                                 <video
                                     key={caseItem.id}
                                     autoPlay
                                     playsInline
+                                    muted
                                     style={{
                                         width: "100%",
                                         height: "100%",
                                         objectFit: "contain",
                                         display: "block",
-                                        mixBlendMode: "screen",
                                     }}
-                                    onEnded={handleVideoEnd}
+                                    onEnded={handleReveal}
                                     onError={function () { setVideoError(true); handleReveal(); }}
                                 >
                                     <source src={caseItem.video} type="video/mp4" />
@@ -98,10 +94,7 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                                 <img
                                     src={caseItem.image}
                                     alt=""
-                                    style={{
-                                        width: "100%", height: "100%",
-                                        objectFit: "contain",
-                                    }}
+                                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
                                     onError={function (e) { e.currentTarget.src = "/cards/card.jpg"; }}
                                 />
                             )}
@@ -110,13 +103,12 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                         <button
                             onClick={handleReveal}
                             style={{
-                                padding: "16px 0",
-                                fontSize: 18, fontWeight: 900,
-                                borderRadius: 16, border: "none",
+                                padding: "12px 0",
+                                fontSize: 15, fontWeight: 900,
+                                borderRadius: 14, border: "none",
                                 background: "linear-gradient(135deg, #78c8ff, #5096ff)",
                                 color: "#000", cursor: "pointer",
-                                boxShadow: "0 6px 25px rgba(120,200,255,0.4)",
-                                width: "100%", maxWidth: 480,
+                                width: "100%",
                             }}
                         >
                             {videoError ? "✨ Открыть!" : "⏭ Пропустить"}
@@ -124,68 +116,62 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                     </>
                 )}
 
-                {/* ── ПОСЛЕ reveal: одна большая карта ── */}
+                {/* ── ПОСЛЕ reveal: карта ── */}
                 {revealed && card && (
                     <>
                         <div style={{
                             opacity: revealedCards.length > 0 ? 1 : 0,
                             transform: revealedCards.length > 0
                                 ? "scale(1) translateY(0)"
-                                : "scale(0.7) translateY(30px)",
+                                : "scale(0.7) translateY(20px)",
                             transition: "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
                             width: "100%",
-                            maxWidth: 320,
+                            maxWidth: 220,
                             aspectRatio: "3/4",
-                            borderRadius: 24,
+                            borderRadius: 18,
                             overflow: "hidden",
-                            border: "4px solid " + rarityColor,
+                            border: "3px solid " + rarityColor,
                             boxShadow: revealedCards.length > 0
-                                ? "0 0 60px " + rarityColor + "99, 0 0 120px " + rarityColor + "44"
+                                ? "0 0 40px " + rarityColor + "80"
                                 : "none",
                             background: "#0a0e1a",
                             position: "relative",
+                            flexShrink: 0,
                         }}>
                             {card.image_url || card.imageUrl ? (
                                 <img
                                     src={card.image_url || card.imageUrl}
                                     alt={card.name || ""}
-                                    style={{
-                                        width: "100%", height: "100%",
-                                        objectFit: "cover",
-                                        display: "block",
-                                    }}
+                                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                                     onError={function (e) { e.currentTarget.src = "/cards/card.jpg"; }}
                                 />
                             ) : (
                                 <div style={{
                                     width: "100%", height: "100%",
                                     display: "flex", alignItems: "center", justifyContent: "center",
-                                    background: "linear-gradient(135deg, #1a2232, #0f1625)",
-                                    fontSize: 80,
+                                    fontSize: 60,
                                 }}>🎴</div>
                             )}
 
-                            {/* Название сверху */}
                             <div style={{
                                 position: "absolute", top: 0, left: 0, right: 0,
-                                padding: "10px 12px",
+                                padding: "8px 10px",
                                 background: "linear-gradient(to bottom, rgba(0,0,0,0.85), transparent)",
-                                fontSize: 14, fontWeight: 700, color: "#fff",
+                                fontSize: 11, fontWeight: 700, color: "#fff",
                                 textAlign: "center",
                             }}>
                                 {card.name || card.title}
                             </div>
 
-                            {/* Рарность снизу */}
                             <div style={{
                                 position: "absolute", bottom: 0, left: 0, right: 0,
-                                padding: "12px",
+                                padding: "8px",
                                 background: "linear-gradient(to top, rgba(0,0,0,0.9), transparent)",
-                                fontSize: 16, fontWeight: 900,
+                                fontSize: 12, fontWeight: 900,
                                 color: rarityColor,
                                 textAlign: "center",
                                 textTransform: "uppercase",
-                                letterSpacing: 2,
+                                letterSpacing: 1,
                             }}>
                                 ✦ {card.rarity} ✦
                             </div>
@@ -195,13 +181,13 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                             <button
                                 onClick={onClose}
                                 style={{
-                                    padding: "16px 0",
-                                    fontSize: 17, fontWeight: 700,
-                                    borderRadius: 16, border: "none",
+                                    padding: "10px 0",
+                                    fontSize: 14, fontWeight: 700,
+                                    borderRadius: 12, border: "none",
                                     background: "linear-gradient(135deg, #22c55e, #16a34a)",
                                     color: "#fff", cursor: "pointer",
-                                    width: "100%", maxWidth: 480,
-                                    boxShadow: "0 4px 20px rgba(34,197,94,0.35)",
+                                    width: "60%",
+                                    boxShadow: "0 4px 16px rgba(34,197,94,0.3)",
                                 }}
                             >
                                 ✅ В инвентарь!
