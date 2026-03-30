@@ -130,8 +130,14 @@ async def transfer_nft(from_wallet: str, to_wallet: str, token_id: str, private_
         return {"success": False, "error": "Pool key not configured", "mock": True}
     try:
         from py_near.account import Account
-        account = Account(from_wallet, private_key)
+
+        account = Account(
+            account_id=from_wallet,
+            private_key=private_key,
+            rpc_addr="https://rpc.mainnet.near.org"
+        )
         await account.startup()
+
         result = await account.function_call(
             contract_id=NFT_CONTRACT_ID,
             method_name="nft_transfer",
@@ -139,15 +145,25 @@ async def transfer_nft(from_wallet: str, to_wallet: str, token_id: str, private_
             gas=30_000_000_000_000,
             amount=1,
         )
+
+        print(f"[CASES] Transfer result type: {type(result)}")
+        print(f"[CASES] Transfer result: {result}")
+
         tx_hash = ""
-        if hasattr(result, "transaction") and hasattr(result.transaction, "hash"):
-            tx_hash = result.transaction.hash
-        elif hasattr(result, "transaction_outcome") and hasattr(result.transaction_outcome, "id"):
-            tx_hash = result.transaction_outcome.id
+        if result and hasattr(result, "transaction"):
+            tx_hash = getattr(result.transaction, "hash", "")
+        elif result and hasattr(result, "transaction_outcome"):
+            tx_hash = getattr(result.transaction_outcome, "id", "")
+        elif isinstance(result, dict):
+            tx_hash = result.get("transaction", {}).get("hash", "")
+
         print(f"[CASES] Transferred {token_id} from {from_wallet} to {to_wallet}, tx: {tx_hash}")
         return {"success": True, "tx_hash": tx_hash, "token_id": token_id}
+
     except Exception as e:
-        print(f"[CASES] Transfer error: {e}")
+        print(f"[CASES] Transfer error: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
         return {"success": False, "error": str(e)}
 
 
