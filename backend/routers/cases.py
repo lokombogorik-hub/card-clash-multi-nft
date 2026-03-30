@@ -131,10 +131,13 @@ async def transfer_nft(from_wallet: str, to_wallet: str, token_id: str, private_
     try:
         from py_near.account import Account
         account = Account(from_wallet, private_key)
+        await account.startup()
         result = await account.function_call(
-            NFT_CONTRACT_ID, "nft_transfer",
-            {"receiver_id": to_wallet, "token_id": token_id},
-            gas=30_000_000_000_000, deposit=1,
+            contract_id=NFT_CONTRACT_ID,
+            method_name="nft_transfer",
+            args={"receiver_id": to_wallet, "token_id": token_id},
+            gas=30_000_000_000_000,
+            amount=1,
         )
         tx_hash = ""
         if hasattr(result, "transaction") and hasattr(result.transaction, "hash"):
