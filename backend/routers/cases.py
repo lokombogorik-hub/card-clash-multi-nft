@@ -83,13 +83,24 @@ async def fetch_pool_tokens(wallet: str) -> List[str]:
                 }
             )
             data = resp.json()
+            print(f"[POOL] wallet={wallet} status={resp.status_code}")
+            print(f"[POOL] response keys={list(data.keys())}")
+
+            if "error" in data:
+                print(f"[POOL] RPC error: {data['error']}")
+                return []
+
             if "result" in data and "result" in data["result"]:
                 result_bytes = bytes(data["result"]["result"])
                 tokens = json.loads(result_bytes.decode())
+                print(f"[POOL] wallet={wallet} found {len(tokens)} tokens: {[t.get('token_id') for t in tokens[:5]]}")
                 return [t.get("token_id") for t in tokens if t.get("token_id")]
+            else:
+                print(f"[POOL] unexpected response: {data}")
+                return []
     except Exception as e:
-        print(f"[CASES] Error fetching tokens from {wallet}: {e}")
-    return []
+        print(f"[POOL] Exception for {wallet}: {type(e).__name__}: {e}")
+        return []
 
 
 # ФИКС: убран @router.post("/open") над этой функцией
