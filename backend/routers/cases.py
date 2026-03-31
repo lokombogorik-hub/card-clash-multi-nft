@@ -24,9 +24,10 @@ class ClaimNFTRequest(BaseModel):
 
 
 NFT_CONTRACT_ID = os.getenv("NFT_CONTRACT_ID", "")
-
-NFT_CONTRACT_ID = os.getenv("NFT_CONTRACT_ID", "")
 TREASURY_WALLET = os.getenv("TREASURY_WALLET", "retardo-s.near")
+
+# IPFS gateway для картинок коллекции
+IPFS_BASE = "https://bafybeibqzbodfn3xczppxh2k2ek3bgvojhivqy4ntbkprcxesulth3yy5e.ipfs.w3s.link"
 
 POOL_WALLETS = {
     "common":    os.getenv("POOL_WALLET_COMMON",    "common-nft.near"),
@@ -58,13 +59,10 @@ CASES = {
 
 reserved_tokens: Dict[str, List[dict]] = {}
 used_tx_hashes: set = set()
-
-# Кэш аккаунтов — создаём один раз
 _account_cache: Dict[str, object] = {}
 
 
 async def get_pool_account(wallet: str, private_key: str):
-    """Получить или создать аккаунт из кэша"""
     if wallet in _account_cache:
         return _account_cache[wallet]
     from py_near.account import Account
@@ -80,6 +78,17 @@ async def get_pool_account(wallet: str, private_key: str):
 
 def is_configured() -> bool:
     return bool(NFT_CONTRACT_ID) and any(POOL_KEYS.values())
+
+
+def get_image_url(token_id: str) -> tuple:
+    """Быстро строим URL картинки без RPC запроса"""
+    try:
+        nft_number = int(token_id) + 1
+        image_url = f"{IPFS_BASE}/{nft_number}.png"
+        title = f"BUNNY #{nft_number}"
+        return image_url, title
+    except (ValueError, TypeError):
+        return None, f"Card #{token_id}"
 
 
 async def fetch_pool_tokens(wallet: str) -> List[str]:
@@ -112,7 +121,7 @@ async def fetch_pool_tokens(wallet: str) -> List[str]:
             if "result" in data and "result" in data["result"]:
                 result_bytes = bytes(data["result"]["result"])
                 tokens = json.loads(result_bytes.decode())
-                print(f"[POOL] wallet={wallet} found {len(tokens)} tokens")
+                print(f"[POOL] wallet={wallet} found {len(tokens)} tokens: {[t.get('token_id') for t in tokens[:5]]}")
                 return [t.get("token_id") for t in tokens if t.get("token_id")]
             else:
                 print(f"[POOL] unexpected response: {data}")
@@ -122,43 +131,11 @@ async def fetch_pool_tokens(wallet: str) -> List[str]:
         return []
 
 
-async def fetch_token_metadata(token_id: str) -> dict:
-    if not NFT_CONTRACT_ID:
-        return {}
-    try:
-        args = json.dumps({"token_id": token_id})
-        args_base64 = base64.b64encode(args.encode()).decode()
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(
-                "https://rpc.mainnet.near.org",
-                json={
-                    "jsonrpc": "2.0", "id": "1", "method": "query",
-                    "params": {
-                        "request_type": "call_function",
-                        "finality": "final",
-                        "account_id": NFT_CONTRACT_ID,
-                        "method_name": "nft_token",
-                        "args_base64": args_base64,
-                    }
-                }
-            )
-            data = resp.json()
-            if "result" in data and "result" in data["result"]:
-                result_bytes = bytes(data["result"]["result"])
-                token = json.loads(result_bytes.decode())
-                if token and "metadata" in token:
-                    return token["metadata"]
-    except Exception as e:
-        print(f"[CASES] Error fetching metadata for {token_id}: {e}")
-    return {}
-
-
 async def transfer_nft(from_wallet: str, to_wallet: str, token_id: str, private_key: str) -> dict:
     if not private_key:
         return {"success": False, "error": "Pool key not configured", "mock": True}
     try:
         account = await get_pool_account(from_wallet, private_key)
-
         result = await account.function_call(
             contract_id=NFT_CONTRACT_ID,
             method_name="nft_transfer",
@@ -166,16 +143,13 @@ async def transfer_nft(from_wallet: str, to_wallet: str, token_id: str, private_
             gas=30_000_000_000_000,
             amount=1,
         )
-
         tx_hash = ""
         if result and hasattr(result, "transaction"):
             tx_hash = getattr(result.transaction, "hash", "")
         elif result and hasattr(result, "transaction_outcome"):
             tx_hash = getattr(result.transaction_outcome, "id", "")
-
         print(f"[CASES] Transferred {token_id} from {from_wallet} to {to_wallet}, tx: {tx_hash}")
         return {"success": True, "tx_hash": tx_hash, "token_id": token_id}
-
     except Exception as e:
         print(f"[CASES] Transfer error: {type(e).__name__}: {e}")
         return {"success": False, "error": str(e)}
@@ -305,23 +279,8 @@ async def open_case(
             token_id = generate_mock_token_id(rarity)
             from_pool = False
 
-        image_url = None
-        title = None
-        if from_pool and NFT_CONTRACT_ID:
-            try:
-                meta = await fetch_token_metadata(token_id)
-                raw_media = meta.get("media", "")
-                title = meta.get("title") or None
-                if raw_media:
-                    if raw_media.startswith("ipfs://"):
-                        cid = raw_media.replace("ipfs://", "")
-                        image_url = f"https://cloudflare-ipfs.com/ipfs/{cid}"
-                    elif raw_media.startswith("http"):
-                        image_url = raw_media
-                    else:
-                        image_url = f"https://cloudflare-ipfs.com/ipfs/{raw_media}"
-            except Exception as e:
-                print(f"[CASES] Metadata fetch failed for {token_id}: {e}")
+        # Картинка строится мгновенно без RPC запроса
+        image_url, title = get_image_url(token_id)
 
         cards.append({
             "token_id": token_id,
@@ -331,8 +290,8 @@ async def open_case(
             "contract_id": NFT_CONTRACT_ID or "mock",
             "image_url": image_url,
             "imageUrl": image_url,
-            "title": title or f"Card #{token_id}",
-            "name": title or f"Card #{token_id}",
+            "title": title,
+            "name": title,
         })
 
     reservation_id = f"{user_id}_{data.tx_hash[:8]}"
@@ -343,6 +302,7 @@ async def open_case(
 
     print(f"[CASES] near_account={near_account} case={data.case_id}")
     print(f"[CASES] cards from_pool={[c['from_pool'] for c in cards]}")
+    print(f"[CASES] token_ids={[c['token_id'] for c in cards]}")
 
     if near_account and is_configured():
         for card in cards:
@@ -406,5 +366,3 @@ async def claim_reserved(
         del reserved_tokens[res_id]
 
     return {"success": True, "transfers": transfers, "message": f"Claimed {len(transfers)} cards"}
-
-
