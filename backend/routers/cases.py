@@ -1,4 +1,3 @@
-# backend/routers/cases.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from database.session import get_db
@@ -18,31 +17,31 @@ NFT_CONTRACT_ID = os.getenv("NFT_CONTRACT_ID", "")
 TREASURY_WALLET = os.getenv("TREASURY_WALLET", "retardo-s.near")
 
 POOL_WALLETS = {
-    "common": os.getenv("POOL_WALLET_COMMON", "common-nft.near"),
-    "rare": os.getenv("POOL_WALLET_RARE", "rare-nfts.near"),
-    "epic": os.getenv("POOL_WALLET_EPIC", "epic-nft.near"),
+    "common":    os.getenv("POOL_WALLET_COMMON",    "common-nft.near"),
+    "rare":      os.getenv("POOL_WALLET_RARE",      "rare-nfts.near"),
+    "epic":      os.getenv("POOL_WALLET_EPIC",      "epic-nft.near"),
     "legendary": os.getenv("POOL_WALLET_LEGENDARY", "legendary-nft.near"),
 }
 
 POOL_KEYS = {
-    "common": os.getenv("POOL_KEY_COMMON", ""),
-    "rare": os.getenv("POOL_KEY_RARE", ""),
-    "epic": os.getenv("POOL_KEY_EPIC", ""),
+    "common":    os.getenv("POOL_KEY_COMMON",    ""),
+    "rare":      os.getenv("POOL_KEY_RARE",      ""),
+    "epic":      os.getenv("POOL_KEY_EPIC",      ""),
     "legendary": os.getenv("POOL_KEY_LEGENDARY", ""),
 }
 
 RARITY_WEIGHTS = {
-    "common": 55,
-    "rare": 30,
-    "epic": 12,
-    "legendary": 3,
+    "common":    55,
+    "rare":      30,
+    "epic":      12,
+    "legendary":  3,
 }
 
 CASES = {
-    "starter":   {"price": 0.1,  "card_count": 1, "rarity_mode": "mixed"},
-    "premium":   {"price": 0.1,    "card_count": 1, "rarity_mode": "mixed"},
-    "legendary": {"price": 0.1,    "card_count": 1, "rarity_mode": "epic"},
-    "ultimate":  {"price": 0.1,   "card_count": 1, "rarity_mode": "legendary"},
+    "starter":   {"price": 0.1, "card_count": 1, "rarity_mode": "common"},
+    "premium":   {"price": 0.1, "card_count": 1, "rarity_mode": "rare"},
+    "legendary": {"price": 0.1, "card_count": 1, "rarity_mode": "epic"},
+    "ultimate":  {"price": 0.1, "card_count": 1, "rarity_mode": "legendary"},
 }
 
 reserved_tokens: Dict[str, List[dict]] = {}
@@ -50,6 +49,7 @@ used_tx_hashes: set = set()
 
 # Кэш аккаунтов — создаём один раз
 _account_cache: Dict[str, object] = {}
+
 
 async def get_pool_account(wallet: str, private_key: str):
     """Получить или создать аккаунт из кэша"""
@@ -63,16 +63,7 @@ async def get_pool_account(wallet: str, private_key: str):
     )
     await account.startup()
     _account_cache[wallet] = account
-    return accountasync def transfer_nft
-
-
-class OpenCaseRequest(BaseModel):
-    case_id: str
-    tx_hash: str
-
-
-class ClaimNFTRequest(BaseModel):
-    reservation_id: Optional[str] = None
+    return account
 
 
 def is_configured() -> bool:
@@ -101,7 +92,6 @@ async def fetch_pool_tokens(wallet: str) -> List[str]:
             )
             data = resp.json()
             print(f"[POOL] wallet={wallet} status={resp.status_code}")
-            print(f"[POOL] response keys={list(data.keys())}")
 
             if "error" in data:
                 print(f"[POOL] RPC error: {data['error']}")
@@ -110,7 +100,7 @@ async def fetch_pool_tokens(wallet: str) -> List[str]:
             if "result" in data and "result" in data["result"]:
                 result_bytes = bytes(data["result"]["result"])
                 tokens = json.loads(result_bytes.decode())
-                print(f"[POOL] wallet={wallet} found {len(tokens)} tokens: {[t.get('token_id') for t in tokens[:5]]}")
+                print(f"[POOL] wallet={wallet} found {len(tokens)} tokens")
                 return [t.get("token_id") for t in tokens if t.get("token_id")]
             else:
                 print(f"[POOL] unexpected response: {data}")
@@ -120,9 +110,7 @@ async def fetch_pool_tokens(wallet: str) -> List[str]:
         return []
 
 
-# ФИКС: убран @router.post("/open") над этой функцией
 async def fetch_token_metadata(token_id: str) -> dict:
-    """Получить метадату NFT токена"""
     if not NFT_CONTRACT_ID:
         return {}
     try:
@@ -151,6 +139,7 @@ async def fetch_token_metadata(token_id: str) -> dict:
     except Exception as e:
         print(f"[CASES] Error fetching metadata for {token_id}: {e}")
     return {}
+
 
 async def transfer_nft(from_wallet: str, to_wallet: str, token_id: str, private_key: str) -> dict:
     if not private_key:
@@ -191,9 +180,9 @@ def pick_rarity(mode: str) -> str:
 def generate_mock_token_id(rarity: str) -> str:
     rarity_ranges = {
         "legendary": (1, 250),
-        "epic": (251, 1000),
-        "rare": (1001, 3500),
-        "common": (3501, 10000),
+        "epic":      (251, 1000),
+        "rare":      (1001, 3500),
+        "common":    (3501, 10000),
     }
     min_id, max_id = rarity_ranges.get(rarity, (1, 10000))
     num = random.randint(min_id, max_id)
@@ -222,6 +211,40 @@ async def get_pools_status():
             "sample_tokens": tokens[:3] if tokens else [],
         }
     return {"nft_contract": NFT_CONTRACT_ID or "NOT SET", "pools": pools, "ready": is_configured()}
+
+
+@router.get("/check-balances")
+async def check_balances():
+    balances = {}
+    for rarity, wallet in POOL_WALLETS.items():
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(
+                    "https://rpc.mainnet.near.org",
+                    json={
+                        "jsonrpc": "2.0", "id": "1",
+                        "method": "query",
+                        "params": {
+                            "request_type": "view_account",
+                            "finality": "final",
+                            "account_id": wallet,
+                        }
+                    }
+                )
+                data = resp.json()
+                if "result" in data:
+                    amount = int(data["result"]["amount"])
+                    near = amount / 10 ** 24
+                    balances[rarity] = {
+                        "wallet": wallet,
+                        "balance_near": round(near, 4),
+                        "enough": near >= 0.01
+                    }
+                else:
+                    balances[rarity] = {"wallet": wallet, "error": str(data.get("error", "unknown"))}
+        except Exception as e:
+            balances[rarity] = {"wallet": wallet, "error": str(e)}
+    return balances
 
 
 @router.post("/open")
@@ -270,7 +293,6 @@ async def open_case(
             token_id = generate_mock_token_id(rarity)
             from_pool = False
 
-        # Получаем картинку
         image_url = None
         title = None
         if from_pool and NFT_CONTRACT_ID:
@@ -281,11 +303,11 @@ async def open_case(
                 if raw_media:
                     if raw_media.startswith("ipfs://"):
                         cid = raw_media.replace("ipfs://", "")
-                        image_url = f"https://ipfs.io/ipfs/{cid}"
+                        image_url = f"https://cloudflare-ipfs.com/ipfs/{cid}"
                     elif raw_media.startswith("http"):
                         image_url = raw_media
                     else:
-                        image_url = f"https://ipfs.io/ipfs/{raw_media}"
+                        image_url = f"https://cloudflare-ipfs.com/ipfs/{raw_media}"
             except Exception as e:
                 print(f"[CASES] Metadata fetch failed for {token_id}: {e}")
 
@@ -307,10 +329,7 @@ async def open_case(
     near_account = getattr(user, "near_account_id", None)
     transfers = []
 
-    print(f"[CASES] near_account={near_account}")
-    print(f"[CASES] is_configured={is_configured()}")
-    print(f"[CASES] NFT_CONTRACT_ID={NFT_CONTRACT_ID}")
-    print(f"[CASES] POOL_KEYS={POOL_KEYS}")
+    print(f"[CASES] near_account={near_account} case={data.case_id}")
     print(f"[CASES] cards from_pool={[c['from_pool'] for c in cards]}")
 
     if near_account and is_configured():
@@ -327,7 +346,9 @@ async def open_case(
                 card["transferred"] = result.get("success", False)
                 print(f"[CASES] Transfer result: {result}")
     else:
-        print(f"[CASES] SKIP transfer: near_account={near_account}, configured={is_configured()}")
+        print(f"[CASES] SKIP: near_account={near_account}, configured={is_configured()}")
+
+    print(f"[CASES] Done: {data.case_id} → {[c['token_id'] for c in cards]}")
 
     return {
         "success": True,
@@ -373,3 +394,12 @@ async def claim_reserved(
         del reserved_tokens[res_id]
 
     return {"success": True, "transfers": transfers, "message": f"Claimed {len(transfers)} cards"}
+
+
+class OpenCaseRequest(BaseModel):
+    case_id: str
+    tx_hash: str
+
+
+class ClaimNFTRequest(BaseModel):
+    reservation_id: Optional[str] = None
