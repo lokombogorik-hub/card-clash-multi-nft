@@ -13,6 +13,18 @@ import base64
 
 router = APIRouter(prefix="/api/cases", tags=["cases"])
 
+
+class OpenCaseRequest(BaseModel):
+    case_id: str
+    tx_hash: str
+
+
+class ClaimNFTRequest(BaseModel):
+    reservation_id: Optional[str] = None
+
+
+NFT_CONTRACT_ID = os.getenv("NFT_CONTRACT_ID", "")
+
 NFT_CONTRACT_ID = os.getenv("NFT_CONTRACT_ID", "")
 TREASURY_WALLET = os.getenv("TREASURY_WALLET", "retardo-s.near")
 
@@ -396,10 +408,3 @@ async def claim_reserved(
     return {"success": True, "transfers": transfers, "message": f"Claimed {len(transfers)} cards"}
 
 
-class OpenCaseRequest(BaseModel):
-    case_id: str
-    tx_hash: str
-
-
-class ClaimNFTRequest(BaseModel):
-    reservation_id: Optional[str] = None
