@@ -48,6 +48,23 @@ CASES = {
 reserved_tokens: Dict[str, List[dict]] = {}
 used_tx_hashes: set = set()
 
+# Кэш аккаунтов — создаём один раз
+_account_cache: Dict[str, object] = {}
+
+async def get_pool_account(wallet: str, private_key: str):
+    """Получить или создать аккаунт из кэша"""
+    if wallet in _account_cache:
+        return _account_cache[wallet]
+    from py_near.account import Account
+    account = Account(
+        account_id=wallet,
+        private_key=private_key,
+        rpc_addr="https://rpc.mainnet.near.org"
+    )
+    await account.startup()
+    _account_cache[wallet] = account
+    return accountasync def transfer_nft
+
 
 class OpenCaseRequest(BaseModel):
     case_id: str
@@ -135,19 +152,11 @@ async def fetch_token_metadata(token_id: str) -> dict:
         print(f"[CASES] Error fetching metadata for {token_id}: {e}")
     return {}
 
-
 async def transfer_nft(from_wallet: str, to_wallet: str, token_id: str, private_key: str) -> dict:
     if not private_key:
         return {"success": False, "error": "Pool key not configured", "mock": True}
     try:
-        from py_near.account import Account
-
-        account = Account(
-            account_id=from_wallet,
-            private_key=private_key,
-            rpc_addr="https://rpc.mainnet.near.org"
-        )
-        await account.startup()
+        account = await get_pool_account(from_wallet, private_key)
 
         result = await account.function_call(
             contract_id=NFT_CONTRACT_ID,
@@ -157,24 +166,17 @@ async def transfer_nft(from_wallet: str, to_wallet: str, token_id: str, private_
             amount=1,
         )
 
-        print(f"[CASES] Transfer result type: {type(result)}")
-        print(f"[CASES] Transfer result: {result}")
-
         tx_hash = ""
         if result and hasattr(result, "transaction"):
             tx_hash = getattr(result.transaction, "hash", "")
         elif result and hasattr(result, "transaction_outcome"):
             tx_hash = getattr(result.transaction_outcome, "id", "")
-        elif isinstance(result, dict):
-            tx_hash = result.get("transaction", {}).get("hash", "")
 
         print(f"[CASES] Transferred {token_id} from {from_wallet} to {to_wallet}, tx: {tx_hash}")
         return {"success": True, "tx_hash": tx_hash, "token_id": token_id}
 
     except Exception as e:
         print(f"[CASES] Transfer error: {type(e).__name__}: {e}")
-        import traceback
-        traceback.print_exc()
         return {"success": False, "error": str(e)}
 
 
