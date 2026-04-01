@@ -20,9 +20,24 @@ var TREASURY = "retardo-s.near";
 var IPFS_BASE = "https://bafybeibqzbodfn3xczppxh2k2ek3bgvojhivqy4ntbkprcxesulth3yy5e.ipfs.w3s.link";
 var NFT_CONTRACT_ID = (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim();
 
+// Альтернативные IPFS шлюзы если основной не грузит
+var IPFS_GATEWAYS = [
+    "https://bafybeibqzbodfn3xczppxh2k2ek3bgvojhivqy4ntbkprcxesulth3yy5e.ipfs.w3s.link",
+    "https://ipfs.io/ipfs/bafybeibqzbodfn3xczppxh2k2ek3bgvojhivqy4ntbkprcxesulth3yy5e",
+    "https://cloudflare-ipfs.com/ipfs/bafybeibqzbodfn3xczppxh2k2ek3bgvojhivqy4ntbkprcxesulth3yy5e",
+];
+
 async function loadTokenMetadata(tokenId) {
-    if (!NFT_CONTRACT_ID) return null;
-    if (!tokenId || String(tokenId).startsWith("card_")) return null;
+    if (!tokenId) return null;
+
+    var nftNumber = parseInt(String(tokenId), 10) + 1;
+    var fallbackUrl = IPFS_BASE + "/" + nftNumber + ".png";
+    var fallbackTitle = "BUNNY #" + nftNumber;
+
+    // Если нет контракта — сразу возвращаем URL по номеру
+    if (!NFT_CONTRACT_ID) {
+        return { imageUrl: fallbackUrl, title: fallbackTitle };
+    }
 
     try {
         var args = JSON.stringify({ token_id: String(tokenId) });
@@ -40,44 +55,97 @@ async function loadTokenMetadata(tokenId) {
                     method_name: "nft_token",
                     args_base64: args_base64,
                 }
-            })
+            }),
+            signal: AbortSignal.timeout(8000),
         });
 
         var data = await resp.json();
+
         if (data.result && data.result.result) {
             var bytes = new Uint8Array(data.result.result);
             var token = JSON.parse(new TextDecoder().decode(bytes));
             var media = token?.metadata?.media || "";
-            var title = token?.metadata?.title || "";
+            var title = token?.metadata?.title || fallbackTitle;
 
-            var imageUrl = media;
-            if (media && media.startsWith("ipfs://")) {
-                imageUrl = "https://ipfs.io/ipfs/" + media.slice(7);
-            } else if (media && !media.startsWith("http")) {
-                imageUrl = IPFS_BASE + "/" + media;
-            } else if (!media) {
-                // Строим URL по номеру токена как fallback
-                var nftNumber = parseInt(tokenId, 10) + 1;
-                imageUrl = IPFS_BASE + "/" + nftNumber + ".png";
+            var imageUrl = fallbackUrl;
+
+            if (media) {
+                if (media.startsWith("http")) {
+                    imageUrl = media;
+                } else if (media.startsWith("ipfs://")) {
+                    var cid = media.slice(7);
+                    imageUrl = "https://ipfs.io/ipfs/" + cid;
+                } else {
+                    // Относительный путь типа "1128.png"
+                    imageUrl = IPFS_BASE + "/" + media;
+                }
             }
 
-            console.log("[CASE] token", tokenId, "media:", media, "→", imageUrl);
+            console.log("[CASE] token_id=" + tokenId + " nft#" + nftNumber + " media=" + media + " → " + imageUrl);
             return { imageUrl, title };
         }
     } catch (e) {
-        console.warn("[CASE] Failed to load token metadata for", tokenId, e);
+        console.warn("[CASE] RPC failed for token_id=" + tokenId + ":", e.message);
     }
 
-    // Fallback — строим URL по номеру
-    try {
-        var nftNumber = parseInt(tokenId, 10) + 1;
-        return {
-            imageUrl: IPFS_BASE + "/" + nftNumber + ".png",
-            title: "BUNNY #" + nftNumber,
-        };
-    } catch (e) {
-        return null;
+    // Fallback — URL по номеру токена
+    console.log("[CASE] Fallback for token_id=" + tokenId + " → " + fallbackUrl);
+    return { imageUrl: fallbackUrl, title: fallbackTitle };
+}
+
+function CardImage({ imageUrl, name }) {
+    var [currentGateway, setCurrentGateway] = useState(0);
+    var [src, setSrc] = useState(imageUrl);
+    var [failed, setFailed] = useState(false);
+
+    useEffect(function () {
+        setSrc(imageUrl);
+        setCurrentGateway(0);
+        setFailed(false);
+    }, [imageUrl]);
+
+    var handleError = function () {
+        var nextGateway = currentGateway + 1;
+        if (nextGateway < IPFS_GATEWAYS.length) {
+            // Пробуем следующий gateway
+            var filename = imageUrl.split("/").pop();
+            var newSrc = IPFS_GATEWAYS[nextGateway] + "/" + filename;
+            console.log("[CASE] Trying gateway " + nextGateway + ": " + newSrc);
+            setCurrentGateway(nextGateway);
+            setSrc(newSrc);
+        } else {
+            console.log("[CASE] All gateways failed for:", imageUrl);
+            setFailed(true);
+        }
+    };
+
+    if (failed || !src) {
+        return (
+            <div style={{
+                width: "100%", height: "100%",
+                display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "center",
+                fontSize: 50, gap: 8,
+            }}>
+                <span>🎴</span>
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", textAlign: "center", padding: "0 8px" }}>
+                    {name}
+                </span>
+            </div>
+        );
     }
+
+    return (
+        <img
+            src={src}
+            alt={name || "NFT"}
+            style={{
+                width: "100%", height: "100%",
+                objectFit: "cover", display: "block",
+            }}
+            onError={handleError}
+        />
+    );
 }
 
 function CaseOpenModal({ caseItem, cards, onClose }) {
@@ -85,37 +153,35 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
     var [revealedCards, setRevealedCards] = useState([]);
     var [videoError, setVideoError] = useState(false);
     var [resolvedCards, setResolvedCards] = useState(cards);
-    var [metaLoading, setMetaLoading] = useState(true);
 
-    // Загружаем реальные картинки из NEAR контракта
+    // Грузим метадату в фоне пока играет видео
     useEffect(function () {
         var alive = true;
-        setMetaLoading(true);
 
         (async function () {
-            var updated = await Promise.all(cards.map(async function (card) {
-                var tokenId = card.token_id;
+            try {
+                var updated = await Promise.all(cards.map(async function (card) {
+                    var tokenId = card.token_id;
+                    if (!tokenId) return card;
 
-                // Для mock токенов оставляем как есть
-                if (!tokenId || String(tokenId).startsWith("card_")) {
-                    return card;
+                    var meta = await loadTokenMetadata(tokenId);
+                    if (!meta || !alive) return card;
+
+                    console.log("[CASE] Card resolved:", tokenId, "→", meta.imageUrl);
+
+                    return {
+                        ...card,
+                        image_url: meta.imageUrl,
+                        imageUrl: meta.imageUrl,
+                        name: meta.title || card.name || card.title,
+                    };
+                }));
+
+                if (alive) {
+                    setResolvedCards(updated);
                 }
-
-                var meta = await loadTokenMetadata(tokenId);
-                if (!meta) return card;
-
-                return {
-                    ...card,
-                    image_url: meta.imageUrl,
-                    imageUrl: meta.imageUrl,
-                    name: meta.title || card.name || card.title,
-                };
-            }));
-
-            if (alive) {
-                setResolvedCards(updated);
-                setMetaLoading(false);
-                console.log("[CASE] Resolved cards:", updated);
+            } catch (e) {
+                console.warn("[CASE] Error resolving cards:", e);
             }
         })();
 
@@ -160,24 +226,14 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                     🎁 {caseItem.name}
                 </h3>
 
-                {/* Индикатор загрузки метадаты */}
-                {metaLoading && (
-                    <div style={{
-                        fontSize: 11, color: "rgba(120,200,255,0.6)",
-                        padding: "4px 12px",
-                        background: "rgba(120,200,255,0.08)",
-                        borderRadius: 8,
-                    }}>
-                        ⏳ Загрузка NFT...
-                    </div>
-                )}
-
-                {/* ДО reveal: видео */}
+                {/* ДО reveal: только видео без лишних элементов */}
                 {!revealed && (
                     <>
                         <div style={{
-                            width: "100%", aspectRatio: "1/1",
-                            borderRadius: 16, overflow: "hidden",
+                            width: "100%",
+                            aspectRatio: "1/1",
+                            borderRadius: 16,
+                            overflow: "hidden",
                             background: "#000",
                             boxShadow: "0 0 40px rgba(120,200,255,0.2)",
                             flexShrink: 0,
@@ -191,14 +247,16 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                                         objectFit: "contain", display: "block",
                                     }}
                                     onEnded={handleReveal}
-                                    onError={function () { setVideoError(true); handleReveal(); }}
+                                    onError={function () {
+                                        setVideoError(true);
+                                        handleReveal();
+                                    }}
                                 >
                                     <source src={caseItem.video} type="video/mp4" />
                                 </video>
                             ) : (
                                 <img
-                                    src={caseItem.image}
-                                    alt=""
+                                    src={caseItem.image} alt=""
                                     style={{ width: "100%", height: "100%", objectFit: "contain" }}
                                     onError={function (e) { e.currentTarget.src = "/cards/card.jpg"; }}
                                 />
@@ -228,45 +286,23 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                                 ? "scale(1) translateY(0)"
                                 : "scale(0.7) translateY(20px)",
                             transition: "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
-                            width: "100%", maxWidth: 220,
-                            aspectRatio: "3/4", borderRadius: 18,
+                            width: "100%",
+                            maxWidth: 220,
+                            aspectRatio: "3/4",
+                            borderRadius: 18,
                             overflow: "hidden",
                             border: "3px solid " + rarityColor,
                             boxShadow: revealedCards.length > 0
                                 ? "0 0 40px " + rarityColor + "80"
                                 : "none",
                             background: "#0a0e1a",
-                            position: "relative", flexShrink: 0,
+                            position: "relative",
+                            flexShrink: 0,
                         }}>
-                            {card.image_url || card.imageUrl ? (
-                                <img
-                                    src={card.image_url || card.imageUrl}
-                                    alt={card.name || ""}
-                                    style={{
-                                        width: "100%", height: "100%",
-                                        objectFit: "cover", display: "block",
-                                    }}
-                                    onError={function (e) {
-                                        console.log("[CASE] Image failed:", e.currentTarget.src);
-                                        var src = e.currentTarget.src;
-                                        if (src.includes("w3s.link")) {
-                                            // Пробуем альтернативный gateway
-                                            var filename = src.split("/").pop();
-                                            e.currentTarget.src = "https://ipfs.io/ipfs/bafybeibqzbodfn3xczppxh2k2ek3bgvojhivqy4ntbkprcxesulth3yy5e/" + filename;
-                                        } else {
-                                            e.currentTarget.src = "/cards/card.jpg";
-                                        }
-                                    }}
-                                />
-                            ) : (
-                                <div style={{
-                                    width: "100%", height: "100%",
-                                    display: "flex", alignItems: "center",
-                                    justifyContent: "center", fontSize: 60,
-                                }}>
-                                    🎴
-                                </div>
-                            )}
+                            <CardImage
+                                imageUrl={card.image_url || card.imageUrl}
+                                name={card.name || card.title}
+                            />
 
                             <div style={{
                                 position: "absolute", top: 0, left: 0, right: 0,
@@ -363,9 +399,12 @@ export default function Market() {
                 body: JSON.stringify({ case_id: c.id, tx_hash: txHash }),
             });
 
-            console.log("[MARKET] Case open response:", open);
+            console.log("[MARKET] Case open response:", JSON.stringify(open));
 
             var cards = open.cards || [];
+            if (cards.length === 0) {
+                throw new Error("Нет карт в ответе");
+            }
 
             // 3. Показываем модалку
             setBuyingStatus("");
