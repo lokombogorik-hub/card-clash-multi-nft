@@ -30,31 +30,31 @@ TREASURY_WALLET = os.getenv("TREASURY_WALLET", "retardo-s.near")
 IPFS_BASE = "https://bafybeibqzbodfn3xczppxh2k2ek3bgvojhivqy4ntbkprcxesulth3yy5e.ipfs.w3s.link"
 
 POOL_WALLETS = {
-    "common":    os.getenv("POOL_WALLET_COMMON",    "common-nft.near"),
-    "rare":      os.getenv("POOL_WALLET_RARE",      "rare-nfts.near"),
-    "epic":      os.getenv("POOL_WALLET_EPIC",      "epic-nft.near"),
+    "common": os.getenv("POOL_WALLET_COMMON", "common-nft.near"),
+    "rare": os.getenv("POOL_WALLET_RARE", "rare-nfts.near"),
+    "epic": os.getenv("POOL_WALLET_EPIC", "epic-nft.near"),
     "legendary": os.getenv("POOL_WALLET_LEGENDARY", "legendary-nft.near"),
 }
 
 POOL_KEYS = {
-    "common":    os.getenv("POOL_KEY_COMMON",    ""),
-    "rare":      os.getenv("POOL_KEY_RARE",      ""),
-    "epic":      os.getenv("POOL_KEY_EPIC",      ""),
+    "common": os.getenv("POOL_KEY_COMMON", ""),
+    "rare": os.getenv("POOL_KEY_RARE", ""),
+    "epic": os.getenv("POOL_KEY_EPIC", ""),
     "legendary": os.getenv("POOL_KEY_LEGENDARY", ""),
 }
 
 RARITY_WEIGHTS = {
-    "common":    55,
-    "rare":      30,
-    "epic":      12,
-    "legendary":  3,
+    "common": 55,
+    "rare": 30,
+    "epic": 12,
+    "legendary": 3,
 }
 
 CASES = {
-    "starter":   {"price": 0.1, "card_count": 1, "rarity_mode": "common"},
-    "premium":   {"price": 0.1, "card_count": 1, "rarity_mode": "rare"},
+    "starter": {"price": 0.1, "card_count": 1, "rarity_mode": "common"},
+    "premium": {"price": 0.1, "card_count": 1, "rarity_mode": "rare"},
     "legendary": {"price": 0.1, "card_count": 1, "rarity_mode": "epic"},
-    "ultimate":  {"price": 0.1, "card_count": 1, "rarity_mode": "legendary"},
+    "ultimate": {"price": 0.1, "card_count": 1, "rarity_mode": "legendary"},
 }
 
 reserved_tokens: Dict[str, List[dict]] = {}
@@ -83,7 +83,9 @@ def is_configured() -> bool:
 def get_image_url(token_id: str) -> tuple:
     """Быстро строим URL картинки без RPC запроса"""
     try:
-        nft_number = int(token_id) + 1
+        # Убираем префикс card_ если есть
+        clean_id = token_id.replace("card_", "").lstrip("0")
+        nft_number = int(clean_id)
         image_url = f"{IPFS_BASE}/{nft_number}.png"
         title = f"BUNNY #{nft_number}"
         return image_url, title
@@ -166,13 +168,22 @@ def pick_rarity(mode: str) -> str:
 def generate_mock_token_id(rarity: str) -> str:
     rarity_ranges = {
         "legendary": (1, 250),
-        "epic":      (251, 1000),
-        "rare":      (1001, 3500),
-        "common":    (3501, 10000),
+        "epic": (251, 1000),
+        "rare": (1001, 3500),
+        "common": (3501, 10000),
     }
     min_id, max_id = rarity_ranges.get(rarity, (1, 10000))
     num = random.randint(min_id, max_id)
-    return f"card_{num:05d}"
+    return str(num)  # Возвращаем просто число, не card_xxxxx
+
+
+def clear_expired_reservations():
+    """Очищаем старые резервации (на всякий случай)"""
+    global reserved_tokens
+    # Просто очищаем все - они не должны накапливаться
+    if len(reserved_tokens) > 100:
+        print(f"[CASES] Clearing {len(reserved_tokens)} old reservations")
+        reserved_tokens.clear()
 
 
 @router.get("/config")
@@ -233,6 +244,25 @@ async def check_balances():
     return balances
 
 
+@router.get("/debug/reservations")
+async def debug_reservations():
+    """Показать текущие резервации для отладки"""
+    return {
+        "count": len(reserved_tokens),
+        "reservations": {k: [c.get("token_id") for c in v] for k, v in reserved_tokens.items()},
+        "used_tx_count": len(used_tx_hashes),
+    }
+
+
+@router.post("/debug/clear-reservations")
+async def clear_reservations():
+    """Очистить все резервации (для отладки)"""
+    global reserved_tokens
+    count = len(reserved_tokens)
+    reserved_tokens.clear()
+    return {"cleared": count, "message": "All reservations cleared"}
+
+
 @router.post("/open")
 async def open_case(
         data: OpenCaseRequest,
@@ -251,10 +281,16 @@ async def open_case(
 
     used_tx_hashes.add(data.tx_hash)
 
+    # Очищаем старые резервации
+    clear_expired_reservations()
+
     user_id = str(user.id)
     card_count = case["card_count"]
     rarity_mode = case["rarity_mode"]
     cards = []
+
+    near_account = getattr(user, "near_account_id", None)
+    print(f"[CASES] Opening {data.case_id} for user={user_id}, near_account={near_account}")
 
     for _ in range(card_count):
         rarity = pick_rarity(rarity_mode)
@@ -264,20 +300,34 @@ async def open_case(
         token_id = None
         from_pool = False
 
+        print(f"[CASES] Looking for {rarity} token, configured={is_configured()}, has_key={bool(pool_key)}")
+
         if is_configured() and pool_key:
             available = await fetch_pool_tokens(pool_wallet)
-            all_reserved = set()
-            for res_list in reserved_tokens.values():
+            print(f"[CASES] Pool {pool_wallet} has {len(available)} tokens: {available[:5]}")
+
+            # Фильтруем только АКТИВНЫЕ резервации (не переданные)
+            active_reserved = set()
+            for res_id, res_list in reserved_tokens.items():
                 for res in res_list:
-                    all_reserved.add(res.get("token_id"))
-            available = [t for t in available if t not in all_reserved]
+                    # Только если ещё не transferred
+                    if not res.get("transferred", False):
+                        active_reserved.add(res.get("token_id"))
+
+            print(f"[CASES] Active reserved tokens: {active_reserved}")
+
+            available = [t for t in available if t not in active_reserved]
+            print(f"[CASES] Available after filter: {available}")
+
             if available:
                 token_id = random.choice(available)
                 from_pool = True
+                print(f"[CASES] Selected token {token_id} from pool")
 
         if not token_id:
             token_id = generate_mock_token_id(rarity)
             from_pool = False
+            print(f"[CASES] Generated mock token {token_id}")
 
         # Картинка строится мгновенно без RPC запроса
         image_url, title = get_image_url(token_id)
@@ -287,6 +337,7 @@ async def open_case(
             "rarity": rarity,
             "pool_wallet": pool_wallet,
             "from_pool": from_pool,
+            "transferred": False,
             "contract_id": NFT_CONTRACT_ID or "mock",
             "image_url": image_url,
             "imageUrl": image_url,
@@ -295,9 +346,12 @@ async def open_case(
         })
 
     reservation_id = f"{user_id}_{data.tx_hash[:8]}"
-    reserved_tokens[reservation_id] = cards
 
-    near_account = getattr(user, "near_account_id", None)
+    # Резервируем только если есть карты из пула
+    if any(c.get("from_pool") for c in cards):
+        reserved_tokens[reservation_id] = cards
+        print(f"[CASES] Reserved {reservation_id}: {[c['token_id'] for c in cards]}")
+
     transfers = []
 
     print(f"[CASES] near_account={near_account} case={data.case_id}")
@@ -318,7 +372,15 @@ async def open_case(
                 card["transferred"] = result.get("success", False)
                 print(f"[CASES] Transfer result: {result}")
     else:
-        print(f"[CASES] SKIP: near_account={near_account}, configured={is_configured()}")
+        print(f"[CASES] SKIP transfer: near_account={near_account}, configured={is_configured()}")
+
+    # Если все карты успешно переданы — убираем резервацию
+    pool_cards = [c for c in cards if c.get("from_pool")]
+    all_transferred = all(c.get("transferred", False) for c in pool_cards) if pool_cards else True
+
+    if all_transferred and reservation_id in reserved_tokens:
+        del reserved_tokens[reservation_id]
+        print(f"[CASES] Reservation {reservation_id} cleared after successful transfer")
 
     print(f"[CASES] Done: {data.case_id} → {[c['token_id'] for c in cards]}")
 
@@ -352,7 +414,7 @@ async def claim_reserved(
         raise HTTPException(400, "No reserved cards found")
 
     transfers = []
-    for res_id, cards in user_reservations.items():
+    for res_id, cards in list(user_reservations.items()):
         for card in cards:
             if card.get("from_pool") and not card.get("transferred"):
                 rarity = card["rarity"]
@@ -363,6 +425,10 @@ async def claim_reserved(
                     private_key=POOL_KEYS.get(rarity, ""),
                 )
                 transfers.append(result)
-        del reserved_tokens[res_id]
+                card["transferred"] = result.get("success", False)
+
+        # Удаляем резервацию после попытки трансфера
+        if res_id in reserved_tokens:
+            del reserved_tokens[res_id]
 
     return {"success": True, "transfers": transfers, "message": f"Claimed {len(transfers)} cards"}
