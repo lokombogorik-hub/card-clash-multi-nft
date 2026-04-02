@@ -128,9 +128,9 @@ var TOURNAMENTS = [
         subtitle: "Главный турнир сезона",
         status: "soon",
         players: 0,
-        maxPlayers: 64,
-        prize: "1000 USDT",
-        prizePool: ["500 USDT", "300 USDT", "200 USDT"],
+        maxPlayers: 0,
+        prize: "N/A USDT",
+        prizePool: ["N/A USDT", "N/A USDT", "N/A USDT"],
         format: "1v1 Single Elimination",
         avatar: "https://bafybeibqzbodfn3xczppxh2k2ek3bgvojhivqy4ntbkprcxesulth3yy5e.ipfs.w3s.link/326.png",
         gradient: ["#667eea", "#764ba2"]
@@ -141,9 +141,9 @@ var TOURNAMENTS = [
         subtitle: "Еженедельные битвы",
         status: "soon",
         players: 0,
-        maxPlayers: 32,
-        prize: "50 NEAR",
-        prizePool: ["25 NEAR", "15 NEAR", "10 NEAR"],
+        maxPlayers: 0,
+        prize: "N/A NEAR",
+        prizePool: ["N/A NEAR", "N/A NEAR", "N/A NEAR"],
         format: "1v1 Best of 3",
         avatar: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&h=200&fit=crop",
         gradient: ["#f093fb", "#f5576c"]
@@ -154,11 +154,11 @@ var TOURNAMENTS = [
         subtitle: "Финал сезона",
         status: "soon",
         players: 0,
-        maxPlayers: 128,
-        prize: "17 NFT + 250 USDT",
-        prizePool: ["100 USDT + 10 NFT", "80 USDT + 5 NFT", "70 USDT + 2 NFT"],
+        maxPlayers: 0,
+        prize: "N/A NFT + N/A USDT",
+        prizePool: ["N/A USDT + N/A NFT", "N/A USDT + N/A NFT", "N/A USDT + N/A NFT"],
         format: "1v1 Double Elimination",
-        avatar: "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=200&h=200&fit=crop",
+        avatar: "https://yandex.ru/images/search?from=tabbar&img_url=https%3A%2F%2Fpic.rutubelist.ru%2Fuser%2F2025-05-02%2F29%2Fd9%2F29d990350fbc3d54164c34cdad353a2e.jpg&lr=100&ogl_url=https%3A%2F%2Fpic.rutubelist.ru%2Fuser%2F2025-05-02%2F29%2Fd9%2F29d990350fbc3d54164c34cdad353a2e.jpg&p=1&pos=16&rlt_url=https%3A%2F%2Fplayerok.com%2Ffile-storage%2Fimages%2F1ed7ee0c-ad73-6930-a612-e3b71c85a179.jpg%3Ftimestamp%3D1671373945&rpt=simage&text=%D1%84%D1%82%D0%BD%D0%B0%D0%BB%20%D0%B7%D0%BD%D0%B0%D1%87%D0%BE%D0%BA",
         gradient: ["#4facfe", "#00f2fe"]
     }
 ];
