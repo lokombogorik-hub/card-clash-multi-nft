@@ -158,7 +158,7 @@ var TOURNAMENTS = [
         prize: "N/A NFT + N/A USDT",
         prizePool: ["N/A USDT + N/A NFT", "N/A USDT + N/A NFT", "N/A USDT + N/A NFT"],
         format: "1v1 Double Elimination",
-        avatar: "https://yandex.ru/images/search?from=tabbar&img_url=https%3A%2F%2Fpic.rutubelist.ru%2Fuser%2F2025-05-02%2F29%2Fd9%2F29d990350fbc3d54164c34cdad353a2e.jpg&lr=100&ogl_url=https%3A%2F%2Fpic.rutubelist.ru%2Fuser%2F2025-05-02%2F29%2Fd9%2F29d990350fbc3d54164c34cdad353a2e.jpg&p=1&pos=16&rlt_url=https%3A%2F%2Fplayerok.com%2Ffile-storage%2Fimages%2F1ed7ee0c-ad73-6930-a612-e3b71c85a179.jpg%3Ftimestamp%3D1671373945&rpt=simage&text=%D1%84%D1%82%D0%BD%D0%B0%D0%BB%20%D0%B7%D0%BD%D0%B0%D1%87%D0%BE%D0%BA",
+        avatar: "https://avatars.mds.yandex.net/i?id=a9714c12aca31ffe8e80d0238892dc19_l-6607472-images-thumbs&n=13",
         gradient: ["#4facfe", "#00f2fe"]
     }
 ];
