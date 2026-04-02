@@ -1307,24 +1307,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                         <div className="hud-corner hud-score red hud-near-left">🟥 {boardScore.red}</div>
                         <div className="hud-corner hud-score blue hud-near-right">{boardScore.blue} 🟦</div>
 
-                        {isPvP && (
-                            <div style={{
-                                position: "absolute",
-                                top: 12,
-                                left: "50%",
-                                transform: "translateX(-50%)",
-                                background: "rgba(255,61,242,0.2)",
-                                border: "1px solid rgba(255,61,242,0.5)",
-                                borderRadius: 8,
-                                padding: "4px 12px",
-                                fontSize: 11,
-                                fontWeight: 900,
-                                color: "#fff",
-                                zIndex: 200,
-                            }}>
-                                ⚔️ PvP {turn === "player" ? "YOUR TURN" : "OPPONENT'S TURN"}
-                            </div>
-                        )}
 
                         <PlayerBadge side="enemy" name={enemyName} avatarUrl={enemyAvatar} active={turn === "enemy"} />
                         <PlayerBadge side="player" name={myName} avatarUrl={myAvatar} active={turn === "player"} />
