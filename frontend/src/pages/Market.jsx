@@ -533,8 +533,8 @@ export default function Market() {
             <div className="market-cases-grid">
                 {CASES.map(function (c) {
                     var available = caseInventory[c.id] || 0;
-                    var isOutOfStock = available <= 0;
-                    var canBuy = connected && balance >= c.price && !isOutOfStock;
+                    var isOutOfStock = !loadingInventory && available <= 0;  // Добавлена проверка loadingInventory
+                    var canBuy = connected && balance >= c.price && !isOutOfStock && !loadingInventory;
                     var isBuying = buying === c.id;
 
                     return (
@@ -542,16 +542,18 @@ export default function Market() {
                             opacity: isOutOfStock ? 0.5 : 1,
                             position: "relative",
                         }}>
-                            {/* Индикатор количества */}
+                            {/* Индикатор количества в ЛЕВОМ верхнем углу */}
                             <div style={{
                                 position: "absolute",
                                 top: 8,
                                 left: 8,
-                                background: isOutOfStock
-                                    ? "rgba(255,80,80,0.9)"
-                                    : available < 10
-                                        ? "rgba(255,165,0,0.9)"
-                                        : "rgba(34,197,94,0.9)",
+                                background: loadingInventory
+                                    ? "rgba(120,200,255,0.9)"  // Синий пока загружается
+                                    : isOutOfStock
+                                        ? "rgba(255,80,80,0.9)"
+                                        : available < 10
+                                            ? "rgba(255,165,0,0.9)"
+                                            : "rgba(34,197,94,0.9)",
                                 color: "#fff",
                                 padding: "4px 10px",
                                 borderRadius: 12,
@@ -560,10 +562,11 @@ export default function Market() {
                                 zIndex: 10,
                                 boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
                             }}>
-                                {loadingInventory ? "..." : (isOutOfStock ? "0 NFT" : available + " NFT")}
+                                {loadingInventory ? "⏳" : (isOutOfStock ? "0 NFT" : available + " NFT")}
                             </div>
 
-                            {isOutOfStock && (
+                            {/* Показываем Sold Out только если НЕ загружается */}
+                            {isOutOfStock && !loadingInventory && (
                                 <div style={{
                                     position: "absolute",
                                     top: "50%",
@@ -602,24 +605,28 @@ export default function Market() {
                             <button
                                 className="market-case-buy-btn"
                                 onClick={function () { handleBuy(c); }}
-                                disabled={!canBuy || isBuying}
+                                disabled={!canBuy || isBuying || loadingInventory}
                                 style={{
-                                    opacity: canBuy ? 1 : 0.5,
-                                    background: isOutOfStock
-                                        ? "#6b7280"
-                                        : canBuy
-                                            ? "linear-gradient(135deg, #78c8ff, #5096ff)"
-                                            : "#6b7280",
-                                    cursor: (canBuy && !isBuying) ? "pointer" : "not-allowed",
+                                    opacity: (canBuy && !loadingInventory) ? 1 : 0.5,
+                                    background: loadingInventory
+                                        ? "#78c8ff"
+                                        : isOutOfStock
+                                            ? "#6b7280"
+                                            : canBuy
+                                                ? "linear-gradient(135deg, #78c8ff, #5096ff)"
+                                                : "#6b7280",
+                                    cursor: (canBuy && !isBuying && !loadingInventory) ? "pointer" : "not-allowed",
                                 }}
                             >
-                                {isBuying
-                                    ? (buyingStatus || "⏳ Оплата...")
-                                    : isOutOfStock
-                                        ? "❌ Нет NFT"
-                                        : canBuy
-                                            ? "🛒 Купить"
-                                            : "Нужно " + c.price + " Ⓝ"}
+                                {loadingInventory
+                                    ? "⏳ Загрузка..."
+                                    : isBuying
+                                        ? (buyingStatus || "⏳ Оплата...")
+                                        : isOutOfStock
+                                            ? "❌ Нет NFT"
+                                            : canBuy
+                                                ? "🛒 Купить"
+                                                : "Нужно " + c.price + " Ⓝ"}
                             </button>
                         </div>
                     );
