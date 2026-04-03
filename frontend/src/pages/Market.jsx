@@ -359,17 +359,61 @@ export default function Market() {
     var [buyingStatus, setBuyingStatus] = useState("");
     var [error, setError] = useState("");
     var [openModal, setOpenModal] = useState(null);
+    var [caseInventory, setCaseInventory] = useState({});
+    var [loadingInventory, setLoadingInventory] = useState(true);
 
     var token = "";
     try {
         token = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
     } catch (e) { }
 
+    // Загрузка количества доступных NFT для каждого кейса
+    useEffect(function () {
+        var alive = true;
+
+        async function fetchInventory() {
+            try {
+                setLoadingInventory(true);
+                var resp = await apiFetch("/api/cases/inventory", {
+                    method: "GET",
+                    token: token,
+                });
+
+                console.log("[MARKET] Inventory response:", resp);
+
+                if (alive && resp && typeof resp === "object") {
+                    // Ожидаем формат: { "starter": 150, "premium": 80, "legendary": 30, "ultimate": 10 }
+                    setCaseInventory(resp);
+                }
+            } catch (e) {
+                console.error("[MARKET] Failed to load inventory:", e);
+                if (alive) {
+                    setCaseInventory({});
+                }
+            } finally {
+                if (alive) {
+                    setLoadingInventory(false);
+                }
+            }
+        }
+
+        fetchInventory();
+
+        return function () { alive = false; };
+    }, [token]);
+
     var handleBuy = async function (c) {
         if (!connected || !accountId) {
             alert("Подключи HOT Wallet!");
             return;
         }
+
+        var available = caseInventory[c.id] || 0;
+        if (available <= 0) {
+            alert("❌ NFT закончились в этом кейсе!");
+            return;
+        }
+
         if (balance < c.price) {
             alert("Недостаточно NEAR! Нужно " + c.price + " Ⓝ, у тебя " + Number(balance).toFixed(2));
             return;
@@ -406,7 +450,16 @@ export default function Market() {
                 throw new Error("Нет карт в ответе");
             }
 
-            // 3. Показываем модалку
+            // 3. Обновляем инвентарь локально
+            setCaseInventory(function (prev) {
+                var updated = { ...prev };
+                if (updated[c.id] > 0) {
+                    updated[c.id] = updated[c.id] - 1;
+                }
+                return updated;
+            });
+
+            // 4. Показываем модалку
             setBuyingStatus("");
             setOpenModal({ caseItem: c, cards: cards });
 
@@ -426,7 +479,17 @@ export default function Market() {
                 <CaseOpenModal
                     caseItem={openModal.caseItem}
                     cards={openModal.cards}
-                    onClose={function () { setOpenModal(null); }}
+                    onClose={function () {
+                        setOpenModal(null);
+                        // Перезагружаем инвентарь после закрытия
+                        apiFetch("/api/cases/inventory", { method: "GET", token: token })
+                            .then(function (resp) {
+                                if (resp && typeof resp === "object") {
+                                    setCaseInventory(resp);
+                                }
+                            })
+                            .catch(function (e) { console.error("[MARKET] Reload inventory error:", e); });
+                    }}
                 />
             )}
 
@@ -469,11 +532,58 @@ export default function Market() {
 
             <div className="market-cases-grid">
                 {CASES.map(function (c) {
-                    var canBuy = connected && balance >= c.price;
+                    var available = caseInventory[c.id] || 0;
+                    var isOutOfStock = available <= 0;
+                    var canBuy = connected && balance >= c.price && !isOutOfStock;
                     var isBuying = buying === c.id;
 
                     return (
-                        <div key={c.id} className="market-case-card">
+                        <div key={c.id} className="market-case-card" style={{
+                            opacity: isOutOfStock ? 0.5 : 1,
+                            position: "relative",
+                        }}>
+                            {/* Индикатор количества */}
+                            <div style={{
+                                position: "absolute",
+                                top: 8,
+                                right: 8,
+                                background: isOutOfStock
+                                    ? "rgba(255,80,80,0.9)"
+                                    : available < 10
+                                        ? "rgba(255,165,0,0.9)"
+                                        : "rgba(34,197,94,0.9)",
+                                color: "#fff",
+                                padding: "4px 10px",
+                                borderRadius: 12,
+                                fontSize: 11,
+                                fontWeight: 700,
+                                zIndex: 10,
+                                boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+                            }}>
+                                {loadingInventory ? "..." : (isOutOfStock ? "0 NFT" : available + " NFT")}
+                            </div>
+
+                            {isOutOfStock && (
+                                <div style={{
+                                    position: "absolute",
+                                    top: "50%",
+                                    left: "50%",
+                                    transform: "translate(-50%, -50%)",
+                                    background: "rgba(0,0,0,0.85)",
+                                    color: "#ff5050",
+                                    padding: "12px 20px",
+                                    borderRadius: 12,
+                                    fontSize: 14,
+                                    fontWeight: 900,
+                                    zIndex: 20,
+                                    border: "2px solid #ff5050",
+                                    textTransform: "uppercase",
+                                    letterSpacing: 1,
+                                }}>
+                                    Sold Out
+                                </div>
+                            )}
+
                             <div className="market-case-image">
                                 <img
                                     src={c.image}
@@ -493,13 +603,23 @@ export default function Market() {
                                 className="market-case-buy-btn"
                                 onClick={function () { handleBuy(c); }}
                                 disabled={!canBuy || isBuying}
-                                style={{ opacity: canBuy ? 1 : 0.5 }}
+                                style={{
+                                    opacity: canBuy ? 1 : 0.5,
+                                    background: isOutOfStock
+                                        ? "#6b7280"
+                                        : canBuy
+                                            ? "linear-gradient(135deg, #78c8ff, #5096ff)"
+                                            : "#6b7280",
+                                    cursor: (canBuy && !isBuying) ? "pointer" : "not-allowed",
+                                }}
                             >
                                 {isBuying
                                     ? (buyingStatus || "⏳ Оплата...")
-                                    : canBuy
-                                        ? "🛒 Купить"
-                                        : "Нужно " + c.price + " Ⓝ"}
+                                    : isOutOfStock
+                                        ? "❌ Нет NFT"
+                                        : canBuy
+                                            ? "🛒 Купить"
+                                            : "Нужно " + c.price + " Ⓝ"}
                             </button>
                         </div>
                     );

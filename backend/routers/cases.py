@@ -61,6 +61,10 @@ reserved_tokens: Dict[str, List[dict]] = {}
 used_tx_hashes: set = set()
 _account_cache: Dict[str, object] = {}
 
+# Кэш для инвентаря пулов (обновляется раз в 30 секунд)
+_pool_inventory_cache: Dict[str, int] = {}
+_pool_inventory_cache_time: float = 0
+
 
 async def get_pool_account(wallet: str, private_key: str):
     if wallet in _account_cache:
@@ -133,6 +137,45 @@ async def fetch_pool_tokens(wallet: str) -> List[str]:
         return []
 
 
+async def get_active_reserved_tokens() -> set:
+    """Получить множество всех активно зарезервированных токенов"""
+    active_reserved = set()
+    for res_id, res_list in reserved_tokens.items():
+        for res in res_list:
+            if not res.get("transferred", False):
+                active_reserved.add(res.get("token_id"))
+    return active_reserved
+
+
+async def get_pool_inventory_cached() -> Dict[str, int]:
+    """Получить количество доступных NFT в каждом пуле с кэшированием"""
+    global _pool_inventory_cache, _pool_inventory_cache_time
+
+    import time
+    current_time = time.time()
+
+    # Обновляем кэш каждые 30 секунд
+    if current_time - _pool_inventory_cache_time > 30 or not _pool_inventory_cache:
+        print("[INVENTORY] Updating cache...")
+        inventory = {}
+
+        # Получаем активные резервации
+        active_reserved = await get_active_reserved_tokens()
+
+        for rarity, wallet in POOL_WALLETS.items():
+            tokens = await fetch_pool_tokens(wallet)
+            # Отфильтровываем зарезервированные токены
+            available = [t for t in tokens if t not in active_reserved]
+            inventory[rarity] = len(available)
+            print(f"[INVENTORY] {rarity}: {len(tokens)} total, {len(available)} available")
+
+        _pool_inventory_cache = inventory
+        _pool_inventory_cache_time = current_time
+        print(f"[INVENTORY] Cache updated: {inventory}")
+
+    return _pool_inventory_cache.copy()
+
+
 async def transfer_nft(from_wallet: str, to_wallet: str, token_id: str, private_key: str) -> dict:
     if not private_key:
         return {"success": False, "error": "Pool key not configured", "mock": True}
@@ -151,6 +194,11 @@ async def transfer_nft(from_wallet: str, to_wallet: str, token_id: str, private_
         elif result and hasattr(result, "transaction_outcome"):
             tx_hash = getattr(result.transaction_outcome, "id", "")
         print(f"[CASES] Transferred {token_id} from {from_wallet} to {to_wallet}, tx: {tx_hash}")
+
+        # Инвалидируем кэш после трансфера
+        global _pool_inventory_cache_time
+        _pool_inventory_cache_time = 0
+
         return {"success": True, "tx_hash": tx_hash, "token_id": token_id}
     except Exception as e:
         print(f"[CASES] Transfer error: {type(e).__name__}: {e}")
@@ -174,16 +222,40 @@ def generate_mock_token_id(rarity: str) -> str:
     }
     min_id, max_id = rarity_ranges.get(rarity, (1, 10000))
     num = random.randint(min_id, max_id)
-    return str(num)  # Возвращаем просто число, не card_xxxxx
+    return str(num)
 
 
 def clear_expired_reservations():
     """Очищаем старые резервации (на всякий случай)"""
     global reserved_tokens
-    # Просто очищаем все - они не должны накапливаться
     if len(reserved_tokens) > 100:
         print(f"[CASES] Clearing {len(reserved_tokens)} old reservations")
         reserved_tokens.clear()
+
+
+@router.get("/inventory")
+async def get_cases_inventory():
+    """
+    Возвращает количество доступных NFT для каждого кейса
+    Формат: {"starter": 150, "premium": 80, "legendary": 30, "ultimate": 10}
+    """
+    try:
+        # Получаем инвентарь по редкостям
+        rarity_inventory = await get_pool_inventory_cached()
+
+        # Маппим редкости на кейсы
+        case_inventory = {}
+        for case_id, case_data in CASES.items():
+            rarity = case_data["rarity_mode"]
+            case_inventory[case_id] = rarity_inventory.get(rarity, 0)
+
+        print(f"[INVENTORY] Cases inventory: {case_inventory}")
+        return case_inventory
+
+    except Exception as e:
+        print(f"[INVENTORY] Error: {type(e).__name__}: {e}")
+        # В случае ошибки возвращаем нули
+        return {case_id: 0 for case_id in CASES.keys()}
 
 
 @router.get("/config")
@@ -199,15 +271,25 @@ async def get_config():
 @router.get("/pools")
 async def get_pools_status():
     pools = {}
+    active_reserved = await get_active_reserved_tokens()
+
     for rarity, wallet in POOL_WALLETS.items():
         tokens = await fetch_pool_tokens(wallet)
+        available = [t for t in tokens if t not in active_reserved]
         pools[rarity] = {
             "wallet": wallet,
-            "available": len(tokens),
+            "total": len(tokens),
+            "available": len(available),
+            "reserved": len(tokens) - len(available),
             "configured": bool(POOL_KEYS.get(rarity)),
-            "sample_tokens": tokens[:3] if tokens else [],
+            "sample_tokens": available[:3] if available else [],
         }
-    return {"nft_contract": NFT_CONTRACT_ID or "NOT SET", "pools": pools, "ready": is_configured()}
+    return {
+        "nft_contract": NFT_CONTRACT_ID or "NOT SET",
+        "pools": pools,
+        "ready": is_configured(),
+        "active_reservations": len(reserved_tokens),
+    }
 
 
 @router.get("/check-balances")
@@ -257,9 +339,10 @@ async def debug_reservations():
 @router.post("/debug/clear-reservations")
 async def clear_reservations():
     """Очистить все резервации (для отладки)"""
-    global reserved_tokens
+    global reserved_tokens, _pool_inventory_cache_time
     count = len(reserved_tokens)
     reserved_tokens.clear()
+    _pool_inventory_cache_time = 0  # Инвалидируем кэш
     return {"cleared": count, "message": "All reservations cleared"}
 
 
@@ -279,9 +362,15 @@ async def open_case(
     if data.tx_hash in used_tx_hashes:
         raise HTTPException(400, "Transaction already used")
 
-    used_tx_hashes.add(data.tx_hash)
+    # Проверяем доступность NFT перед открытием
+    inventory = await get_pool_inventory_cached()
+    rarity = case["rarity_mode"]
+    available_count = inventory.get(rarity, 0)
 
-    # Очищаем старые резервации
+    if available_count <= 0:
+        raise HTTPException(400, f"No NFTs available for {data.case_id} case (rarity: {rarity})")
+
+    used_tx_hashes.add(data.tx_hash)
     clear_expired_reservations()
 
     user_id = str(user.id)
@@ -306,14 +395,7 @@ async def open_case(
             available = await fetch_pool_tokens(pool_wallet)
             print(f"[CASES] Pool {pool_wallet} has {len(available)} tokens: {available[:5]}")
 
-            # Фильтруем только АКТИВНЫЕ резервации (не переданные)
-            active_reserved = set()
-            for res_id, res_list in reserved_tokens.items():
-                for res in res_list:
-                    # Только если ещё не transferred
-                    if not res.get("transferred", False):
-                        active_reserved.add(res.get("token_id"))
-
+            active_reserved = await get_active_reserved_tokens()
             print(f"[CASES] Active reserved tokens: {active_reserved}")
 
             available = [t for t in available if t not in active_reserved]
@@ -329,7 +411,6 @@ async def open_case(
             from_pool = False
             print(f"[CASES] Generated mock token {token_id}")
 
-        # Картинка строится мгновенно без RPC запроса
         image_url, title = get_image_url(token_id)
 
         cards.append({
@@ -347,16 +428,14 @@ async def open_case(
 
     reservation_id = f"{user_id}_{data.tx_hash[:8]}"
 
-    # Резервируем только если есть карты из пула
     if any(c.get("from_pool") for c in cards):
         reserved_tokens[reservation_id] = cards
         print(f"[CASES] Reserved {reservation_id}: {[c['token_id'] for c in cards]}")
+        # Инвалидируем кэш после резервации
+        global _pool_inventory_cache_time
+        _pool_inventory_cache_time = 0
 
     transfers = []
-
-    print(f"[CASES] near_account={near_account} case={data.case_id}")
-    print(f"[CASES] cards from_pool={[c['from_pool'] for c in cards]}")
-    print(f"[CASES] token_ids={[c['token_id'] for c in cards]}")
 
     if near_account and is_configured():
         for card in cards:
@@ -371,10 +450,7 @@ async def open_case(
                 transfers.append(result)
                 card["transferred"] = result.get("success", False)
                 print(f"[CASES] Transfer result: {result}")
-    else:
-        print(f"[CASES] SKIP transfer: near_account={near_account}, configured={is_configured()}")
 
-    # Если все карты успешно переданы — убираем резервацию
     pool_cards = [c for c in cards if c.get("from_pool")]
     all_transferred = all(c.get("transferred", False) for c in pool_cards) if pool_cards else True
 
@@ -427,7 +503,6 @@ async def claim_reserved(
                 transfers.append(result)
                 card["transferred"] = result.get("success", False)
 
-        # Удаляем резервацию после попытки трансфера
         if res_id in reserved_tokens:
             del reserved_tokens[res_id]
 
