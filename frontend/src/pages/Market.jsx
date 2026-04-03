@@ -546,7 +546,7 @@ export default function Market() {
                             <div style={{
                                 position: "absolute",
                                 top: 8,
-                                right: 8,
+                                left: 8,
                                 background: isOutOfStock
                                     ? "rgba(255,80,80,0.9)"
                                     : available < 10
