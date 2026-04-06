@@ -5,7 +5,7 @@ import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from 
 
 (function migrateRarity() {
     try {
-        if (localStorage.getItem("cc_rarity_v21_hotcraft_fixed")) return;
+        if (localStorage.getItem("cc_rarity_v22_hotcraft_final")) return;
         var keys = Object.keys(localStorage);
         for (var i = 0; i < keys.length; i++) {
             if (keys[i].startsWith("cc_card_")) {
@@ -16,14 +16,13 @@ import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from 
             }
         }
         localStorage.removeItem("cc_nft_cache");
-        localStorage.setItem("cc_rarity_v21_hotcraft_fixed", "1");
+        localStorage.setItem("cc_rarity_v22_hotcraft_final", "1");
     } catch (e) { }
 })();
 
 var ACE_VALUE = 10;
 var IPFS_GATEWAY = "https://bafybeibqzbodfn3xczppxh2k2ek3bgvojhivqy4ntbkprcxesulth3yy5e.ipfs.w3s.link";
 
-// ⚠️ ТОЧНЫЕ ПРОЦЕНТЫ ИЗ HOTCRAFT
 var TRAIT_RARITY = {
     "Background": {
         "Ancient ruins": 0.05, "Apocalypse": 0.05, "Aristocrat's house": 0.05, "Ashes": 0.05,
@@ -117,12 +116,10 @@ var TRAIT_RARITY = {
     },
 };
 
-// ⚠️ ПРАВИЛЬНАЯ ФОРМУЛА RARITY SCORE (как в HotCraft)
 function calculateRarityScore(attributes) {
     if (!attributes || !Array.isArray(attributes) || attributes.length === 0) return 0;
 
     var totalScore = 0;
-    var traitCount = 0;
 
     for (var i = 0; i < attributes.length; i++) {
         var attr = attributes[i];
@@ -134,35 +131,30 @@ function calculateRarityScore(attributes) {
         var percentage = TRAIT_RARITY[traitType][value];
         if (percentage === undefined) percentage = 5.0;
 
-        // HotCraft формула: 1 / (percentage / 100)
-        var traitScore = 100 / percentage;
-        totalScore += traitScore;
-        traitCount++;
+        totalScore += (1 / (percentage / 100));
     }
 
-    // Средний score по всем трейтам
-    return traitCount > 0 ? totalScore / traitCount : 0;
+    return totalScore;
 }
 
-// ⚠️ ПОРОГИ ВЗЯТЫ ИЗ АНАЛИЗА HOTCRAFT
 function getRarityFromScore(score) {
-    // Legendary: хотя бы один 0.05% трейт → score ~2000+
-    if (score >= 400) {
+    // Legendary: ранг 1-240 → score > 217
+    if (score >= 217) {
         return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.70)", min: 8, max: 9 };
     }
-    // Epic: редкие комбинации → score 100-400
-    if (score >= 100) {
+    // Epic: ранг 241-580 → score 196-217
+    if (score >= 196) {
         return { key: "epic", border: "#f97316", glow: "rgba(249,115,22,0.65)", min: 7, max: 9 };
     }
-    // Rare: выше среднего → score 50-100
-    if (score >= 50) {
+    // Rare: ранг 581-1550 → score 154-196
+    if (score >= 154) {
         return { key: "rare", border: "#a855f7", glow: "rgba(168,85,247,0.60)", min: 5, max: 7 };
     }
-    // Uncommon: средние → score 30-50
-    if (score >= 30) {
+    // Uncommon: ранг 1551-1900 → score 148-154
+    if (score >= 148) {
         return { key: "uncommon", border: "#3b82f6", glow: "rgba(59,130,246,0.60)", min: 3, max: 5 };
     }
-    // Common: всё остальное
+    // Common: ранг 1901+
     return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 3 };
 }
 
@@ -213,7 +205,7 @@ function createSeed(tokenId, salt) {
 
 function getStoredCardData(tokenId) {
     try {
-        var stored = localStorage.getItem("cc_card_v21_" + String(tokenId));
+        var stored = localStorage.getItem("cc_card_v22_" + String(tokenId));
         if (stored) return JSON.parse(stored);
     } catch (e) { }
     return null;
@@ -221,12 +213,12 @@ function getStoredCardData(tokenId) {
 
 function storeCardData(tokenId, data) {
     try {
-        localStorage.setItem("cc_card_v21_" + String(tokenId), JSON.stringify(data));
+        localStorage.setItem("cc_card_v22_" + String(tokenId), JSON.stringify(data));
     } catch (e) { }
 }
 
 function genStats(tokenId, rarity) {
-    var STATS_VERSION = "v21";
+    var STATS_VERSION = "v22";
     var stored = getStoredCardData(tokenId);
     if (stored && stored.stats && stored.statsVersion === STATS_VERSION && stored.rarityKey === rarity.key) {
         var s = stored.stats;
@@ -236,7 +228,7 @@ function genStats(tokenId, rarity) {
         }
     }
 
-    var rng = mulberry32(createSeed(tokenId, "stats_v21"));
+    var rng = mulberry32(createSeed(tokenId, "stats_v22"));
     var min = Math.max(1, rarity.min);
     var max = Math.min(9, rarity.max);
 
@@ -248,11 +240,11 @@ function genStats(tokenId, rarity) {
     };
 
     if (rarity.key === "legendary") {
-        var aceRng = mulberry32(createSeed(tokenId, "ace_v21"));
+        var aceRng = mulberry32(createSeed(tokenId, "ace_v22"));
         var sides = ["top", "right", "bottom", "left"];
         stats[sides[Math.floor(aceRng() * sides.length)]] = ACE_VALUE;
     } else if (rarity.key === "epic") {
-        var aceRng2 = mulberry32(createSeed(tokenId, "ace_v21"));
+        var aceRng2 = mulberry32(createSeed(tokenId, "ace_v22"));
         if (aceRng2() < 0.30) {
             var sides2 = ["top", "right", "bottom", "left"];
             stats[sides2[Math.floor(aceRng2() * sides2.length)]] = ACE_VALUE;
@@ -297,7 +289,7 @@ export function invalidateNftCache() {
     nftCache.accountId = null;
     nftCache.items = [];
     nftCache.timestamp = 0;
-    try { localStorage.removeItem("cc_nft_cache_v21"); } catch (e) { }
+    try { localStorage.removeItem("cc_nft_cache_v22"); } catch (e) { }
 }
 
 var imageCache = new Map();
@@ -468,7 +460,7 @@ export default function Inventory({ token, onDeckReady }) {
         }
 
         try {
-            var lsCache = JSON.parse(localStorage.getItem("cc_nft_cache_v21") || "null");
+            var lsCache = JSON.parse(localStorage.getItem("cc_nft_cache_v22") || "null");
             if (lsCache && lsCache.accountId === accountId &&
                 lsCache.items && lsCache.items.length > 0 &&
                 (now - lsCache.timestamp) < 300000) {
@@ -548,7 +540,7 @@ export default function Inventory({ token, onDeckReady }) {
                         nftCache.timestamp = Date.now();
 
                         try {
-                            localStorage.setItem("cc_nft_cache_v21", JSON.stringify({
+                            localStorage.setItem("cc_nft_cache_v22", JSON.stringify({
                                 accountId: accountId,
                                 timestamp: nftCache.timestamp,
                                 items: items
