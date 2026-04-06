@@ -139,17 +139,28 @@ function calculateRarityScore(attributes) {
 }
 
 function getRarityFromScore(score) {
-    // Legendary — трейты 0.05% → score 5+
-    if (score >= 5.0) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.70)", min: 8, max: 9 };
-    // top 0-20% — рыжий
-    if (score >= 2.05) return { key: "epic", border: "#f97316", glow: "rgba(249,115,22,0.65)", min: 7, max: 9 };
-    // top 20-40% — фиолетовый
-    if (score >= 1.97) return { key: "rare", border: "#a855f7", glow: "rgba(168,85,247,0.60)", min: 5, max: 7 };
-    // top 40-60% — синий
-    if (score >= 1.78) return { key: "uncommon", border: "#3b82f6", glow: "rgba(59,130,246,0.60)", min: 3, max: 5 };
-    // top 60-80% — коричневый
-    if (score >= 1.73) return { key: "poor", border: "#92400e", glow: "rgba(146,64,14,0.60)", min: 2, max: 4 };
-    // top 80-100% — серый
+    // На основе твоих примеров:
+    // #1105 score=217.66 → ранг 241 → Legendary
+    // #1676 score=202.54 → ранг 436 → Epic (граница Legendary/Epic)
+    // #2082 score=201.53 → ранг 460 → Epic
+
+    // Legendary: ранг 1-440 → score >= 202.6
+    if (score >= 202.6) {
+        return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.70)", min: 8, max: 9 };
+    }
+    // Epic: ранг 441-880 → score >= 169.7
+    if (score >= 169.7) {
+        return { key: "epic", border: "#f97316", glow: "rgba(249,115,22,0.65)", min: 7, max: 9 };
+    }
+    // Rare: ранг 881-1320 → score >= 157.9
+    if (score >= 157.9) {
+        return { key: "rare", border: "#a855f7", glow: "rgba(168,85,247,0.60)", min: 5, max: 7 };
+    }
+    // Uncommon: ранг 1321-1760 → score >= 146.5
+    if (score >= 146.5) {
+        return { key: "uncommon", border: "#3b82f6", glow: "rgba(59,130,246,0.60)", min: 3, max: 5 };
+    }
+    // Common: ранг 1761-2129
     return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 3 };
 }
 
