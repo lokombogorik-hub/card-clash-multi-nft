@@ -5,7 +5,7 @@ import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from 
 
 (function migrateRarity() {
     try {
-        if (localStorage.getItem("cc_rarity_v22_hotcraft_final")) return;
+        if (localStorage.getItem("cc_rarity_v23_hotcraft_2129")) return;
         var keys = Object.keys(localStorage);
         for (var i = 0; i < keys.length; i++) {
             if (keys[i].startsWith("cc_card_")) {
@@ -16,7 +16,7 @@ import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from 
             }
         }
         localStorage.removeItem("cc_nft_cache");
-        localStorage.setItem("cc_rarity_v22_hotcraft_final", "1");
+        localStorage.setItem("cc_rarity_v23_hotcraft_2129", "1");
     } catch (e) { }
 })();
 
@@ -138,23 +138,23 @@ function calculateRarityScore(attributes) {
 }
 
 function getRarityFromScore(score) {
-    // Legendary: ранг 1-240 → score > 217
-    if (score >= 217) {
+    // Legendary: топ 20% (ранг 1-426 из 2129) → score >= 213
+    if (score >= 213) {
         return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.70)", min: 8, max: 9 };
     }
-    // Epic: ранг 241-580 → score 196-217
-    if (score >= 196) {
+    // Epic: 20-40% (ранг 427-852) → score >= 169.5
+    if (score >= 169.5) {
         return { key: "epic", border: "#f97316", glow: "rgba(249,115,22,0.65)", min: 7, max: 9 };
     }
-    // Rare: ранг 581-1550 → score 154-196
-    if (score >= 154) {
+    // Rare: 40-60% (ранг 853-1278) → score >= 157.5
+    if (score >= 157.5) {
         return { key: "rare", border: "#a855f7", glow: "rgba(168,85,247,0.60)", min: 5, max: 7 };
     }
-    // Uncommon: ранг 1551-1900 → score 148-154
-    if (score >= 148) {
+    // Uncommon: 60-80% (ранг 1279-1704) → score >= 146.5
+    if (score >= 146.5) {
         return { key: "uncommon", border: "#3b82f6", glow: "rgba(59,130,246,0.60)", min: 3, max: 5 };
     }
-    // Common: ранг 1901+
+    // Common: 80-100% (ранг 1705-2129)
     return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 3 };
 }
 
@@ -205,7 +205,7 @@ function createSeed(tokenId, salt) {
 
 function getStoredCardData(tokenId) {
     try {
-        var stored = localStorage.getItem("cc_card_v22_" + String(tokenId));
+        var stored = localStorage.getItem("cc_card_v23_" + String(tokenId));
         if (stored) return JSON.parse(stored);
     } catch (e) { }
     return null;
@@ -213,12 +213,12 @@ function getStoredCardData(tokenId) {
 
 function storeCardData(tokenId, data) {
     try {
-        localStorage.setItem("cc_card_v22_" + String(tokenId), JSON.stringify(data));
+        localStorage.setItem("cc_card_v23_" + String(tokenId), JSON.stringify(data));
     } catch (e) { }
 }
 
 function genStats(tokenId, rarity) {
-    var STATS_VERSION = "v22";
+    var STATS_VERSION = "v23";
     var stored = getStoredCardData(tokenId);
     if (stored && stored.stats && stored.statsVersion === STATS_VERSION && stored.rarityKey === rarity.key) {
         var s = stored.stats;
@@ -228,7 +228,7 @@ function genStats(tokenId, rarity) {
         }
     }
 
-    var rng = mulberry32(createSeed(tokenId, "stats_v22"));
+    var rng = mulberry32(createSeed(tokenId, "stats_v23"));
     var min = Math.max(1, rarity.min);
     var max = Math.min(9, rarity.max);
 
@@ -240,11 +240,11 @@ function genStats(tokenId, rarity) {
     };
 
     if (rarity.key === "legendary") {
-        var aceRng = mulberry32(createSeed(tokenId, "ace_v22"));
+        var aceRng = mulberry32(createSeed(tokenId, "ace_v23"));
         var sides = ["top", "right", "bottom", "left"];
         stats[sides[Math.floor(aceRng() * sides.length)]] = ACE_VALUE;
     } else if (rarity.key === "epic") {
-        var aceRng2 = mulberry32(createSeed(tokenId, "ace_v22"));
+        var aceRng2 = mulberry32(createSeed(tokenId, "ace_v23"));
         if (aceRng2() < 0.30) {
             var sides2 = ["top", "right", "bottom", "left"];
             stats[sides2[Math.floor(aceRng2() * sides2.length)]] = ACE_VALUE;
@@ -289,7 +289,7 @@ export function invalidateNftCache() {
     nftCache.accountId = null;
     nftCache.items = [];
     nftCache.timestamp = 0;
-    try { localStorage.removeItem("cc_nft_cache_v22"); } catch (e) { }
+    try { localStorage.removeItem("cc_nft_cache_v23"); } catch (e) { }
 }
 
 var imageCache = new Map();
@@ -460,7 +460,7 @@ export default function Inventory({ token, onDeckReady }) {
         }
 
         try {
-            var lsCache = JSON.parse(localStorage.getItem("cc_nft_cache_v22") || "null");
+            var lsCache = JSON.parse(localStorage.getItem("cc_nft_cache_v23") || "null");
             if (lsCache && lsCache.accountId === accountId &&
                 lsCache.items && lsCache.items.length > 0 &&
                 (now - lsCache.timestamp) < 300000) {
@@ -540,7 +540,7 @@ export default function Inventory({ token, onDeckReady }) {
                         nftCache.timestamp = Date.now();
 
                         try {
-                            localStorage.setItem("cc_nft_cache_v22", JSON.stringify({
+                            localStorage.setItem("cc_nft_cache_v23", JSON.stringify({
                                 accountId: accountId,
                                 timestamp: nftCache.timestamp,
                                 items: items
