@@ -5,79 +5,165 @@ import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from 
 
 (function migrateRarity() {
     try {
-        if (localStorage.getItem("cc_rarity_v24_hotcraft_rank")) return;
+        if (localStorage.getItem("cc_rarity_v18_force")) return;
         var keys = Object.keys(localStorage);
         for (var i = 0; i < keys.length; i++) {
             if (keys[i].startsWith("cc_card_")) {
-                localStorage.removeItem(keys[i]);
+                try {
+                    var val = JSON.parse(localStorage.getItem(keys[i]));
+                    if (val) {
+                        delete val.stats;
+                        delete val.statsVersion;
+                        delete val.rarityKey;
+                        localStorage.setItem(keys[i], JSON.stringify(val));
+                    }
+                } catch (e) { }
             }
             if (keys[i].startsWith("cc_rarity_")) {
                 localStorage.removeItem(keys[i]);
             }
         }
         localStorage.removeItem("cc_nft_cache");
-        localStorage.setItem("cc_rarity_v24_hotcraft_rank", "1");
+        localStorage.setItem("cc_rarity_v18_force", "1");
     } catch (e) { }
 })();
 
 var ACE_VALUE = 10;
 var IPFS_GATEWAY = "https://bafybeibqzbodfn3xczppxh2k2ek3bgvojhivqy4ntbkprcxesulth3yy5e.ipfs.w3s.link";
 
-// ⚠️ ПОЛУЧАЕМ РАНГ ИЗ HOTCRAFT API
-async function fetchRankFromHotCraft(tokenId) {
-    try {
-        var nftNumber = parseInt(String(tokenId), 10) + 1;
+var TRAIT_RARITY = {
+    "Background": {
+        "Ancient ruins": 0.05, "Apocalypse": 0.05, "Aristocrat's house": 0.05, "Ashes": 0.05,
+        "Autumn evening": 2.44, "Black Wall": 2.02, "Blue paints": 2.11, "Blue rings": 2.11,
+        "City": 1.32, "City of Ashes": 1.74, "Cold morning": 1.74, "Country evening": 1.46,
+        "Cracked ball": 1.97, "Crypt": 1.36, "Dark forest": 1.88, "Darkforest": 1.88,
+        "Dragon spirit": 0.05, "Evening field": 2.02, "Evening light": 2.02, "Forest": 1.6,
+        "Forest of Oblivion": 1.93, "Future": 0.05, "Gears": 1.88, "Ghost": 1.88,
+        "Golden Radiance": 1.69, "Golden age": 1.64, "Graffiti wall": 0.05, "Green ball": 1.64,
+        "Green wall": 1.5, "Laboratory": 1.64, "Lake shore": 1.97, "Lunar oblivion": 2.25,
+        "Meteor shower": 1.55, "Midway park": 0.05, "Moon": 2.11, "Morning forest": 1.64,
+        "Mountain beach": 1.78, "Near factory": 0.05, "Necromancer's Abode": 0.05,
+        "Neon circle": 2.11, "Neon city": 1.83, "Neon diamond": 1.74, "Night": 1.6,
+        "Night city": 0.05, "Night street": 1.55, "Night trail": 2.58, "Old castle": 0.05,
+        "Olympus": 0.05, "Orange canvas": 1.93, "Overcast clouds": 1.74, "Paris": 1.88,
+        "Pink bubbles": 2.11, "Pixel landscape": 1.64, "Purple style": 2.02, "Pyramid": 2.25,
+        "Quiet Sun": 0.05, "Radiation": 1.55, "Reading room": 1.6, "Road forest": 1.46,
+        "Room": 2.54, "Rotten Grove": 1.97, "Ruins": 1.36, "Slanting rain": 1.74,
+        "Sorcerer Forest": 0.05, "Spring forest": 2.16, "Street Lanterns": 2.07,
+        "Through the Twilight": 0.05, "Twilight": 1.83, "Vampire house": 0.05,
+        "Winter forest": 1.6, "evening lights": 1.55,
+    },
+    "Body": {
+        "Ash Whirlwind": 0.05, "Ash gray haze": 0.05, "Ashes of Time": 0.05, "Black": 9.53,
+        "Blue": 9.3, "Bluish gray": 0.05, "Cloud smoke": 0.05, "Coal smoke": 0.05,
+        "Cosmic reflection": 0.05, "Dusty obsidian": 0.05, "Gray": 9.91, "Grayish": 0.05,
+        "Grey Stream": 0.05, "Infernal Violet": 0.05, "Light gray": 8.88, "Lilac": 10.8,
+        "Lunar ash": 0.05, "Midnight gray": 0.05, "Orange": 10.29, "Pink": 9.86,
+        "Purple gray": 0.05, "Red": 10.33, "Redhead": 0.05, "Salad green": 9.53,
+        "Thundercloud": 0.05, "Warhammer": 0.05, "White": 10.76,
+    },
+    "Eyes": {
+        "Amber Ember Eyes": 0.05, "Ash Phantom": 0.05, "Blood": 9.07, "Bloody eye": 0.05,
+        "Crystal glint": 0.05, "Ghost eyes": 0.05, "Hi Tech": 8.92, "Honeycombs": 10.29,
+        "Hot eyes": 0.05, "Hypnosis": 8.08, "Jester's Eyes": 0.05, "Legion g": 0.05,
+        "Moon Shadow": 0.05, "Necromancer's Eyes": 0.05, "Omni eye": 0.05, "Pink": 8.27,
+        "Pink glare": 8.97, "Purple": 9.35, "Red": 9.49, "Sandy": 0.05,
+        "Shining Stream": 0.05, "Sorcerer eye": 0.05, "Thunderbolt Glow": 0.05,
+        "Venom": 9.11, "Volcanic heat": 0.05, "White": 8.97, "Yellow highlights": 0.05,
+        "Zombie": 8.69,
+    },
+    "Head": {
+        "Barber Broo": 2.96, "Biker hairstyle": 2.54, "Bogocha glasses": 2.68,
+        "Brown fashionable": 2.72, "CC": 2.72, "Cedar": 2.87, "Chef's hat": 2.35,
+        "Corey": 0.05, "Crown Kings": 2.49, "Curly hair": 2.63, "Cyber detective hat": 3.62,
+        "Cyclops": 3.1, "Deep Shadow": 0.05, "Diamond glasses": 2.82, "Didi": 1.69,
+        "Digital glasses": 2.49, "Dir": 2.72, "Dragon helmet": 0.05, "Dreamer's cap": 0.05,
+        "Earflap hat": 0.05, "Easter hat": 2.96, "Fashion glass": 2.4, "Fool's cap": 0.05,
+        "Goggles": 3.15, "Golden wreath": 0.05, "Hermes": 2.72, "Hockey helmet": 3.05,
+        "Horns of the Abyss": 0.05, "Hot cylinder": 0.05, "Jacket hat": 3.62,
+        "Lab glasses": 2.68, "Mafia hat": 2.49, "Magnetus helmet": 3.29, "Major's cap": 2.3,
+        "Mechanical glasses": 0.05, "Morning Mist Helmet": 0.05, "Neon glasses": 2.77,
+        "Nightcap": 2.58, "Omni hair": 0.05, "Pork": 2.35, "Robocop helmet": 2.63,
+        "Rose-colored glasses": 2.87, "Sand cape": 0.05, "Shadow Necromancer": 0.05,
+        "Sharp visor": 2.68, "Shiny hat": 2.72, "Short hairstyle": 2.49, "Snow goggles": 2.96,
+        "Sorcerer hair": 0.05, "Straw hat": 3.48, "Transparent wool": 0.05,
+        "Warhammer helmet": 0.05, "Yellow 75 glasses": 2.63,
+    },
+    "Suits": {
+        "Abibas": 1.69, "Astartes Space Marines": 0.05, "Balenci": 2.11, "Balenciaga": 1.41,
+        "Belivera raincoat": 1.46, "Biker vest": 1.78, "Bottega Veneta": 1.41, "CC": 1.36,
+        "Celine": 1.97, "Cloak of Near legion": 0.05, "Cook": 1.69, "Cyber detective": 1.6,
+        "DG": 1.46, "Desert nomad": 0.05, "Didi": 1.64, "Dies": 1.78, "Digital down": 1.46,
+        "Doctor": 1.83, "Dreamer": 0.05, "Easter costume": 1.13, "Exo suit": 1.46,
+        "Exoskeleton": 1.46, "Farmer's shirt": 1.13, "Fire jacket": 1.64, "Ghost": 0.05,
+        "Glamorous puffer": 1.6, "Glitch": 1.69, "Green acid": 1.5, "Green poison": 1.46,
+        "Gucci jacket": 1.46, "Hawaiian shirt": 1.5, "Hermes coat": 1.41, "Hockey player": 1.55,
+        "Hole time": 1.22, "Ice armor": 1.36, "Infected": 1.32, "Iron captain": 1.5,
+        "Iron lava": 1.13, "Jacket": 1.32, "Jester's motley": 0.05, "Jordan": 1.74,
+        "Kayvin Klein": 1.64, "LV": 1.32, "Louis Vuitton": 1.5, "Lvs": 1.17, "Mafia": 1.64,
+        "Magic costume": 1.5, "Magnetus": 1.6, "Maki": 1.74, "Mantle Kings": 1.13,
+        "Mechanical": 1.27, "Mechanical armor": 0.05, "Neon chains": 1.6,
+        "Neon windbreaker": 1.55, "Nightgown": 1.22, "Nike": 1.32,
+        "Obsidian Chain of Power": 0.05, "OmniBlinks": 0.05, "Peaked cap": 2.02,
+        "Pearl jacket": 0.05, "Pink armor": 1.27, "Prada": 1.97, "Pulsar of Eternity": 1.08,
+        "Raincoat": 1.32, "Red techno": 1.36, "Robocop": 1.5, "Robot": 1.41, "Saint L": 2.07,
+        "Samurai": 0.05, "Samurai Ashigaru": 1.46, "Shadow Necromancer": 0.05,
+        "Smoky ashes": 1.17, "Sorcerer": 0.05, "Summer shirt": 1.69, "Tailcoat suit": 0.05,
+        "Vampire": 0.05, "Venom": 0.05, "White Fur Coat": 1.17, "White roba": 1.41,
+        "Winter coat": 1.78, "Zeus": 0.05, "Zombie": 1.27, "jacket rhinestones": 1.83,
+    },
+    "Teeth": {
+        "Alabaster tone": 0.09, "Amber spark": 0.05, "Echo of Ashes": 0.05,
+        "Ethereal shine": 0.05, "Frozen teeth": 8.45, "Ghostly blue": 0.05, "Glint": 0.05,
+        "Golden": 7.05, "Golden Fag": 0.05, "Gray": 8.03, "Jester's Teeth": 0.05,
+        "Lava": 8.92, "Mechanical": 8.03, "Opal light": 0.05, "Orange": 8.41,
+        "Palette": 8.27, "Purable white": 0.05, "Purple teeth": 0.05, "Rainbow": 9.39,
+        "Raleigh RR-32": 8.41, "Reddish glow": 0.05, "Runes": 8.45, "Salad greens": 0.05,
+        "Snow-white": 0.05, "Stone ruins": 8.45, "Titanium glitter": 0.05,
+        "Vampire fangs": 0.05, "White": 7.33,
+    },
+};
 
-        // Пробуем через их API
-        var url = "https://hotcraft.art/api/nft/bunny.nfts.tg/" + nftNumber;
-
-        var controller = new AbortController();
-        var timeoutId = setTimeout(function () { controller.abort(); }, 5000);
-
-        var resp = await fetch(url, { signal: controller.signal });
-        clearTimeout(timeoutId);
-
-        if (resp.ok) {
-            var data = await resp.json();
-
-            // Ищем rank в разных полях
-            var rank = data.rank || data.rarity_rank || data.rarityRank || data.ranking;
-
-            if (rank && typeof rank === 'number') {
-                console.log("[HotCraft] Token", tokenId, "rank:", rank);
-                return rank;
-            }
+function calculateRarityScore(attributes) {
+    if (!attributes || !Array.isArray(attributes) || attributes.length === 0) return 0;
+    var score = 0;
+    for (var i = 0; i < attributes.length; i++) {
+        var attr = attributes[i];
+        var pct = 5;
+        if (TRAIT_RARITY[attr.trait_type] && TRAIT_RARITY[attr.trait_type][attr.value] !== undefined) {
+            pct = TRAIT_RARITY[attr.trait_type][attr.value];
         }
-    } catch (e) {
-        console.warn("[HotCraft] Failed to fetch rank for", tokenId, ":", e.message);
+        if (pct > 0) score += 1 / pct;
     }
-
-    return null;
+    return score;
 }
 
-// ⚠️ ОПРЕДЕЛЯЕМ КАТЕГОРИЮ ПО РАНГУ (1-2129)
-function getRarityFromRank(rank) {
-    if (!rank || rank < 1) {
-        return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 3 };
-    }
+function getRarityFromScore(score) {
+    // Legendary — трейты 0.05% → score 5+
+    if (score >= 5.0) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.70)", min: 8, max: 9 };
+    // top 0-20% — рыжий
+    if (score >= 2.05) return { key: "epic", border: "#f97316", glow: "rgba(249,115,22,0.65)", min: 7, max: 9 };
+    // top 20-40% — фиолетовый
+    if (score >= 1.97) return { key: "rare", border: "#a855f7", glow: "rgba(168,85,247,0.60)", min: 5, max: 7 };
+    // top 40-60% — синий
+    if (score >= 1.78) return { key: "uncommon", border: "#3b82f6", glow: "rgba(59,130,246,0.60)", min: 3, max: 5 };
+    // top 60-80% — коричневый
+    if (score >= 1.73) return { key: "poor", border: "#92400e", glow: "rgba(146,64,14,0.60)", min: 2, max: 4 };
+    // top 80-100% — серый
+    return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 3 };
+}
 
-    // Топ 1-400 = Legendary
-    if (rank <= 400) {
-        return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.70)", min: 8, max: 9 };
-    }
-    // 401-800 = Epic
-    if (rank <= 800) {
-        return { key: "epic", border: "#f97316", glow: "rgba(249,115,22,0.65)", min: 7, max: 9 };
-    }
-    // 801-1200 = Rare
-    if (rank <= 1200) {
-        return { key: "rare", border: "#a855f7", glow: "rgba(168,85,247,0.60)", min: 5, max: 7 };
-    }
-    // 1201-1700 = Uncommon
-    if (rank <= 1700) {
-        return { key: "uncommon", border: "#3b82f6", glow: "rgba(59,130,246,0.60)", min: 3, max: 5 };
-    }
-    // 1701-2129 = Common
+function getRarityFromTraits(attributes) {
+    return getRarityFromScore(calculateRarityScore(attributes));
+}
+
+function getRarityFallback(tokenId) {
+    var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
+    if (num <= 16) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.70)", min: 8, max: 9 };
+    if (num <= 441) return { key: "epic", border: "#f97316", glow: "rgba(249,115,22,0.65)", min: 7, max: 9 };
+    if (num <= 882) return { key: "rare", border: "#a855f7", glow: "rgba(168,85,247,0.60)", min: 5, max: 7 };
+    if (num <= 1323) return { key: "uncommon", border: "#3b82f6", glow: "rgba(59,130,246,0.60)", min: 3, max: 5 };
+    if (num <= 1764) return { key: "poor", border: "#92400e", glow: "rgba(146,64,14,0.60)", min: 2, max: 4 };
     return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 3 };
 }
 
@@ -120,7 +206,7 @@ function createSeed(tokenId, salt) {
 
 function getStoredCardData(tokenId) {
     try {
-        var stored = localStorage.getItem("cc_card_v24_" + String(tokenId));
+        var stored = localStorage.getItem("cc_card_" + String(tokenId));
         if (stored) return JSON.parse(stored);
     } catch (e) { }
     return null;
@@ -128,12 +214,12 @@ function getStoredCardData(tokenId) {
 
 function storeCardData(tokenId, data) {
     try {
-        localStorage.setItem("cc_card_v24_" + String(tokenId), JSON.stringify(data));
+        localStorage.setItem("cc_card_" + String(tokenId), JSON.stringify(data));
     } catch (e) { }
 }
 
 function genStats(tokenId, rarity) {
-    var STATS_VERSION = "v24";
+    var STATS_VERSION = "v18";
     var stored = getStoredCardData(tokenId);
     if (stored && stored.stats && stored.statsVersion === STATS_VERSION && stored.rarityKey === rarity.key) {
         var s = stored.stats;
@@ -143,7 +229,7 @@ function genStats(tokenId, rarity) {
         }
     }
 
-    var rng = mulberry32(createSeed(tokenId, "stats_v24"));
+    var rng = mulberry32(createSeed(tokenId, "stats_v18"));
     var min = Math.max(1, rarity.min);
     var max = Math.min(9, rarity.max);
 
@@ -155,11 +241,11 @@ function genStats(tokenId, rarity) {
     };
 
     if (rarity.key === "legendary") {
-        var aceRng = mulberry32(createSeed(tokenId, "ace_v24"));
+        var aceRng = mulberry32(createSeed(tokenId, "ace_v18"));
         var sides = ["top", "right", "bottom", "left"];
         stats[sides[Math.floor(aceRng() * sides.length)]] = ACE_VALUE;
     } else if (rarity.key === "epic") {
-        var aceRng2 = mulberry32(createSeed(tokenId, "ace_v24"));
+        var aceRng2 = mulberry32(createSeed(tokenId, "ace_v18"));
         if (aceRng2() < 0.30) {
             var sides2 = ["top", "right", "bottom", "left"];
             stats[sides2[Math.floor(aceRng2() * sides2.length)]] = ACE_VALUE;
@@ -196,7 +282,7 @@ function statStyle(val) {
     return undefined;
 }
 
-var RARITY_ORDER = { legendary: 0, epic: 1, rare: 2, uncommon: 3, common: 4 };
+var RARITY_ORDER = { legendary: 0, epic: 1, rare: 2, uncommon: 3, poor: 4, common: 5 };
 
 var nftCache = { accountId: null, items: [], timestamp: 0 };
 
@@ -204,7 +290,7 @@ export function invalidateNftCache() {
     nftCache.accountId = null;
     nftCache.items = [];
     nftCache.timestamp = 0;
-    try { localStorage.removeItem("cc_nft_cache_v24"); } catch (e) { }
+    try { localStorage.removeItem("cc_nft_cache"); } catch (e) { }
 }
 
 var imageCache = new Map();
@@ -268,8 +354,8 @@ var InventoryCard = memo(function InventoryCard({ nft, isSelected, pickNo, onTog
     }, [nft.element, nft.tokenId, nft.token_id, nft.id, k]);
 
     var rarity = useMemo(function () {
-        return nft.rarity || { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 3 };
-    }, [nft.rarity]);
+        return nft.rarity || getRarityFallback(nft.tokenId);
+    }, [nft.rarity, nft.tokenId]);
 
     var handleClick = useCallback(function () { onToggle(k); }, [onToggle, k]);
 
@@ -368,14 +454,16 @@ export default function Inventory({ token, onDeckReady }) {
 
         var now = Date.now();
 
+        // 1. Memory cache
         if (nftCache.accountId === accountId && nftCache.items.length > 0 && (now - nftCache.timestamp) < 300000) {
             setNfts(nftCache.items);
             setSource("✅ " + nftCache.items.length + " NFTs (cached)");
             return;
         }
 
+        // 2. localStorage cache
         try {
-            var lsCache = JSON.parse(localStorage.getItem("cc_nft_cache_v24") || "null");
+            var lsCache = JSON.parse(localStorage.getItem("cc_nft_cache") || "null");
             if (lsCache && lsCache.accountId === accountId &&
                 lsCache.items && lsCache.items.length > 0 &&
                 (now - lsCache.timestamp) < 300000) {
@@ -401,49 +489,66 @@ export default function Inventory({ token, onDeckReady }) {
                 if (connected && accountId && nftContractId) {
                     try {
                         var tokens = await nearNftTokensForOwner(nftContractId, accountId);
+                        var attributesMap = {};
+                        var loadedCount = 0;
+                        var failedCount = 0;
 
-                        setSource("⏳ Загрузка рангов из HotCraft...");
-
-                        // ⚠️ ЗАГРУЖАЕМ РАНГИ ИЗ HOTCRAFT
-                        var ranksMap = {};
-
-                        // Проверяем кэш
+                        // Сначала берём всё что есть в кэше
                         tokens.forEach(function (t) {
                             var cached = getStoredCardData(t.token_id);
-                            if (cached && cached.rank) {
-                                ranksMap[t.token_id] = cached.rank;
+                            if (cached && cached.attributes) {
+                                attributesMap[t.token_id] = cached.attributes;
+                                loadedCount++;
                             }
                         });
 
-                        // Догружаем недостающие
-                        var missing = tokens.filter(function (t) { return !ranksMap[t.token_id]; });
+                        // Показываем карты из кэша сразу
+                        if (loadedCount > 0 && alive) {
+                            var quickItems = buildItems(tokens, attributesMap, nftContractId);
+                            setNfts(quickItems);
+                            setLoading(false);
+                            setSource("✅ " + tokens.length + " NFTs (загрузка атрибутов...)");
+                        }
+
+                        // Догружаем недостающие с IPFS
+                        var missing = tokens.filter(function (t) { return !attributesMap[t.token_id]; });
                         if (missing.length > 0) {
                             await Promise.allSettled(
                                 missing.map(async function (t) {
                                     var tid = t.token_id;
                                     try {
-                                        var rank = await fetchRankFromHotCraft(tid);
-                                        if (rank) {
-                                            ranksMap[tid] = rank;
-                                            var data = getStoredCardData(tid) || {};
-                                            data.rank = rank;
-                                            storeCardData(tid, data);
-                                        }
+                                        var nftNumber = parseInt(tid, 10) + 1;
+                                        var url = IPFS_GATEWAY + "/" + nftNumber + ".json";
+                                        var controller = new AbortController();
+                                        var timeoutId = setTimeout(function () { controller.abort(); }, 8000);
+                                        var resp = await fetch(url, { signal: controller.signal });
+                                        clearTimeout(timeoutId);
+                                        if (resp.ok) {
+                                            var json = await resp.json();
+                                            if (json.attributes && Array.isArray(json.attributes)) {
+                                                attributesMap[tid] = json.attributes;
+                                                loadedCount++;
+                                                var data = getStoredCardData(tid) || {};
+                                                data.attributes = json.attributes;
+                                                storeCardData(tid, data);
+                                            } else { failedCount++; }
+                                        } else { failedCount++; }
                                     } catch (e) {
-                                        console.warn("[HotCraft] Error for", tid, ":", e.message);
+                                        failedCount++;
+                                        console.warn("IPFS fetch error for", tid, e.name, e.message);
                                     }
                                 })
                             );
                         }
 
-                        items = await buildItems(tokens, ranksMap, nftContractId);
+                        items = buildItems(tokens, attributesMap, nftContractId);
 
                         nftCache.accountId = accountId;
                         nftCache.items = items;
                         nftCache.timestamp = Date.now();
 
                         try {
-                            localStorage.setItem("cc_nft_cache_v24", JSON.stringify({
+                            localStorage.setItem("cc_nft_cache", JSON.stringify({
                                 accountId: accountId,
                                 timestamp: nftCache.timestamp,
                                 items: items
@@ -620,13 +725,13 @@ export default function Inventory({ token, onDeckReady }) {
     );
 }
 
-async function buildItems(tokens, ranksMap, nftContractId) {
+function buildItems(tokens, attributesMap, nftContractId) {
     var items = tokens.map(function (t) {
-        var rank = ranksMap[t.token_id] || null;
-        var r = getRarityFromRank(rank);
+        var attributes = attributesMap[t.token_id] || null;
+        var score = attributes ? calculateRarityScore(attributes) : 0;
+        var r = attributes ? getRarityFromTraits(attributes) : getRarityFallback(t.token_id);
         var st = genStats(t.token_id, r);
         var elem = genElement(t.token_id);
-
         return {
             key: "near:" + nftContractId + ":" + t.token_id,
             chain: "near",
@@ -641,7 +746,8 @@ async function buildItems(tokens, ranksMap, nftContractId) {
             rarity: r,
             rank: r.key,
             rankLabel: r.key[0].toUpperCase(),
-            hotcraftRank: rank,
+            attributes: attributes,
+            score: score,
         };
     });
 
@@ -649,11 +755,7 @@ async function buildItems(tokens, ranksMap, nftContractId) {
         var ra = RARITY_ORDER[a.rarity.key] !== undefined ? RARITY_ORDER[a.rarity.key] : 99;
         var rb = RARITY_ORDER[b.rarity.key] !== undefined ? RARITY_ORDER[b.rarity.key] : 99;
         if (ra !== rb) return ra - rb;
-
-        // Сортируем по рангу HotCraft внутри категории
-        var rankA = a.hotcraftRank || 9999;
-        var rankB = b.hotcraftRank || 9999;
-        return rankA - rankB;
+        return (b.score || 0) - (a.score || 0);
     });
 
     return items;
