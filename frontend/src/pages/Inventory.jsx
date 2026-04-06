@@ -31,6 +31,7 @@ import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from 
 var ACE_VALUE = 10;
 var IPFS_GATEWAY = "https://bafybeibqzbodfn3xczppxh2k2ek3bgvojhivqy4ntbkprcxesulth3yy5e.ipfs.w3s.link";
 
+// ⚠️ ОБНОВЛЕННЫЕ ДАННЫЕ ИЗ HOTCRAFT
 var TRAIT_RARITY = {
     "Background": {
         "Ancient ruins": 0.05, "Apocalypse": 0.05, "Aristocrat's house": 0.05, "Ashes": 0.05,
@@ -127,43 +128,87 @@ var TRAIT_RARITY = {
 function calculateRarityScore(attributes) {
     if (!attributes || !Array.isArray(attributes) || attributes.length === 0) return 0;
     var score = 0;
+    var count = 0;
+
     for (var i = 0; i < attributes.length; i++) {
         var attr = attributes[i];
-        var pct = 5;
-        if (TRAIT_RARITY[attr.trait_type] && TRAIT_RARITY[attr.trait_type][attr.value] !== undefined) {
-            pct = TRAIT_RARITY[attr.trait_type][attr.value];
+        var traitType = attr.trait_type;
+        var value = attr.value;
+
+        // Пропускаем Rank - он не влияет на score
+        if (traitType === "Rank") continue;
+
+        var pct = 5; // default
+        if (TRAIT_RARITY[traitType] && TRAIT_RARITY[traitType][value] !== undefined) {
+            pct = TRAIT_RARITY[traitType][value];
         }
-        if (pct > 0) score += 1 / pct;
+
+        if (pct > 0) {
+            score += 1 / (pct / 100); // Переводим проценты в score
+            count++;
+        }
     }
-    return score;
+
+    // Средний score
+    return count > 0 ? score / count : 0;
 }
 
+// ⚠️ НОВАЯ ЛОГИКА — основана на HotCraft рангах
 function getRarityFromScore(score) {
-    // Legendary — трейты 0.05% → score 5+
-    if (score >= 5.0) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.70)", min: 8, max: 9 };
-    // top 0-20% — рыжий
-    if (score >= 2.05) return { key: "epic", border: "#f97316", glow: "rgba(249,115,22,0.65)", min: 7, max: 9 };
-    // top 20-40% — фиолетовый
-    if (score >= 1.97) return { key: "rare", border: "#a855f7", glow: "rgba(168,85,247,0.60)", min: 5, max: 7 };
-    // top 40-60% — синий
-    if (score >= 1.78) return { key: "uncommon", border: "#3b82f6", glow: "rgba(59,130,246,0.60)", min: 3, max: 5 };
-    // top 60-80% — коричневый
-    if (score >= 1.73) return { key: "poor", border: "#92400e", glow: "rgba(146,64,14,0.60)", min: 2, max: 4 };
-    // top 80-100% — серый
+    // HotCraft использует такие диапазоны:
+    // Legendary: очень редкие комбинации (0.05% трейты)
+    if (score >= 150) {
+        return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.70)", min: 8, max: 9 };
+    }
+    // Epic: редкие (несколько 0.05% трейтов)
+    if (score >= 80) {
+        return { key: "epic", border: "#f97316", glow: "rgba(249,115,22,0.65)", min: 7, max: 9 };
+    }
+    // Rare: необычные (один 0.05% трейт или несколько редких)
+    if (score >= 40) {
+        return { key: "rare", border: "#a855f7", glow: "rgba(168,85,247,0.60)", min: 5, max: 7 };
+    }
+    // Uncommon: выше среднего
+    if (score >= 25) {
+        return { key: "uncommon", border: "#3b82f6", glow: "rgba(59,130,246,0.60)", min: 3, max: 5 };
+    }
+    // Common: обычные
     return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 3 };
 }
 
 function getRarityFromTraits(attributes) {
+    if (!attributes || !Array.isArray(attributes)) {
+        return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 3 };
+    }
+
+    // Сначала проверяем есть ли Rank в атрибутах (HotCraft добавляет его)
+    var rankAttr = attributes.find(function (a) { return a.trait_type === "Rank"; });
+    if (rankAttr && rankAttr.value) {
+        var rank = String(rankAttr.value).toLowerCase();
+
+        if (rank === "legendary" || rank === "legend") {
+            return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.70)", min: 8, max: 9 };
+        }
+        if (rank === "epic") {
+            return { key: "epic", border: "#f97316", glow: "rgba(249,115,22,0.65)", min: 7, max: 9 };
+        }
+        if (rank === "rare") {
+            return { key: "rare", border: "#a855f7", glow: "rgba(168,85,247,0.60)", min: 5, max: 7 };
+        }
+        if (rank === "uncommon") {
+            return { key: "uncommon", border: "#3b82f6", glow: "rgba(59,130,246,0.60)", min: 3, max: 5 };
+        }
+        if (rank === "common") {
+            return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 3 };
+        }
+    }
+
+    // Если Rank нет — считаем по трейтам
     return getRarityFromScore(calculateRarityScore(attributes));
 }
 
+// Fallback больше не нужен — всегда используем attributes
 function getRarityFallback(tokenId) {
-    var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
-    if (num <= 16) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.70)", min: 8, max: 9 };
-    if (num <= 441) return { key: "epic", border: "#f97316", glow: "rgba(249,115,22,0.65)", min: 7, max: 9 };
-    if (num <= 882) return { key: "rare", border: "#a855f7", glow: "rgba(168,85,247,0.60)", min: 5, max: 7 };
-    if (num <= 1323) return { key: "uncommon", border: "#3b82f6", glow: "rgba(59,130,246,0.60)", min: 3, max: 5 };
-    if (num <= 1764) return { key: "poor", border: "#92400e", glow: "rgba(146,64,14,0.60)", min: 2, max: 4 };
     return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 3 };
 }
 
