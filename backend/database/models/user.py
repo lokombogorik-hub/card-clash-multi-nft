@@ -19,7 +19,7 @@ class User(Base):
     losses = Column(Integer, default=0, nullable=False, server_default="0")
 
     # Rating system
-    elo_rating = Column(Integer, default=1000, nullable=False, server_default="1000")
+    elo_rating = Column(Integer, default=0, nullable=False, server_default="0")
     rank = Column(String, default="Новичок", nullable=False, server_default="'Новичок'")
 
     # PvP specific

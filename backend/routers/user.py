@@ -43,7 +43,7 @@ async def get_current_user(authorization: str = Header(None)):
             if not user:
                 raise HTTPException(status_code=404, detail="User not found")
 
-            rating = user.elo_rating or 1000
+            rating = user.elo_rating or 0
             rank_info = get_rank_by_rating(rating)
             progress = get_progress_to_next_rank(rating)
 

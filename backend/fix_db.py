@@ -1,34 +1,19 @@
-import os
-import psycopg2
+# backend/scripts/reset_ratings.py
+import asyncio
+from sqlalchemy import update
+from database.session import get_session
+from database.models.user import User
 
-DATABASE_URL = os.getenv("DATABASE_URL", "")
+async def reset_ratings():
+    async for session in get_session():
+        await session.execute(
+            update(User)
+            .where(User.elo_rating == 1000)
+            .values(elo_rating=0)
+        )
+        await session.commit()
+        print("✅ Ratings reset to 0")
+        break
 
-def fix_url(url):
-    url = url.strip().strip('"').strip("'")
-    if url.startswith("postgres://"):
-        url = "postgresql://" + url[len("postgres://"):]
-    return url
-
-def main():
-    url = fix_url(DATABASE_URL)
-    conn = psycopg2.connect(url, sslmode="require")
-    cur = conn.cursor()
-
-    # У KostiantynWalmond 1 победа, рейтинг должен быть 10 а не 1010
-    # Значит стартовый был 1000, вычитаем 1000
-    cur.execute("UPDATE users SET elo_rating = elo_rating - 1000 WHERE elo_rating >= 1000")
-    fixed = cur.rowcount
-    conn.commit()
-    print("Fixed " + str(fixed) + " users")
-
-    cur.execute("SELECT id, username, elo_rating, wins, losses FROM users ORDER BY elo_rating DESC LIMIT 20")
-    rows = cur.fetchall()
-    print("After fix:")
-    for row in rows:
-        print("  id=" + str(row[0]) + " name=" + str(row[1]) + " rating=" + str(row[2]) + " wins=" + str(row[3]) + " losses=" + str(row[4]))
-
-    cur.close()
-    conn.close()
-    print("Done!")
-
-main()
+if __name__ == "__main__":
+    asyncio.run(reset_ratings())

@@ -70,7 +70,7 @@ function Leaderboard({ token }) {
         (async function () {
             try {
                 var t = token || getStoredToken();
-                var res = await apiFetch("/api/matches/leaderboard?limit=50", { token: t });
+                var res = await apiFetch("/api/matches/leaderboard?limit=10", { token: t });
                 setLeaders(Array.isArray(res?.leaders) ? res.leaders : Array.isArray(res) ? res : []);
             } catch (_) { setLeaders([]); }
             finally { setLoading(false); }

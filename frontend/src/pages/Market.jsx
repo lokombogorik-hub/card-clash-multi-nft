@@ -3,10 +3,10 @@ import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
 
 var CASES = [
-    { id: "starter", name: "Starter Case", price: 0.01, displayPrice: "1 Card", image: "/ui/case-starter.png", video: "/ui/case-starter.mp4", rarity: "common", description: "1 random card", type: "single" },
-    { id: "premium", name: "Premium Case", price: 0.01, displayPrice: "1 Card", image: "/ui/case-premium.png", video: "/ui/case-premium.mp4", rarity: "rare", description: "1 rare card", type: "single" },
-    { id: "legendary", name: "Legendary Case", price: 0.01, displayPrice: "1 Epic Card", image: "/ui/case-legendary.png", video: "/ui/case-legendary.mp4", rarity: "epic", description: "1 Epic card guaranteed", type: "single" },
-    { id: "ultimate", name: "Ultimate Case", price: 0.01, displayPrice: "1 Legendary", image: "/ui/case-ultimate.png", video: "/ui/case-ultimate.mp4", rarity: "legendary", description: "1 Legendary card guaranteed", type: "single" },
+    { id: "starter", name: "Starter Case", price: 2, displayPrice: "1 Card", image: "/ui/case-starter.png", video: "/ui/case-starter.mp4", rarity: "common", description: "1 random card", type: "single" },
+    { id: "premium", name: "Premium Case", price: 6, displayPrice: "1 Card", image: "/ui/case-premium.png", video: "/ui/case-premium.mp4", rarity: "rare", description: "1 rare card", type: "single" },
+    { id: "legendary", name: "Legendary Case", price: 10, displayPrice: "1 Epic Card", image: "/ui/case-legendary.png", video: "/ui/case-legendary.mp4", rarity: "epic", description: "1 Epic card guaranteed", type: "single" },
+    { id: "ultimate", name: "Ultimate Case", price: 20, displayPrice: "1 Legendary", image: "/ui/case-ultimate.png", video: "/ui/case-ultimate.mp4", rarity: "legendary", description: "1 Legendary card guaranteed", type: "single" },
 ];
 
 var RARITY_COLORS = {
