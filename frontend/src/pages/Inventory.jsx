@@ -33,10 +33,29 @@ var ACE_VALUE = 10;
 var IPFS_GATEWAY = "https://bafybeibqzbodfn3xczppxh2k2ek3bgvojhivqy4ntbkprcxesulth3yy5e.ipfs.w3s.link";
 
 function getRarityFromRank(rank) {
-    if (rank <= 400) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.70)", min: 8, max: 9 };
-    if (rank <= 800) return { key: "epic", border: "#f97316", glow: "rgba(249,115,22,0.65)", min: 7, max: 9 };
-    if (rank <= 1200) return { key: "rare", border: "#a855f7", glow: "rgba(168,85,247,0.60)", min: 5, max: 7 };
-    if (rank <= 1700) return { key: "uncommon", border: "#3b82f6", glow: "rgba(59,130,246,0.60)", min: 3, max: 5 };
+    var total = 2129;
+
+    // 1% от 2129 = rank 1-21
+    if (rank <= Math.ceil(total * 0.01))
+        return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.70)", min: 8, max: 9 };
+
+    // top 20% = rank 1-426
+    if (rank <= Math.ceil(total * 0.20))
+        return { key: "epic", border: "#f97316", glow: "rgba(249,115,22,0.65)", min: 7, max: 9 };
+
+    // top 40% = rank 1-851
+    if (rank <= Math.ceil(total * 0.40))
+        return { key: "rare", border: "#a855f7", glow: "rgba(168,85,247,0.60)", min: 5, max: 7 };
+
+    // top 60% = rank 1-1277
+    if (rank <= Math.ceil(total * 0.60))
+        return { key: "uncommon", border: "#3b82f6", glow: "rgba(59,130,246,0.60)", min: 3, max: 5 };
+
+    // top 80% = rank 1-1703
+    if (rank <= Math.ceil(total * 0.80))
+        return { key: "poor", border: "#92400e", glow: "rgba(146,64,14,0.60)", min: 2, max: 4 };
+
+    // top 100% = rank 1704-2129
     return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 3 };
 }
 
@@ -53,12 +72,8 @@ function getRarityFromTokenId(tokenId) {
 }
 
 function getRarityFallback(tokenId) {
-    var num = parseInt(String(tokenId || "0").replace(/\D/g, ""), 10) || 0;
-    if (num <= 16) return { key: "legendary", border: "#ffd700", glow: "rgba(255,215,0,0.70)", min: 8, max: 9 };
-    if (num <= 441) return { key: "epic", border: "#f97316", glow: "rgba(249,115,22,0.65)", min: 7, max: 9 };
-    if (num <= 882) return { key: "rare", border: "#a855f7", glow: "rgba(168,85,247,0.60)", min: 5, max: 7 };
-    if (num <= 1323) return { key: "uncommon", border: "#3b82f6", glow: "rgba(59,130,246,0.60)", min: 3, max: 5 };
-    if (num <= 1764) return { key: "poor", border: "#92400e", glow: "rgba(146,64,14,0.60)", min: 2, max: 4 };
+    // Если токена нет в базе nft-ranks.json, возвращаем common
+    console.warn("⚠️ Rank not found for token", tokenId, "- using common rarity as fallback");
     return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 3 };
 }
 
