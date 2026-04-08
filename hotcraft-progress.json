@@ -1,0 +1,97 @@
+{
+  "nfts": [
+    {
+      "tokenId": 4,
+      "nftNumber": 5,
+      "score": 12000,
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Olympus"
+        },
+        {
+          "trait_type": "Body",
+          "value": "Coal smoke"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Crystal glint"
+        },
+        {
+          "trait_type": "Teeth",
+          "value": "Titanium glitter"
+        },
+        {
+          "trait_type": "Suits",
+          "value": "Zeus"
+        },
+        {
+          "trait_type": "Head",
+          "value": "Golden wreath"
+        }
+      ]
+    },
+    {
+      "tokenId": 7,
+      "nftNumber": 8,
+      "score": 12000,
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Ancient ruins"
+        },
+        {
+          "trait_type": "Body",
+          "value": "Cloud smoke"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Legion g"
+        },
+        {
+          "trait_type": "Teeth",
+          "value": "Salad greens"
+        },
+        {
+          "trait_type": "Suits",
+          "value": "Cloak of Near legion"
+        },
+        {
+          "trait_type": "Head",
+          "value": "Dragon helmet"
+        }
+      ]
+    },
+    {
+      "tokenId": 17,
+      "nftNumber": 18,
+      "score": 194.12767254106944,
+      "attributes": [
+        {
+          "trait_type": "Background",
+          "value": "Dark forest"
+        },
+        {
+          "trait_type": "Body",
+          "value": "Orange"
+        },
+        {
+          "trait_type": "Eyes",
+          "value": "Pink glare"
+        },
+        {
+          "trait_type": "Teeth",
+          "value": "Runes"
+        },
+        {
+          "trait_type": "Suits",
+          "value": "Bottega Veneta"
+        },
+        {
+          "trait_type": "Head",
+          "value": "Bogocha glasses"
+        }
+      ]
+    }
+  ]
+}
