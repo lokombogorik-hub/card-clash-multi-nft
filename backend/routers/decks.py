@@ -121,48 +121,90 @@ async def get_active_deck_full(authorization: str = Header(None)):
 
 @router.get("/ai_opponent")
 async def get_ai_opponent_deck():
-    """Возвращает колоду AI оппонента"""
+    """Умный AI оппонент — выбирает лучший ход"""
     import random
 
-    ai_cards = []
-    elements = ["Earth", "Fire", "Water", "Poison", "Holy", "Thunder", "Wind", "Ice", None]
+    CARD_IMAGES = [
+        "/cards/card.jpg",  "/cards/card1.jpg", "/cards/card2.jpg",
+        "/cards/card3.jpg", "/cards/card4.jpg", "/cards/card5.jpg",
+        "/cards/card6.jpg", "/cards/card7.jpg", "/cards/card8.jpg",
+        "/cards/card9.jpg",
+    ]
 
-    for i in range(5):
-        seed = 42 + i
-        random.seed(seed)
+    ELEMENTS = ["Earth", "Fire", "Water", "Poison", "Holy", "Thunder", "Wind", "Ice"]
 
-        rarity = random.choice(["common", "common", "rare", "rare", "epic"])
+    BEATS = {
+        "Earth": ["Thunder"], "Thunder": ["Water"], "Water": ["Fire"],
+        "Fire": ["Ice"], "Ice": ["Wind"], "Wind": ["Poison"],
+        "Poison": ["Holy"], "Holy": ["Earth"],
+    }
 
-        if rarity == "epic":
-            base = 5
-            variance = 4
-        elif rarity == "rare":
-            base = 3
-            variance = 4
-        else:
-            base = 1
-            variance = 5
+    RANKS = [
+        {"key": "common",    "min": 1, "max": 5, "ace_chance": 0.0,  "weight": 30},
+        {"key": "rare",      "min": 2, "max": 7, "ace_chance": 0.0,  "weight": 35},
+        {"key": "epic",      "min": 3, "max": 8, "ace_chance": 0.20, "weight": 25},
+        {"key": "legendary", "min": 4, "max": 9, "ace_chance": 0.50, "weight": 10},
+    ]
 
-        card = {
-            "id": f"ai_card_{i}",
-            "token_id": f"ai_card_{i}",
-            "name": f"AI Card #{i + 1}",
-            "imageUrl": f"/cards/card{i + 1}.jpg",
-            "image": f"/cards/card{i + 1}.jpg",
-            "rarity": rarity,
-            "rank": rarity,
-            "rankLabel": rarity[0].upper(),
-            "element": random.choice(elements),
-            "values": {
-                "top": min(10, max(1, base + random.randint(0, variance))),
-                "right": min(10, max(1, base + random.randint(0, variance))),
-                "bottom": min(10, max(1, base + random.randint(0, variance))),
-                "left": min(10, max(1, base + random.randint(0, variance))),
-            }
+    ACE_VALUE = 10
+
+    def gen_card(i: int) -> dict:
+        rank_def = random.choices(RANKS, weights=[r["weight"] for r in RANKS], k=1)[0]
+        min_val, max_val = rank_def["min"], rank_def["max"]
+
+        values = {
+            "top":    random.randint(min_val, max_val),
+            "right":  random.randint(min_val, max_val),
+            "bottom": random.randint(min_val, max_val),
+            "left":   random.randint(min_val, max_val),
         }
-        ai_cards.append(card)
 
-    random.seed()
+        if rank_def["ace_chance"] > 0 and random.random() < rank_def["ace_chance"]:
+            ace_side = random.choice(["top", "right", "bottom", "left"])
+            values[ace_side] = ACE_VALUE
+
+        image = random.choice(CARD_IMAGES)
+        element = random.choice(ELEMENTS)
+
+        return {
+            "id":        f"ai_card_{i}_{random.randint(1000, 9999)}",
+            "token_id":  f"ai_card_{i}",
+            "name":      f"AI Card #{i + 1}",
+            "imageUrl":  image,
+            "image":     image,
+            "rarity":    rank_def["key"],
+            "rank":      rank_def["key"],
+            "rankLabel": rank_def["key"][0].upper(),
+            "element":   element,
+            "values":    values,
+            "stats":     values,
+        }
+
+    # Генерируем колоду из лучших карт (выбираем из большего пула)
+    pool = [gen_card(i) for i in range(15)]  # генерируем 15 карт
+
+    def card_score(card: dict) -> float:
+        """Оценка карты — сумма значений с бонусом за Ace"""
+        v = card["values"]
+        score = 0
+        for side in ["top", "right", "bottom", "left"]:
+            val = v.get(side, 5)
+            if val == ACE_VALUE:
+                score += 15  # Ace очень ценный
+            else:
+                score += val
+        return score
+
+    # Сортируем по силе и берём топ-5 с небольшой случайностью
+    pool.sort(key=lambda c: card_score(c) + random.uniform(-2, 2), reverse=True)
+    ai_cards = pool[:5]
+
+    # Переназываем карты правильно
+    for i, card in enumerate(ai_cards):
+        card["id"] = f"ai_card_{i}_{random.randint(1000, 9999)}"
+        card["name"] = f"AI Card #{i + 1}"
+
+    print(f"[AI] Deck: {[(c['rank'], card_score(c)) for c in ai_cards]}")
     return ai_cards
 
 

@@ -1149,9 +1149,9 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     };
 
     // AI turn — использует новый resolvePlacement
+    // Замени useEffect AI хода целиком
     useEffect(() => {
-        if (isPvP) return;
-        if (turn !== "enemy" || roundOver || matchOver) return;
+        if (isPvP || turn !== "enemy" || roundOver || matchOver) return;
 
         const t = setTimeout(() => {
             const curBoard = boardRef.current;
@@ -1161,36 +1161,114 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
             const empty = curBoard
                 .map((c, idx) => (c === null && curFrozen[idx] === 0 ? idx : null))
-                .filter((v) => v !== null);
+                .filter(v => v !== null);
 
             if (!empty.length || !curHands.enemy.length) {
                 setTurn("player");
                 return;
             }
 
-            const cell = empty[Math.floor(Math.random() * empty.length)];
-            const card = curHands.enemy[Math.floor(Math.random() * curHands.enemy.length)];
+            // ✅ Умный AI — перебирает все варианты и выбирает лучший
+            let bestScore = -Infinity;
+            let bestCell = empty[0];
+            let bestCard = curHands.enemy[0];
+
+            for (const card of curHands.enemy) {
+                for (const cellIdx of empty) {
+                    let score = 0;
+
+                    // Бонус от элемента клетки
+                    const cellElem = curElems[cellIdx];
+                    if (cellElem && card.element) {
+                        if (card.element === cellElem) score += 3;  // своя стихия — хорошо
+                        else score -= 1;                             // чужая — плохо
+                    }
+
+                    // Считаем сколько карт можно захватить
+                    const neighbors = [
+                        { ni: cellIdx - 3, a: "top", b: "bottom" },
+                        { ni: cellIdx + 1, a: "right", b: "left" },
+                        { ni: cellIdx + 3, a: "bottom", b: "top" },
+                        { ni: cellIdx - 1, a: "left", b: "right" },
+                    ].filter(({ ni }) => ni >= 0 && ni <= 8);
+
+                    for (const { ni, a, b } of neighbors) {
+                        const neighbor = curBoard[ni];
+                        if (!neighbor) continue;
+
+                        const attackBase = Number(card.values?.[a] ?? 1);
+                        const defendBase = Number(neighbor.values?.[b] ?? 1);
+
+                        const myCellElem = curElems[cellIdx] ?? null;
+                        const theirCellElem = curElems[ni] ?? null;
+
+                        // Эффективное значение атаки
+                        let attackVal;
+                        if (attackBase === 10) {
+                            attackVal = 10;
+                        } else {
+                            const bonus = myCellElem
+                                ? (card.element === myCellElem ? 1 : -1)
+                                : 0;
+                            attackVal = Math.min(9, Math.max(1, attackBase + bonus));
+                        }
+
+                        // Эффективное значение защиты
+                        let defendVal;
+                        if (defendBase === 10) {
+                            defendVal = 10;
+                        } else {
+                            const bonus = theirCellElem
+                                ? (neighbor.element === theirCellElem ? 1 : -1)
+                                : 0;
+                            defendVal = Math.min(9, Math.max(1, defendBase + bonus));
+                        }
+
+                        if (neighbor.owner === "enemy") {
+                            // Своя карта рядом — не трогаем, но защищаем позицию
+                            score += 0.5;
+                        } else if (neighbor.owner === "player") {
+                            if (attackVal > defendVal) {
+                                score += 5;  // можем захватить — отлично!
+                            } else if (attackVal === defendVal) {
+                                score += 0;  // ничья
+                            } else {
+                                score -= 0.5; // не можем захватить
+                            }
+                        }
+                    }
+
+                    // Предпочитаем центр и углы
+                    if (cellIdx === 4) score += 1;        // центр
+                    if ([0, 2, 6, 8].includes(cellIdx)) score += 0.5; // углы
+
+                    // Небольшая случайность чтоб AI не был предсказуемым
+                    score += Math.random() * 0.5;
+
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestCell = cellIdx;
+                        bestCard = card;
+                    }
+                }
+            }
 
             const next = [...curBoard];
-            next[cell] = { ...card, owner: "enemy", placeKey: (card.placeKey || 0) + 1 };
-
-            // Новая логика: только прямой захват крестом, без цепочек
-            resolvePlacement(cell, next, curElems);
+            next[bestCell] = { ...bestCard, owner: "enemy", placeKey: (bestCard.placeKey || 0) + 1 };
+            resolvePlacement(bestCell, next, curElems);
 
             setBoard(next);
-            setHands((h) => ({ ...h, enemy: h.enemy.filter((c) => c.id !== card.id) }));
+            setHands(h => ({ ...h, enemy: h.enemy.filter(c => c.id !== bestCard.id) }));
             decFrozenAfterCardMove();
             setTurn("player");
-        }, 420);
+
+        }, 600); // чуть дольше чем раньше — "думает"
 
         const safety = setTimeout(() => {
-            setTurn((cur) => (cur === "enemy" ? "player" : cur));
-        }, 1400);
+            setTurn(cur => cur === "enemy" ? "player" : cur);
+        }, 2000);
 
-        return () => {
-            clearTimeout(t);
-            clearTimeout(safety);
-        };
+        return () => { clearTimeout(t); clearTimeout(safety); };
     }, [turn, roundOver, matchOver, isPvP]);
 
     // Check round over (AI mode)
