@@ -1180,7 +1180,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                     // Бонус от элемента клетки
                     const cellElem = curElems[cellIdx];
                     if (cellElem && card.element) {
-                        if (card.element === cellElem) score += 3;  // своя стихия — хорошо
+                        if (card.element === cellElem) score += 1;  // своя стихия — хорошо
                         else score -= 1;                             // чужая — плохо
                     }
 
