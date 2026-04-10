@@ -207,24 +207,26 @@ function resolvePlacement(placedIdx, grid, boardElems) {
     if (!placed) return [];
 
     const flipped = [];
-    const neighbors = neighborsOf(placedIdx);
 
-    for (const { ni, a, b } of neighbors) {
+    for (const { ni, a, b } of neighborsOf(placedIdx)) {
         const target = grid[ni];
-        if (!target) continue;
-        if (target.owner === placed.owner) continue;
+        if (!target || target.owner === placed.owner) continue;
 
-        // Базовые значения
-        const baseAttack = placed.values?.[a] ?? 1;
-        const baseDefend = target.values?.[b] ?? 1;
+        const attackBase = Number(placed.values?.[a] ?? 1);
+        const defendBase = Number(target.values?.[b] ?? 1);
 
-        // Эффективные значения
-        const attackVal = getEffectiveValue(placed, a, placedIdx, boardElems);
-        const defendVal = getEffectiveValue(target, b, ni, boardElems);
+        const placedCellElem = boardElems?.[placedIdx] ?? null;
+        const targetCellElem = boardElems?.[ni] ?? null;
 
-        console.log(`[BATTLE] placed[${placedIdx}].${a}=${baseAttack}(eff:${attackVal}) vs target[${ni}].${b}=${baseDefend}(eff:${defendVal}) → ${attackVal > defendVal ? "CAPTURE ✅" : "NO ❌"}`);
+        const attackVal = attackBase === ACE_VALUE
+            ? ACE_VALUE
+            : Math.min(9, Math.max(1, attackBase + (placed.element && placedCellElem === placed.element ? 1 : 0)));
 
-        if (attackVal > defendVal) {
+        const defendVal = defendBase === ACE_VALUE
+            ? ACE_VALUE
+            : Math.min(9, Math.max(1, defendBase + (target.element && targetCellElem === target.element ? 1 : 0)));
+
+        if (Number(attackVal) > Number(defendVal)) {
             if (flipToOwner(grid, ni, placed.owner)) {
                 flipped.push(ni);
             }
@@ -290,39 +292,42 @@ function nftToCard(nft, idx) {
         element = ELEMENTS[hash % ELEMENTS.length];
     }
 
-    // Определяем рарность для шанса на Ace
-    const rankKey = nft.rank || nft.rarity || "common";
+    const rankKey = nft.rank || (nft.rarity && (nft.rarity.key || nft.rarity)) || "common";
     const rankDef = RANKS.find(r => r.key === rankKey) || RANKS[0];
 
     const rawValues = nft.values || nft.stats || { top: 5, right: 5, bottom: 5, left: 5 };
 
-    // Проверяем есть ли уже Ace в значениях (если NFT пришла с A)
-    const values = { ...rawValues };
+    // ✅ Все значения приводим к числам
+    const values = {
+        top: Number(rawValues.top) || 5,
+        right: Number(rawValues.right) || 5,
+        bottom: Number(rawValues.bottom) || 5,
+        left: Number(rawValues.left) || 5,
+    };
 
-    // Если карта legendary/epic и нет Ace — даём шанс
     if (rankDef.aceChance > 0) {
         const hasAce = Object.values(values).some(v => v === ACE_VALUE);
         if (!hasAce) {
-            // Детерминированный шанс на основе id чтобы было стабильно
             const id = nft.id || nft.key || nft.tokenId || nft.token_id || `nft_${idx}`;
             const hash = String(id).split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-            const pseudoRandom = (hash % 100) / 100;
-            if (pseudoRandom < rankDef.aceChance) {
+            if ((hash % 100) / 100 < rankDef.aceChance) {
                 const sides = ["top", "right", "bottom", "left"];
-                const aceSide = sides[hash % 4];
-                values[aceSide] = ACE_VALUE;
+                values[sides[hash % 4]] = ACE_VALUE;
             }
         }
     }
+
+    // ✅ Берём imageUrl из всех возможных мест
+    const imageUrl = nft.imageUrl || nft.image || nft.metadata?.media || "";
 
     return {
         id: nft.id || nft.key || nft.tokenId || nft.token_id || `nft_${idx}`,
         owner: "player",
         values,
-        imageUrl: nft.imageUrl || nft.image || ART[0],
+        imageUrl,
         rank: rankKey,
         rankLabel: nft.rankLabel || rankKey[0].toUpperCase(),
-        element: element,
+        element,
         placeKey: 0,
         captureKey: 0,
         nftData: nft,
@@ -1685,6 +1690,7 @@ function PlayerBadge({ side, name, avatarUrl, active }) {
 function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
     const [placedAnim, setPlacedAnim] = useState(false);
     const [capturedAnim, setCapturedAnim] = useState(false);
+    const [imgFailed, setImgFailed] = useState(false);
 
     useEffect(() => {
         if (!card?.placeKey) return;
@@ -1700,6 +1706,11 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
         return () => clearTimeout(t);
     }, [card?.captureKey]);
 
+    // Сбрасываем ошибку изображения при смене карты
+    useEffect(() => {
+        setImgFailed(false);
+    }, [card?.id]);
+
     if (hidden) {
         return (
             <div className="card back" aria-hidden="true">
@@ -1710,32 +1721,40 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
         );
     }
 
-    const cardValues = card?.values || card?.stats || { top: 5, right: 5, bottom: 5, left: 5 };
+    // ✅ Все значения — числа
+    const raw = card?.values || card?.stats || { top: 5, right: 5, bottom: 5, left: 5 };
+    const cardValues = {
+        top: Number(raw.top) || 5,
+        right: Number(raw.right) || 5,
+        bottom: Number(raw.bottom) || 5,
+        left: Number(raw.left) || 5,
+    };
 
     const elemBonus = (card?.element && cellElement)
         ? (card.element === cellElement ? +1 : -1)
         : 0;
 
-    /**
-     * Отображаемое значение на карте.
-     * Ace (10) всегда показывается как "A", не меняется от бонусов.
-     * 9 + бонус НЕ становится A (clamp до 9).
-     */
     const getCardDisplayValue = (base) => {
-        if (isAce(base)) return "A";
-        if (elemBonus === 0) return base;
-        return clamp(base + elemBonus, 1, 9);
+        const n = Number(base);
+        if (n === ACE_VALUE) return "A";
+        if (elemBonus === 0) return n;
+        return Math.min(9, Math.max(1, n + elemBonus));
     };
 
     const getNumStyle = (base) => {
-        if (isAce(base)) return { color: "#ffd700", fontWeight: 900 }; // Ace — золотой
+        const n = Number(base);
+        if (n === ACE_VALUE) return { color: "#ffd700", fontWeight: 900 };
         if (elemBonus === 0) return {};
-        const result = base + elemBonus;
-        const clamped = clamp(result, 1, 9);
-        if (clamped === base) return {};
-        if (elemBonus > 0) return { color: "#4ade80" };
-        return { color: "#f87171" };
+        const result = Math.min(9, Math.max(1, n + elemBonus));
+        if (result > n) return { color: "#4ade80" };
+        if (result < n) return { color: "#f87171" };
+        return {};
     };
+
+    // ✅ Правильный источник изображения со всеми fallback
+    const imgSrc = !imgFailed
+        ? (card?.imageUrl || card?.image || card?.nftData?.imageUrl || card?.nftData?.image || "")
+        : "";
 
     return (
         <div
@@ -1750,18 +1769,26 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
             onClick={disabled ? undefined : onClick}
         >
             <div className="card-anim">
-                <img
-                    className="card-art-img"
-                    src={card?.imageUrl || "/cards/card.jpg"}
-                    alt=""
-                    draggable="false"
-                    loading="lazy"
-                    onError={(e) => {
-                        try {
-                            e.currentTarget.src = "/cards/card.jpg";
-                        } catch { }
-                    }}
-                />
+                {imgSrc ? (
+                    <img
+                        className="card-art-img"
+                        src={imgSrc}
+                        alt=""
+                        draggable="false"
+                        loading="lazy"
+                        onError={() => setImgFailed(true)}
+                    />
+                ) : (
+                    <div className="card-art-img" style={{
+                        background: "linear-gradient(135deg, #1a2a4a, #2a1a4a)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 32,
+                    }}>
+                        🎴
+                    </div>
+                )}
 
                 {card?.element ? (
                     <div className="card-elem-pill" title={card.element}>
