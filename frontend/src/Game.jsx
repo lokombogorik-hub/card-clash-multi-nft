@@ -8,10 +8,10 @@ import { useWalletConnect } from "./context/WalletConnectContext";
    ═══════════════════════════════════════════════ */
 
 const DIRS = [
-    { dx: 0, dy: -1, a: "top", b: "bottom" },
-    { dx: 1, dy: 0, a: "right", b: "left" },
-    { dx: 0, dy: 1, a: "bottom", b: "top" },
-    { dx: -1, dy: 0, a: "left", b: "right" },
+    { dx: 0, dy: -1, a: "top", b: "bottom" },    // вверх
+    { dx: 1, dy: 0, a: "right", b: "left" },      // вправо
+    { dx: 0, dy: 1, a: "bottom", b: "top" },      // вниз
+    { dx: -1, dy: 0, a: "left", b: "right" },     // влево
 ];
 
 // Убраны same, plus, combo — остаётся только прямой захват крестом
@@ -154,6 +154,7 @@ function neighborsOf(idx) {
         if (nx < 0 || nx > 2 || ny < 0 || ny > 2) continue;
         res.push({ ni: ny * 3 + nx, a, b });
     }
+    console.log(`neighborsOf(${idx}):`, res);
     return res;
 }
 
@@ -166,10 +167,10 @@ function flipToOwner(grid, ni, newOwner) {
 }
 
 function squareDelta(cardElement, cellElement) {
+    // Убираем штраф -1, оставляем только бонус +1
     if (!RULES.elementalSquares) return 0;
-    if (!cellElement) return 0;
-    if (!cardElement) return 0;
-    return cardElement === cellElement ? +1 : -1;
+    if (!cellElement || !cardElement) return 0;
+    return cardElement === cellElement ? +1 : 0; // ← только +1, без -1
 }
 
 function battleElementDelta(attackerElement, defenderElement) {
@@ -189,27 +190,18 @@ function battleElementDelta(attackerElement, defenderElement) {
  * Обычные значения (1-9) модифицируются, но 9 не становится A.
  */
 function getEffectiveValue(card, side, cellIdx, boardElems) {
-    const base = card.values[side];
+    const base = card.values?.[side] ?? 1;
 
-    // Ace не меняется ни от чего
+    // Ace не меняется
     if (isAce(base)) return ACE_VALUE;
 
-    // Только бонус от элемента клетки
-    const sqDelta = squareDelta(card.element, boardElems[cellIdx]);
+    // Бонус от элемента клетки
+    const cellElem = boardElems?.[cellIdx] ?? null;
+    const sqDelta = (card.element && cellElem && card.element === cellElem) ? +1 : 0;
 
-    // Clamp 1-9, НЕ может стать 10 (Ace)
     return clamp(base + sqDelta, 1, 9);
 }
 
-/**
- * ИСПРАВЛЕНО: Основная логика захвата.
- * Правила:
- * - Только крестом (4 стороны)
- * - Только прямой захват — БЕЗ цепочек
- * - Захват если атакующее значение СТРОГО БОЛЬШЕ защитного
- * - Бонус +1/-1 от элемента клетки
- * - Ace (A=10) бьёт всё
- */
 function resolvePlacement(placedIdx, grid, boardElems) {
     const placed = grid[placedIdx];
     if (!placed) return [];
@@ -222,13 +214,16 @@ function resolvePlacement(placedIdx, grid, boardElems) {
         if (!target) continue;
         if (target.owner === placed.owner) continue;
 
-        // Атакующая сторона положенной карты (с бонусом от СВОЕЙ клетки)
-        const attackVal = getEffectiveValue(placed, a, placedIdx, boardElems);
+        // Базовые значения
+        const baseAttack = placed.values?.[a] ?? 1;
+        const baseDefend = target.values?.[b] ?? 1;
 
-        // Защитная сторона целевой карты (с бонусом от СВОЕЙ клетки)
+        // Эффективные значения
+        const attackVal = getEffectiveValue(placed, a, placedIdx, boardElems);
         const defendVal = getEffectiveValue(target, b, ni, boardElems);
 
-        // Строго больше — захват
+        console.log(`[BATTLE] placed[${placedIdx}].${a}=${baseAttack}(eff:${attackVal}) vs target[${ni}].${b}=${baseDefend}(eff:${defendVal}) → ${attackVal > defendVal ? "CAPTURE ✅" : "NO ❌"}`);
+
         if (attackVal > defendVal) {
             if (flipToOwner(grid, ni, placed.owner)) {
                 flipped.push(ni);
