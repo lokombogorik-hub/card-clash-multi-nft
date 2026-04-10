@@ -40,43 +40,23 @@ def get_effective_value(
     board_elements: List,
     opponent_card: Optional[Dict] = None
 ) -> int:
-    """
-    Считает эффективное значение стороны карты с учётом бонусов.
-    Ace (10) не меняется от бонусов.
-    Обычные значения clamp 1-9 (не могут стать 10).
-    """
     values = card.get("values") or card.get("stats") or {}
-    base = values.get(side, 5)
+    base = int(values.get(side, 5))
 
-    # Ace не меняется
+    # ✅ ACE не меняется никогда
     if base == ACE_VALUE:
         return ACE_VALUE
 
-    # Бонус от элемента клетки
+    # ✅ Бонус от клетки: своя стихия +1, чужая -1
     cell_elem = board_elements[cell_idx] if cell_idx < len(board_elements) else None
     card_elem = card.get("element")
 
     sq_delta = 0
     if cell_elem and card_elem:
-        if card_elem == cell_elem:
-            sq_delta = +1
-        else:
-            sq_delta = -1
+        sq_delta = +1 if card_elem == cell_elem else -1
 
-    # Бонус от элементального боя с картой противника
-    el_delta = 0
-    if opponent_card:
-        opp_elem = opponent_card.get("element")
-        if card_elem and opp_elem:
-            if card_elem == opp_elem:
-                el_delta = +1
-            elif opp_elem in BEATS.get(card_elem, []):
-                el_delta = +1
-            elif card_elem in BEATS.get(opp_elem, []):
-                el_delta = -1
-
-    # clamp 1-9, НЕ может стать 10 (Ace)
-    return clamp(base + sq_delta + el_delta, 1, 9)
+    # ✅ clamp 1-9, НЕ может стать 10 (ACE)
+    return clamp(base + sq_delta, 1, 9)
 
 
 def init_match_state(
@@ -163,11 +143,6 @@ def get_neighbors(idx: int) -> List[Dict]:
 
 
 def resolve_placement(state: Dict, cell_idx: int, card: Dict, player_id: str) -> List[int]:
-    """
-    Размещает карту и считает захваты.
-    СТРОГО БОЛЬШЕ — при равных значениях захвата НЕТ.
-    Ace (10) бьёт всё, не меняется от бонусов.
-    """
     board = state["board"]
     board_elements = state["board_elements"]
 
@@ -175,9 +150,17 @@ def resolve_placement(state: Dict, cell_idx: int, card: Dict, player_id: str) ->
         "top": 5, "right": 5, "bottom": 5, "left": 5
     }
 
+    # ✅ Все values приводим к числам
+    normalized_values = {
+        "top":    int(values.get("top", 5)),
+        "right":  int(values.get("right", 5)),
+        "bottom": int(values.get("bottom", 5)),
+        "left":   int(values.get("left", 5)),
+    }
+
     card_on_board = {
         **card,
-        "values": values,
+        "values": normalized_values,
         "owner": player_id,
     }
     board[cell_idx] = card_on_board
@@ -196,37 +179,45 @@ def resolve_placement(state: Dict, cell_idx: int, card: Dict, player_id: str) ->
         my_side = neighbor["my_side"]
         their_side = neighbor["their_side"]
 
-        # Эффективное значение атакующей стороны
-        my_value = get_effective_value(
-            card=card_on_board,
-            side=my_side,
-            cell_idx=cell_idx,
-            board_elements=board_elements,
-            opponent_card=n_card,
-        )
+        # ✅ Базовые значения как числа
+        my_base = int((card_on_board.get("values") or {}).get(my_side, 5))
+        their_base = int((n_card.get("values") or {}).get(their_side, 5))
 
-        # Эффективное значение защитной стороны
-        their_value = get_effective_value(
-            card=n_card,
-            side=their_side,
-            cell_idx=n_idx,
-            board_elements=board_elements,
-            opponent_card=card_on_board,
-        )
+        # ✅ Бонус от клетки
+        my_cell_elem = board_elements[cell_idx] if cell_idx < len(board_elements) else None
+        n_cell_elem = board_elements[n_idx] if n_idx < len(board_elements) else None
 
-        print(f"[WS] Compare cell {cell_idx}→{n_idx}: my {my_side}={my_value} vs their {their_side}={their_value}")
+        my_card_elem = card_on_board.get("element")
+        their_card_elem = n_card.get("element")
 
-        # СТРОГО БОЛЬШЕ — равные не переворачиваются
+        # ✅ ACE (10) не меняется от бонусов, бьёт всё кроме другого ACE
+        if my_base == ACE_VALUE:
+            my_value = ACE_VALUE
+        else:
+            my_bonus = 0
+            if my_cell_elem and my_card_elem:
+                my_bonus = +1 if my_card_elem == my_cell_elem else -1
+            my_value = clamp(my_base + my_bonus, 1, 9)
+
+        if their_base == ACE_VALUE:
+            their_value = ACE_VALUE
+        else:
+            their_bonus = 0
+            if n_cell_elem and their_card_elem:
+                their_bonus = +1 if their_card_elem == n_cell_elem else -1
+            their_value = clamp(their_base + their_bonus, 1, 9)
+
+        print(f"[WS] cell {cell_idx}→{n_idx}: "
+              f"my {my_side}={my_base}→{my_value} "
+              f"vs their {their_side}={their_base}→{their_value} "
+              f"→ {'CAPTURE ✅' if my_value > their_value else 'NO ❌'}")
+
+        # ✅ Строго больше — ACE (10) > 9 > 8 > ... > 1
         if my_value > their_value:
-            board[n_idx] = {
-                **n_card,
-                "owner": player_id,
-            }
+            board[n_idx] = {**n_card, "owner": player_id}
             captured.append(n_idx)
-            print(f"[WS] Captured cell {n_idx}!")
 
     return captured
-
 
 def check_game_over(state: Dict) -> Optional[str]:
     board = state["board"]

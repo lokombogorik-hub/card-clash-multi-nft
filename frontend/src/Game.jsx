@@ -218,13 +218,22 @@ function resolvePlacement(placedIdx, grid, boardElems) {
         const placedCellElem = boardElems?.[placedIdx] ?? null;
         const targetCellElem = boardElems?.[ni] ?? null;
 
+        // ✅ Вариант Б: своя стихия +1, чужая -1, нет стихии = 0
+        const attackBonus = placedCellElem
+            ? (placed.element === placedCellElem ? +1 : -1)
+            : 0;
+
+        const defendBonus = targetCellElem
+            ? (target.element === targetCellElem ? +1 : -1)
+            : 0;
+
         const attackVal = attackBase === ACE_VALUE
             ? ACE_VALUE
-            : Math.min(9, Math.max(1, attackBase + (placed.element && placedCellElem === placed.element ? 1 : 0)));
+            : Math.min(9, Math.max(1, attackBase + attackBonus));
 
         const defendVal = defendBase === ACE_VALUE
             ? ACE_VALUE
-            : Math.min(9, Math.max(1, defendBase + (target.element && targetCellElem === target.element ? 1 : 0)));
+            : Math.min(9, Math.max(1, defendBase + defendBonus));
 
         if (Number(attackVal) > Number(defendVal)) {
             if (flipToOwner(grid, ni, placed.owner)) {
@@ -597,17 +606,22 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         }
 
         if (state.board) {
-            const newBoard = state.board.map((cell, idx) => {
+            setBoard(state.board.map((cell, idx) => {
                 if (!cell) return null;
                 return {
                     ...cell,
-                    values: cell.values || cell.stats || { top: 5, right: 5, bottom: 5, left: 5 },
+                    values: {
+                        top: Number(cell.values?.top || cell.stats?.top || 5),
+                        right: Number(cell.values?.right || cell.stats?.right || 5),
+                        bottom: Number(cell.values?.bottom || cell.stats?.bottom || 5),
+                        left: Number(cell.values?.left || cell.stats?.left || 5),
+                    },
+                    imageUrl: cell.imageUrl || cell.image || cell.metadata?.media || "",
                     owner: cell.owner === effectiveMyPlayerId ? "player" : "enemy",
                     placeKey: boardRef.current[idx]?.placeKey || 0,
                     captureKey: boardRef.current[idx]?.captureKey || 0,
                 };
-            });
-            setBoard(newBoard);
+            }));
         }
 
         if (state.board_elements) {
