@@ -188,32 +188,27 @@ function battleElementDelta(attackerElement, defenderElement) {
  * Ace (10) НЕ меняется от элементальных бонусов.
  * Обычные значения (1-9) модифицируются, но 9 не становится A.
  */
-function getEffectiveValue(card, side, cellIdx, boardElems, opponentCard) {
+function getEffectiveValue(card, side, cellIdx, boardElems) {
     const base = card.values[side];
 
     // Ace не меняется ни от чего
     if (isAce(base)) return ACE_VALUE;
 
-    // Square bonus (элемент клетки)
+    // Только бонус от элемента клетки
     const sqDelta = squareDelta(card.element, boardElems[cellIdx]);
 
-    // Battle element bonus (элемент противника)
-    const elDelta = opponentCard
-        ? battleElementDelta(card.element, opponentCard.element)
-        : 0;
-
     // Clamp 1-9, НЕ может стать 10 (Ace)
-    return clamp(base + sqDelta + elDelta, 1, 9);
+    return clamp(base + sqDelta, 1, 9);
 }
 
 /**
- * ОСНОВНАЯ ЛОГИКА ЗАХВАТА.
- * 
+ * ИСПРАВЛЕНО: Основная логика захвата.
  * Правила:
- * - Только крестом (4 стороны от положенной карты)
+ * - Только крестом (4 стороны)
  * - Только прямой захват — БЕЗ цепочек
  * - Захват если атакующее значение СТРОГО БОЛЬШЕ защитного
- * - Ace (A=10) бьёт всё, не меняется от бонусов
+ * - Бонус +1/-1 от элемента клетки
+ * - Ace (A=10) бьёт всё
  */
 function resolvePlacement(placedIdx, grid, boardElems) {
     const placed = grid[placedIdx];
@@ -227,11 +222,11 @@ function resolvePlacement(placedIdx, grid, boardElems) {
         if (!target) continue;
         if (target.owner === placed.owner) continue;
 
-        // Значение атакующей стороны положенной карты
-        const attackVal = getEffectiveValue(placed, a, placedIdx, boardElems, target);
+        // Атакующая сторона положенной карты (с бонусом от СВОЕЙ клетки)
+        const attackVal = getEffectiveValue(placed, a, placedIdx, boardElems);
 
-        // Значение защитной стороны целевой карты
-        const defendVal = getEffectiveValue(target, b, ni, boardElems, placed);
+        // Защитная сторона целевой карты (с бонусом от СВОЕЙ клетки)
+        const defendVal = getEffectiveValue(target, b, ni, boardElems);
 
         // Строго больше — захват
         if (attackVal > defendVal) {
@@ -243,6 +238,7 @@ function resolvePlacement(placedIdx, grid, boardElems) {
 
     return flipped;
 }
+
 
 /**
  * Значение для отображения на карте (с учётом элемента клетки).
@@ -894,23 +890,41 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                 setLoadingEnemyDeck(true);
                 const token = getStoredToken();
                 const aiDeck = await apiFetch("/api/decks/ai_opponent", { token });
-                const cards = Array.isArray(aiDeck) ? aiDeck.map((n, idx) => nftToCard(n, idx)) : [];
+                const cards = Array.isArray(aiDeck)
+                    ? aiDeck.map((n, idx) => nftToCard(n, idx))
+                    : [];
 
                 if (!alive) return;
 
-                if (cards.length === 5) setEnemyDeck(cards);
-                else setEnemyDeck(getFallbackEnemyDeck());
+                if (cards.length === 5) {
+                    setEnemyDeck(cards);
+                    // ✅ Сразу обновляем руку соперника
+                    setHands(h => ({
+                        ...h,
+                        enemy: cloneDeckToHand(cards, "enemy"),
+                    }));
+                } else {
+                    const fallback = getFallbackEnemyDeck();
+                    setEnemyDeck(fallback);
+                    setHands(h => ({
+                        ...h,
+                        enemy: cloneDeckToHand(fallback, "enemy"),
+                    }));
+                }
             } catch {
                 if (!alive) return;
-                setEnemyDeck(getFallbackEnemyDeck());
+                const fallback = getFallbackEnemyDeck();
+                setEnemyDeck(fallback);
+                setHands(h => ({
+                    ...h,
+                    enemy: cloneDeckToHand(fallback, "enemy"),
+                }));
             } finally {
                 if (alive) setLoadingEnemyDeck(false);
             }
         })();
 
-        return () => {
-            alive = false;
-        };
+        return () => { alive = false; };
     }, [isPvP]);
 
     useEffect(() => {
