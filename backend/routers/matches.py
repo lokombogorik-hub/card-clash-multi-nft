@@ -1,706 +1,631 @@
-from fastapi import APIRouter, HTTPException, status, Header
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
-from datetime import datetime
-from utils.rating import calculate_rating_change, get_rank_by_rating
-from database.session import get_session
-from database.models.user import User
-import uuid
-import os
-import httpx
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from typing import Dict, List, Any, Optional
+from datetime import datetime, timedelta
 import json
-import base64
+import asyncio
+import traceback
 
-router = APIRouter(prefix="/api/matches", tags=["matches"])
+router = APIRouter(tags=["websocket"])
 
-from routers.matchmaking import active_matches
+match_connections: Dict[str, Dict[str, WebSocket]] = {}
+match_states: Dict[str, Dict[str, Any]] = {}
+reconnect_deadlines: Dict[str, Dict[str, datetime]] = {}
 
-RECONNECT_TIMEOUT_MINUTES = 3
+RECONNECT_TIMEOUT_SECONDS = 180
 
-ESCROW_WALLET = os.getenv("ESCROW_WALLET", "escrow.near")
-ESCROW_PRIVATE_KEY = os.getenv("ESCROW_PRIVATE_KEY", "")
-NFT_CONTRACT_ID = os.getenv("NFT_CONTRACT_ID", "")
+ELEMENTS = ["Earth", "Fire", "Water", "Poison", "Holy", "Thunder", "Wind", "Ice"]
 
-match_deposits: Dict[str, Dict[str, List[Dict[str, Any]]]] = {}
+BEATS = {
+    "Earth": ["Thunder"],
+    "Thunder": ["Water"],
+    "Water": ["Fire"],
+    "Fire": ["Ice"],
+    "Ice": ["Wind"],
+    "Wind": ["Poison"],
+    "Poison": ["Holy"],
+    "Holy": ["Earth"],
+}
 
-
-class CreateMatchRequest(BaseModel):
-    player1_id: Optional[str] = None
-    player2_id: Optional[str] = None
-    mode: str = "pvp"
-    player1_deck: Optional[List[Dict[str, Any]]] = None
-    player2_deck: Optional[List[Dict[str, Any]]] = None
-
-
-class RegisterDepositsRequest(BaseModel):
-    token_ids: List[str]
-    nft_contract_id: Optional[str] = None
-    images: Optional[List[str]] = None
-    near_wallet: Optional[str] = None
+ACE_VALUE = 10
 
 
-class ClaimRequest(BaseModel):
-    pick_index: int
-    token_id: Optional[str] = None
-    nft_contract_id: Optional[str] = None
+def clamp(v, a, b):
+    return max(a, min(b, v))
 
 
-class PlayCardRequest(BaseModel):
-    match_id: str
-    card_index: int
-    attribute: str
+def get_effective_value(
+    card: Dict,
+    side: str,
+    cell_idx: int,
+    board_elements: List,
+    opponent_card: Optional[Dict] = None
+) -> int:
+    values = card.get("values") or card.get("stats") or {}
+    base = int(values.get(side, 5))
+
+    if base == ACE_VALUE:
+        return ACE_VALUE
+
+    cell_elem = board_elements[cell_idx] if cell_idx < len(board_elements) else None
+    card_elem = card.get("element")
+
+    sq_delta = 0
+    if cell_elem and card_elem:
+        sq_delta = +1 if card_elem == cell_elem else -1
+
+    return clamp(base + sq_delta, 1, 9)
 
 
-class MatchState(BaseModel):
-    match_id: str
-    status: str
-    current_round: int
-    player1_score: int
-    player2_score: int
-    player1_id: str
-    player2_id: str
-    player1_deck: List[Dict[str, Any]]
-    player2_deck: List[Dict[str, Any]]
-    winner: Optional[str] = None
-
-
-def get_player_id_from_token(token: str) -> Optional[str]:
-    try:
-        from utils.security import decode_access_token
-        payload = decode_access_token(token)
-        return str(payload.get("sub") or payload.get("user_id") or payload.get("telegram_id"))
-    except:
-        return None
-
-
-def is_escrow_configured() -> bool:
-    return bool(ESCROW_PRIVATE_KEY) and bool(NFT_CONTRACT_ID)
-
-
-async def fetch_nft_image(token_id: str, nft_contract: str) -> str:
-    if not nft_contract or not token_id:
-        return ""
-    try:
-        args = json.dumps({"token_id": token_id})
-        args_b64 = base64.b64encode(args.encode()).decode()
-        async with httpx.AsyncClient(timeout=8) as client:
-            resp = await client.post(
-                "https://rpc.mainnet.near.org",
-                json={
-                    "jsonrpc": "2.0", "id": "1", "method": "query",
-                    "params": {
-                        "request_type": "call_function",
-                        "finality": "final",
-                        "account_id": nft_contract,
-                        "method_name": "nft_token",
-                        "args_base64": args_b64,
-                    }
-                }
-            )
-            data = resp.json()
-            if "result" in data and "result" in data["result"]:
-                token = json.loads(bytes(data["result"]["result"]).decode())
-                media = (token.get("metadata") or {}).get("media", "")
-                if media:
-                    if media.startswith("ipfs://"):
-                        return "https://ipfs.near.social/ipfs/" + media[7:]
-                    if media.startswith("http"):
-                        return media
-                    return "https://ipfs.near.social/ipfs/" + media
-    except Exception as e:
-        print(f"[MATCHES] fetch_nft_image error for {token_id}: {e}")
-    return ""
-
-
-async def transfer_nft_from_escrow(to_wallet: str, token_id: str, nft_contract_id: str) -> Dict:
-    if not ESCROW_PRIVATE_KEY:
-        return {"success": False, "error": "Escrow private key not configured", "mock": True}
-    try:
-        from py_near.account import Account
-        private_key = ESCROW_PRIVATE_KEY
-        if not private_key.startswith("ed25519:"):
-            private_key = "ed25519:" + private_key
-        account = Account(ESCROW_WALLET, private_key)
-        await account.startup()
-        result = await account.function_call(
-            nft_contract_id or NFT_CONTRACT_ID,
-            "nft_transfer",
-            {"receiver_id": to_wallet, "token_id": str(token_id)},
-            gas=30_000_000_000_000,
-            amount=1,
-        )
-        tx_hash = ""
-        if result:
-            if hasattr(result, "transaction") and hasattr(result.transaction, "hash"):
-                tx_hash = result.transaction.hash
-            elif hasattr(result, "transaction_outcome"):
-                tx_hash = result.transaction_outcome.id
-            else:
-                tx_hash = str(result)[:32]
-        print(f"[ESCROW] Transferred {token_id} to {to_wallet}, tx: {tx_hash}")
-        return {"success": True, "tx_hash": tx_hash, "token_id": token_id, "to": to_wallet}
-    except Exception as e:
-        print(f"[ESCROW] Transfer error: {e}")
-        traceback.print_exc()
-        return {"success": False, "error": str(e)}
-
-
-# ── STATIC ROUTES FIRST ──────────────────────────────────────
-
-@router.get("/leaderboard")
-async def get_leaderboard(limit: int = 50):
-    try:
-        async for session in get_session():
-            from sqlalchemy import select, desc
-            stmt = select(User).order_by(desc(User.elo_rating)).limit(limit)
-            result = await session.execute(stmt)
-            users = result.scalars().all()
-
-            leaders = []
-            for i, u in enumerate(users):
-                leaders.append({
-                    "rank": i + 1,
-                    "user_id": u.id,
-                    "username": u.username or u.first_name or f"Player #{u.id}",
-                    "first_name": u.first_name or "",
-                    "photo_url": getattr(u, "photo_url", None) or "",
-                    "rating": u.elo_rating or 0,
-                    "wins": u.wins or 0,
-                    "losses": u.losses or 0,
-                    "rank_name": u.rank or "Новичок",
-                })
-            return {"leaders": leaders, "total": len(leaders)}
-    except Exception as e:
-        print(f"[LEADERBOARD] Error: {e}")
-        import traceback
-        traceback.print_exc()
-        return {"leaders": [], "total": 0}
-
-
-@router.get("/config/status")
-async def get_escrow_status():
-    return {
-        "escrow_wallet": ESCROW_WALLET,
-        "escrow_configured": is_escrow_configured(),
-        "nft_contract": NFT_CONTRACT_ID or "NOT SET",
-    }
-
-
-# ── POST ROUTES ───────────────────────────────────────────────
-
-@router.post("/create")
-async def create_match(request: CreateMatchRequest):
-    match_id = str(uuid.uuid4())
-    match_data = {
-        "match_id": match_id,
-        "player1_id": str(request.player1_id) if request.player1_id else None,
-        "player2_id": str(request.player2_id) if request.player2_id else None,
-        "mode": request.mode,
-        "status": "waiting",
-        "player1_deck": request.player1_deck or [],
-        "player2_deck": request.player2_deck or [],
-        "player1_score": 0,
-        "player2_score": 0,
-        "current_round": 0,
-        "created_at": datetime.utcnow().isoformat(),
-        "escrow_locked": False,
-        "winner": None,
-        "claimed": False,
-        "claimed_token_id": None,
-        "refunded": False,
-    }
-    active_matches[match_id] = match_data
-    match_deposits[match_id] = {}
-    print(f"[MATCHES] Created match {match_id}")
-    return {"match_id": match_id, "status": "waiting", "message": "Match created"}
-
-
-# ── DYNAMIC ROUTES ────────────────────────────────────────────
-
-@router.post("/{match_id}/register_deposits")
-async def register_deposits(
+def init_match_state(
     match_id: str,
-    request: RegisterDepositsRequest,
-    authorization: Optional[str] = Header(None),
-):
-    match_data = active_matches.get(match_id)
-    if not match_data:
-        raise HTTPException(status_code=404, detail="Match not found")
+    player1_id: str,
+    player2_id: str,
+    player1_deck: List[Dict],
+    player2_deck: List[Dict]
+) -> Dict:
+    import random
 
-    player_id = None
-    if authorization:
-        token = authorization.replace("Bearer ", "")
-        player_id = get_player_id_from_token(token)
-    if not player_id:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    if player_id not in [match_data.get("player1_id"), match_data.get("player2_id")]:
-        if not match_data.get("player2_id"):
-            match_data["player2_id"] = player_id
-            active_matches[match_id] = match_data
+    board_elements = []
+    for _ in range(9):
+        if random.random() < 0.35:
+            board_elements.append(random.choice(ELEMENTS))
         else:
-            raise HTTPException(status_code=403, detail="Not a participant")
+            board_elements.append(None)
 
-    if request.near_wallet:
-        key = "player1_near_wallet" if player_id == match_data.get("player1_id") else "player2_near_wallet"
-        match_data[key] = request.near_wallet
-        active_matches[match_id] = match_data
+    first_player = random.choice([player1_id, player2_id])
 
-    nft_contract = request.nft_contract_id or NFT_CONTRACT_ID
-    deposits = []
-    for i, token_id in enumerate(request.token_ids):
-        image = request.images[i] if request.images and i < len(request.images) else None
-        if not image and nft_contract:
-            image = await fetch_nft_image(token_id, nft_contract)
-        deposits.append({
-            "token_id": token_id,
-            "nft_contract_id": nft_contract,
-            "image": image,
-            "player_id": player_id,
-            "near_wallet": request.near_wallet,
+    def normalize_deck(deck):
+        normalized = []
+        for i, card in enumerate(deck):
+            if not card:
+                continue
+            values = card.get("values") or card.get("stats") or {
+                "top": 5, "right": 5, "bottom": 5, "left": 5
+            }
+            normalized.append({
+                **card,
+                "values": values,
+                "id": card.get("id") or card.get("token_id") or f"card_{i}",
+            })
+        return normalized
+
+    p1_deck = normalize_deck(player1_deck) if player1_deck else []
+    p2_deck = normalize_deck(player2_deck) if player2_deck else []
+
+    while len(p1_deck) < 5:
+        p1_deck.append({
+            "id": f"default_p1_{len(p1_deck)}",
+            "values": {"top": 5, "right": 5, "bottom": 5, "left": 5},
+            "element": None,
+        })
+    while len(p2_deck) < 5:
+        p2_deck.append({
+            "id": f"default_p2_{len(p2_deck)}",
+            "values": {"top": 5, "right": 5, "bottom": 5, "left": 5},
+            "element": None,
         })
 
-    if match_id not in match_deposits:
-        match_deposits[match_id] = {}
-    match_deposits[match_id][player_id] = deposits
-
-    p1_id = match_data.get("player1_id")
-    p2_id = match_data.get("player2_id")
-    if (p1_id and p1_id in match_deposits.get(match_id, {})) and \
-       (p2_id and p2_id in match_deposits.get(match_id, {})):
-        match_data["escrow_locked"] = True
-        match_data["status"] = "active"
-        active_matches[match_id] = match_data
-
-    return {
-        "success": True,
-        "deposits_count": len(deposits),
-        "escrow_locked": match_data.get("escrow_locked", False),
-        "status": match_data.get("status"),
-    }
-
-
-@router.post("/{match_id}/confirm_escrow")
-async def confirm_escrow(match_id: str, body: dict):
-    from routers.matchmaking import ESCROW_LOCK_TIMEOUT_SECONDS
-    match_data = active_matches.get(match_id)
-    if not match_data:
-        raise HTTPException(status_code=404, detail="Match not found")
-
-    if match_data.get("status") == "cancelled":
-        raise HTTPException(status_code=400, detail="Match was cancelled")
-
-    player_id = body.get("player_id")
-    tx_hash = body.get("tx_hash")
-    token_ids = body.get("token_ids", [])
-    near_wallet = body.get("near_wallet")
-
-    if not player_id:
-        raise HTTPException(status_code=400, detail="player_id required")
-
-    if player_id == match_data.get("player1_id"):
-        match_data["player1_escrow_tx"] = tx_hash
-        match_data["player1_escrow_confirmed"] = True
-        if near_wallet: match_data["player1_near_wallet"] = near_wallet
-    elif player_id == match_data.get("player2_id"):
-        match_data["player2_escrow_tx"] = tx_hash
-        match_data["player2_escrow_confirmed"] = True
-        if near_wallet: match_data["player2_near_wallet"] = near_wallet
-    else:
-        if not match_data.get("player2_id"):
-            match_data["player2_id"] = player_id
-            match_data["player2_escrow_tx"] = tx_hash
-            match_data["player2_escrow_confirmed"] = True
-            if near_wallet: match_data["player2_near_wallet"] = near_wallet
-
-    if token_ids:
-        if match_id not in match_deposits:
-            match_deposits[match_id] = {}
-        contract = NFT_CONTRACT_ID or ""
-        deposits = []
-        for tid in token_ids:
-            image = await fetch_nft_image(tid, contract)
-            deposits.append({
-                "token_id": tid, "nft_contract_id": contract,
-                "player_id": player_id, "near_wallet": near_wallet, "image": image,
-            })
-        match_deposits[match_id][player_id] = deposits
-
-    p1_confirmed = match_data.get("player1_escrow_confirmed", False)
-    p2_confirmed = match_data.get("player2_escrow_confirmed", False)
-    if p1_confirmed and p2_confirmed:
-        match_data["escrow_locked"] = True
-        match_data["status"] = "active"
-        match_data["game_started_at"] = datetime.utcnow().isoformat()
-
-    active_matches[match_id] = match_data
-    return {
-        "success": True,
-        "escrow_locked": match_data.get("escrow_locked", False),
-        "status": match_data.get("status"),
-        "both_locked": p1_confirmed and p2_confirmed,
-    }
-
-
-@router.get("/{match_id}/opponent_deposits")
-async def get_opponent_deposits(
-    match_id: str,
-    authorization: Optional[str] = Header(None),
-):
-    match_data = active_matches.get(match_id)
-    if not match_data:
-        raise HTTPException(status_code=404, detail="Match not found")
-
-    player_id = None
-    if authorization:
-        token = authorization.replace("Bearer ", "")
-        player_id = get_player_id_from_token(token)
-    if not player_id:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    p1_id = match_data.get("player1_id")
-    p2_id = match_data.get("player2_id")
-
-    if player_id == p1_id:
-        opponent_id = p2_id
-    elif player_id == p2_id:
-        opponent_id = p1_id
-    else:
-        raise HTTPException(status_code=403, detail="Not a participant")
-
-    opponent_deposits = match_deposits.get(match_id, {}).get(opponent_id, [])
-    deposits_list = [
-        {"index": i, "token_id": d.get("token_id"), "nft_contract_id": d.get("nft_contract_id"), "image": d.get("image")}
-        for i, d in enumerate(opponent_deposits)
-    ]
-
-    return {
+    state = {
         "match_id": match_id,
-        "opponent_id": opponent_id,
-        "deposits": deposits_list,
-        "count": len(deposits_list),
+        "player1_id": player1_id,
+        "player2_id": player2_id,
+        "player1_deck": p1_deck,
+        "player2_deck": p2_deck,
+        "player1_hand": list(range(len(p1_deck))),
+        "player2_hand": list(range(len(p2_deck))),
+        "board": [None] * 9,
+        "board_elements": board_elements,
+        "current_turn": first_player,
+        "status": "active",
+        "winner": None,
+        "player1_ready": False,
+        "player2_ready": False,
+        "moves_count": 0,
+        "created_at": datetime.utcnow().isoformat(),
     }
 
+    print(f"[WS] Init: p1={player1_id}, p2={player2_id}, first={first_player}")
+    return state
 
-@router.post("/{match_id}/claim")
-async def claim_card(
-    match_id: str,
-    request: ClaimRequest,
-    authorization: Optional[str] = Header(None),
-):
-    match_data = active_matches.get(match_id)
-    if not match_data:
-        raise HTTPException(status_code=404, detail="Match not found")
-    if match_data.get("status") != "finished":
-        raise HTTPException(status_code=400, detail="Match is not finished")
-    if match_data.get("claimed"):
-        raise HTTPException(status_code=400, detail="Already claimed")
 
-    player_id = None
-    if authorization:
-        token = authorization.replace("Bearer ", "")
-        player_id = get_player_id_from_token(token)
-    if not player_id:
-        raise HTTPException(status_code=401, detail="Authentication required")
+def get_neighbors(idx: int) -> List[Dict]:
+    x = idx % 3
+    y = idx // 3
+    neighbors = []
+    if y > 0: neighbors.append({"idx": idx - 3, "my_side": "top",    "their_side": "bottom"})
+    if x < 2: neighbors.append({"idx": idx + 1, "my_side": "right",  "their_side": "left"})
+    if y < 2: neighbors.append({"idx": idx + 3, "my_side": "bottom", "their_side": "top"})
+    if x > 0: neighbors.append({"idx": idx - 1, "my_side": "left",   "their_side": "right"})
+    return neighbors
 
-    winner_id = match_data.get("winner")
-    if player_id != winner_id:
-        raise HTTPException(status_code=403, detail="Only winner can claim")
 
-    p1_id = match_data.get("player1_id")
-    p2_id = match_data.get("player2_id")
-    loser_id = p2_id if winner_id == p1_id else p1_id
+def resolve_placement(state: Dict, cell_idx: int, card: Dict, player_id: str) -> List[int]:
+    board = state["board"]
+    board_elements = state["board_elements"]
 
-    loser_deposits = match_deposits.get(match_id, {}).get(loser_id, [])
-    if not loser_deposits:
-        raise HTTPException(status_code=400, detail="No deposits found for loser")
-
-    pick_index = request.pick_index
-    if not (0 <= pick_index < len(loser_deposits)):
-        raise HTTPException(status_code=400, detail=f"Invalid pick_index: {pick_index}")
-
-    picked_card = loser_deposits[pick_index]
-    token_id = picked_card.get("token_id")
-    nft_contract_id = picked_card.get("nft_contract_id") or NFT_CONTRACT_ID
-
-    image = picked_card.get("image")
-    if not image and nft_contract_id and token_id:
-        image = await fetch_nft_image(token_id, nft_contract_id)
-
-    winner_near_wallet = match_data.get(
-        "player1_near_wallet" if winner_id == p1_id else "player2_near_wallet"
-    )
-
-    transfer_result = None
-    if is_escrow_configured() and winner_near_wallet:
-        transfer_result = await transfer_nft_from_escrow(
-            to_wallet=winner_near_wallet,
-            token_id=token_id,
-            nft_contract_id=nft_contract_id,
-        )
-
-    match_data["claimed"] = True
-    match_data["claimed_token_id"] = token_id
-    match_data["claimed_at"] = datetime.utcnow().isoformat()
-    active_matches[match_id] = match_data
-
-    await refund_remaining_nfts(match_id)
-
-    return {
-        "success": True,
-        "claimed_card": {
-            "token_id": token_id,
-            "nft_contract_id": nft_contract_id,
-            "image": image,
-            "imageUrl": image,
-            "index": pick_index,
-        },
-        "transfer": transfer_result,
-        "message": "Card claimed successfully!",
+    values = card.get("values") or card.get("stats") or {
+        "top": 5, "right": 5, "bottom": 5, "left": 5
     }
 
-
-async def refund_remaining_nfts(match_id: str):
-    match_data = active_matches.get(match_id)
-    if not match_data or match_data.get("refunded"):
-        return
-
-    claimed_token_id = match_data.get("claimed_token_id")
-    deposits = match_deposits.get(match_id, {})
-    refunds = []
-
-    for pid, player_deposits in deposits.items():
-        near_wallet = match_data.get(
-            "player1_near_wallet" if pid == match_data.get("player1_id") else "player2_near_wallet"
-        )
-        if not near_wallet:
-            for dep in player_deposits:
-                if dep.get("near_wallet"):
-                    near_wallet = dep["near_wallet"]
-                    break
-
-        if near_wallet and is_escrow_configured():
-            for dep in player_deposits:
-                token_id = dep.get("token_id")
-                nft_contract = dep.get("nft_contract_id") or NFT_CONTRACT_ID
-                if token_id == claimed_token_id:
-                    continue
-                if token_id:
-                    result = await transfer_nft_from_escrow(
-                        to_wallet=near_wallet,
-                        token_id=token_id,
-                        nft_contract_id=nft_contract,
-                    )
-                    refunds.append({"player_id": pid, "token_id": token_id, "result": result})
-
-    match_data["refunded"] = True
-    match_data["refunded_at"] = datetime.utcnow().isoformat()
-    match_data["refund_count"] = len(refunds)
-    active_matches[match_id] = match_data
-    print(f"[MATCHES] Refunded {len(refunds)} NFTs for match {match_id}")
-
-
-@router.get("/{match_id}/deposits")
-async def get_all_deposits(match_id: str):
-    match_data = active_matches.get(match_id)
-    if not match_data:
-        raise HTTPException(status_code=404, detail="Match not found")
-    return {
-        "match_id": match_id,
-        "deposits": match_deposits.get(match_id, {}),
-        "player1_id": match_data.get("player1_id"),
-        "player2_id": match_data.get("player2_id"),
-        "escrow_locked": match_data.get("escrow_locked", False),
+    normalized_values = {
+        "top":    int(values.get("top", 5)),
+        "right":  int(values.get("right", 5)),
+        "bottom": int(values.get("bottom", 5)),
+        "left":   int(values.get("left", 5)),
     }
 
+    card_on_board = {
+        **card,
+        "values": normalized_values,
+        "owner": player_id,
+    }
+    board[cell_idx] = card_on_board
 
-@router.post("/{match_id}/cancel")
-async def cancel_match(match_id: str, authorization: Optional[str] = Header(None)):
-    match_data = active_matches.get(match_id)
-    if not match_data:
-        raise HTTPException(status_code=404, detail="Match not found")
+    captured = []
 
-    player_id = None
-    if authorization:
-        token = authorization.replace("Bearer ", "")
-        player_id = get_player_id_from_token(token)
+    for neighbor in get_neighbors(cell_idx):
+        n_idx = neighbor["idx"]
+        n_card = board[n_idx]
 
-    match_data["status"] = "cancelled"
-    match_data["cancelled_at"] = datetime.utcnow().isoformat()
-    match_data["cancelled_by"] = player_id
-    active_matches[match_id] = match_data
+        if n_card is None:
+            continue
+        if n_card.get("owner") == player_id:
+            continue
 
-    refunds = []
-    for pid, player_deposits in match_deposits.get(match_id, {}).items():
-        near_wallet = match_data.get(
-            "player1_near_wallet" if pid == match_data.get("player1_id") else "player2_near_wallet"
-        )
-        if not near_wallet:
-            for dep in player_deposits:
-                if dep.get("near_wallet"):
-                    near_wallet = dep["near_wallet"]
-                    break
-        if near_wallet and is_escrow_configured():
-            for dep in player_deposits:
-                token_id = dep.get("token_id")
-                nft_contract = dep.get("nft_contract_id") or NFT_CONTRACT_ID
-                if token_id:
-                    result = await transfer_nft_from_escrow(
-                        to_wallet=near_wallet, token_id=token_id, nft_contract_id=nft_contract,
-                    )
-                    refunds.append({"player_id": pid, "token_id": token_id, "result": result})
+        my_side = neighbor["my_side"]
+        their_side = neighbor["their_side"]
 
-    if match_id in match_deposits:
-        del match_deposits[match_id]
+        my_base = int((card_on_board.get("values") or {}).get(my_side, 5))
+        their_base = int((n_card.get("values") or {}).get(their_side, 5))
 
-    return {"success": True, "message": "Match cancelled", "refunds": refunds}
+        my_cell_elem = board_elements[cell_idx] if cell_idx < len(board_elements) else None
+        n_cell_elem = board_elements[n_idx] if n_idx < len(board_elements) else None
 
+        my_card_elem = card_on_board.get("element")
+        their_card_elem = n_card.get("element")
 
-@router.get("/{match_id}")
-async def get_match(match_id: str):
-    match_data = active_matches.get(match_id)
-    if not match_data:
-        raise HTTPException(status_code=404, detail="Match not found")
-    return match_data
+        if my_base == ACE_VALUE:
+            my_value = ACE_VALUE
+        else:
+            my_bonus = 0
+            if my_cell_elem and my_card_elem:
+                my_bonus = +1 if my_card_elem == my_cell_elem else -1
+            my_value = clamp(my_base + my_bonus, 1, 9)
 
+        if their_base == ACE_VALUE:
+            their_value = ACE_VALUE
+        else:
+            their_bonus = 0
+            if n_cell_elem and their_card_elem:
+                their_bonus = +1 if their_card_elem == n_cell_elem else -1
+            their_value = clamp(their_base + their_bonus, 1, 9)
 
-@router.get("/{match_id}/state")
-async def get_match_state(match_id: str):
-    match_data = active_matches.get(match_id)
-    if not match_data:
-        raise HTTPException(status_code=404, detail="Match not found")
-    return MatchState(
-        match_id=match_data["match_id"],
-        status=match_data.get("status", "active"),
-        current_round=match_data.get("current_round", 0),
-        player1_score=match_data.get("player1_score", 0),
-        player2_score=match_data.get("player2_score", 0),
-        player1_id=match_data.get("player1_id", ""),
-        player2_id=match_data.get("player2_id", ""),
-        player1_deck=match_data.get("player1_deck", []),
-        player2_deck=match_data.get("player2_deck", []),
-        winner=match_data.get("winner"),
-    )
+        print(f"[WS] cell {cell_idx}→{n_idx}: "
+              f"my {my_side}={my_base}→{my_value} "
+              f"vs their {their_side}={their_base}→{their_value} "
+              f"→ {'CAPTURE ✅' if my_value > their_value else 'NO ❌'}")
+
+        if my_value > their_value:
+            board[n_idx] = {**n_card, "owner": player_id}
+            captured.append(n_idx)
+
+    return captured
 
 
-@router.post("/{match_id}/play")
-async def play_card(match_id: str, request: PlayCardRequest):
-    match_data = active_matches.get(match_id)
-    if not match_data:
-        raise HTTPException(status_code=404, detail="Match not found")
-    if match_data.get("status") != "active":
-        raise HTTPException(status_code=400, detail="Match is not active")
-    return {"success": True, "message": "Move recorded"}
+def check_game_over(state: Dict) -> Optional[str]:
+    board = state["board"]
 
-
-@router.post("/{match_id}/finish")
-async def finish_match(match_id: str, body: dict):
-    match_data = active_matches.get(match_id)
-    if not match_data:
-        raise HTTPException(status_code=404, detail="Match not found")
-
-    winner_user_id = body.get("winner_user_id")
-    winner_near_wallet = body.get("winner_near_wallet")
-    is_pvp = match_data.get("mode") == "pvp" or match_data.get("player2_id")
-
-    match_data["status"] = "finished"
-    match_data["winner"] = str(winner_user_id) if winner_user_id else None
-    if winner_near_wallet:
-        match_data["winner_near_wallet"] = winner_near_wallet
-    match_data["finished_at"] = datetime.utcnow().isoformat()
-
-    rating_update = None
-    if is_pvp and winner_user_id:
-        p1_id = match_data.get("player1_id")
-        p2_id = match_data.get("player2_id")
-        if p1_id and p2_id:
-            loser_id = p2_id if str(winner_user_id) == str(p1_id) else p1_id
-            rating_update = await update_player_ratings(
-                winner_id=str(winner_user_id),
-                loser_id=str(loser_id),
-            )
-            if rating_update:
-                match_data["rating_update"] = rating_update
-
-    active_matches[match_id] = match_data
-    return {"success": True, "winner": winner_user_id, "rating_update": rating_update}
-
-
-async def update_player_ratings(winner_id: str, loser_id: str) -> Optional[Dict]:
-    try:
-        async for session in get_session():
-            winner = await session.get(User, int(winner_id))
-            loser = await session.get(User, int(loser_id))
-
-            if not winner or not loser:
-                print(f"[RATING] Users not found: winner={winner_id}, loser={loser_id}")
-                return None
-
-            # ИСПРАВЛЕНО: стартовый рейтинг 0, не 1000
-            winner_rating = winner.elo_rating if winner.elo_rating is not None else 0
-            loser_rating = loser.elo_rating if loser.elo_rating is not None else 0
-
-            winner_change, loser_change = calculate_rating_change(winner_rating, loser_rating)
-
-            new_winner_rating = max(0, winner_rating + winner_change)
-            new_loser_rating = max(0, loser_rating + loser_change)
-
-            new_winner_rank = get_rank_by_rating(new_winner_rating)
-            new_loser_rank = get_rank_by_rating(new_loser_rating)
-
-            winner.elo_rating = new_winner_rating
-            winner.rank = new_winner_rank["name"]
-            winner.pvp_wins = (winner.pvp_wins or 0) + 1
-            winner.wins = (winner.wins or 0) + 1
-            winner.total_matches = (winner.total_matches or 0) + 1
-
-            loser.elo_rating = new_loser_rating
-            loser.rank = new_loser_rank["name"]
-            loser.pvp_losses = (loser.pvp_losses or 0) + 1
-            loser.losses = (loser.losses or 0) + 1
-            loser.total_matches = (loser.total_matches or 0) + 1
-
-            await session.commit()
-
-            print(f"[RATING] winner {winner_id}: {winner_rating}→{new_winner_rating}")
-            print(f"[RATING] loser  {loser_id}: {loser_rating}→{new_loser_rating}")
-
-            return {
-                "winner": {
-                    "id": winner_id,
-                    "old_rating": winner_rating,
-                    "new_rating": new_winner_rating,
-                    "change": winner_change,
-                    "rank": new_winner_rank["name"],
-                },
-                "loser": {
-                    "id": loser_id,
-                    "old_rating": loser_rating,
-                    "new_rating": new_loser_rating,
-                    "change": loser_change,
-                    "rank": new_loser_rank["name"],
-                },
-            }
-    except Exception as e:
-        print(f"[RATING] Error: {e}")
-        import traceback
-        traceback.print_exc()
+    if any(cell is None for cell in board):
         return None
 
+    p1_count = sum(1 for cell in board if cell and cell.get("owner") == state["player1_id"])
+    p2_count = sum(1 for cell in board if cell and cell.get("owner") == state["player2_id"])
 
-@router.post("/{match_id}/claim_tx")
-async def record_claim_tx(match_id: str, body: dict):
-    match_data = active_matches.get(match_id)
-    if not match_data:
-        raise HTTPException(status_code=404, detail="Match not found")
-    match_data["claim_tx_hash"] = body.get("tx_hash")
-    active_matches[match_id] = match_data
-    return {"success": True}
+    if p1_count > p2_count:
+        return state["player1_id"]
+    elif p2_count > p1_count:
+        return state["player2_id"]
+    else:
+        return state["player1_id"]
 
 
-@router.post("/{match_id}/reconnect")
-async def reconnect_to_match(match_id: str):
-    match_data = active_matches.get(match_id)
-    if not match_data:
-        raise HTTPException(status_code=404, detail="Match not found")
-    return {"success": True, "message": "Reconnected"}
+async def safe_send_json(ws: WebSocket, message: Dict) -> bool:
+    try:
+        await ws.send_json(message)
+        return True
+    except Exception as e:
+        print(f"[WS] Error sending: {e}")
+        return False
+
+
+async def broadcast_to_match(match_id: str, message: Dict, exclude_player: str = None):
+    if match_id not in match_connections:
+        return
+
+    disconnected = []
+    for player_id, ws in list(match_connections[match_id].items()):
+        if exclude_player and player_id == exclude_player:
+            continue
+        success = await safe_send_json(ws, message)
+        if not success:
+            disconnected.append(player_id)
+
+    for pid in disconnected:
+        if match_id in match_connections and pid in match_connections[match_id]:
+            del match_connections[match_id][pid]
+
+
+async def send_game_state(match_id: str, player_id: str = None):
+    if match_id not in match_states:
+        return
+
+    state = match_states[match_id]
+
+    async def send_to_player(pid: str):
+        if match_id not in match_connections:
+            return
+        if pid not in match_connections[match_id]:
+            return
+
+        ws = match_connections[match_id][pid]
+
+        if pid == state["player1_id"]:
+            hand_indices = state["player1_hand"]
+            deck = state["player1_deck"]
+            you_are = "player1"
+        else:
+            hand_indices = state["player2_hand"]
+            deck = state["player2_deck"]
+            you_are = "player2"
+
+        # ✅ ПРАВКА 1: безопасное получение карт из руки
+        your_hand = []
+        for i in hand_indices:
+            if i < len(deck):
+                your_hand.append(deck[i])
+
+        message = {
+            "type": "game_state",
+            "state": {
+                "match_id": state["match_id"],
+                "board": state["board"],
+                "board_elements": state["board_elements"],
+                "current_turn": state["current_turn"],
+                "status": state["status"],
+                "winner": state["winner"],
+                "player1_id": state["player1_id"],
+                "player2_id": state["player2_id"],
+                "player1_hand_count": len(state["player1_hand"]),
+                "player2_hand_count": len(state["player2_hand"]),
+                "moves_count": state["moves_count"],
+            },
+            "your_hand": your_hand,
+            "you_are": you_are,
+        }
+
+        await safe_send_json(ws, message)
+
+    if player_id:
+        await send_to_player(player_id)
+    else:
+        for pid in [state["player1_id"], state["player2_id"]]:
+            await send_to_player(pid)
+
+
+@router.websocket("/ws/match/{match_id}")
+async def websocket_match(websocket: WebSocket, match_id: str):
+    await websocket.accept()
+    print(f"[WS] Accepted match {match_id}")
+
+    player_id = None
+
+    try:
+        # Auth
+        try:
+            auth_data = await asyncio.wait_for(websocket.receive_json(), timeout=15.0)
+        except asyncio.TimeoutError:
+            await safe_send_json(websocket, {"type": "error", "message": "Auth timeout"})
+            await websocket.close(code=1008)
+            return
+
+        if auth_data.get("type") != "auth":
+            await safe_send_json(websocket, {"type": "error", "message": "Expected auth"})
+            await websocket.close(code=1008)
+            return
+
+        token = auth_data.get("token")
+        if not token:
+            await safe_send_json(websocket, {"type": "error", "message": "No token"})
+            await websocket.close(code=1008)
+            return
+
+        try:
+            from utils.security import decode_access_token
+            payload = decode_access_token(token)
+            player_id = str(payload.get("sub") or payload.get("user_id") or payload.get("telegram_id"))
+        except Exception as e:
+            await safe_send_json(websocket, {"type": "error", "message": "Invalid token"})
+            await websocket.close(code=1008)
+            return
+
+        if not player_id:
+            await safe_send_json(websocket, {"type": "error", "message": "No player_id"})
+            await websocket.close(code=1008)
+            return
+
+        print(f"[WS] Player {player_id} auth OK for match {match_id}")
+
+        from routers.matchmaking import active_matches
+
+        if match_id not in active_matches:
+            await safe_send_json(websocket, {"type": "error", "message": "Match not found"})
+            await websocket.close(code=1008)
+            return
+
+        match_data = active_matches[match_id]
+
+        if player_id not in [match_data["player1_id"], match_data["player2_id"]]:
+            await safe_send_json(websocket, {"type": "error", "message": "Not a participant"})
+            await websocket.close(code=1008)
+            return
+
+        if match_id not in match_connections:
+            match_connections[match_id] = {}
+
+        # Close old connection
+        if player_id in match_connections[match_id]:
+            try:
+                await match_connections[match_id][player_id].close(code=1000)
+            except:
+                pass
+
+        match_connections[match_id][player_id] = websocket
+
+        # Init game state
+        if match_id not in match_states:
+            match_states[match_id] = init_match_state(
+                match_id=match_id,
+                player1_id=match_data["player1_id"],
+                player2_id=match_data["player2_id"],
+                player1_deck=match_data.get("player1_deck", []),
+                player2_deck=match_data.get("player2_deck", []),
+            )
+
+        state = match_states[match_id]
+
+        if player_id == state["player1_id"]:
+            state["player1_ready"] = True
+        else:
+            state["player2_ready"] = True
+
+        # Clear reconnect deadline
+        if match_id in reconnect_deadlines and player_id in reconnect_deadlines[match_id]:
+            del reconnect_deadlines[match_id][player_id]
+
+        # Send connected
+        await safe_send_json(websocket, {
+            "type": "connected",
+            "match_id": match_id,
+            "player_id": player_id,
+            "you_are": "player1" if player_id == state["player1_id"] else "player2",
+        })
+
+        await broadcast_to_match(match_id, {
+            "type": "player_connected",
+            "player_id": player_id,
+        }, exclude_player=player_id)
+
+        await send_game_state(match_id, player_id)
+
+        if state["player1_ready"] and state["player2_ready"]:
+            await broadcast_to_match(match_id, {
+                "type": "game_start",
+                "current_turn": state["current_turn"],
+            })
+
+        # ✅ ПРАВКА 2: Message loop — break только при реальном дисконнекте
+        while True:
+            try:
+                data = await asyncio.wait_for(websocket.receive_json(), timeout=60.0)
+                msg_type = data.get("type")
+
+                if msg_type == "ping":
+                    await safe_send_json(websocket, {"type": "pong"})
+                    continue
+
+                if msg_type == "pong":
+                    continue
+
+                if msg_type == "get_state":
+                    await send_game_state(match_id, player_id)
+                    continue
+
+                if msg_type == "play_card":
+                    # ✅ ПРАВКА 3: весь блок play_card в try-except — ошибка НЕ убивает соединение
+                    try:
+                        if state["status"] != "active":
+                            await safe_send_json(websocket, {"type": "error", "message": "Game not active"})
+                            continue
+
+                        card_index = data.get("card_index")
+                        cell_index = data.get("cell_index")
+
+                        if state["current_turn"] != player_id:
+                            await safe_send_json(websocket, {"type": "error", "message": "Not your turn"})
+                            continue
+
+                        if cell_index is None or card_index is None:
+                            await safe_send_json(websocket, {"type": "error", "message": "Missing indices"})
+                            continue
+
+                        if not (0 <= cell_index <= 8):
+                            await safe_send_json(websocket, {"type": "error", "message": "Invalid cell"})
+                            continue
+
+                        if state["board"][cell_index] is not None:
+                            await safe_send_json(websocket, {"type": "error", "message": "Cell occupied"})
+                            continue
+
+                        if player_id == state["player1_id"]:
+                            hand = state["player1_hand"]
+                            deck = state["player1_deck"]
+                        else:
+                            hand = state["player2_hand"]
+                            deck = state["player2_deck"]
+
+                        if not (0 <= card_index < len(hand)):
+                            await safe_send_json(websocket, {"type": "error", "message": f"Invalid card_index {card_index}"})
+                            continue
+
+                        deck_idx = hand[card_index]
+                        if deck_idx >= len(deck):
+                            await safe_send_json(websocket, {"type": "error", "message": "Card not found"})
+                            continue
+
+                        card = deck[deck_idx].copy()
+
+                        hand.pop(card_index)
+
+                        captured = resolve_placement(state, cell_index, card, player_id)
+                        state["moves_count"] += 1
+
+                        print(f"[WS] {player_id} played {card.get('id')} at {cell_index}, captured={captured}")
+
+                        # ✅ ПРАВКА 4: сначала broadcast card_played
+                        await broadcast_to_match(match_id, {
+                            "type": "card_played",
+                            "player_id": player_id,
+                            "cell_index": cell_index,
+                            "card": card,
+                            "captured": captured,
+                        })
+
+                        winner = check_game_over(state)
+                        if winner:
+                            state["status"] = "finished"
+                            state["winner"] = winner
+
+                            print(f"[WS] Game over! Winner: {winner}")
+
+                            # ✅ ПРАВКА 5: сначала game_state потом game_over
+                            await send_game_state(match_id)
+
+                            await broadcast_to_match(match_id, {
+                                "type": "game_over",
+                                "winner": winner,
+                                "board": state["board"],
+                            })
+
+                            # Обновляем рейтинг
+                            try:
+                                from routers.matches import update_player_ratings
+                                loser = state["player2_id"] if winner == state["player1_id"] else state["player1_id"]
+                                if winner != "draw":
+                                    await update_player_ratings(
+                                        winner_id=winner,
+                                        loser_id=loser,
+                                    )
+                                    print(f"[WS] Rating updated: winner={winner}, loser={loser}")
+                            except Exception as rating_err:
+                                # ✅ ПРАВКА 6: ошибка рейтинга не убивает соединение
+                                print(f"[WS] Rating update error: {rating_err}")
+
+                            # Обновляем статус матча
+                            try:
+                                from routers.matchmaking import active_matches as am
+                                if match_id in am:
+                                    am[match_id]["status"] = "finished"
+                                    am[match_id]["winner"] = winner
+                            except Exception as status_err:
+                                print(f"[WS] Match status update error: {status_err}")
+
+                        else:
+                            # Switch turn
+                            state["current_turn"] = (
+                                state["player2_id"]
+                                if state["current_turn"] == state["player1_id"]
+                                else state["player1_id"]
+                            )
+
+                            # ✅ ПРАВКА 7: сначала turn_change, потом game_state
+                            await broadcast_to_match(match_id, {
+                                "type": "turn_change",
+                                "current_turn": state["current_turn"],
+                            })
+
+                            # ✅ ПРАВКА 8: game_state после turn_change
+                            await send_game_state(match_id)
+
+                    except Exception as play_err:
+                        # ✅ ПРАВКА 9: ошибка хода НЕ убивает соединение — continue!
+                        print(f"[WS] play_card error: {play_err}")
+                        traceback.print_exc()
+                        await safe_send_json(websocket, {
+                            "type": "error",
+                            "message": f"Move error: {str(play_err)}"
+                        })
+                        continue  # ← НЕ break! Продолжаем слушать!
+
+            except asyncio.TimeoutError:
+                # ✅ ПРАВКА 10: таймаут — пингуем, НЕ разрываем
+                try:
+                    ok = await safe_send_json(websocket, {"type": "ping"})
+                    if not ok:
+                        print(f"[WS] Ping failed for {player_id}, closing")
+                        break
+                    # НЕ делаем break — продолжаем ждать
+                    continue
+                except Exception:
+                    print(f"[WS] Ping exception for {player_id}")
+                    break
+
+            except WebSocketDisconnect:
+                print(f"[WS] Disconnect in loop: {player_id}")
+                break
+
+            except json.JSONDecodeError:
+                # ✅ ПРАВКА 11: битый JSON — НЕ убиваем соединение
+                await safe_send_json(websocket, {"type": "error", "message": "Invalid JSON"})
+                continue  # ← НЕ break!
+
+            except Exception as e:
+                # ✅ ПРАВКА 12: любая ошибка в цикле — логируем и continue, НЕ break
+                print(f"[WS] Loop error (non-fatal): {e}")
+                traceback.print_exc()
+                # Только критические ошибки разрывают соединение
+                err_str = str(e).lower()
+                if any(x in err_str for x in ["connection", "closed", "disconnect", "reset"]):
+                    print(f"[WS] Fatal connection error, breaking loop")
+                    break
+                # Остальные ошибки — продолжаем
+                continue
+
+    except WebSocketDisconnect:
+        print(f"[WS] Disconnect: {player_id}")
+    except Exception as e:
+        print(f"[WS] Unexpected error: {e}")
+        traceback.print_exc()
+    finally:
+        if player_id and match_id in match_connections:
+            if player_id in match_connections[match_id]:
+                del match_connections[match_id][player_id]
+
+            if match_id in match_states and match_states[match_id].get("status") == "active":
+                if match_id not in reconnect_deadlines:
+                    reconnect_deadlines[match_id] = {}
+                deadline = datetime.utcnow() + timedelta(seconds=RECONNECT_TIMEOUT_SECONDS)
+                reconnect_deadlines[match_id][player_id] = deadline
+
+                await broadcast_to_match(match_id, {
+                    "type": "player_disconnected",
+                    "player_id": player_id,
+                    "reconnect_deadline": deadline.isoformat(),
+                })
+
+            if match_id in match_connections and not match_connections[match_id]:
+                del match_connections[match_id]
+
+        try:
+            await websocket.close()
+        except:
+            pass
