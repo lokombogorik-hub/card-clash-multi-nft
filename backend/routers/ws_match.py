@@ -11,52 +11,18 @@ match_connections: Dict[str, Dict[str, WebSocket]] = {}
 match_states: Dict[str, Dict[str, Any]] = {}
 reconnect_deadlines: Dict[str, Dict[str, datetime]] = {}
 
+# ✅ Locks для защиты от двойного хода
+match_locks: Dict[str, asyncio.Lock] = {}
+
 RECONNECT_TIMEOUT_SECONDS = 180
 
 ELEMENTS = ["Earth", "Fire", "Water", "Poison", "Holy", "Thunder", "Wind", "Ice"]
-
-BEATS = {
-    "Earth": ["Thunder"],
-    "Thunder": ["Water"],
-    "Water": ["Fire"],
-    "Fire": ["Ice"],
-    "Ice": ["Wind"],
-    "Wind": ["Poison"],
-    "Poison": ["Holy"],
-    "Holy": ["Earth"],
-}
 
 ACE_VALUE = 10
 
 
 def clamp(v, a, b):
     return max(a, min(b, v))
-
-
-def get_effective_value(
-    card: Dict,
-    side: str,
-    cell_idx: int,
-    board_elements: List,
-    opponent_card: Optional[Dict] = None
-) -> int:
-    values = card.get("values") or card.get("stats") or {}
-    base = int(values.get(side, 5))
-
-    # ✅ ACE не меняется никогда
-    if base == ACE_VALUE:
-        return ACE_VALUE
-
-    # ✅ Бонус от клетки: своя стихия +1, чужая -1
-    cell_elem = board_elements[cell_idx] if cell_idx < len(board_elements) else None
-    card_elem = card.get("element")
-
-    sq_delta = 0
-    if cell_elem and card_elem:
-        sq_delta = +1 if card_elem == cell_elem else -1
-
-    # ✅ clamp 1-9, НЕ может стать 10 (ACE)
-    return clamp(base + sq_delta, 1, 9)
 
 
 def init_match_state(
@@ -87,7 +53,12 @@ def init_match_state(
             }
             normalized.append({
                 **card,
-                "values": values,
+                "values": {
+                    "top":    int(values.get("top", 5)),
+                    "right":  int(values.get("right", 5)),
+                    "bottom": int(values.get("bottom", 5)),
+                    "left":   int(values.get("left", 5)),
+                },
                 "id": card.get("id") or card.get("token_id") or f"card_{i}",
             })
         return normalized
@@ -149,62 +120,45 @@ def resolve_placement(state: Dict, cell_idx: int, card: Dict, player_id: str) ->
     values = card.get("values") or card.get("stats") or {
         "top": 5, "right": 5, "bottom": 5, "left": 5
     }
-
-    # ✅ Все values приводим к числам
     normalized_values = {
         "top":    int(values.get("top", 5)),
         "right":  int(values.get("right", 5)),
         "bottom": int(values.get("bottom", 5)),
         "left":   int(values.get("left", 5)),
     }
-
-    card_on_board = {
-        **card,
-        "values": normalized_values,
-        "owner": player_id,
-    }
+    card_on_board = {**card, "values": normalized_values, "owner": player_id}
     board[cell_idx] = card_on_board
-
     captured = []
 
     for neighbor in get_neighbors(cell_idx):
         n_idx = neighbor["idx"]
         n_card = board[n_idx]
 
-        if n_card is None:
-            continue
-        if n_card.get("owner") == player_id:
+        if n_card is None or n_card.get("owner") == player_id:
             continue
 
         my_side = neighbor["my_side"]
         their_side = neighbor["their_side"]
 
-        # ✅ Базовые значения как числа
         my_base = int((card_on_board.get("values") or {}).get(my_side, 5))
         their_base = int((n_card.get("values") or {}).get(their_side, 5))
 
-        # ✅ Бонус от клетки
         my_cell_elem = board_elements[cell_idx] if cell_idx < len(board_elements) else None
         n_cell_elem = board_elements[n_idx] if n_idx < len(board_elements) else None
 
         my_card_elem = card_on_board.get("element")
         their_card_elem = n_card.get("element")
 
-        # ✅ ACE (10) не меняется от бонусов, бьёт всё кроме другого ACE
         if my_base == ACE_VALUE:
             my_value = ACE_VALUE
         else:
-            my_bonus = 0
-            if my_cell_elem and my_card_elem:
-                my_bonus = +1 if my_card_elem == my_cell_elem else -1
+            my_bonus = (+1 if my_card_elem == my_cell_elem else -1) if (my_cell_elem and my_card_elem) else 0
             my_value = clamp(my_base + my_bonus, 1, 9)
 
         if their_base == ACE_VALUE:
             their_value = ACE_VALUE
         else:
-            their_bonus = 0
-            if n_cell_elem and their_card_elem:
-                their_bonus = +1 if their_card_elem == n_cell_elem else -1
+            their_bonus = (+1 if their_card_elem == n_cell_elem else -1) if (n_cell_elem and their_card_elem) else 0
             their_value = clamp(their_base + their_bonus, 1, 9)
 
         print(f"[WS] cell {cell_idx}→{n_idx}: "
@@ -212,16 +166,15 @@ def resolve_placement(state: Dict, cell_idx: int, card: Dict, player_id: str) ->
               f"vs their {their_side}={their_base}→{their_value} "
               f"→ {'CAPTURE ✅' if my_value > their_value else 'NO ❌'}")
 
-        # ✅ Строго больше — ACE (10) > 9 > 8 > ... > 1
         if my_value > their_value:
             board[n_idx] = {**n_card, "owner": player_id}
             captured.append(n_idx)
 
     return captured
 
+
 def check_game_over(state: Dict) -> Optional[str]:
     board = state["board"]
-
     if any(cell is None for cell in board):
         return None
 
@@ -233,7 +186,6 @@ def check_game_over(state: Dict) -> Optional[str]:
     elif p2_count > p1_count:
         return state["player2_id"]
     else:
-        # При ничье побеждает тот кто ходил первым (или p1)
         return state["player1_id"]
 
 
@@ -249,7 +201,6 @@ async def safe_send_json(ws: WebSocket, message: Dict) -> bool:
 async def broadcast_to_match(match_id: str, message: Dict, exclude_player: str = None):
     if match_id not in match_connections:
         return
-
     disconnected = []
     for player_id, ws in list(match_connections[match_id].items()):
         if exclude_player and player_id == exclude_player:
@@ -257,7 +208,6 @@ async def broadcast_to_match(match_id: str, message: Dict, exclude_player: str =
         success = await safe_send_json(ws, message)
         if not success:
             disconnected.append(player_id)
-
     for pid in disconnected:
         if match_id in match_connections and pid in match_connections[match_id]:
             del match_connections[match_id][pid]
@@ -266,7 +216,6 @@ async def broadcast_to_match(match_id: str, message: Dict, exclude_player: str =
 async def send_game_state(match_id: str, player_id: str = None):
     if match_id not in match_states:
         return
-
     state = match_states[match_id]
 
     async def send_to_player(pid: str):
@@ -274,7 +223,6 @@ async def send_game_state(match_id: str, player_id: str = None):
             return
         if pid not in match_connections[match_id]:
             return
-
         ws = match_connections[match_id][pid]
 
         if pid == state["player1_id"]:
@@ -306,7 +254,6 @@ async def send_game_state(match_id: str, player_id: str = None):
             "your_hand": your_hand,
             "you_are": you_are,
         }
-
         await safe_send_json(ws, message)
 
     if player_id:
@@ -314,6 +261,27 @@ async def send_game_state(match_id: str, player_id: str = None):
     else:
         for pid in [state["player1_id"], state["player2_id"]]:
             await send_to_player(pid)
+
+
+async def _save_ws_state_to_db(match_id: str, state: Dict):
+    """Сохраняем игровое состояние в БД после каждого хода"""
+    try:
+        from routers.matchmaking import save_match, get_match
+        match_data = await get_match(match_id)
+        if match_data:
+            match_data["board"] = state["board"]
+            match_data["board_elements"] = state["board_elements"]
+            match_data["current_turn"] = state["current_turn"]
+            match_data["player1_hand"] = state["player1_hand"]
+            match_data["player2_hand"] = state["player2_hand"]
+            match_data["moves_count"] = state["moves_count"]
+            match_data["status"] = state["status"]
+            match_data["winner"] = state["winner"]
+            match_data["player1_ready"] = state["player1_ready"]
+            match_data["player2_ready"] = state["player2_ready"]
+            await save_match(match_data)
+    except Exception as e:
+        print(f"[WS] State save error: {e}")
 
 
 @router.websocket("/ws/match/{match_id}")
@@ -324,7 +292,7 @@ async def websocket_match(websocket: WebSocket, match_id: str):
     player_id = None
 
     try:
-        # Auth
+        # ── Auth ──────────────────────────────────────────────
         try:
             auth_data = await asyncio.wait_for(websocket.receive_json(), timeout=15.0)
         except asyncio.TimeoutError:
@@ -347,7 +315,7 @@ async def websocket_match(websocket: WebSocket, match_id: str):
             from utils.security import decode_access_token
             payload = decode_access_token(token)
             player_id = str(payload.get("sub") or payload.get("user_id") or payload.get("telegram_id"))
-        except Exception as e:
+        except Exception:
             await safe_send_json(websocket, {"type": "error", "message": "Invalid token"})
             await websocket.close(code=1008)
             return
@@ -359,41 +327,67 @@ async def websocket_match(websocket: WebSocket, match_id: str):
 
         print(f"[WS] Player {player_id} auth OK for match {match_id}")
 
-        from routers.matchmaking import active_matches
+        # ── Load match ────────────────────────────────────────
+        from routers.matchmaking import get_match, save_match
 
-        if match_id not in active_matches:
+        match_data = await get_match(match_id)
+        if not match_data:
             await safe_send_json(websocket, {"type": "error", "message": "Match not found"})
             await websocket.close(code=1008)
             return
-
-        match_data = active_matches[match_id]
 
         if player_id not in [match_data["player1_id"], match_data["player2_id"]]:
             await safe_send_json(websocket, {"type": "error", "message": "Not a participant"})
             await websocket.close(code=1008)
             return
 
+        # ── Register connection ───────────────────────────────
         if match_id not in match_connections:
             match_connections[match_id] = {}
 
-        # Close old connection
         if player_id in match_connections[match_id]:
             try:
                 await match_connections[match_id][player_id].close(code=1000)
-            except:
+            except Exception:
                 pass
 
         match_connections[match_id][player_id] = websocket
 
-        # Init game state
+        # ── Create lock for match ─────────────────────────────
+        if match_id not in match_locks:
+            match_locks[match_id] = asyncio.Lock()
+
+        # ── Init game state ───────────────────────────────────
         if match_id not in match_states:
-            match_states[match_id] = init_match_state(
-                match_id=match_id,
-                player1_id=match_data["player1_id"],
-                player2_id=match_data["player2_id"],
-                player1_deck=match_data.get("player1_deck", []),
-                player2_deck=match_data.get("player2_deck", []),
-            )
+            # Восстанавливаем из БД если есть прогресс
+            if match_data.get("moves_count", 0) > 0 and match_data.get("board"):
+                match_states[match_id] = {
+                    "match_id": match_id,
+                    "player1_id": match_data["player1_id"],
+                    "player2_id": match_data["player2_id"],
+                    "player1_deck": match_data.get("player1_deck", []),
+                    "player2_deck": match_data.get("player2_deck", []),
+                    "player1_hand": match_data.get("player1_hand", []),
+                    "player2_hand": match_data.get("player2_hand", []),
+                    "board": match_data.get("board", [None] * 9),
+                    "board_elements": match_data.get("board_elements", []),
+                    "current_turn": match_data.get("current_turn", match_data["player1_id"]),
+                    "status": match_data.get("status", "active"),
+                    "winner": match_data.get("winner"),
+                    "player1_ready": match_data.get("player1_ready", False),
+                    "player2_ready": match_data.get("player2_ready", False),
+                    "moves_count": match_data.get("moves_count", 0),
+                    "created_at": match_data.get("created_at", datetime.utcnow().isoformat()),
+                }
+                print(f"[WS] Restored state from DB for match {match_id}, moves={match_data.get('moves_count')}")
+            else:
+                match_states[match_id] = init_match_state(
+                    match_id=match_id,
+                    player1_id=match_data["player1_id"],
+                    player2_id=match_data["player2_id"],
+                    player1_deck=match_data.get("player1_deck", []),
+                    player2_deck=match_data.get("player2_deck", []),
+                )
 
         state = match_states[match_id]
 
@@ -402,11 +396,11 @@ async def websocket_match(websocket: WebSocket, match_id: str):
         else:
             state["player2_ready"] = True
 
-        # Clear reconnect deadline
+        # Снимаем deadline реконнекта
         if match_id in reconnect_deadlines and player_id in reconnect_deadlines[match_id]:
             del reconnect_deadlines[match_id][player_id]
 
-        # Send connected
+        # ── Send initial messages ─────────────────────────────
         await safe_send_json(websocket, {
             "type": "connected",
             "match_id": match_id,
@@ -427,7 +421,7 @@ async def websocket_match(websocket: WebSocket, match_id: str):
                 "current_turn": state["current_turn"],
             })
 
-        # Message loop
+        # ── Message loop ──────────────────────────────────────
         while True:
             try:
                 data = await asyncio.wait_for(websocket.receive_json(), timeout=60.0)
@@ -437,138 +431,149 @@ async def websocket_match(websocket: WebSocket, match_id: str):
                     await safe_send_json(websocket, {"type": "pong"})
                     continue
 
+                if msg_type == "pong":
+                    continue
+
                 if msg_type == "get_state":
                     await send_game_state(match_id, player_id)
                     continue
 
                 if msg_type == "play_card":
-                    if state["status"] != "active":
-                        await safe_send_json(websocket, {"type": "error", "message": "Game not active"})
-                        continue
-
-                    card_index = data.get("card_index")
-                    cell_index = data.get("cell_index")
-
-                    # Validate turn
-                    if state["current_turn"] != player_id:
-                        await safe_send_json(websocket, {"type": "error", "message": "Not your turn"})
-                        continue
-
-                    if cell_index is None or card_index is None:
-                        await safe_send_json(websocket, {"type": "error", "message": "Missing indices"})
-                        continue
-
-                    if not (0 <= cell_index <= 8):
-                        await safe_send_json(websocket, {"type": "error", "message": "Invalid cell"})
-                        continue
-
-                    if state["board"][cell_index] is not None:
-                        await safe_send_json(websocket, {"type": "error", "message": "Cell occupied"})
-                        continue
-
-                    if player_id == state["player1_id"]:
-                        hand = state["player1_hand"]
-                        deck = state["player1_deck"]
-                    else:
-                        hand = state["player2_hand"]
-                        deck = state["player2_deck"]
-
-                    if not (0 <= card_index < len(hand)):
-                        await safe_send_json(websocket, {"type": "error", "message": f"Invalid card_index {card_index}"})
-                        continue
-
-                    deck_idx = hand[card_index]
-                    if deck_idx >= len(deck):
-                        await safe_send_json(websocket, {"type": "error", "message": "Card not found"})
-                        continue
-
-                    card = deck[deck_idx].copy()
-
-                    # Remove from hand
-                    hand.pop(card_index)
-
-                    # Place and resolve — СТРОГО БОЛЬШЕ
-                    captured = resolve_placement(state, cell_index, card, player_id)
-                    state["moves_count"] += 1
-
-                    print(f"[WS] {player_id} played {card.get('id')} at {cell_index}, captured={captured}")
-
-                    await broadcast_to_match(match_id, {
-                        "type": "card_played",
-                        "player_id": player_id,
-                        "cell_index": cell_index,
-                        "card": card,
-                        "captured": captured,
-                    })
-
-                    winner = check_game_over(state)
-                    if winner:
-                        state["status"] = "finished"
-                        state["winner"] = winner
-
-                        print(f"[WS] Game over! Winner: {winner}")
-
-                        await broadcast_to_match(match_id, {
-                            "type": "game_over",
-                            "winner": winner,
-                            "board": state["board"],
-                        })
-
-                        # Обновляем рейтинг
+                    # ✅ Lock — только один ход одновременно
+                    async with match_locks[match_id]:
                         try:
-                            from routers.matches import update_player_ratings
-                            loser = state["player2_id"] if winner == state["player1_id"] else state["player1_id"]
-                            if winner != "draw":
-                                await update_player_ratings(
-                                    winner_id=winner,
-                                    loser_id=loser,
+                            if state["status"] != "active":
+                                await safe_send_json(websocket, {"type": "error", "message": "Game not active"})
+                                continue
+
+                            card_index = data.get("card_index")
+                            cell_index = data.get("cell_index")
+
+                            # ✅ Проверка хода
+                            if state["current_turn"] != player_id:
+                                await safe_send_json(websocket, {"type": "error", "message": "Not your turn"})
+                                continue
+
+                            if cell_index is None or card_index is None:
+                                await safe_send_json(websocket, {"type": "error", "message": "Missing indices"})
+                                continue
+
+                            if not (0 <= cell_index <= 8):
+                                await safe_send_json(websocket, {"type": "error", "message": "Invalid cell"})
+                                continue
+
+                            if state["board"][cell_index] is not None:
+                                await safe_send_json(websocket, {"type": "error", "message": "Cell occupied"})
+                                continue
+
+                            if player_id == state["player1_id"]:
+                                hand = state["player1_hand"]
+                                deck = state["player1_deck"]
+                            else:
+                                hand = state["player2_hand"]
+                                deck = state["player2_deck"]
+
+                            if not (0 <= card_index < len(hand)):
+                                await safe_send_json(websocket, {"type": "error", "message": f"Invalid card_index {card_index}"})
+                                continue
+
+                            deck_idx = hand[card_index]
+                            if deck_idx >= len(deck):
+                                await safe_send_json(websocket, {"type": "error", "message": "Card not found"})
+                                continue
+
+                            card = deck[deck_idx].copy()
+                            hand.pop(card_index)
+
+                            # ── Resolve move ──────────────────
+                            captured = resolve_placement(state, cell_index, card, player_id)
+                            state["moves_count"] += 1
+
+                            print(f"[WS] {player_id} played {card.get('id')} at {cell_index}, captured={captured}")
+
+                            # ── Broadcast card_played ─────────
+                            await broadcast_to_match(match_id, {
+                                "type": "card_played",
+                                "player_id": player_id,
+                                "cell_index": cell_index,
+                                "card": card,
+                                "captured": captured,
+                            })
+
+                            # ── Check game over ───────────────
+                            winner = check_game_over(state)
+                            if winner:
+                                state["status"] = "finished"
+                                state["winner"] = winner
+                                print(f"[WS] Game over! Winner: {winner}")
+
+                                # ✅ Сначала game_state, потом game_over
+                                await send_game_state(match_id)
+                                await broadcast_to_match(match_id, {
+                                    "type": "game_over",
+                                    "winner": winner,
+                                    "board": state["board"],
+                                })
+
+                                # Обновляем рейтинг
+                                try:
+                                    from routers.matches import update_player_ratings
+                                    loser = state["player2_id"] if winner == state["player1_id"] else state["player1_id"]
+                                    await update_player_ratings(winner_id=winner, loser_id=loser)
+                                    print(f"[WS] Rating updated: winner={winner}, loser={loser}")
+                                except Exception as re:
+                                    print(f"[WS] Rating update error: {re}")
+
+                            else:
+                                # ── Switch turn ───────────────
+                                state["current_turn"] = (
+                                    state["player2_id"]
+                                    if state["current_turn"] == state["player1_id"]
+                                    else state["player1_id"]
                                 )
-                                print(f"[WS] Rating updated: winner={winner}, loser={loser}")
-                        except Exception as e:
-                            print(f"[WS] Rating update error: {e}")
+                                await broadcast_to_match(match_id, {
+                                    "type": "turn_change",
+                                    "current_turn": state["current_turn"],
+                                })
+                                await send_game_state(match_id)
 
-                        # Обновляем статус матча
-                        try:
-                            from routers.matchmaking import active_matches
-                            if match_id in active_matches:
-                                active_matches[match_id]["status"] = "finished"
-                                active_matches[match_id]["winner"] = winner
-                        except Exception as e:
-                            print(f"[WS] Match status update error: {e}")
+                            # ✅ Сохраняем состояние в БД после каждого хода
+                            asyncio.create_task(_save_ws_state_to_db(match_id, state))
 
-                    else:
-                        # Switch turn
-                        state["current_turn"] = (
-                            state["player2_id"]
-                            if state["current_turn"] == state["player1_id"]
-                            else state["player1_id"]
-                        )
-
-                        await broadcast_to_match(match_id, {
-                            "type": "turn_change",
-                            "current_turn": state["current_turn"],
-                        })
-
-                    await send_game_state(match_id)
+                        except Exception as play_err:
+                            print(f"[WS] play_card error: {play_err}")
+                            traceback.print_exc()
+                            await safe_send_json(websocket, {
+                                "type": "error",
+                                "message": f"Move error: {str(play_err)}"
+                            })
+                            # ✅ continue — НЕ break! Соединение остаётся!
+                            continue
 
             except asyncio.TimeoutError:
-                try:
-                    await websocket.send_json({"type": "ping"})
-                except:
+                # ✅ Пингуем и продолжаем — НЕ разрываем
+                ok = await safe_send_json(websocket, {"type": "ping"})
+                if not ok:
                     print(f"[WS] Ping failed for {player_id}")
                     break
+                continue
 
             except WebSocketDisconnect:
                 print(f"[WS] Disconnect in loop: {player_id}")
                 break
 
             except json.JSONDecodeError:
+                # ✅ Битый JSON — продолжаем
                 await safe_send_json(websocket, {"type": "error", "message": "Invalid JSON"})
+                continue
 
             except Exception as e:
                 print(f"[WS] Loop error: {e}")
                 traceback.print_exc()
-                break
+                err_str = str(e).lower()
+                if any(x in err_str for x in ["connection", "closed", "disconnect", "reset"]):
+                    break
+                continue
 
     except WebSocketDisconnect:
         print(f"[WS] Disconnect: {player_id}")
@@ -594,8 +599,11 @@ async def websocket_match(websocket: WebSocket, match_id: str):
 
             if match_id in match_connections and not match_connections[match_id]:
                 del match_connections[match_id]
+                # Чистим lock
+                if match_id in match_locks:
+                    del match_locks[match_id]
 
         try:
             await websocket.close()
-        except:
+        except Exception:
             pass

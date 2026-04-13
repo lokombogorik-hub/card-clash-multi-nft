@@ -1,4 +1,3 @@
-# backend/routers/matchmaking.py
 from fastapi import APIRouter, HTTPException, status, Header
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
@@ -6,26 +5,27 @@ from datetime import datetime, timedelta
 import uuid
 import asyncio
 
+from database.session import get_session
+from database.models.pvp_match import PvPMatch
+from database.models.match_deposit import MatchDeposit
+
 router = APIRouter(prefix="/api/matchmaking", tags=["matchmaking"])
 
-# In-memory storage
+# In-memory для быстрого доступа (кэш поверх БД)
 matchmaking_queue: Dict[str, Dict[str, Any]] = {}
 active_matches: Dict[str, Dict[str, Any]] = {}
 
-# Таймауты
-ESCROW_LOCK_TIMEOUT_SECONDS = 150  # 2.5 минуты на lock phase
-GAME_RECONNECT_TIMEOUT_SECONDS = 180  # 3 минуты на реконнект во время игры
+ESCROW_LOCK_TIMEOUT_SECONDS = 150
+GAME_RECONNECT_TIMEOUT_SECONDS = 180
 
 
 class JoinQueueRequest(BaseModel):
     max_elo_diff: Optional[int] = 300
 
 
-def get_user_id_from_token(authorization: str = None) -> str:
-    """Extract user ID from JWT token"""
+def get_user_id_from_token(authorization: str = None) -> Optional[str]:
     if not authorization:
         return None
-
     try:
         from utils.security import decode_access_token
         token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
@@ -36,24 +36,19 @@ def get_user_id_from_token(authorization: str = None) -> str:
                 return str(user_id)
     except Exception as e:
         print(f"[Matchmaking] Token decode error: {e}")
-
     return None
 
 
 def get_user_deck(user_id: str) -> List[Dict]:
-    """Get user's deck from storage"""
     from routers.decks import _decks_storage
-
     print(f"[Matchmaking] Looking for deck, user_id={user_id}")
     print(f"[Matchmaking] Available decks: {list(_decks_storage.keys())}")
 
-    # Try user-specific deck first
     deck = _decks_storage.get(user_id, {}).get("full_cards", [])
     if deck and len(deck) == 5:
         print(f"[Matchmaking] Found deck for {user_id}: {len(deck)} cards")
         return deck
 
-    # Fallback to default_user
     deck = _decks_storage.get("default_user", {}).get("full_cards", [])
     if deck and len(deck) == 5:
         print(f"[Matchmaking] Using default_user deck: {len(deck)} cards")
@@ -64,7 +59,6 @@ def get_user_deck(user_id: str) -> List[Dict]:
 
 
 def calculate_elo_range(wait_time_seconds: float, max_diff: int = 300) -> int:
-    """ELO range based on wait time"""
     if wait_time_seconds < 10:
         return max_diff
     elif wait_time_seconds < 30:
@@ -75,35 +69,125 @@ def calculate_elo_range(wait_time_seconds: float, max_diff: int = 300) -> int:
 
 
 def find_opponent(user_id: str, user_elo: int, max_elo_diff: int) -> Optional[str]:
-    """Find matching opponent in queue"""
     now = datetime.utcnow()
-
     for queue_user_id, queue_data in list(matchmaking_queue.items()):
         if queue_user_id == user_id:
             continue
         if queue_data.get("match_id"):
             continue
-
         wait_time = (now - queue_data.get("joined_at", now)).total_seconds()
         opponent_elo = queue_data.get("elo", 1000)
-
         elo_range = calculate_elo_range(wait_time, max_elo_diff)
-
         if abs(user_elo - opponent_elo) <= elo_range:
             return queue_user_id
-
     return None
 
 
-async def check_and_refund_stale_match(match_id: str) -> bool:
-    """Check if match is stale and refund if needed. Returns True if refunded."""
-    from routers.matches import match_deposits, transfer_nft_from_escrow, is_escrow_configured
+async def _save_match_to_db(match_data: Dict) -> bool:
+    """Сохраняем матч в PostgreSQL"""
+    try:
+        async for session in get_session():
+            existing = await session.get(PvPMatch, match_data["match_id"])
+            if existing:
+                for key, value in match_data.items():
+                    if key == "match_id":
+                        continue
+                    if hasattr(existing, key):
+                        setattr(existing, key, value)
+            else:
+                match = PvPMatch(
+                    id=match_data["match_id"],
+                    player1_id=match_data.get("player1_id", ""),
+                    player2_id=match_data.get("player2_id"),
+                    status=match_data.get("status", "waiting"),
+                    player1_deck=match_data.get("player1_deck", []),
+                    player2_deck=match_data.get("player2_deck", []),
+                    board=match_data.get("board", [None] * 9),
+                    board_elements=match_data.get("board_elements", []),
+                    current_turn=match_data.get("current_turn"),
+                    player1_hand=match_data.get("player1_hand", []),
+                    player2_hand=match_data.get("player2_hand", []),
+                    player1_escrow_confirmed=match_data.get("player1_escrow_confirmed", False),
+                    player2_escrow_confirmed=match_data.get("player2_escrow_confirmed", False),
+                    player1_near_wallet=match_data.get("player1_near_wallet"),
+                    player2_near_wallet=match_data.get("player2_near_wallet"),
+                    escrow_locked=match_data.get("escrow_locked", False),
+                    mode=match_data.get("mode", "pvp"),
+                )
+                session.add(match)
+            await session.commit()
+            return True
+    except Exception as e:
+        print(f"[Matchmaking] DB save error: {e}")
+        return False
 
-    match_data = active_matches.get(match_id)
+
+async def _load_match_from_db(match_id: str) -> Optional[Dict]:
+    """Загружаем матч из PostgreSQL"""
+    try:
+        async for session in get_session():
+            match = await session.get(PvPMatch, match_id)
+            if not match:
+                return None
+            return {
+                "match_id": match.id,
+                "player1_id": match.player1_id,
+                "player2_id": match.player2_id,
+                "status": match.status,
+                "player1_deck": match.player1_deck or [],
+                "player2_deck": match.player2_deck or [],
+                "board": match.board or [None] * 9,
+                "board_elements": match.board_elements or [],
+                "current_turn": match.current_turn,
+                "player1_hand": match.player1_hand or [],
+                "player2_hand": match.player2_hand or [],
+                "player1_escrow_confirmed": match.player1_escrow_confirmed or False,
+                "player2_escrow_confirmed": match.player2_escrow_confirmed or False,
+                "player1_near_wallet": match.player1_near_wallet,
+                "player2_near_wallet": match.player2_near_wallet,
+                "player1_escrow_tx": match.player1_escrow_tx,
+                "player2_escrow_tx": match.player2_escrow_tx,
+                "escrow_locked": match.escrow_locked or False,
+                "claimed": match.claimed or False,
+                "claimed_token_id": match.claimed_token_id,
+                "refunded": match.refunded or False,
+                "winner": match.winner,
+                "mode": match.mode or "pvp",
+                "player1_ready": match.player1_ready or False,
+                "player2_ready": match.player2_ready or False,
+                "moves_count": match.moves_count or 0,
+                "created_at": match.created_at.isoformat() if match.created_at else datetime.utcnow().isoformat(),
+                "escrow_timeout_at": match.escrow_timeout_at.isoformat() if match.escrow_timeout_at else None,
+            }
+    except Exception as e:
+        print(f"[Matchmaking] DB load error: {e}")
+        return None
+
+
+async def get_match(match_id: str) -> Optional[Dict]:
+    """Получаем матч: сначала из памяти, потом из БД"""
+    if match_id in active_matches:
+        return active_matches[match_id]
+    match = await _load_match_from_db(match_id)
+    if match:
+        active_matches[match_id] = match
+    return match
+
+
+async def save_match(match_data: Dict):
+    """Сохраняем матч в память и БД"""
+    match_id = match_data["match_id"]
+    active_matches[match_id] = match_data
+    await _save_match_to_db(match_data)
+
+
+async def check_and_refund_stale_match(match_id: str) -> bool:
+    from routers.matches import transfer_nft_from_escrow, is_escrow_configured
+
+    match_data = await get_match(match_id)
     if not match_data:
         return False
 
-    # Проверяем только матчи в статусе waiting_escrow или waiting
     if match_data.get("status") not in ["waiting", "waiting_escrow", "pending_lock"]:
         return False
 
@@ -116,87 +200,76 @@ async def check_and_refund_stale_match(match_id: str) -> bool:
             created_at = datetime.fromisoformat(created_at_str.replace("Z", ""))
         else:
             created_at = created_at_str
-    except:
+    except Exception:
         return False
 
     elapsed = (datetime.utcnow() - created_at).total_seconds()
-
     if elapsed < ESCROW_LOCK_TIMEOUT_SECONDS:
         return False
 
-    # Таймаут истёк — рефандим
     print(f"[Matchmaking] Match {match_id} timed out after {elapsed:.0f}s, refunding...")
 
     p1_confirmed = match_data.get("player1_escrow_confirmed", False)
     p2_confirmed = match_data.get("player2_escrow_confirmed", False)
 
-    # Если никто не залочил — просто отменяем
     if not p1_confirmed and not p2_confirmed:
         match_data["status"] = "cancelled"
         match_data["cancelled_reason"] = "timeout_no_locks"
         match_data["cancelled_at"] = datetime.utcnow().isoformat()
-        active_matches[match_id] = match_data
-        print(f"[Matchmaking] Match {match_id} cancelled - no one locked")
+        await save_match(match_data)
         return True
 
-    # Рефандим тем, кто залочил
-    deposits = match_deposits.get(match_id, {})
+    # Рефандим из БД
     refunded_count = 0
+    try:
+        async for session in get_session():
+            from sqlalchemy import select
+            result = await session.execute(
+                select(MatchDeposit).where(MatchDeposit.match_id == match_id)
+            )
+            deposits = result.scalars().all()
 
-    for player_id, player_deposits in deposits.items():
-        # Получаем кошелёк игрока
-        near_wallet = None
-        if player_id == match_data.get("player1_id"):
-            near_wallet = match_data.get("player1_near_wallet")
-        elif player_id == match_data.get("player2_id"):
-            near_wallet = match_data.get("player2_near_wallet")
+            for dep in deposits:
+                near_wallet = dep.near_wallet
+                if not near_wallet:
+                    if dep.player_id == match_data.get("player1_id"):
+                        near_wallet = match_data.get("player1_near_wallet")
+                    else:
+                        near_wallet = match_data.get("player2_near_wallet")
 
-        if not near_wallet:
-            for dep in player_deposits:
-                if dep.get("near_wallet"):
-                    near_wallet = dep["near_wallet"]
-                    break
-
-        if near_wallet and is_escrow_configured():
-            for dep in player_deposits:
-                token_id = dep.get("token_id")
-                nft_contract = dep.get("nft_contract_id")
-
-                if token_id:
-                    result = await transfer_nft_from_escrow(
+                if near_wallet and is_escrow_configured():
+                    result_transfer = await transfer_nft_from_escrow(
                         to_wallet=near_wallet,
-                        token_id=token_id,
-                        nft_contract_id=nft_contract or "",
+                        token_id=dep.token_id,
+                        nft_contract_id=dep.nft_contract_id or "",
                     )
-                    if result.get("success"):
+                    if result_transfer.get("success"):
+                        dep.refunded = True
                         refunded_count += 1
-                    print(f"[Matchmaking] Refund {token_id} to {near_wallet}: {result}")
 
-    # Обновляем статус матча
+            await session.commit()
+    except Exception as e:
+        print(f"[Matchmaking] Refund error: {e}")
+
     match_data["status"] = "cancelled"
     match_data["cancelled_reason"] = "timeout_incomplete_locks"
     match_data["cancelled_at"] = datetime.utcnow().isoformat()
-    match_data["refunded_on_timeout"] = True
-    match_data["refunded_count"] = refunded_count
-    active_matches[match_id] = match_data
-
-    # Очищаем deposits
-    if match_id in match_deposits:
-        del match_deposits[match_id]
+    match_data["refunded"] = True
+    match_data["refund_count"] = refunded_count
+    await save_match(match_data)
 
     print(f"[Matchmaking] Match {match_id} cancelled, refunded {refunded_count} NFTs")
     return True
 
 
 async def cleanup_stale_matches():
-    """Background task: cleanup stale matches and refund NFTs"""
+    """Background task: cleanup stale matches"""
     while True:
         try:
             now = datetime.utcnow()
             stale_matches = []
 
             for match_id, match_data in list(active_matches.items()):
-                # Проверяем матчи в состоянии ожидания lock
                 if match_data.get("status") in ["waiting", "waiting_escrow", "pending_lock"]:
                     created_at_str = match_data.get("created_at")
                     if created_at_str:
@@ -205,27 +278,24 @@ async def cleanup_stale_matches():
                                 created_at = datetime.fromisoformat(created_at_str.replace("Z", ""))
                             else:
                                 created_at = created_at_str
-
                             elapsed = (now - created_at).total_seconds()
                             if elapsed > ESCROW_LOCK_TIMEOUT_SECONDS:
                                 stale_matches.append(match_id)
-                        except:
+                        except Exception:
                             pass
 
-            # Обрабатываем stale матчи
             for match_id in stale_matches:
                 try:
                     await check_and_refund_stale_match(match_id)
                 except Exception as e:
                     print(f"[Matchmaking] Error refunding stale match {match_id}: {e}")
 
-            # Также чистим очередь от старых записей
+            # Чистим очередь
             stale_queue = []
             for user_id, queue_data in list(matchmaking_queue.items()):
                 joined_at = queue_data.get("joined_at")
                 if joined_at:
                     elapsed = (now - joined_at).total_seconds()
-                    # Если в очереди больше 10 минут без матча — удаляем
                     if elapsed > 600 and not queue_data.get("match_id"):
                         stale_queue.append(user_id)
 
@@ -237,7 +307,6 @@ async def cleanup_stale_matches():
         except Exception as e:
             print(f"[Matchmaking] Cleanup error: {e}")
 
-        # Проверяем каждые 30 секунд
         await asyncio.sleep(30)
 
 
@@ -246,45 +315,30 @@ async def join_queue(
         request: JoinQueueRequest,
         authorization: str = Header(None)
 ):
-    """Join matchmaking queue"""
-
     user_id = get_user_id_from_token(authorization)
     if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authorization required"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authorization required")
 
-    # Check if user has a deck
     user_deck = get_user_deck(user_id)
     if not user_deck or len(user_deck) < 5:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No deck saved. Select 5 cards first."
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No deck saved. Select 5 cards first.")
 
     user_elo = 1000
     max_elo_diff = request.max_elo_diff or 300
 
-    # Check if user already in queue with a match
+    # Проверяем существующую запись в очереди
     if user_id in matchmaking_queue:
         queue_entry = matchmaking_queue[user_id]
         if queue_entry.get("match_id"):
             match_id = queue_entry["match_id"]
-            match_data = active_matches.get(match_id)
+            match_data = await get_match(match_id)
             if match_data:
-                # Проверяем, не истёк ли таймаут
                 if match_data.get("status") == "cancelled":
-                    # Матч был отменён, удаляем из очереди
                     del matchmaking_queue[user_id]
-                    return {
-                        "status": "cancelled",
-                        "message": "Previous match was cancelled due to timeout. Search again."
-                    }
+                    return {"status": "cancelled", "message": "Previous match was cancelled. Search again."}
 
                 del matchmaking_queue[user_id]
-                opponent_id = match_data["player2_id"] if match_data["player1_id"] == user_id else match_data[
-                    "player1_id"]
+                opponent_id = match_data["player2_id"] if match_data["player1_id"] == user_id else match_data["player1_id"]
                 return {
                     "status": "matched",
                     "match_id": match_id,
@@ -293,13 +347,11 @@ async def join_queue(
                 }
         matchmaking_queue[user_id]["last_poll"] = datetime.utcnow()
 
-    # Try to find opponent
     opponent_id = find_opponent(user_id, user_elo, max_elo_diff)
 
     if opponent_id and opponent_id in matchmaking_queue:
         match_id = str(uuid.uuid4())
         now = datetime.utcnow()
-
         opponent_deck = get_user_deck(opponent_id)
 
         match_data = {
@@ -308,7 +360,7 @@ async def join_queue(
             "player2_id": opponent_id,
             "player1_deck": user_deck,
             "player2_deck": opponent_deck,
-            "status": "waiting_escrow",  # Ждём lock от обоих
+            "status": "waiting_escrow",
             "created_at": now.isoformat(),
             "current_round": 0,
             "player1_score": 0,
@@ -316,9 +368,16 @@ async def join_queue(
             "player1_escrow_confirmed": False,
             "player2_escrow_confirmed": False,
             "escrow_timeout_at": (now + timedelta(seconds=ESCROW_LOCK_TIMEOUT_SECONDS)).isoformat(),
+            "board": [None] * 9,
+            "board_elements": [],
+            "player1_hand": [],
+            "player2_hand": [],
+            "moves_count": 0,
+            "mode": "pvp",
         }
 
-        active_matches[match_id] = match_data
+        # Сохраняем в память И в БД
+        await save_match(match_data)
         matchmaking_queue[opponent_id]["match_id"] = match_id
 
         if user_id in matchmaking_queue:
@@ -334,7 +393,7 @@ async def join_queue(
             "message": "Match found!"
         }
 
-    # Add to queue
+    # Добавляем в очередь
     if user_id not in matchmaking_queue:
         matchmaking_queue[user_id] = {
             "user_id": user_id,
@@ -347,7 +406,6 @@ async def join_queue(
         print(f"[Matchmaking] User {user_id} joined queue. Size: {len(matchmaking_queue)}")
 
     position = list(matchmaking_queue.keys()).index(user_id) + 1
-
     return {
         "status": "searching",
         "position": position,
@@ -358,49 +416,36 @@ async def join_queue(
 
 @router.post("/leave_queue")
 async def leave_queue(authorization: str = Header(None)):
-    """Leave matchmaking queue"""
-
     user_id = get_user_id_from_token(authorization)
     if user_id and user_id in matchmaking_queue:
         del matchmaking_queue[user_id]
         print(f"[Matchmaking] User {user_id} left queue")
-
     return {"success": True, "message": "Left queue"}
 
 
 @router.get("/queue_status")
 async def get_queue_status(authorization: str = Header(None)):
-    """Check queue status"""
-
     user_id = get_user_id_from_token(authorization)
     if not user_id or user_id not in matchmaking_queue:
         return {"status": "not_in_queue"}
 
     queue_entry = matchmaking_queue[user_id]
-
     if queue_entry.get("match_id"):
         match_id = queue_entry["match_id"]
-        match_data = active_matches.get(match_id)
+        match_data = await get_match(match_id)
         if match_data:
-            # Проверяем статус матча
             if match_data.get("status") == "cancelled":
                 del matchmaking_queue[user_id]
-                return {
-                    "status": "cancelled",
-                    "reason": match_data.get("cancelled_reason", "timeout"),
-                    "message": "Match was cancelled"
-                }
+                return {"status": "cancelled", "reason": match_data.get("cancelled_reason", "timeout")}
 
             opponent_id = match_data["player2_id"] if match_data["player1_id"] == user_id else match_data["player1_id"]
-
-            # Вычисляем оставшееся время на lock
             remaining_seconds = None
             timeout_at_str = match_data.get("escrow_timeout_at")
             if timeout_at_str:
                 try:
                     timeout_at = datetime.fromisoformat(timeout_at_str.replace("Z", ""))
                     remaining_seconds = max(0, (timeout_at - datetime.utcnow()).total_seconds())
-                except:
+                except Exception:
                     pass
 
             return {
@@ -417,7 +462,6 @@ async def get_queue_status(authorization: str = Header(None)):
 
 @router.get("/queue-info")
 async def get_queue_info():
-    """Debug endpoint"""
     return {
         "queue_size": len(matchmaking_queue),
         "active_matches": len(active_matches),
@@ -429,13 +473,10 @@ async def get_queue_info():
 
 @router.post("/check_timeout/{match_id}")
 async def check_match_timeout(match_id: str):
-    """Manually check and handle match timeout"""
     refunded = await check_and_refund_stale_match(match_id)
-
-    match_data = active_matches.get(match_id)
+    match_data = await get_match(match_id)
     if not match_data:
         return {"status": "not_found"}
-
     return {
         "status": match_data.get("status"),
         "refunded": refunded,
