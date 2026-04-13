@@ -17,7 +17,7 @@ from routers.matchmaking import router as matchmaking_router, cleanup_stale_matc
 from routers.cases import router as cases_router
 from routers.proxy import router as proxy_router
 from routers.decks import router as decks_router
-from routers.ws_game import router as ws_game_router
+from routers.ws_match import router as ws_game_router
 from routers.user import router as user_router
 
 logger = logging.getLogger(__name__)
