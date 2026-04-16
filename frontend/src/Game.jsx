@@ -152,7 +152,6 @@ function resolvePlacement(placedIdx, grid, boardElems) {
     return flipped;
 }
 
-// ✅ Универсальная нормализация карты с любого источника
 function normalizeCard(raw, owner, prevCard) {
     if (!raw) return null;
 
@@ -171,7 +170,6 @@ function normalizeCard(raw, owner, prevCard) {
         element = ELEMENTS[hash % ELEMENTS.length];
     }
 
-    // ✅ Все возможные источники изображения
     const imageUrl =
         raw.imageUrl ||
         raw.image ||
@@ -252,7 +250,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const pingIntervalRef = useRef(null);
     const mountedRef = useRef(true);
 
-    // Refs для WS-замыканий (без stale state)
     const myPlayerIdRef = useRef(null);
     const myRoleRef = useRef(null);
     const pvpStateRef = useRef(null);
@@ -274,6 +271,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
     // ── Claim state ───────────────────────────────
     const [claimCards, setClaimCards] = useState([]);
+    const [claimLoading, setClaimLoading] = useState(false); // ← ДОБАВЛЕНО
     const [claimPickIndex, setClaimPickIndex] = useState(null);
     const [claimRevealed, setClaimRevealed] = useState(false);
     const [claimBusy, setClaimBusy] = useState(false);
@@ -314,7 +312,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const [enemyRevealId, setEnemyRevealId] = useState(null);
     const [playerSpells, setPlayerSpells] = useState({ freeze: 1, reveal: 1 });
 
-    // Refs для AI (без stale closure)
     const boardRef = useRef(board);
     const handsRef = useRef(hands);
     const frozenRef = useRef(frozen);
@@ -359,13 +356,11 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             const state = data.state;
             if (!state) return;
 
-            // Снимаем ожидание
             setWaitingForOpponent(false);
             setOpponentConnected(true);
             setPvpState(state);
             pvpStateRef.current = state;
 
-            // Определяем наш ID
             let myId = myPlayerIdRef.current;
             if (!myId) {
                 const role = myRoleRef.current || data.you_are;
@@ -376,7 +371,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                 }
             }
 
-            // Доска
             if (Array.isArray(state.board)) {
                 setBoard(prev => state.board.map((cell, idx) => {
                     if (!cell) return null;
@@ -385,18 +379,15 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                 }));
             }
 
-            // Элементы клеток
             if (Array.isArray(state.board_elements)) {
                 setBoardElems(state.board_elements);
             }
 
-            // Чей ход
             if (state.current_turn != null) {
                 const isMyTurn = myId ? String(state.current_turn) === String(myId) : false;
                 setTurn(isMyTurn ? "player" : "enemy");
             }
 
-            // ✅ Руки — ОДИН атомарный вызов setHands
             const myHand = Array.isArray(data.your_hand)
                 ? data.your_hand
                     .filter(c => c != null)
@@ -420,7 +411,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                 enemy: enemyHand,
             }));
 
-            // Конец игры
             if (state.status === "finished") {
                 setMatchOver(true);
                 setRoundOver(true);
@@ -469,8 +459,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                 return next;
             });
 
-            // Противнику убираем одну скрытую карту
-            // Свою руку обновит следующий game_state от сервера
             if (!isMyCard) {
                 setHands(h => ({
                     ...h,
@@ -574,7 +562,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                             setOpponentConnected(true);
                             setWaitingForOpponent(false);
                             setReconnectDeadline(null);
-                            // Запрашиваем актуальное состояние
                             try {
                                 if (wsRef.current?.readyState === WebSocket.OPEN)
                                     wsRef.current.send(JSON.stringify({ type: "get_state" }));
@@ -658,6 +645,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     // ══════════════════════════════════════════════
 
     const prepareClaimCards = async () => {
+        setClaimLoading(true); // ← ДОБАВЛЕНО
         if (isPvP && matchId) {
             try {
                 const token = getStoredToken();
@@ -671,6 +659,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                         image: d.image || null,
                         imageUrl: d.image || null,
                     })));
+                    setClaimLoading(false); // ← ДОБАВЛЕНО
                     return;
                 }
             } catch (e) { console.error("[prepareClaimCards]", e); }
@@ -684,6 +673,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                 imageUrl: c.imageUrl || c.image || null,
             })));
         }
+        setClaimLoading(false); // ← ДОБАВЛЕНО
     };
 
     const onClaimPick = (index) => {
@@ -692,6 +682,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         haptic("light");
     };
 
+    // ← ИСПРАВЛЕНО: убран дублирующий запрос opponent_deposits
     const onClaimConfirm = async () => {
         if (claimPickIndex === null || claimBusy || claimDone) return;
         setClaimBusy(true);
@@ -701,6 +692,9 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             const pickedCard = claimCards[claimPickIndex] || {};
 
             if (isPvP && matchId) {
+                // Imagen уже есть в claimCards — не грузим повторно
+                const realImage = pickedCard?.image || pickedCard?.imageUrl || null;
+
                 await apiFetch(`/api/matches/${matchId}/finish`, {
                     method: "POST", token,
                     body: JSON.stringify({
@@ -708,13 +702,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                         winner_near_wallet: nearAccountId || null,
                     }),
                 });
-
-                let realImage = pickedCard?.image || pickedCard?.imageUrl;
-                try {
-                    const dr = await apiFetch(`/api/matches/${matchId}/opponent_deposits`, { token });
-                    if (dr?.deposits?.[claimPickIndex])
-                        realImage = dr.deposits[claimPickIndex].image || realImage;
-                } catch { }
 
                 const res = await apiFetch(`/api/matches/${matchId}/claim`, {
                     method: "POST", token,
@@ -724,6 +711,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                         nft_contract_id: pickedCard?.nft_contract_id || null,
                     }),
                 });
+
                 setClaimedCard({
                     ...pickedCard,
                     ...(res?.claimed_card || {}),
@@ -779,7 +767,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
     useEffect(() => { refreshStage2Match(); }, [matchId, isStage2]);
 
-    // Загрузка колоды AI
     useEffect(() => {
         if (isPvP) return;
         let alive = true;
@@ -812,7 +799,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         return () => { alive = false; };
     }, [isPvP]);
 
-    // Синхронизация playerDeck → рука игрока (AI режим)
     useEffect(() => {
         if (!deckOk || isPvP) return;
         setHands(h => ({
@@ -824,7 +810,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         }));
     }, [playerDeck, isPvP]);
 
-    // Синхронизация enemyDeck → рука врага (AI режим)
     useEffect(() => {
         if (isPvP) return;
         setHands(h => ({ ...h, enemy: cloneDeckToHand(enemyDeck, "enemy") }));
@@ -865,6 +850,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         setClaimDone(false);
         setClaimError("");
         setClaimedCard(null);
+        setClaimLoading(false); // ← ДОБАВЛЕНО
         if (!keepSeries) {
             setSeries({ player: 0, enemy: 0 });
             setRoundNo(1);
@@ -1016,7 +1002,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         return () => { clearTimeout(t); clearTimeout(safety); };
     }, [turn, roundOver, matchOver, isPvP]);
 
-    // Конец раунда (AI)
     useEffect(() => {
         if (isPvP || roundOver || matchOver) return;
         if (board.some(c => c === null)) return;
@@ -1028,7 +1013,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         setSeries(s => ({ ...s, [w]: s[w] + 1 }));
     }, [board, roundOver, matchOver, isPvP]);
 
-    // Конец матча (AI)
     useEffect(() => {
         if (isPvP || matchOver) return;
         if (series.player >= MATCH_WINS_TARGET || series.enemy >= MATCH_WINS_TARGET) {
@@ -1038,7 +1022,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         }
     }, [series, matchOver, isStage2, isPvP]);
 
-    // Конфетти при победе в раунде
     useEffect(() => {
         if (!roundOver || roundWinner !== "player") return;
         const origin = { x: 0.5, y: 0.35 };
@@ -1057,7 +1040,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     // RENDER
     // ══════════════════════════════════════════════
 
-    // 1. Нет WS соединения
     if (isPvP && !wsConnected) {
         return (
             <div className="game-root">
@@ -1086,7 +1068,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         );
     }
 
-    // 2. WS подключён, но ждём второго игрока
     if (isPvP && wsConnected && waitingForOpponent) {
         return (
             <div className="game-root">
@@ -1109,7 +1090,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         );
     }
 
-    // 3. Противник отвалился
     if (isPvP && reconnectDeadline && !opponentConnected) {
         const sec = Math.max(0, Math.ceil((reconnectDeadline.getTime() - Date.now()) / 1000));
         return (
@@ -1129,7 +1109,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         );
     }
 
-    // 4. Основной рендер игры
     return (
         <div className="game-root">
             <div className="game-ui tt-layout">
@@ -1148,7 +1127,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                     <PlayerBadge side="enemy" name={isPvP ? "Opponent" : "BunnyBot"} avatarUrl="/ui/avatar-enemy.png?v=1" active={turn === "enemy"} />
                     <PlayerBadge side="player" name={myName} avatarUrl={myAvatar} active={turn === "player"} />
 
-                    {/* ── Рука противника ── */}
                     <div className="hand left">
                         <div className="hand-cards-wrap">
                             {hands.enemy.slice(0, 5).map((c, i) => {
@@ -1169,7 +1147,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                         )}
                     </div>
 
-                    {/* ── Доска ── */}
                     <div className="center-col">
                         <div className="board">
                             {board.map((cell, i) => {
@@ -1192,7 +1169,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                         </div>
                     </div>
 
-                    {/* ── Рука игрока ── */}
                     <div className="hand right">
                         <div className="hand-cards-wrap">
                             {hands.player.slice(0, 5).map((c, i) => {
@@ -1231,7 +1207,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                         )}
                     </div>
 
-                    {/* ── Загрузка AI ── */}
                     {loadingEnemyDeck && !isPvP && (
                         <div className="game-over">
                             <div className="game-over-box" style={{ minWidth: 320 }}>
@@ -1240,7 +1215,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                         </div>
                     )}
 
-                    {/* ── Конец игры ── */}
                     {(roundOver || matchOver) && (
                         <div className="game-over">
                             <div className="game-over-box" style={{ minWidth: 340, maxWidth: 420 }}>
@@ -1258,7 +1232,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                     }
                                 </div>
 
-                                {/* Выбор карты победителя */}
+                                {/* ← ИСПРАВЛЕНО: один источник карт + лоадер */}
                                 {matchOver && (isPvP ? roundWinner : matchWinner) === "player" && !claimDone && (
                                     <>
                                         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8, color: "#ffd700" }}>
@@ -1267,38 +1241,51 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                         <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 14 }}>
                                             Карты скрыты — выбирай наугад!
                                         </div>
-                                        <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 16, flexWrap: "wrap" }}>
-                                            {(claimCards.length > 0 ? claimCards : enemyDeck).map((card, idx) => {
-                                                const isSel = claimPickIndex === idx;
-                                                const showCard = claimRevealed && isSel;
-                                                const realImg = claimedCard?.image || claimedCard?.imageUrl || card?.image || card?.imageUrl || null;
-                                                return (
-                                                    <div
-                                                        key={card?.id || card?.token_id || idx}
-                                                        onClick={() => onClaimPick(idx)}
-                                                        style={{
-                                                            cursor: claimRevealed ? "default" : "pointer",
-                                                            transform: isSel ? "scale(1.1) translateY(-4px)" : "scale(1)",
-                                                            transition: "all 0.25s ease",
-                                                            filter: claimRevealed && !isSel ? "brightness(0.5)" : "none",
-                                                        }}
-                                                    >
-                                                        {showCard ? (
-                                                            <div style={{ width: 64, height: 88, borderRadius: 10, overflow: "hidden", border: "3px solid #ffd700", boxShadow: "0 0 20px rgba(255,215,0,0.5)", background: "#1a1a2e" }}>
-                                                                <img src={realImg || "/cards/card.jpg"} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={e => { e.currentTarget.src = "/cards/card.jpg"; }} />
-                                                            </div>
-                                                        ) : (
-                                                            <div className="card back" style={{ width: 64, height: 88, border: isSel ? "3px solid #ffd700" : "2px solid rgba(255,255,255,0.2)", boxShadow: isSel ? "0 0 20px rgba(255,215,0,0.5)" : "none", borderRadius: 10 }}>
-                                                                <div className="card-back-inner">
-                                                                    <img className="card-back-logo-img" src="/ui/cardclash-logo.png?v=3" alt="" draggable="false" style={{ width: "70%", height: "auto" }} />
+
+                                        {claimLoading ? (
+                                            <div style={{ padding: 20, opacity: 0.7, fontSize: 14 }}>
+                                                ⏳ Загрузка карт...
+                                            </div>
+                                        ) : (
+                                            <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 16, flexWrap: "wrap" }}>
+                                                {claimCards.map((card, idx) => {
+                                                    const isSel = claimPickIndex === idx;
+                                                    const showCard = claimRevealed && isSel;
+                                                    const realImg = claimedCard?.image || claimedCard?.imageUrl || card?.image || card?.imageUrl || null;
+                                                    return (
+                                                        <div
+                                                            key={card?.id || card?.token_id || idx}
+                                                            onClick={() => onClaimPick(idx)}
+                                                            style={{
+                                                                cursor: claimRevealed ? "default" : "pointer",
+                                                                transform: isSel ? "scale(1.1) translateY(-4px)" : "scale(1)",
+                                                                transition: "all 0.25s ease",
+                                                                filter: claimRevealed && !isSel ? "brightness(0.5)" : "none",
+                                                            }}
+                                                        >
+                                                            {showCard ? (
+                                                                <div style={{ width: 64, height: 88, borderRadius: 10, overflow: "hidden", border: "3px solid #ffd700", boxShadow: "0 0 20px rgba(255,215,0,0.5)", background: "#1a1a2e" }}>
+                                                                    <img
+                                                                        src={realImg || "/cards/card.jpg"}
+                                                                        alt=""
+                                                                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                                                        onError={e => { e.currentTarget.src = "/cards/card.jpg"; }}
+                                                                    />
                                                                 </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                        {!claimRevealed && (
+                                                            ) : (
+                                                                <div className="card back" style={{ width: 64, height: 88, border: isSel ? "3px solid #ffd700" : "2px solid rgba(255,255,255,0.2)", boxShadow: isSel ? "0 0 20px rgba(255,215,0,0.5)" : "none", borderRadius: 10 }}>
+                                                                    <div className="card-back-inner">
+                                                                        <img className="card-back-logo-img" src="/ui/cardclash-logo.png?v=3" alt="" draggable="false" style={{ width: "70%", height: "auto" }} />
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+
+                                        {!claimRevealed && !claimLoading && (
                                             <button
                                                 onClick={onClaimConfirm}
                                                 disabled={claimPickIndex === null || claimBusy}
@@ -1432,7 +1419,6 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
         return {};
     };
 
-    // ✅ Все источники изображения
     const imgSrc = !imgFailed
         ? (card.imageUrl || card.image || card.nftData?.imageUrl || card.nftData?.image || "")
         : "";
@@ -1468,9 +1454,9 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
                 )}
 
                 <div className="tt-badge">
-                    <span className="tt-num top" style={numStyle(cv.top)}   >{displayVal(cv.top)}</span>
-                    <span className="tt-num left" style={numStyle(cv.left)}  >{displayVal(cv.left)}</span>
-                    <span className="tt-num right" style={numStyle(cv.right)} >{displayVal(cv.right)}</span>
+                    <span className="tt-num top" style={numStyle(cv.top)}>{displayVal(cv.top)}</span>
+                    <span className="tt-num left" style={numStyle(cv.left)}>{displayVal(cv.left)}</span>
+                    <span className="tt-num right" style={numStyle(cv.right)}>{displayVal(cv.right)}</span>
                     <span className="tt-num bottom" style={numStyle(cv.bottom)}>{displayVal(cv.bottom)}</span>
                 </div>
             </div>
