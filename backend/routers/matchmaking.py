@@ -163,6 +163,9 @@ async def _load_match_from_db(match_id: str) -> Optional[Dict]:
         print(f"[Matchmaking] DB load error: {e}")
         return None
 
+async def get_all_matches() -> dict:
+    """Возвращает все матчи из памяти"""
+    return matches_storage  # или как у тебя называется dict с матчами
 
 async def get_match(match_id: str) -> Optional[Dict]:
     """Получаем матч: сначала из памяти, потом из БД"""

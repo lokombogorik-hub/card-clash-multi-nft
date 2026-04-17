@@ -7,19 +7,22 @@ function getStoredToken() {
         return localStorage.getItem("token") || localStorage.getItem("accessToken") || localStorage.getItem("access_token") || "";
     } catch (e) { return ""; }
 }
-// Добавить перед export default function Matchmaking:
+// СТАЛО:
 function LockWaitTimer({ timeoutMs, onTimeout }) {
-    var [secsLeft, setSecsLeft] = useState(Math.ceil((timeoutMs || 180000) / 1000));
+    // [PATCH] startRef фиксирует время старта чтобы не сбрасываться при ре-рендере
+    var startRef = useRef(Date.now());
+    var totalMs = timeoutMs || 180000;
+    var [secsLeft, setSecsLeft] = useState(Math.ceil(totalMs / 1000));
     var onTimeoutRef = useRef(onTimeout);
     onTimeoutRef.current = onTimeout;
 
     useEffect(function () {
-        var start = Date.now();
-        var total = timeoutMs || 180000;
+        // [PATCH] Считаем от реального времени старта
+        startRef.current = Date.now();
 
         var interval = setInterval(function () {
-            var elapsed = Date.now() - start;
-            var remaining = Math.max(0, Math.ceil((total - elapsed) / 1000));
+            var elapsed = Date.now() - startRef.current;
+            var remaining = Math.max(0, Math.ceil((totalMs - elapsed) / 1000));
             setSecsLeft(remaining);
             if (remaining <= 0) {
                 clearInterval(interval);
@@ -28,17 +31,19 @@ function LockWaitTimer({ timeoutMs, onTimeout }) {
         }, 1000);
 
         return function () { clearInterval(interval); };
-    }, [timeoutMs]);
+        // [PATCH] пустой deps — запускается один раз при маунте
+    }, []);
 
     var mins = Math.floor(secsLeft / 60);
     var secs = secsLeft % 60;
 
     return (
         <div style={{
-            fontSize: 12, opacity: 0.7, marginTop: 8,
-            color: secsLeft < 30 ? "#ff6b6b" : "inherit"
+            fontSize: 13, marginTop: 12,
+            color: secsLeft < 30 ? "#ff6b6b" : "rgba(255,255,255,0.7)",
+            fontWeight: secsLeft < 30 ? 700 : 400,
         }}>
-            Auto-cancel in {mins}:{secs.toString().padStart(2, "0")}
+            ⏳ Auto-cancel in {mins}:{secs.toString().padStart(2, "0")}
         </div>
     );
 }

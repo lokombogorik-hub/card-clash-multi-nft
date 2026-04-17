@@ -557,7 +557,16 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                             setWaitingForOpponent(true);
                             setWsError("");
                             break;
-
+                        case "match_cancelled":
+                            // [PATCH] Матч отменён backend (таймаут реконнекта)
+                            setMatchOver(true);
+                            setRoundOver(true);
+                            setWsError(
+                                data.message || "Match cancelled. NFTs will be refunded."
+                            );
+                            // Через 3 секунды выходим в меню
+                            setTimeout(onExit, 3000);
+                            break;
                         case "player_connected":
                             setOpponentConnected(true);
                             setWaitingForOpponent(false);
@@ -567,7 +576,11 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                     wsRef.current.send(JSON.stringify({ type: "get_state" }));
                             } catch { }
                             break;
-
+                        // [PATCH] Сервер говорит что NFT ещё не залочены
+                        case "waiting_for_escrow":
+                            setWaitingForOpponent(true);
+                            setWsError("Waiting for NFT lock confirmation...");
+                            break;
                         case "player_disconnected":
                             setOpponentConnected(false);
                             if (data.reconnect_deadline)
@@ -888,6 +901,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const placeCard = (cellIdx) => {
         if (roundOver || matchOver || turn !== "player" || !selected) return;
         if (board[cellIdx] || frozen[cellIdx] > 0) return;
+        if (isPvP && !opponentConnected) return;
 
         if (isPvP) {
             const cardIndex = hands.player.findIndex(c =>

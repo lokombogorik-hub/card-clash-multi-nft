@@ -119,39 +119,22 @@ function Leaderboard({ token }) {
 
 var TOURNAMENTS = [
     {
-        id: 1,
-        title: "Digital Bunny Cup",
-        subtitle: "Главный турнир сезона",
-        status: "soon",
-        players: 0,
-        maxPlayers: 0,
-        prize: "N/A USDT",
-        prizePool: ["N/A USDT", "N/A USDT", "N/A USDT"],
-        format: "1v1 Single Elimination",
+        id: 1, title: "Digital Bunny Cup", subtitle: "Главный турнир сезона",
+        status: "soon", players: 0, maxPlayers: 0, prize: "N/A USDT",
+        prizePool: ["N/A USDT", "N/A USDT", "N/A USDT"], format: "1v1 Single Elimination",
         avatar: "https://bafybeibqzbodfn3xczppxh2k2ek3bgvojhivqy4ntbkprcxesulth3yy5e.ipfs.w3s.link/326.png",
         gradient: ["#667eea", "#764ba2"]
     },
     {
-        id: 2,
-        title: "Weekly Clash",
-        subtitle: "Еженедельные битвы",
-        status: "soon",
-        players: 0,
-        maxPlayers: 0,
-        prize: "N/A NEAR",
-        prizePool: ["N/A NEAR", "N/A NEAR", "N/A NEAR"],
-        format: "1v1 Best of 3",
+        id: 2, title: "Weekly Clash", subtitle: "Еженедельные битвы",
+        status: "soon", players: 0, maxPlayers: 0, prize: "N/A NEAR",
+        prizePool: ["N/A NEAR", "N/A NEAR", "N/A NEAR"], format: "1v1 Best of 3",
         avatar: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&h=200&fit=crop",
         gradient: ["#f093fb", "#f5576c"]
     },
     {
-        id: 3,
-        title: "Season Finale",
-        subtitle: "Финал сезона",
-        status: "soon",
-        players: 0,
-        maxPlayers: 0,
-        prize: "N/A NFT + N/A USDT",
+        id: 3, title: "Season Finale", subtitle: "Финал сезона",
+        status: "soon", players: 0, maxPlayers: 0, prize: "N/A NFT + N/A USDT",
         prizePool: ["N/A USDT + N/A NFT", "N/A USDT + N/A NFT", "N/A USDT + N/A NFT"],
         format: "1v1 Double Elimination",
         avatar: "https://avatars.mds.yandex.net/i?id=a9714c12aca31ffe8e80d0238892dc19_l-6607472-images-thumbs&n=13",
@@ -162,12 +145,10 @@ var TOURNAMENTS = [
 function SeasonBar({ onGoTournament }) {
     var [idx, setIdx] = useState(0);
     var t = TOURNAMENTS[idx];
-
     useEffect(function () {
         var id = setInterval(function () { setIdx(function (i) { return (i + 1) % TOURNAMENTS.length; }); }, 4000);
         return function () { clearInterval(id); };
     }, []);
-
     return (
         <div className="season-bar" style={{ cursor: "pointer" }} onClick={onGoTournament}>
             <div className="season-bar-avatar" style={{ background: "linear-gradient(135deg, " + t.gradient[0] + ", " + t.gradient[1] + ")" }}>
@@ -195,7 +176,6 @@ function SeasonBar({ onGoTournament }) {
 
 function TournamentPage() {
     var [expandedId, setExpandedId] = useState(null);
-
     return (
         <div className="tournament-page-v2">
             <div className="tournament-header">
@@ -204,30 +184,18 @@ function TournamentPage() {
                 </h2>
                 <div className="tournament-subtitle">Участвуй в турнирах и выигрывай призы</div>
             </div>
-
             <div className="tournament-stats-row">
-                <div className="tournament-stat-chip">
-                    <span className="stat-chip-icon">🎮</span>
-                    <span>{TOURNAMENTS.length} турнира</span>
-                </div>
-                <div className="tournament-stat-chip">
-                    <span className="stat-chip-icon">💎</span>
-                    <span>Много призов</span>
-                </div>
+                <div className="tournament-stat-chip"><span className="stat-chip-icon">🎮</span><span>{TOURNAMENTS.length} турнира</span></div>
+                <div className="tournament-stat-chip"><span className="stat-chip-icon">💎</span><span>Много призов</span></div>
             </div>
-
             <div className="tournament-list-v2">
                 {TOURNAMENTS.map(function (t, i) {
                     var isExpanded = expandedId === t.id;
                     return (
-                        <div
-                            key={t.id}
-                            className={"tournament-card-v2" + (isExpanded ? " expanded" : "")}
+                        <div key={t.id} className={"tournament-card-v2" + (isExpanded ? " expanded" : "")}
                             style={{ animationDelay: (i * 0.1) + "s" }}
-                            onClick={function () { setExpandedId(isExpanded ? null : t.id); }}
-                        >
+                            onClick={function () { setExpandedId(isExpanded ? null : t.id); }}>
                             <div className="tournament-card-glow" style={{ background: "linear-gradient(135deg, " + t.gradient[0] + "40, " + t.gradient[1] + "40)" }} />
-
                             <div className="tournament-card-main">
                                 <div className="tournament-avatar-wrap">
                                     <div className="tournament-avatar-ring" style={{ background: "linear-gradient(135deg, " + t.gradient[0] + ", " + t.gradient[1] + ")" }}>
@@ -237,55 +205,37 @@ function TournamentPage() {
                                     </div>
                                     <div className="tournament-avatar-badge">SOON</div>
                                 </div>
-
                                 <div className="tournament-card-info">
-                                    <div className="tournament-card-title-row">
-                                        <h3>{t.title}</h3>
-                                    </div>
+                                    <div className="tournament-card-title-row"><h3>{t.title}</h3></div>
                                     <p className="tournament-card-subtitle">{t.subtitle}</p>
-
                                     <div className="tournament-quick-stats">
-                                        <div className="quick-stat">
-                                            <span className="quick-stat-icon">👥</span>
-                                            <span>{t.players}/{t.maxPlayers}</span>
-                                        </div>
-                                        <div className="quick-stat">
-                                            <span className="quick-stat-icon">🎯</span>
-                                            <span>{t.format.split(" ")[0]}</span>
-                                        </div>
-                                        <div className="quick-stat prize">
-                                            <span className="quick-stat-icon">💰</span>
-                                            <span>{t.prize}</span>
-                                        </div>
+                                        <div className="quick-stat"><span className="quick-stat-icon">👥</span><span>{t.players}/{t.maxPlayers}</span></div>
+                                        <div className="quick-stat"><span className="quick-stat-icon">🎯</span><span>{t.format.split(" ")[0]}</span></div>
+                                        <div className="quick-stat prize"><span className="quick-stat-icon">💰</span><span>{t.prize}</span></div>
                                     </div>
                                 </div>
-
                                 <div className={"tournament-expand-arrow" + (isExpanded ? " rotated" : "")}>
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                                         <path d="M6 9l6 6 6-6" stroke="white" strokeWidth="2" strokeLinecap="round" />
                                     </svg>
                                 </div>
                             </div>
-
                             {isExpanded && (
                                 <div className="tournament-expanded">
                                     <div className="tournament-divider" />
-
                                     <div className="tournament-prize-section">
                                         <div className="prize-section-title">Призовой фонд</div>
                                         <div className="prize-places">
                                             {t.prizePool.map(function (prize, pi) {
-                                                var placeIcons = ["🥇", "🥈", "🥉"];
                                                 return (
                                                     <div key={pi} className={"prize-place place-" + (pi + 1)}>
-                                                        <span className="place-icon">{placeIcons[pi]}</span>
+                                                        <span className="place-icon">{["🥇", "🥈", "🥉"][pi]}</span>
                                                         <span className="place-prize">{prize}</span>
                                                     </div>
                                                 );
                                             })}
                                         </div>
                                     </div>
-
                                     <div className="tournament-format-section">
                                         <div className="format-item">
                                             <span className="format-icon">📋</span>
@@ -298,12 +248,9 @@ function TournamentPage() {
                                             <span className="format-value">до {t.maxPlayers} игроков</span>
                                         </div>
                                     </div>
-
-                                    <button
-                                        className="tournament-action-btn"
+                                    <button className="tournament-action-btn"
                                         style={{ background: "linear-gradient(135deg, " + t.gradient[0] + ", " + t.gradient[1] + ")" }}
-                                        onClick={function (e) { e.stopPropagation(); alert("Регистрация скоро откроется!"); }}
-                                    >
+                                        onClick={function (e) { e.stopPropagation(); alert("Регистрация скоро откроется!"); }}>
                                         <span className="btn-icon">🔔</span>
                                         <span>Уведомить о старте</span>
                                     </button>
@@ -313,12 +260,9 @@ function TournamentPage() {
                     );
                 })}
             </div>
-
             <div className="tournament-bottom-info">
                 <div className="bottom-info-icon">💡</div>
-                <div className="bottom-info-text">
-                    Нажми на турнир, чтобы узнать подробности
-                </div>
+                <div className="bottom-info-text">Нажми на турнир, чтобы узнать подробности</div>
             </div>
         </div>
     );
@@ -363,41 +307,33 @@ function AppContent() {
     var bottomStackRef = useRef(null);
     var [authState, setAuthState] = useState({ status: "idle", error: "" });
 
-    // [PATCH] Debug state для отображения active match
-    var [debugMatchData, setDebugMatchData] = useState(null);
+    // [PATCH] State для активного матча
+    var [activeMatch, setActiveMatch] = useState(null);
+    var [activeMatchLoading, setActiveMatchLoading] = useState(false);
 
     // [PATCH] Проверка активного матча при загрузке
     useEffect(function () {
         if (!token) return;
         (async function () {
             try {
-                var active = await apiFetch("/api/matches/active", { token: token });
-                console.log("[DEBUG] ACTIVE MATCH:", active);
-                setDebugMatchData(active);
-
-                try {
-                    window.Telegram?.WebApp?.showAlert?.(
-                        "ACTIVE MATCH:\n" + JSON.stringify(active, null, 2).slice(0, 200)
-                    );
-                } catch (e) { }
-            } catch (e) {
-                console.log("[DEBUG] active match error:", e.message);
-                setDebugMatchData({ error: e.message });
-
-                if (e.message.indexOf("404") === -1) {
-                    try {
-                        window.Telegram?.WebApp?.showAlert?.(
-                            "MATCH CHECK ERROR:\n" + e.message
-                        );
-                    } catch (e2) { }
+                var data = await apiFetch("/api/matches/active", { token: token });
+                if (data && data.match_id && data.status !== "cancelled") {
+                    setActiveMatch(data);
+                } else {
+                    setActiveMatch(null);
                 }
+            } catch (e) {
+                setActiveMatch(null);
             }
         })();
     }, [token]);
 
     useEffect(function () {
         var t = getStoredToken();
-        if (t) { setToken(t); setAuthState(function (s) { return s.status === "idle" ? { status: "ok", error: "" } : s; }); }
+        if (t) {
+            setToken(t);
+            setAuthState(function (s) { return s.status === "idle" ? { status: "ok", error: "" } : s; });
+        }
     }, []);
 
     useEffect(function () {
@@ -421,12 +357,23 @@ function AppContent() {
                     if (stored) { setToken(stored); setAuthState({ status: "ok", error: "" }); return; }
                     setAuthState({ status: "err", error: "tg.initData is empty" }); return;
                 }
-                var r = await apiFetch("/api/auth/telegram", { method: "POST", body: JSON.stringify({ initData: initData }) });
+                var r = await apiFetch("/api/auth/telegram", {
+                    method: "POST",
+                    body: JSON.stringify({ initData: initData }),
+                });
                 var accessToken = r?.accessToken || r?.access_token || r?.token || null;
                 setToken(accessToken);
-                try { if (accessToken) { localStorage.setItem("token", accessToken); localStorage.setItem("accessToken", accessToken); localStorage.setItem("access_token", accessToken); } } catch (_) { }
+                try {
+                    if (accessToken) {
+                        localStorage.setItem("token", accessToken);
+                        localStorage.setItem("accessToken", accessToken);
+                        localStorage.setItem("access_token", accessToken);
+                    }
+                } catch (_) { }
                 setAuthState(accessToken ? { status: "ok", error: "" } : { status: "err", error: "No accessToken" });
-            } catch (e) { setAuthState({ status: "err", error: String(e?.message || e) }); }
+            } catch (e) {
+                setAuthState({ status: "err", error: String(e?.message || e) });
+            }
         })();
 
         try { tg.disableVerticalSwipes?.(); } catch (_) { }
@@ -436,13 +383,21 @@ function AppContent() {
     useLayoutEffect(function () {
         var el = bottomStackRef.current;
         if (!el) return;
-        var apply = function () { document.documentElement.style.setProperty("--bottom-stack-h", Math.ceil(el.getBoundingClientRect().height) + "px"); };
+        var apply = function () {
+            document.documentElement.style.setProperty(
+                "--bottom-stack-h",
+                Math.ceil(el.getBoundingClientRect().height) + "px"
+            );
+        };
         apply();
-        var ro = new ResizeObserver(apply); ro.observe(el);
+        var ro = new ResizeObserver(apply);
+        ro.observe(el);
         return function () { ro.disconnect(); };
     }, [screen]);
 
-    useEffect(function () { if (screen === "home") try { logoRef.current?.play?.(); } catch (_) { } }, [screen]);
+    useEffect(function () {
+        if (screen === "home") try { logoRef.current?.play?.(); } catch (_) { }
+    }, [screen]);
 
     var requestFullscreen = async function () {
         try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light"); } catch (_) { }
@@ -452,11 +407,18 @@ function AppContent() {
     };
 
     var onPlay = function () { requestFullscreen(); setScreen("inventory"); };
+
     var onDeckReady = function (selectedNfts) {
         if (Array.isArray(selectedNfts) && selectedNfts.length === 5) setPlayerDeck(selectedNfts);
         setScreen("matchmaking");
     };
-    var onExitGame = function () { setScreen("home"); setPlayerDeck(null); setStage2MatchId(""); setGameMode("ai"); };
+
+    var onExitGame = function () {
+        setScreen("home");
+        setPlayerDeck(null);
+        setStage2MatchId("");
+        setGameMode("ai");
+    };
 
     var showRotateGame = isMobile && screen === "game" && !isLandscape;
     var showRotateMenu = isMobile && screen !== "game" && isLandscape;
@@ -467,7 +429,13 @@ function AppContent() {
                 <StormBg />
                 <div className={"game-host" + (showRotateGame ? " is-hidden" : "")}>
                     {playerDeck && playerDeck.length === 5 ? (
-                        <Game onExit={onExitGame} me={me} playerDeck={playerDeck} matchId={stage2MatchId} mode={gameMode} />
+                        <Game
+                            onExit={onExitGame}
+                            me={me}
+                            playerDeck={playerDeck}
+                            matchId={stage2MatchId}
+                            mode={gameMode}
+                        />
                     ) : (
                         <div style={{ color: "#fff", padding: 20 }}>Loading deck...</div>
                     )}
@@ -483,33 +451,108 @@ function AppContent() {
             {showRotateMenu && <RotateGateMenu />}
 
             <div className="shell-content">
-                {/* [PATCH] Debug overlay для active match */}
-                {screen === "home" && debugMatchData && (
-                    <div style={{
-                        position: "fixed", top: 0, left: 0, right: 0,
-                        background: "rgba(0,0,0,0.95)", color: "lime",
-                        padding: 20, zIndex: 999999, maxHeight: 300,
-                        overflow: "auto", fontSize: 11, fontFamily: "monospace",
-                        whiteSpace: "pre-wrap", wordBreak: "break-all",
-                        borderBottom: "2px solid lime"
-                    }}>
-                        {JSON.stringify(debugMatchData, null, 2)}
-                        <button onClick={function () { setDebugMatchData(null); }}
-                            style={{ marginTop: 10, padding: 8, background: "red", color: "#fff", border: "none", borderRadius: 4 }}>
-                            CLOSE DEBUG
-                        </button>
-                    </div>
-                )}
-
                 {screen === "home" && (
                     <div className="home-center">
                         <div className="home-wallet-row"><WalletConnector /></div>
+
+                        {/* [PATCH] Баннер активного матча */}
+                        {activeMatch && (
+                            <div style={{
+                                margin: "8px 16px 0",
+                                padding: "14px 16px",
+                                background: "linear-gradient(135deg, rgba(255,215,0,0.15), rgba(255,140,0,0.15))",
+                                border: "1px solid rgba(255,215,0,0.5)",
+                                borderRadius: 14,
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 8,
+                            }}>
+                                <div style={{
+                                    fontSize: 14, fontWeight: 700, color: "#ffd700",
+                                    display: "flex", alignItems: "center", gap: 8
+                                }}>
+                                    ⚔️ У тебя есть активный матч!
+                                </div>
+                                <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
+                                    {activeMatch.escrow_locked
+                                        ? "NFT залочены — матч идёт"
+                                        : activeMatch.my_escrow_confirmed
+                                            ? "Твои NFT залочены, ждём оппонента"
+                                            : "NFT ещё не залочены"
+                                    }
+                                </div>
+                                <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                                    {activeMatch.escrow_locked && (
+                                        <button
+                                            onClick={async function () {
+                                                setActiveMatchLoading(true);
+                                                try {
+                                                    var t = token || getStoredToken();
+                                                    var deckRes = await apiFetch(
+                                                        "/api/decks/active/full", { token: t }
+                                                    );
+                                                    if (deckRes?.cards?.length === 5) {
+                                                        setPlayerDeck(deckRes.cards);
+                                                    }
+                                                    setGameMode("pvp");
+                                                    setStage2MatchId(activeMatch.match_id);
+                                                    setActiveMatch(null);
+                                                    setScreen("game");
+                                                } catch (e) {
+                                                    alert("Ошибка восстановления матча: " + e.message);
+                                                } finally {
+                                                    setActiveMatchLoading(false);
+                                                }
+                                            }}
+                                            disabled={activeMatchLoading}
+                                            style={{
+                                                flex: 1, padding: "10px 16px",
+                                                borderRadius: 10, border: "none",
+                                                background: "linear-gradient(135deg, #ffd700, #ff8c00)",
+                                                color: "#000", fontWeight: 900, fontSize: 14,
+                                                cursor: "pointer",
+                                                opacity: activeMatchLoading ? 0.6 : 1,
+                                            }}
+                                        >
+                                            {activeMatchLoading ? "⏳..." : "🎮 Вернуться в игру"}
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={async function () {
+                                            try {
+                                                var t = token || getStoredToken();
+                                                await apiFetch(
+                                                    "/api/matches/" + activeMatch.match_id + "/cancel",
+                                                    { method: "POST", token: t }
+                                                );
+                                            } catch (e) { /* ignore */ }
+                                            setActiveMatch(null);
+                                        }}
+                                        style={{
+                                            padding: "10px 14px", borderRadius: 10,
+                                            border: "1px solid rgba(255,100,100,0.4)",
+                                            background: "rgba(255,100,100,0.1)",
+                                            color: "#ff6b6b", fontSize: 13,
+                                            cursor: "pointer",
+                                        }}
+                                    >
+                                        Отменить
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="home-spacer" />
                         <div className="home-logo-area">
                             <button className="play-logo" aria-label="Play" onClick={onPlay}>
                                 <div className="logo-wrap">
                                     {logoOk ? (
-                                        <video ref={logoRef} className="logo-video" autoPlay loop muted playsInline preload="auto" onError={function () { setLogoOk(false); }}>
+                                        <video
+                                            ref={logoRef}
+                                            className="logo-video"
+                                            autoPlay loop muted playsInline preload="auto"
+                                            onError={function () { setLogoOk(false); }}
+                                        >
                                             <source src="/ui/logo.mp4" type="video/mp4" />
                                         </video>
                                     ) : (
@@ -524,7 +567,9 @@ function AppContent() {
                 )}
 
                 {screen === "matchmaking" && (
-                    <Matchmaking me={me} playerDeck={playerDeck}
+                    <Matchmaking
+                        me={me}
+                        playerDeck={playerDeck}
                         onBack={function () { setScreen("inventory"); }}
                         onMatched={async function (data) {
                             setGameMode(data.mode || "ai");
@@ -533,9 +578,18 @@ function AppContent() {
                                 try {
                                     var t = token || getStoredToken();
                                     var deckRes = await apiFetch("/api/decks/active/full", { token: t });
-                                    if (deckRes?.cards?.length === 5) { setPlayerDeck(deckRes.cards); }
-                                    else { alert("Колода не выбрана. Вернись в инвентарь."); setScreen("inventory"); return; }
-                                } catch (_) { alert("Колода не выбрана. Вернись в инвентарь."); setScreen("inventory"); return; }
+                                    if (deckRes?.cards?.length === 5) {
+                                        setPlayerDeck(deckRes.cards);
+                                    } else {
+                                        alert("Колода не выбрана. Вернись в инвентарь.");
+                                        setScreen("inventory");
+                                        return;
+                                    }
+                                } catch (_) {
+                                    alert("Колода не выбрана. Вернись в инвентарь.");
+                                    setScreen("inventory");
+                                    return;
+                                }
                             }
                             setScreen("game");
                         }}
@@ -572,7 +626,11 @@ function BottomNav({ active, onChange }) {
         <div className="bottom-nav" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
             {items.map(function (it) {
                 return (
-                    <button key={it.key} className={"nav-item" + (active === it.key ? " active" : "")} onClick={function () { onChange(it.key); }}>
+                    <button
+                        key={it.key}
+                        className={"nav-item" + (active === it.key ? " active" : "")}
+                        onClick={function () { onChange(it.key); }}
+                    >
                         <span className="nav-ic">{it.icon}</span>
                         <span className="nav-txt">{it.label}</span>
                     </button>

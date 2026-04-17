@@ -1,5 +1,3 @@
-# routers/websocket.py
-
 from __future__ import annotations
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -7,6 +5,8 @@ from typing import Dict, List, Optional
 import logging
 import json
 import random
+import asyncio
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["websocket"])
@@ -18,14 +18,14 @@ router = APIRouter(tags=["websocket"])
 
 class MatchState:
     def __init__(
-        self,
-        match_id: str,
-        player1_id: str,
-        player2_id: str,
-        player1_hand: list,
-        player2_hand: list,
-        board_elements: list,
-        first_turn: str,
+            self,
+            match_id: str,
+            player1_id: str,
+            player2_id: str,
+            player1_hand: list,
+            player2_hand: list,
+            board_elements: list,
+            first_turn: str,
     ):
         self.match_id = match_id
         self.player1_id = str(player1_id)
@@ -51,17 +51,17 @@ class MatchState:
 
     def to_state_dict(self) -> dict:
         return {
-            "match_id":           self.match_id,
-            "player1_id":         self.player1_id,
-            "player2_id":         self.player2_id,
-            "board":              self.board,
-            "board_elements":     self.board_elements,
-            "current_turn":       self.current_turn,
-            "status":             self.status,
-            "winner":             self.winner,
+            "match_id": self.match_id,
+            "player1_id": self.player1_id,
+            "player2_id": self.player2_id,
+            "board": self.board,
+            "board_elements": self.board_elements,
+            "current_turn": self.current_turn,
+            "status": self.status,
+            "winner": self.winner,
             "player1_hand_count": len(self.player1_hand),
             "player2_hand_count": len(self.player2_hand),
-            "moves_count":        self.moves_count,
+            "moves_count": self.moves_count,
         }
 
 
@@ -70,14 +70,8 @@ class WSManager:
     ELEMENTS = ["Earth", "Fire", "Water", "Poison", "Holy", "Thunder", "Wind", "Ice"]
 
     def __init__(self):
-        # match_id -> {player_id -> WebSocket}
         self.connections: Dict[str, Dict[str, WebSocket]] = {}
-        # match_id -> MatchState
         self.match_states: Dict[str, MatchState] = {}
-
-    # ─────────────────────────────────────
-    # Соединения
-    # ─────────────────────────────────────
 
     async def connect(self, ws: WebSocket, match_id: str, player_id: str):
         if match_id not in self.connections:
@@ -119,19 +113,14 @@ class WSManager:
             except Exception:
                 self.disconnect(match_id, pid)
 
-    # ─────────────────────────────────────
-    # Игровая логика (зеркало клиента)
-    # ─────────────────────────────────────
-
     def _get_neighbors(self, idx: int) -> list:
-        """Соседи клетки в сетке 3x3 — зеркало клиентского neighborsOf()"""
         x = idx % 3
         y = idx // 3
         dirs = [
-            (0, -1, "top",    "bottom"),
-            (1,  0, "right",  "left"),
-            (0,  1, "bottom", "top"),
-            (-1, 0, "left",   "right"),
+            (0, -1, "top", "bottom"),
+            (1, 0, "right", "left"),
+            (0, 1, "bottom", "top"),
+            (-1, 0, "left", "right"),
         ]
         result = []
         for dx, dy, a, b in dirs:
@@ -141,7 +130,6 @@ class WSManager:
         return result
 
     def _safe_val(self, raw) -> int:
-        """Безопасно приводим значение стороны к int 1-10"""
         try:
             v = int(raw)
             return max(1, min(self.ACE_VALUE, v))
@@ -150,7 +138,6 @@ class WSManager:
 
     def _effective_val(self, base: int, card_elem: Optional[str],
                        cell_elem: Optional[str]) -> int:
-        """Эффективное значение с учётом элемента клетки — зеркало клиента"""
         if base == self.ACE_VALUE:
             return self.ACE_VALUE
         if cell_elem:
@@ -160,13 +147,12 @@ class WSManager:
         return max(1, min(9, base + bonus))
 
     def _normalize_card(self, card: dict, owner: str) -> dict:
-        """Нормализуем карту: values всегда числа, owner проставлен"""
         raw = card.get("values") or card.get("stats") or {}
         values = {
-            "top":    self._safe_val(raw.get("top",    5)),
-            "right":  self._safe_val(raw.get("right",  5)),
+            "top": self._safe_val(raw.get("top", 5)),
+            "right": self._safe_val(raw.get("right", 5)),
             "bottom": self._safe_val(raw.get("bottom", 5)),
-            "left":   self._safe_val(raw.get("left",   5)),
+            "left": self._safe_val(raw.get("left", 5)),
         }
         elem = card.get("element")
         if not elem or elem not in self.ELEMENTS:
@@ -175,37 +161,33 @@ class WSManager:
             elem = self.ELEMENTS[h % len(self.ELEMENTS)]
 
         return {
-            "id":        card.get("id") or card.get("token_id") or f"card_{random.randint(1000,9999)}",
-            "token_id":  card.get("token_id") or card.get("id") or "",
-            "owner":     str(owner),
-            "values":    values,
-            "element":   elem,
-            "rank":      card.get("rank") or card.get("rarity") or "common",
+            "id": card.get("id") or card.get("token_id") or f"card_{random.randint(1000, 9999)}",
+            "token_id": card.get("token_id") or card.get("id") or "",
+            "owner": str(owner),
+            "values": values,
+            "element": elem,
+            "rank": card.get("rank") or card.get("rarity") or "common",
             "rankLabel": card.get("rankLabel") or (card.get("rank") or "c")[0].upper(),
-            "imageUrl":  card.get("imageUrl") or card.get("image") or "",
-            "image":     card.get("imageUrl") or card.get("image") or "",
+            "imageUrl": card.get("imageUrl") or card.get("image") or "",
+            "image": card.get("imageUrl") or card.get("image") or "",
         }
 
     def _resolve_placement(
-        self,
-        placed_idx: int,
-        board: List[Optional[dict]],
-        board_elems: List[Optional[str]],
-        placed_card: dict,
+            self,
+            placed_idx: int,
+            board: List[Optional[dict]],
+            board_elems: List[Optional[str]],
+            placed_card: dict,
     ) -> List[int]:
-        """
-        Захват карт крестом — точное зеркало клиентского resolvePlacement().
-        Возвращает список захваченных индексов.
-        """
         flipped = []
         placed_owner = placed_card["owner"]
-        placed_elem  = placed_card.get("element")
+        placed_elem = placed_card.get("element")
         placed_cell_elem = board_elems[placed_idx] if placed_idx < len(board_elems) else None
 
         for nb in self._get_neighbors(placed_idx):
             ni = nb["ni"]
-            a  = nb["a"]   # сторона атакующего (placed)
-            b  = nb["b"]   # сторона защитника  (target)
+            a = nb["a"]
+            b = nb["b"]
 
             target = board[ni]
             if not target:
@@ -217,16 +199,10 @@ class WSManager:
             defend_base = self._safe_val(target["values"].get(b, 5))
 
             target_cell_elem = board_elems[ni] if ni < len(board_elems) else None
-            target_elem      = target.get("element")
+            target_elem = target.get("element")
 
-            attack_val = self._effective_val(attack_base, placed_elem,  placed_cell_elem)
-            defend_val = self._effective_val(defend_base, target_elem,  target_cell_elem)
-
-            logger.debug(
-                "[resolve] placed[%d].%s=%d(eff=%d) vs target[%d].%s=%d(eff=%d)",
-                placed_idx, a, attack_base, attack_val,
-                ni,         b, defend_base, defend_val,
-            )
+            attack_val = self._effective_val(attack_base, placed_elem, placed_cell_elem)
+            defend_val = self._effective_val(defend_base, target_elem, target_cell_elem)
 
             if attack_val > defend_val:
                 board[ni] = {**target, "owner": placed_owner}
@@ -235,7 +211,6 @@ class WSManager:
         return flipped
 
     def _check_game_over(self, state: MatchState) -> Optional[str]:
-        """None если доска не заполнена, иначе player_id победителя"""
         if any(cell is None for cell in state.board):
             return None
 
@@ -246,30 +221,22 @@ class WSManager:
             return state.player1_id
         if p2 > p1:
             return state.player2_id
-        # Ничья — победа первого (как в клиенте)
         return state.player1_id
 
-    # ─────────────────────────────────────
-    # Обработка хода
-    # ─────────────────────────────────────
-
     async def handle_play_card(
-        self,
-        match_id: str,
-        player_id: str,
-        card_index: int,
-        cell_index: int,
-        ws: WebSocket,
+            self,
+            match_id: str,
+            player_id: str,
+            card_index: int,
+            cell_index: int,
+            ws: WebSocket,
     ):
         player_id = str(player_id)
-
-        # ── Получаем состояние ──────────────────────────
         state = self.match_states.get(match_id)
         if not state:
             await ws.send_json({"type": "error", "message": "Match state not found"})
             return
 
-        # ── Валидация ───────────────────────────────────
         if state.status != "active":
             await ws.send_json({"type": "error", "message": "Game is already over"})
             return
@@ -294,23 +261,15 @@ class WSManager:
             })
             return
 
-        # ── Нормализуем карту ───────────────────────────
-        raw_card  = hand[card_index]
+        raw_card = hand[card_index]
         placed_card = self._normalize_card(raw_card, player_id)
-
-        # ── Ставим на доску ─────────────────────────────
         state.board[cell_index] = placed_card
-
-        # ── Захватываем соседей ─────────────────────────
         captured = self._resolve_placement(
             cell_index, state.board, state.board_elements, placed_card
         )
-
-        # ── Убираем карту из руки ───────────────────────
         state.remove_from_hand(player_id, card_index)
         state.moves_count += 1
 
-        # ── Меняем ход ──────────────────────────────────
         next_turn = (
             state.player2_id
             if state.current_turn == state.player1_id
@@ -318,48 +277,42 @@ class WSManager:
         )
         state.current_turn = next_turn
 
-        # ── Проверяем конец игры ────────────────────────
         winner = self._check_game_over(state)
         if winner:
             state.status = "finished"
             state.winner = winner
-
-            # Сохраняем результат в матч через matchmaking storage
             try:
                 from routers.matchmaking import get_match, save_match
                 match_data = await get_match(match_id)
                 if match_data:
-                    match_data["status"]  = "finished"
-                    match_data["winner"]  = winner
+                    match_data["status"] = "finished"
+                    match_data["winner"] = winner
                     await save_match(match_data)
             except Exception as e:
                 logger.warning("[WS] Could not persist match result: %s", e)
 
-        # ── Отправляем card_played обоим ────────────────
         await self.broadcast_all(match_id, {
-            "type":       "card_played",
-            "player_id":  player_id,
+            "type": "card_played",
+            "player_id": player_id,
             "cell_index": cell_index,
-            "card":       placed_card,
-            "captured":   captured,
+            "card": placed_card,
+            "captured": captured,
         })
 
-        # ── turn_change ─────────────────────────────────
         if state.status == "active":
             await self.broadcast_all(match_id, {
-                "type":         "turn_change",
+                "type": "turn_change",
                 "current_turn": next_turn,
             })
 
-        # ── game_over ───────────────────────────────────
         if state.status == "finished":
             p1_score = sum(1 for c in state.board if c and c.get("owner") == state.player1_id)
             p2_score = sum(1 for c in state.board if c and c.get("owner") == state.player2_id)
 
             await self.broadcast_all(match_id, {
-                "type":         "game_over",
-                "winner":       state.winner,
-                "board":        state.board,
+                "type": "game_over",
+                "winner": state.winner,
+                "board": state.board,
                 "player1_score": p1_score,
                 "player2_score": p2_score,
             })
@@ -369,10 +322,6 @@ class WSManager:
 
 ws_manager = WSManager()
 
-
-# ═══════════════════════════════════════════
-# WebSocket эндпоинт  /ws/match/{match_id}
-# ═══════════════════════════════════════════
 
 @router.websocket("/ws/match/{match_id}")
 async def ws_match_endpoint(websocket: WebSocket, match_id: str):
@@ -402,7 +351,6 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
             await websocket.close(1008)
             return
 
-        # Декодируем токен через твою утилиту
         try:
             from utils.security import decode_access_token
             payload = decode_access_token(token)
@@ -449,27 +397,38 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
 
         # ══ 4. ОТПРАВЛЯЕМ connected ══════════════════════
         await websocket.send_json({
-            "type":      "connected",
-            "you_are":   you_are,
+            "type": "connected",
+            "you_are": you_are,
             "player_id": player_id,
-            "match_id":  match_id,
+            "match_id": match_id,
         })
 
         # ══ 5. УВЕДОМЛЯЕМ ВТОРОГО ИГРОКА ════════════════
         other_id = p2_id if player_id == p1_id else p1_id
         await ws_manager.broadcast_except(match_id, {
-            "type":      "player_connected",
+            "type": "player_connected",
             "player_id": player_id,
         }, exclude_id=player_id)
 
-        # ══ 6. ЕСЛИ ОБА ПОДКЛЮЧЕНЫ — СТАРТУЕМ ИГРУ ═════
+        # ══ 6. ЕСЛИ ОБА ПОДКЛЮЧЕНЫ — ПРОВЕРЯЕМ ESCROW ═══
         conns = ws_manager.connections.get(match_id, {})
         both_connected = p1_id in conns and p2_id in conns
 
-        if both_connected:
+        # [PATCH] Игра стартует ТОЛЬКО если оба залочили NFT
+        escrow_locked = match_data.get("escrow_locked", False)
+
+        if both_connected and not escrow_locked:
+            # Сообщаем игроку что ждём лока
+            await websocket.send_json({
+                "type": "waiting_for_escrow",
+                "message": "Waiting for both players to lock NFTs",
+                "player1_locked": match_data.get("player1_escrow_confirmed", False),
+                "player2_locked": match_data.get("player2_escrow_confirmed", False),
+            })
+
+        if both_connected and escrow_locked:
             # Инициализируем состояние один раз
             if match_id not in ws_manager.match_states:
-                # Загружаем колоды из decks storage
                 try:
                     from routers.decks import _decks_storage
                     p1_deck_data = _decks_storage.get(p1_id) or {}
@@ -480,20 +439,17 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
                     logger.warning("[WS] Could not load decks: %s", e)
                     p1_hand, p2_hand = [], []
 
-                # Fallback — 5 случайных карт
                 if len(p1_hand) < 5:
                     p1_hand = _make_random_hand(p1_id)
                 if len(p2_hand) < 5:
                     p2_hand = _make_random_hand(p2_id)
 
-                # Элементы на клетках
                 elements = WSManager.ELEMENTS
                 board_elements = [
                     random.choice(elements) if random.random() < 0.38 else None
                     for _ in range(9)
                 ]
 
-                # Первый ход случайный
                 first_turn = random.choice([p1_id, p2_id])
 
                 state = MatchState(
@@ -510,25 +466,22 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
             else:
                 state = ws_manager.match_states[match_id]
 
-            # game_start всем
             await ws_manager.broadcast_all(match_id, {
-                "type":        "game_start",
-                "first_turn":  state.current_turn,
+                "type": "game_start",
+                "first_turn": state.current_turn,
             })
 
-            # game_state каждому со своей рукой
             for pid in [p1_id, p2_id]:
                 role = "player1" if pid == p1_id else "player2"
                 hand = state.get_hand(pid)
-                # Нормализуем карты перед отправкой
                 normalized_hand = [
                     ws_manager._normalize_card(c, pid) for c in hand
                 ]
                 await ws_manager.send(match_id, pid, {
-                    "type":      "game_state",
-                    "you_are":   role,
+                    "type": "game_state",
+                    "you_are": role,
                     "your_hand": normalized_hand,
-                    "state":     state.to_state_dict(),
+                    "state": state.to_state_dict(),
                 })
 
         # ══ 7. ОСНОВНОЙ ЦИКЛ ════════════════════════════
@@ -553,13 +506,12 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
                 pass
 
             elif msg_type == "play_card":
-                # Валидация индексов
                 try:
                     card_index = int(data["card_index"])
                     cell_index = int(data["cell_index"])
                 except (KeyError, TypeError, ValueError):
                     await websocket.send_json({
-                        "type":    "error",
+                        "type": "error",
                         "message": "play_card requires integer card_index and cell_index",
                     })
                     continue
@@ -578,11 +530,54 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
     finally:
         if player_id:
             ws_manager.disconnect(match_id, player_id)
-            # Уведомляем второго что первый ушёл
+
+            # [PATCH] Deadline для реконнекта
+            deadline = datetime.utcnow() + timedelta(seconds=180)
+
             await ws_manager.broadcast_all(match_id, {
-                "type":      "player_disconnected",
+                "type": "player_disconnected",
                 "player_id": player_id,
+                "reconnect_deadline": deadline.isoformat(),
             })
+
+            # [PATCH] Фоновый таймер авто-cancel через 3 минуты
+            async def _auto_cancel(mid: str, pid: str):
+                await asyncio.sleep(180)
+
+                # Проверяем — может уже вернулся
+                if pid in ws_manager.connections.get(mid, {}):
+                    logger.info("[WS] Player %s reconnected — auto-cancel skipped", pid)
+                    return
+
+                logger.warning("[WS] Auto-cancel match %s — player %s timeout", mid, pid)
+
+                try:
+                    from routers.matchmaking import get_match, save_match
+                    match_info = await get_match(mid)
+                    if match_info and match_info.get("status") in ("active", "waiting_escrow"):
+                        # Меняем статус
+                        match_info["status"] = "cancelled"
+                        match_info["cancelled_reason"] = "player_reconnect_timeout"
+                        match_info["cancelled_at"] = datetime.utcnow().isoformat()
+                        await save_match(match_info)
+
+                        # Уведомляем оставшегося игрока
+                        await ws_manager.broadcast_all(mid, {
+                            "type": "match_cancelled",
+                            "reason": "opponent_timeout",
+                            "message": "Opponent did not reconnect. NFTs will be refunded.",
+                        })
+
+                        # Возвращаем NFT
+                        from routers.matches import refund_remaining_nfts
+                        await refund_remaining_nfts(mid)
+
+                        logger.info("[WS] Match %s cancelled and NFTs refunded", mid)
+                except Exception as e:
+                    logger.error("[WS] Auto-cancel error for match %s: %s", mid, e)
+
+            asyncio.create_task(_auto_cancel(match_id, player_id))
+
             logger.info("[WS] Cleaned up player=%s match=%s", player_id, match_id)
 
 
@@ -591,12 +586,11 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
 # ═══════════════════════════════════════════
 
 def _make_random_hand(owner_id: str) -> List[dict]:
-    """Случайная рука из 5 карт — fallback если колода не найдена"""
     ELEMENTS = WSManager.ELEMENTS
     RANKS = [
-        {"key": "common",    "min": 1, "max": 5, "ace": 0.0,  "w": 30},
-        {"key": "rare",      "min": 2, "max": 7, "ace": 0.0,  "w": 35},
-        {"key": "epic",      "min": 3, "max": 8, "ace": 0.20, "w": 25},
+        {"key": "common", "min": 1, "max": 5, "ace": 0.0, "w": 30},
+        {"key": "rare", "min": 2, "max": 7, "ace": 0.0, "w": 35},
+        {"key": "epic", "min": 3, "max": 8, "ace": 0.20, "w": 25},
         {"key": "legendary", "min": 4, "max": 9, "ace": 0.50, "w": 10},
     ]
     IMAGES = [f"/cards/card{'' if i == 0 else i}.jpg" for i in range(10)]
@@ -607,25 +601,25 @@ def _make_random_hand(owner_id: str) -> List[dict]:
         rank = random.choices(RANKS, weights=[r["w"] for r in RANKS], k=1)[0]
         lo, hi = rank["min"], rank["max"]
         values = {
-            "top":    random.randint(lo, hi),
-            "right":  random.randint(lo, hi),
+            "top": random.randint(lo, hi),
+            "right": random.randint(lo, hi),
             "bottom": random.randint(lo, hi),
-            "left":   random.randint(lo, hi),
+            "left": random.randint(lo, hi),
         }
         if rank["ace"] > 0 and random.random() < rank["ace"]:
             values[random.choice(list(values))] = ACE
 
         img = random.choice(IMAGES)
         cards.append({
-            "id":        f"rnd_{owner_id}_{i}_{random.randint(1000,9999)}",
-            "token_id":  f"rnd_{i}",
-            "owner":     str(owner_id),
-            "values":    values,
-            "stats":     values,
-            "element":   random.choice(ELEMENTS),
-            "rank":      rank["key"],
+            "id": f"rnd_{owner_id}_{i}_{random.randint(1000, 9999)}",
+            "token_id": f"rnd_{i}",
+            "owner": str(owner_id),
+            "values": values,
+            "stats": values,
+            "element": random.choice(ELEMENTS),
+            "rank": rank["key"],
             "rankLabel": rank["key"][0].upper(),
-            "imageUrl":  img,
-            "image":     img,
+            "imageUrl": img,
+            "image": img,
         })
     return cards

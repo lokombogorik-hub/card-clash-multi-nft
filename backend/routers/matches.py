@@ -139,6 +139,45 @@ async def _save_match(match_data: Dict):
 
 # ── STATIC ROUTES ─────────────────────────────────────────────
 
+@router.get("/active")
+async def get_active_match(authorization: Optional[str] = Header(None)):
+    """Возвращает активный матч текущего игрока"""
+    player_id = None
+    if authorization:
+        token = authorization.replace("Bearer ", "")
+        player_id = get_player_id_from_token(token)
+    if not player_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    # [PATCH] Ищем в active_matches из matchmaking
+    from routers.matchmaking import active_matches
+
+    for mid, match in active_matches.items():
+        p1 = str(match.get("player1_id") or "")
+        p2 = str(match.get("player2_id") or "")
+        if player_id not in (p1, p2):
+            continue
+        # Только живые матчи
+        if match.get("status") in ("waiting_escrow", "active", "waiting"):
+            return {
+                "match_id": mid,
+                "status": match.get("status"),
+                "escrow_locked": match.get("escrow_locked", False),
+                "player1_id": p1,
+                "player2_id": p2,
+                "player1_escrow_confirmed": match.get("player1_escrow_confirmed", False),
+                "player2_escrow_confirmed": match.get("player2_escrow_confirmed", False),
+                "my_escrow_confirmed": (
+                    match.get("player1_escrow_confirmed", False) if player_id == p1
+                    else match.get("player2_escrow_confirmed", False)
+                ),
+                "escrow_timeout_at": match.get("escrow_timeout_at"),
+                "created_at": match.get("created_at"),
+            }
+
+    raise HTTPException(status_code=404, detail="Match not found")
+
+
 @router.get("/leaderboard")
 async def get_leaderboard(limit: int = 50):
     try:
@@ -213,9 +252,9 @@ async def create_match(request: CreateMatchRequest):
 
 @router.post("/{match_id}/register_deposits")
 async def register_deposits(
-    match_id: str,
-    request: RegisterDepositsRequest,
-    authorization: Optional[str] = Header(None),
+        match_id: str,
+        request: RegisterDepositsRequest,
+        authorization: Optional[str] = Header(None),
 ):
     match_data = await _get_match(match_id)
     if not match_data:
@@ -365,8 +404,8 @@ async def confirm_escrow(match_id: str, body: dict):
 
 @router.get("/{match_id}/opponent_deposits")
 async def get_opponent_deposits(
-    match_id: str,
-    authorization: Optional[str] = Header(None),
+        match_id: str,
+        authorization: Optional[str] = Header(None),
 ):
     match_data = await _get_match(match_id)
     if not match_data:
@@ -421,9 +460,9 @@ async def get_opponent_deposits(
 
 @router.post("/{match_id}/claim")
 async def claim_card(
-    match_id: str,
-    request: ClaimRequest,
-    authorization: Optional[str] = Header(None),
+        match_id: str,
+        request: ClaimRequest,
+        authorization: Optional[str] = Header(None),
 ):
     match_data = await _get_match(match_id)
     if not match_data:
@@ -652,15 +691,14 @@ async def get_match_endpoint(match_id: str):
 
 @router.post("/{match_id}/finish")
 async def finish_match(
-    match_id: str,
-    body: dict,
-    authorization: Optional[str] = Header(None),
+        match_id: str,
+        body: dict,
+        authorization: Optional[str] = Header(None),
 ):
     match_data = await _get_match(match_id)
     if not match_data:
         raise HTTPException(status_code=404, detail="Match not found")
 
-    # ✅ Проверяем что запрос от участника
     player_id = None
     if authorization:
         token = authorization.replace("Bearer ", "")
@@ -672,14 +710,12 @@ async def finish_match(
     if player_id not in [match_data.get("player1_id"), match_data.get("player2_id")]:
         raise HTTPException(status_code=403, detail="Not a participant")
 
-    # ✅ Уже завершён?
     if match_data.get("status") == "finished":
         return {"success": True, "winner": match_data.get("winner"), "already_finished": True}
 
     winner_user_id = body.get("winner_user_id")
     winner_near_wallet = body.get("winner_near_wallet")
 
-    # ✅ Победитель должен быть участником
     if winner_user_id and str(winner_user_id) not in [
         match_data.get("player1_id"),
         match_data.get("player2_id")
