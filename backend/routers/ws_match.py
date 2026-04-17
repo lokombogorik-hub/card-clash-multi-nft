@@ -619,7 +619,15 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
 
             elif msg_type == "pong":
                 pass
-
+            elif msg_type == "escrow_locked":
+                # Перечитываем match — стартуем если оба залочили
+                try:
+                    from routers.matchmaking import get_match
+                    match_data = await get_match(match_id)
+                    if match_data and match_data.get("escrow_locked"):
+                        await ws_manager.try_start_game(match_id, match_data, p1_id, p2_id)
+                except Exception as e:
+                    logger.error("[WS] escrow_locked error: %s", e)
             elif msg_type == "play_card":
                 try:
                     card_index = int(data["card_index"])

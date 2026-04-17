@@ -1,56 +1,21 @@
-import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
-import { initSelector, resetSelectorSingleton, fetchBalance } from "../libs/walletSelector";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import { initSelector, fetchBalance } from "../libs/walletSelector";
 
 var WalletContext = createContext({
     selector: null, accountId: null, balance: 0, isLoading: true,
     connected: false, connect: async function () { }, disconnect: async function () { },
     sendNear: async function () { }, signAndSendTransaction: async function () { },
-    getWallet: async function () { },
+    getWallet: async function () { }, // [ДОБАВЛЕНО]
 });
 
-// PATCH: Module-level кэш selector — переживает React ремонт/StrictMode.
-// После HOT Wallet deep-link redirect React перемонтирует компонент,
-// но _cachedSelector уже есть → setSelector вызывается синхронно,
-// нет 500-1500ms окна где selector=null.
-var _cachedSelector = null;
-
-function getStoredAccountId() {
-    try { return localStorage.getItem("cc_near_account_id") || ""; } catch (e) { return ""; }
-}
-
-function storeAccountId(id) {
-    try {
-        if (id) localStorage.setItem("cc_near_account_id", id);
-        else localStorage.removeItem("cc_near_account_id");
-    } catch (e) { }
-}
-
 export function WalletConnectProvider({ children }) {
-    // PATCH: Инициализируем selector из кэша синхронно — без мигания null
-    var [selector, setSelector] = useState(function () { return _cachedSelector; });
-    // PATCH: accountId из localStorage — восстанавливаем после redirect немедленно
-    var [accountId, setAccountId] = useState(function () { return getStoredAccountId() || null; });
+    var [selector, setSelector] = useState(null);
+    var [accountId, setAccountId] = useState(null);
     var [balance, setBalance] = useState(0);
-    // PATCH: isLoading=false если selector уже в кэше
-    var [isLoading, setIsLoading] = useState(function () { return _cachedSelector === null; });
-
+    var [isLoading, setIsLoading] = useState(true);
     var unsubRef = useRef(null);
-    var mountedRef = useRef(true);
 
-    useEffect(function () {
-        mountedRef.current = true;
-        return function () { mountedRef.current = false; };
-    }, []);
-
-    var refreshBal = useCallback(async function (id) {
-        if (!id) return;
-        try {
-            var b = await fetchBalance(id);
-            if (mountedRef.current) setBalance(b);
-        } catch (e) { }
-    }, []);
-
-    var linkToBackend = useCallback(async function (id) {
+    var linkToBackend = async function (id) {
         if (!id) return;
         var t = "";
         try { t = localStorage.getItem("token") || localStorage.getItem("accessToken") || ""; } catch (e) { }
@@ -65,71 +30,22 @@ export function WalletConnectProvider({ children }) {
                 body: JSON.stringify({ accountId: id }),
             });
         } catch (e) { }
-    }, []);
+    };
 
-    // PATCH: Единая функция обновления accountId — синхронизирует state + localStorage
-    var applyAccountId = useCallback(function (id) {
-        if (!mountedRef.current) return;
-        var newId = id || null;
-        setAccountId(newId);
-        storeAccountId(newId);
-        if (newId) {
-            refreshBal(newId);
-            linkToBackend(newId);
-        } else {
-            setBalance(0);
-        }
-    }, [refreshBal, linkToBackend]);
-
-    // PATCH: Подписка на store.observable — вынесена в отдельную функцию
-    // чтобы вызывать и при первой инициализации, и при восстановлении из кэша
-    var subscribeToSelector = useCallback(function (sel) {
-        if (!sel) return function () { };
-        try {
-            // Читаем текущий state синхронно
-            var st = sel.store.getState();
-            var act = st.accounts ? st.accounts.find(function (a) { return a.active; }) : null;
-            var currentId = act ? act.accountId : null;
-            if (currentId) applyAccountId(currentId);
-
-            // Подписываемся на изменения
-            var unsub = sel.store.observable.subscribe(function (ns) {
-                if (!mountedRef.current) return;
-                var a = ns.accounts ? ns.accounts.find(function (x) { return x.active; }) : null;
-                var nid = a ? a.accountId : null;
-                applyAccountId(nid);
-            });
-            return unsub;
-        } catch (e) {
-            console.warn("[wallet] subscribeToSelector error:", e);
-            return function () { };
-        }
-    }, [applyAccountId]);
+    var refreshBal = async function (id) {
+        if (!id) return;
+        try { var b = await fetchBalance(id); setBalance(b); } catch (e) { }
+    };
 
     useEffect(function () {
         var cancelled = false;
-
-        // PATCH: Если selector уже в кэше — не инициализируем заново.
-        // Просто подписываемся и читаем текущий state.
-        if (_cachedSelector) {
-            setSelector(_cachedSelector);
-            setIsLoading(false);
-            if (unsubRef.current) { try { unsubRef.current(); } catch (e) { } }
-            unsubRef.current = subscribeToSelector(_cachedSelector);
-            return function () {
-                cancelled = true;
-                if (unsubRef.current) { try { unsubRef.current(); } catch (e) { } }
-            };
-        }
-
-        // Первая инициализация
         (async function () {
             setIsLoading(true);
             try {
                 var isMiniApp = false;
                 var initData = "";
                 try {
-                    if (window.Telegram?.WebApp?.initData) {
+                    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) {
                         isMiniApp = true;
                         initData = window.Telegram.WebApp.initData;
                     }
@@ -137,127 +53,54 @@ export function WalletConnectProvider({ children }) {
 
                 var sel = await initSelector({ miniApp: isMiniApp, telegramInitData: initData });
                 if (cancelled) return;
-
-                // PATCH: Сохраняем в module-level кэш
-                _cachedSelector = sel;
                 setSelector(sel);
 
-                if (unsubRef.current) { try { unsubRef.current(); } catch (e) { } }
-                unsubRef.current = subscribeToSelector(sel);
+                try {
+                    var st = sel.store.getState();
+                    var act = st.accounts ? st.accounts.find(function (a) { return a.active; }) : null;
+                    var id = act ? act.accountId : null;
+                    setAccountId(id || null);
+                    if (id) { refreshBal(id); linkToBackend(id); }
+                } catch (e) { setAccountId(null); }
 
+                try { if (unsubRef.current) unsubRef.current(); } catch (e) { }
+                unsubRef.current = sel.store.observable.subscribe(function (ns) {
+                    var a = ns.accounts ? ns.accounts.find(function (x) { return x.active; }) : null;
+                    var nid = a ? a.accountId : null;
+                    setAccountId(nid || null);
+                    if (nid) { refreshBal(nid); linkToBackend(nid); }
+                    else { setBalance(0); }
+                });
             } catch (e) {
                 console.error("[wallet] init error:", e);
-                if (!cancelled) {
-                    setSelector(null);
-                    // PATCH: Не сбрасываем accountId — он мог быть из localStorage
-                }
+                if (!cancelled) { setSelector(null); setAccountId(null); }
             } finally {
                 if (!cancelled) setIsLoading(false);
             }
         })();
+        return function () { cancelled = true; try { if (unsubRef.current) unsubRef.current(); } catch (e) { } };
+    }, []);
 
-        return function () {
-            cancelled = true;
-            if (unsubRef.current) { try { unsubRef.current(); } catch (e) { } }
-        };
-    }, [subscribeToSelector]);
-
-    // PATCH: getWallet — единая точка получения кошелька с fallback цепочкой.
-    // Порядок: selectedWalletId → hot-wallet → первый модуль.
-    // Используется в LockEscrowModal вместо прямого ctx.selector.wallet(id).
-    var getWallet = useCallback(async function () {
-        var sel = _cachedSelector || selector;
-        if (!sel) throw new Error("Wallet selector not initialized. Please reload the page.");
-
-        var state = null;
-        try { state = sel.store.getState(); } catch (e) {
-            throw new Error("Cannot read selector state: " + (e?.message || e));
-        }
-
-        var selectedWalletId = state?.selectedWalletId;
-        var errors = [];
-
-        console.warn("[wallet] getWallet: selectedWalletId=", selectedWalletId,
-            "accounts=", state?.accounts?.length,
-            "modules=", state?.modules?.map(function (m) { return m.id; })
-        );
-
-        // Попытка 1: selectedWalletId
-        if (selectedWalletId) {
-            try {
-                var w1 = await sel.wallet(selectedWalletId);
-                if (w1) {
-                    console.warn("[wallet] getWallet OK: using", selectedWalletId);
-                    return w1;
-                }
-            } catch (e) {
-                errors.push(selectedWalletId + ": " + (e?.message || e));
-                console.warn("[wallet] getWallet", selectedWalletId, "failed:", e?.message);
-            }
-        }
-
-        // Попытка 2: hot-wallet явно
-        if (selectedWalletId !== "hot-wallet") {
-            try {
-                var w2 = await sel.wallet("hot-wallet");
-                if (w2) {
-                    console.warn("[wallet] getWallet OK: fallback to hot-wallet");
-                    return w2;
-                }
-            } catch (e) {
-                errors.push("hot-wallet: " + (e?.message || e));
-                console.warn("[wallet] getWallet hot-wallet failed:", e?.message);
-            }
-        }
-
-        // Попытка 3: первый доступный модуль
-        var modules = state?.modules || [];
-        for (var i = 0; i < modules.length; i++) {
-            var mid = modules[i]?.id;
-            if (!mid || mid === selectedWalletId || mid === "hot-wallet") continue;
-            try {
-                var w3 = await sel.wallet(mid);
-                if (w3) {
-                    console.warn("[wallet] getWallet OK: fallback to module", mid);
-                    return w3;
-                }
-            } catch (e) {
-                errors.push(mid + ": " + (e?.message || e));
-            }
-        }
-
-        throw new Error(
-            "Cannot get wallet after all fallbacks. " +
-            "Errors: [" + errors.join(" | ") + "]. " +
-            "Try reconnecting wallet."
-        );
-    }, [selector]);
-
-    var connect = useCallback(async function () {
-        var w = await getWallet();
+    var connect = async function () {
+        if (!selector) throw new Error("Wallet not ready");
+        var w = await selector.wallet("hot-wallet");
         await w.signIn({ contractId: "retardo-s.near", methodNames: [] });
-    }, [getWallet]);
+    };
 
-    var disconnect = useCallback(async function () {
-        var sel = _cachedSelector || selector;
-        if (!sel) return;
+    var disconnect = async function () {
+        if (!selector) return;
         try {
-            var w = await getWallet();
+            var st = selector.store.getState();
+            var wid = st.selectedWalletId;
+            if (!wid) return;
+            var w = await selector.wallet(wid);
             await w.signOut();
-            applyAccountId(null);
-            // PATCH: При disconnect сбрасываем singleton — пользователь может
-            // захотеть войти с другим аккаунтом
-            resetSelectorSingleton();
-            _cachedSelector = null;
-            setSelector(null);
-        } catch (e) {
-            console.warn("[wallet] disconnect error:", e);
-        }
-    }, [selector, getWallet, applyAccountId]);
+        } catch (e) { }
+    };
 
-    var sendNear = useCallback(async function (params) {
-        if (!accountId) throw new Error("Wallet not connected");
-        var w = await getWallet();
+    var sendNear = async function (params) {
+        if (!selector || !accountId) throw new Error("Wallet not connected");
+        var w = await selector.wallet("hot-wallet");
         var amount = parseFloat(params.amount) || 0;
         var yocto = "0";
         if (amount > 0) {
@@ -269,6 +112,7 @@ export function WalletConnectProvider({ children }) {
             var fracYocto = BigInt(fracPart);
             yocto = (wholeYocto + fracYocto).toString();
         }
+        console.log("[sendNear]", amount, "NEAR =", yocto, "yocto, to:", params.receiverId);
         var result = await w.signAndSendTransaction({
             receiverId: params.receiverId,
             actions: [{ type: "Transfer", params: { deposit: yocto } }],
@@ -282,46 +126,39 @@ export function WalletConnectProvider({ children }) {
             else if (result.txHash) txHash = result.txHash;
         }
         return { txHash: txHash, result: result };
-    }, [accountId, getWallet, refreshBal]);
+    };
 
-    var signAndSendTransaction = useCallback(async function (params) {
-        if (!accountId) throw new Error("Wallet not connected");
-        var w = await getWallet();
-        return await w.signAndSendTransaction({
-            receiverId: params.receiverId,
-            actions: params.actions,
-        });
-    }, [accountId, getWallet]);
+    var signAndSendTransaction = async function (params) {
+        if (!selector || !accountId) throw new Error("Wallet not connected");
+        var w = await selector.wallet("hot-wallet");
+        return await w.signAndSendTransaction({ receiverId: params.receiverId, actions: params.actions });
+    };
 
-    // Debug helpers
+    // [ДОБАВЛЕНО] getWallet с простым fallback
+    var getWallet = async function () {
+        if (!selector) throw new Error("Selector not ready");
+        var st = selector.store.getState();
+        var wid = st?.selectedWalletId || "hot-wallet";
+        try {
+            return await selector.wallet(wid);
+        } catch (e) {
+            // fallback на hot-wallet
+            return await selector.wallet("hot-wallet");
+        }
+    };
+
     useEffect(function () {
         window.showWalletSelector = connect;
         window.disconnectWallet = disconnect;
-        window._debugWallet = function () {
-            var sel = _cachedSelector || selector;
-            if (!sel) { console.warn("No selector"); return; }
-            var st = sel.store.getState();
-            console.warn("[wallet debug]", {
-                selectedWalletId: st.selectedWalletId,
-                accounts: st.accounts,
-                modules: st.modules?.map(function (m) { return m.id; }),
-                accountId: accountId,
-                isLoading: isLoading,
-                hasCachedSelector: !!_cachedSelector,
-            });
-        };
         return function () {
-            try {
-                delete window.showWalletSelector;
-                delete window.disconnectWallet;
-                delete window._debugWallet;
-            } catch (e) { }
+            try { delete window.showWalletSelector; delete window.disconnectWallet; }
+            catch (e) { window.showWalletSelector = undefined; window.disconnectWallet = undefined; }
         };
-    }, [selector, connect, disconnect, accountId, isLoading]);
+    }, [selector]);
 
     return (
         <WalletContext.Provider value={{
-            selector: selector || _cachedSelector,
+            selector: selector,
             accountId: accountId,
             balance: balance,
             isLoading: isLoading,
@@ -330,8 +167,7 @@ export function WalletConnectProvider({ children }) {
             disconnect: disconnect,
             sendNear: sendNear,
             signAndSendTransaction: signAndSendTransaction,
-            // PATCH: getWallet экспортируется в контекст — используется в LockEscrowModal
-            getWallet: getWallet,
+            getWallet: getWallet, // [ДОБАВЛЕНО]
         }}>
             {children}
         </WalletContext.Provider>

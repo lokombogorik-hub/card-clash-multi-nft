@@ -284,6 +284,36 @@ async def get_leaderboard(limit: int = 50):
         traceback.print_exc()
         return {"leaders": [], "total": 0}
 
+@router.get("/active")
+async def get_active_match(authorization: Optional[str] = Header(None)):
+    player_id = None
+    if authorization:
+        token = authorization.replace("Bearer ", "")
+        player_id = get_player_id_from_token(token)
+    if not player_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    from routers.matchmaking import active_matches
+    for mid, match in active_matches.items():
+        p1 = str(match.get("player1_id") or "")
+        p2 = str(match.get("player2_id") or "")
+        if player_id not in (p1, p2):
+            continue
+        if match.get("status") in ("waiting_escrow", "active", "waiting"):
+            return {
+                "match_id": mid,
+                "status": match.get("status"),
+                "escrow_locked": match.get("escrow_locked", False),
+                "player1_id": p1,
+                "player2_id": p2,
+                "player1_escrow_confirmed": match.get("player1_escrow_confirmed", False),
+                "player2_escrow_confirmed": match.get("player2_escrow_confirmed", False),
+                "my_escrow_confirmed": (
+                    match.get("player1_escrow_confirmed", False) if player_id == p1
+                    else match.get("player2_escrow_confirmed", False)
+                ),
+            }
+    raise HTTPException(status_code=404, detail="No active match")
 
 @router.get("/config/status")
 async def get_escrow_status():
@@ -517,7 +547,18 @@ async def confirm_escrow(match_id: str, body: dict):
         "both_locked": p1_confirmed and p2_confirmed,
     }
 
+    if p1_confirmed and p2_confirmed:
+        match_data["escrow_locked"] = True
+        match_data["status"] = "active"
+        match_data["game_started_at"] = datetime.utcnow().isoformat()
 
+        # [ДОБАВЬ ЭТО]
+        try:
+            from routers.ws_match import ws_manager
+            await ws_manager.broadcast_all(match_id, {"type": "escrow_locked"})
+        except Exception as e:
+            print(f"[MATCHES] WS broadcast error: {e}")
+            
 @router.get("/{match_id}/opponent_deposits")
 async def get_opponent_deposits(
         match_id: str,
