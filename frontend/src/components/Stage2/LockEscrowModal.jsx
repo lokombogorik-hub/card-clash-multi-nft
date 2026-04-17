@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { apiFetch } from "../../api.js";
 import { useWalletConnect } from "../../context/WalletConnectContext";
-import { nearNftTokensForOwner } from "../../libs/nearNft.js";
+import { nearNftTokensForOwner, invalidateOwnerCache } from "../../libs/nearNft.js";
 
 function getStoredToken() {
     try {
@@ -9,40 +9,28 @@ function getStoredToken() {
     } catch (e) { return ""; }
 }
 
-// PATCH: Timeout-wrapper для мобильных кошельков.
-// HOT Wallet на мобилке делает deep-link redirect → промис зависает навсегда.
-// Через timeoutMs бросаем специальную ошибку TX_TIMEOUT.
-// Это НЕ значит что транзакция не прошла — пользователь мог подписать в кошельке,
-// но промис не вернулся из-за редиректа. Дальше идём на backend-check.
+// PATCH: Timeout для TX — на мобилке кошелёк делает deep-link redirect,
+// промис signAndSendTransaction зависает навсегда.
+// TX_TIMEOUT ≠ ошибка транзакции — пользователь мог подписать!
 function withMobileTxTimeout(promise, timeoutMs) {
-    var ms = timeoutMs || 120000;
+    var ms = timeoutMs || 90000; // PATCH: 90s вместо 120s — быстрее даём фидбек
     return new Promise(function (resolve, reject) {
         var timer = setTimeout(function () {
-            reject(new Error(
-                "TX_TIMEOUT: Wallet did not respond in " + (ms / 1000) + "s. " +
-                "If you signed in wallet app — check match status."
-            ));
+            reject(new Error("TX_TIMEOUT"));
         }, ms);
-        promise.then(function (r) {
-            clearTimeout(timer);
-            resolve(r);
-        }).catch(function (e) {
-            clearTimeout(timer);
-            reject(e);
-        });
+        promise.then(function (r) { clearTimeout(timer); resolve(r); })
+            .catch(function (e) { clearTimeout(timer); reject(e); });
     });
 }
 
-// PATCH: Retry helper. На мобилке selector.wallet() может не быть готов сразу
-// после deep-link возврата. Ретраем с паузой.
-function retryAsync(fn, retries, delayMs) {
+// PATCH: Retry с экспоненциальным backoff
+// delay: 500 → 1000 → 2000ms
+function retryAsync(fn, retries, baseDelayMs) {
+    var delay = baseDelayMs || 500;
     return fn().catch(function (err) {
         if (retries <= 0) throw err;
-        return new Promise(function (resolve) {
-            setTimeout(resolve, delayMs || 700);
-        }).then(function () {
-            return retryAsync(fn, retries - 1, delayMs);
-        });
+        return new Promise(function (resolve) { setTimeout(resolve, delay); })
+            .then(function () { return retryAsync(fn, retries - 1, delay * 2); });
     });
 }
 
@@ -54,15 +42,13 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
     var [statusText, setStatusText] = useState("");
     var [error, setError] = useState("");
 
-    // PATCH: Ref-guard против двойного вызова handleLock.
-    // State обновляется асинхронно — между двумя кликами state ещё "idle".
-    // Ref меняется синхронно — первый клик ставит true ДО первого await.
+    // PATCH: isLockingRef — синхронный guard против двойного вызова.
+    // State обновляется асинхронно, ref — синхронно.
+    // Первый клик ставит ref=true ДО первого await → второй клик видит true.
     var isLockingRef = useRef(false);
 
-    // PATCH: Ref для отслеживания — проверяли ли уже backend статус при маунте.
-    // Если пользователь уже подписал транзакцию в кошельке (мобильный redirect),
-    // но модал открылся заново — не показываем "idle", а сразу "success".
-    var didCheckBackendRef = useRef(false);
+    // PATCH: didCheckRef — проверяем backend статус только один раз при открытии.
+    var didCheckRef = useRef(false);
 
     var escrowContractId = (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim();
     var nftContractId = (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim();
@@ -77,26 +63,21 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
         return playerDeck.map(function (c) { return c.imageUrl || c.image || ""; });
     }, [playerDeck]);
 
-    // PATCH: При открытии модала — проверяем backend статус матча.
-    // Это recovery для случая когда пользователь подписал транзакцию в кошельке,
-    // приложение вернулось из deep-link redirect, модал открылся снова в idle.
-    // Если backend уже знает что deposits зарегистрированы — пропускаем lock.
+    // PATCH: При открытии — recovery check.
+    // Если пользователь подписал транзакцию в кошельке (mobile redirect),
+    // но приложение перезапустилось и модал открылся снова в idle —
+    // проверяем backend: вдруг deposits уже зарегистрированы.
     useEffect(function () {
         if (!open) {
-            // Сбрасываем всё при закрытии
             isLockingRef.current = false;
-            didCheckBackendRef.current = false;
+            didCheckRef.current = false;
             setStatus("idle");
             setStatusText("");
             setError("");
             return;
         }
-
-        // Проверяем backend только один раз при открытии
-        if (didCheckBackendRef.current) return;
-        didCheckBackendRef.current = true;
-
-        if (!existingMatchId) return;
+        if (didCheckRef.current || !existingMatchId) return;
+        didCheckRef.current = true;
 
         (async function () {
             try {
@@ -105,55 +86,46 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                 if (!matchData) return;
 
                 var myId = String(me?.id || "");
-                var p1Id = String(matchData.player1_id || "");
-                var p2Id = String(matchData.player2_id || "");
+                var p1Confirmed = matchData.player1_escrow_confirmed === true;
+                var p2Confirmed = matchData.player2_escrow_confirmed === true;
+                var isP1 = myId && String(matchData.player1_id) === myId;
+                var isP2 = myId && String(matchData.player2_id) === myId;
+                var myConfirmed = isP1 ? p1Confirmed : isP2 ? p2Confirmed : false;
 
-                var myEscrowConfirmed = false;
-                if (myId && myId === p1Id) {
-                    myEscrowConfirmed = matchData.player1_escrow_confirmed === true;
-                } else if (myId && myId === p2Id) {
-                    myEscrowConfirmed = matchData.player2_escrow_confirmed === true;
-                }
+                console.warn("[LockEscrow] open check: myId=", myId,
+                    "isP1=", isP1, "isP2=", isP2,
+                    "myConfirmed=", myConfirmed,
+                    "escrow_locked=", matchData.escrow_locked
+                );
 
-                if (myEscrowConfirmed) {
-                    // PATCH: Уже залочено — показываем success и вызываем onReady
-                    console.warn("[LockEscrow] Backend says already locked — skipping lock");
+                if (myConfirmed) {
+                    // PATCH: Уже залочено — сразу success без лока
                     setStatus("success");
                     setStatusText("NFTs already locked!");
-                    setTimeout(function () {
-                        onReady?.({ matchId: existingMatchId });
-                    }, 800);
-                } else {
-                    // PATCH: Ещё не залочено — Debug лог
-                    console.warn("[LockEscrow] Backend: not yet locked for player", myId,
-                        "p1_confirmed:", matchData.player1_escrow_confirmed,
-                        "p2_confirmed:", matchData.player2_escrow_confirmed
-                    );
+                    setTimeout(function () { onReady?.({ matchId: existingMatchId }); }, 600);
                 }
             } catch (e) {
-                // Не критично — просто логируем
-                console.warn("[LockEscrow] Backend check on open failed:", e?.message);
+                // Не критично — модал просто остаётся в idle
+                console.warn("[LockEscrow] open check error:", e?.message);
             }
         })();
     }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // PATCH: useCallback чтобы функция не пересоздавалась на каждый рендер
     var handleLock = useCallback(async function () {
-        // PATCH: Синхронная проверка ref — работает даже если state ещё не обновился
+        // PATCH: Синхронная проверка ref — самая надёжная защита от двойного клика
         if (isLockingRef.current) {
-            console.warn("[LockEscrow] handleLock: already locking (ref guard) — skipped");
+            console.warn("[LockEscrow] BLOCKED: already locking (ref guard)");
             return;
         }
-        // Дополнительная проверка state
         if (status === "loading" || status === "success") {
-            console.warn("[LockEscrow] handleLock: wrong status =", status, "— skipped");
+            console.warn("[LockEscrow] BLOCKED: wrong status =", status);
             return;
         }
 
-        // PATCH: Ставим guard СИНХРОННО до первого await
+        // PATCH: Ставим guard СИНХРОННО — до первого await
         isLockingRef.current = true;
 
-        // Базовые проверки
+        // Валидация
         if (!walletAddress) {
             setError("Wallet not connected. AccountId: " + (ctx.accountId || "null"));
             isLockingRef.current = false;
@@ -175,113 +147,66 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
             return;
         }
         if (!existingMatchId) {
-            setError("No match ID provided");
+            setError("No match ID");
             isLockingRef.current = false;
             return;
         }
 
         setStatus("loading");
-        setStatusText("Checking NFT ownership...");
         setError("");
 
         try {
-            // Step 1: Проверка владения
-            console.warn("[LockEscrow] Step 1: checking ownership for", deckTokenIds);
+            // ── Step 1: Проверка владения ──────────────────────────────
+            // PATCH: nearNftTokensForOwner теперь кэшируется 30s —
+            // повторные вызовы мгновенные
+            setStatusText("Verifying NFT ownership...");
+            console.warn("[LockEscrow] Step 1: checking ownership", deckTokenIds);
+
             var owned = await nearNftTokensForOwner(nftContractId, walletAddress);
             var ownedIds = new Set(owned.map(function (t) { return t.token_id; }));
             var missing = deckTokenIds.filter(function (id) { return !ownedIds.has(id); });
             if (missing.length > 0) {
-                throw new Error("You don't own these NFTs: " + missing.join(", "));
+                throw new Error("NFTs not owned: " + missing.join(", ") +
+                    ". Owned: [" + Array.from(ownedIds).join(", ") + "]");
             }
-            console.warn("[LockEscrow] Step 1 OK: all NFTs owned");
+            console.warn("[LockEscrow] Step 1 OK: all NFTs verified");
 
-            // Step 2: Получаем кошелёк
-            setStatusText("Opening wallet...");
+            // ── Step 2: Получаем кошелёк ───────────────────────────────
+            setStatusText("Connecting to wallet...");
 
-            if (!ctx.selector) {
-                throw new Error("Selector is null. Wallet not initialized.");
-            }
-
-            // PATCH: Читаем selector state с защитой
-            var selectorState = null;
-            try {
-                selectorState = ctx.selector.store.getState();
-            } catch (e) {
-                throw new Error("Cannot read selector state: " + (e?.message || e));
+            // PATCH: Используем ctx.getWallet() — единая функция с fallback цепочкой.
+            // Она сама разберётся: selectedWalletId → hot-wallet → первый доступный.
+            // На мобилке после redirect selector уже в кэше (_selectorInstance),
+            // getWallet работает мгновенно.
+            var getWalletFn = ctx.getWallet;
+            if (!getWalletFn) {
+                throw new Error("getWallet not available in context. WalletConnectProvider version mismatch.");
             }
 
-            // PATCH: Debug-лог selector state — критично для диагностики мобильных проблем
-            console.warn("[LockEscrow] selector state:", JSON.stringify({
-                selectedWalletId: selectorState?.selectedWalletId,
-                accountsCount: selectorState?.accounts?.length,
-                modules: selectorState?.modules?.map(function (m) { return m.id; }),
-            }));
-
-            var selectedWalletId = selectorState?.selectedWalletId || null;
-            var isSignedIn = Array.isArray(selectorState?.accounts) && selectorState.accounts.length > 0;
-
-            if (!isSignedIn) {
-                throw new Error("Not signed in to any wallet. Please reconnect wallet from main screen.");
-            }
-
-            setStatusText("Getting wallet: " + (selectedWalletId || "hot-wallet") + "...");
-
-            // PATCH: Получаем wallet с retry.
-            // На мобилке после deep-link redirect selector может быть не готов первые 1-2 секунды.
             var wallet = null;
-            var walletError = null;
 
-            // Пробуем selectedWalletId с 3 попытками
-            if (selectedWalletId) {
-                try {
-                    wallet = await retryAsync(
-                        function () {
-                            console.warn("[LockEscrow] trying wallet:", selectedWalletId);
-                            return ctx.selector.wallet(selectedWalletId);
-                        },
-                        3,    // 3 повтора
-                        800   // 800ms между попытками
-                    );
-                    console.warn("[LockEscrow] got wallet:", selectedWalletId);
-                } catch (e) {
-                    walletError = "wallet(" + selectedWalletId + ") failed: " + (e?.message || e);
-                    console.warn("[LockEscrow]", walletError);
-                }
-            }
-
-            // PATCH: Fallback на hot-wallet с retry
-            if (!wallet) {
-                try {
-                    wallet = await retryAsync(
-                        function () {
-                            console.warn("[LockEscrow] fallback to hot-wallet");
-                            return ctx.selector.wallet("hot-wallet");
-                        },
-                        3,
-                        800
-                    );
-                    console.warn("[LockEscrow] got fallback wallet: hot-wallet");
-                } catch (e) {
-                    walletError = (walletError ? walletError + " | " : "") +
-                        "hot-wallet failed: " + (e?.message || e);
-                    console.warn("[LockEscrow]", walletError);
-                }
-            }
+            // PATCH: getWallet с retry (3 попытки, 500→1000→2000ms)
+            // На мобилке selector может быть не полностью готов сразу после маунта
+            wallet = await retryAsync(
+                function () {
+                    console.warn("[LockEscrow] calling getWallet...");
+                    return getWalletFn();
+                },
+                3,
+                500
+            );
 
             if (!wallet) {
-                throw new Error(
-                    "Cannot get wallet. " + (walletError || "Unknown error") +
-                    ". Try reconnecting wallet from main screen."
-                );
+                throw new Error("getWallet returned null/undefined after retries");
             }
+            console.warn("[LockEscrow] Step 2 OK: wallet obtained");
 
-            // Step 3: Отправляем транзакцию
-            setStatusText("Sending " + deckTokenIds.length + " NFTs to escrow...");
-            console.warn("[LockEscrow] Step 3: sending tx to", nftContractId, "tokens:", deckTokenIds);
+            // ── Step 3: Транзакция ─────────────────────────────────────
+            setStatusText("Sign transaction in wallet (" + deckTokenIds.length + " NFTs)...");
 
-            // PATCH: actions с memo: null
-            // Некоторые мобильные кошельки (HOT Wallet) падают на non-null строковом memo
-            // при обработке deep-link. null безопаснее.
+            // PATCH: actions с memo: null.
+            // HOT Wallet на мобилке иногда падает при non-null строковом memo
+            // в deep-link обработке.
             var actions = deckTokenIds.map(function (tokenId) {
                 return {
                     type: "FunctionCall",
@@ -290,104 +215,143 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                         args: {
                             receiver_id: escrowContractId,
                             token_id: String(tokenId),
-                            // PATCH: memo: null — надёжнее на мобилке чем строка
                             memo: null,
                         },
-                        // PATCH: Явные строки — некоторые wallet-selector версии
-                        // не принимают number для gas/deposit
                         gas: "30000000000000",
                         deposit: "1",
                     },
                 };
             });
 
-            // PATCH: Оборачиваем в timeout 120s.
-            // Если кошелёк делает redirect — промис зависает.
-            // TX_TIMEOUT ≠ ошибка транзакции. Идём дальше на backend-check.
+            console.warn("[LockEscrow] Step 3: signAndSendTransaction →", nftContractId);
+            console.warn("[LockEscrow] actions:", JSON.stringify(actions));
+
             var txResult;
+            var txSuccess = false;
+
             try {
+                // PATCH: Timeout 90s — после этого предполагаем что TX прошёл через redirect
                 txResult = await withMobileTxTimeout(
                     wallet.signAndSendTransaction({
                         receiverId: nftContractId,
                         actions: actions,
                     }),
-                    120000
+                    90000
                 );
-                console.warn("[LockEscrow] TX OK:", txResult);
+                txSuccess = true;
+                console.warn("[LockEscrow] Step 3 OK: TX result", txResult);
             } catch (txErr) {
-                console.error("[LockEscrow] TX error:", txErr?.message);
+                var txErrMsg = String(txErr?.message || txErr);
+                console.error("[LockEscrow] TX error:", txErrMsg);
 
-                if (txErr.message && txErr.message.indexOf("TX_TIMEOUT") === 0) {
-                    // PATCH: Timeout после redirect — не критично, идём дальше
-                    setStatusText("Wallet redirect detected, registering on backend...");
-                    console.warn("[LockEscrow] TX_TIMEOUT — trying backend registration anyway");
-                    // txResult = undefined — ok, backend примет
+                if (txErrMsg === "TX_TIMEOUT") {
+                    // PATCH: Timeout после deep-link redirect.
+                    // Пользователь мог подписать в кошельке.
+                    // Идём дальше — backend примет register_deposits.
+                    setStatusText("Wallet redirect detected — registering on backend...");
+                    console.warn("[LockEscrow] TX_TIMEOUT: proceeding to backend registration");
+                    txSuccess = false; // неизвестно — но продолжаем
+                } else if (
+                    txErrMsg.toLowerCase().includes("reject") ||
+                    txErrMsg.toLowerCase().includes("cancel") ||
+                    txErrMsg.toLowerCase().includes("denied") ||
+                    txErrMsg.toLowerCase().includes("user ")
+                ) {
+                    // Явный отказ пользователя — не продолжаем
+                    throw new Error("❌ Transaction rejected in wallet.");
                 } else {
-                    // Обычная ошибка кошелька — пробрасываем
+                    // Другие ошибки — пробрасываем
                     throw txErr;
                 }
             }
 
-            // Step 4: Регистрируем депозиты на backend
+            // ── Step 4: Регистрация на backend ────────────────────────
             setStatusText("Registering deposits...");
             console.warn("[LockEscrow] Step 4: register_deposits");
 
             var token = getStoredToken();
-            await apiFetch("/api/matches/" + existingMatchId + "/register_deposits", {
-                method: "POST",
-                token: token,
-                body: JSON.stringify({
-                    token_ids: deckTokenIds,
-                    nft_contract_id: nftContractId,
-                    images: deckImages,
-                    near_wallet: walletAddress,
-                }),
-            });
 
-            // Step 5: Подтверждаем escrow
+            // PATCH: register_deposits с retry (3 попытки).
+            // Мобильная сеть нестабильна — первый запрос может упасть.
+            await retryAsync(
+                function () {
+                    return apiFetch("/api/matches/" + existingMatchId + "/register_deposits", {
+                        method: "POST",
+                        token: token,
+                        body: JSON.stringify({
+                            token_ids: deckTokenIds,
+                            nft_contract_id: nftContractId,
+                            images: deckImages,
+                            near_wallet: walletAddress,
+                        }),
+                    });
+                },
+                3,
+                800
+            );
+            console.warn("[LockEscrow] Step 4 OK");
+
+            // ── Step 5: Confirm escrow ────────────────────────────────
             setStatusText("Confirming escrow...");
             console.warn("[LockEscrow] Step 5: confirm_escrow");
 
-            await apiFetch("/api/matches/" + existingMatchId + "/confirm_escrow", {
-                method: "POST",
-                token: token,
-                body: JSON.stringify({
-                    player_id: String(me?.id || ""),
-                    token_ids: deckTokenIds,
-                    near_wallet: walletAddress,
-                }),
-            });
+            // PATCH: confirm_escrow с retry
+            await retryAsync(
+                function () {
+                    return apiFetch("/api/matches/" + existingMatchId + "/confirm_escrow", {
+                        method: "POST",
+                        token: token,
+                        body: JSON.stringify({
+                            player_id: String(me?.id || ""),
+                            token_ids: deckTokenIds,
+                            near_wallet: walletAddress,
+                        }),
+                    });
+                },
+                3,
+                800
+            );
+            console.warn("[LockEscrow] Step 5 OK");
+
+            // PATCH: Инвалидируем кэш NFT — чтобы после игры данные были свежие
+            try {
+                invalidateOwnerCache(nftContractId, walletAddress);
+            } catch (e) { }
 
             // Успех!
             setStatus("success");
             setStatusText("NFTs locked!");
-            console.warn("[LockEscrow] SUCCESS — all steps done");
+            console.warn("[LockEscrow] ALL STEPS DONE ✓");
 
             setTimeout(function () {
                 onReady?.({ matchId: existingMatchId });
-            }, 800);
+            }, 700);
 
         } catch (err) {
             console.error("[LockEscrow] FINAL ERROR:", err?.message, err);
 
-            // PATCH: Человекочитаемые сообщения
             var userMessage = String(err?.message || err);
 
-            if (
-                userMessage.includes("User rejected") ||
-                userMessage.includes("user rejected") ||
-                userMessage.toLowerCase().includes("rejected") ||
-                userMessage.toLowerCase().includes("cancelled") ||
-                userMessage.toLowerCase().includes("canceled")
-            ) {
-                userMessage = "❌ Transaction rejected in wallet. Please try again.";
-            } else if (userMessage.indexOf("TX_TIMEOUT") === 0) {
-                userMessage = "⏱ Wallet did not respond. If you signed in wallet app — tap Try Again to check status.";
+            // PATCH: Уже залочено (race condition — второй игрок залочил первым)
+            if (userMessage.includes("Already locked") || userMessage.includes("already confirmed")) {
+                setStatus("success");
+                setStatusText("Already locked!");
+                setTimeout(function () { onReady?.({ matchId: existingMatchId }); }, 700);
+                return;
+            }
+
+            if (userMessage.includes("❌")) {
+                // Уже отформатировано
+            } else if (userMessage.includes("TX_TIMEOUT")) {
+                userMessage = "⏱ Wallet timeout. If you approved in wallet app — tap Try Again.";
             } else if (
-                userMessage.includes("Cannot get wallet") ||
-                userMessage.includes("Кошелёк не определён")
+                userMessage.includes("Cannot get") ||
+                userMessage.includes("not initialized") ||
+                userMessage.includes("Selector")
             ) {
-                userMessage = "🔌 Wallet disconnected. Please reload the page and reconnect.";
+                userMessage = "🔌 Wallet not connected. Reload page and reconnect wallet.";
+            } else if (userMessage.includes("not owned") || userMessage.includes("don't own")) {
+                // Оставляем как есть — информативно
             }
 
             setError(userMessage);
@@ -399,7 +363,6 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
         }
 
     }, [
-        // PATCH: status в deps — чтобы guard по status работал актуально
         status, walletAddress, escrowContractId, nftContractId,
         deckTokenIds, deckImages, existingMatchId, ctx, me, onReady
     ]);
@@ -408,9 +371,6 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
 
     var topCards = playerDeck ? playerDeck.slice(0, 3) : [];
     var bottomCards = playerDeck ? playerDeck.slice(3, 5) : [];
-
-    // PATCH: Кнопка Lock заблокирована если isLockingRef.current ИЛИ status loading/success.
-    // Для UI используем status (ref не триггерит ре-рендер).
     var isButtonDisabled = status === "loading" || status === "success";
 
     return (
@@ -420,7 +380,7 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                 background: "rgba(0,0,0,0.92)",
                 display: "flex", alignItems: "center", justifyContent: "center", padding: 16,
             }}
-            onClick={onClose}
+            onClick={status === "loading" ? undefined : onClose}
         >
             <div
                 style={{
@@ -444,7 +404,6 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                             <span style={{ color: "#ffd700" }}>Winner takes 1 NFT from loser!</span>
                         </p>
 
-                        {/* Карты 3 + 2 */}
                         <div style={{ marginBottom: 20 }}>
                             <div style={{ display: "flex", gap: 12, justifyContent: "center", marginBottom: 12 }}>
                                 {topCards.map(function (card, i) {
@@ -484,17 +443,16 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                             </div>
                         </div>
 
-                        {/* Match info */}
                         <div style={{
                             fontSize: 11, opacity: 0.5, marginBottom: 20,
                             padding: "10px 14px",
                             background: "rgba(255,255,255,0.03)", borderRadius: 10,
+                            textAlign: "left",
                         }}>
-                            Match: {existingMatchId?.slice(0, 12)}...
-                            <br />
-                            Escrow: {escrowContractId}
-                            <br />
-                            Wallet: {walletAddress?.slice(0, 16)}...
+                            <div>Match: {existingMatchId?.slice(0, 16)}...</div>
+                            <div>Escrow: {escrowContractId || "NOT SET"}</div>
+                            <div>Wallet: {walletAddress?.slice(0, 20) || "NOT CONNECTED"}...</div>
+                            <div>NFTs: {deckTokenIds.join(", ")}</div>
                         </div>
 
                         <button
@@ -509,6 +467,9 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                                 boxShadow: "0 6px 25px rgba(255,215,0,0.4)",
                                 opacity: isButtonDisabled ? 0.5 : 1,
                                 pointerEvents: isButtonDisabled ? "none" : "auto",
+                                // PATCH: Убираем задержку нажатия на мобилке
+                                touchAction: "manipulation",
+                                WebkitTapHighlightColor: "transparent",
                             }}
                         >
                             🔒 Lock & Battle!
@@ -525,7 +486,9 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                             padding: "10px 14px",
                             background: "rgba(255,255,255,0.05)", borderRadius: 10,
                         }}>
-                            Please confirm in your wallet
+                            {statusText.includes("wallet") || statusText.includes("Sign")
+                                ? "⚠️ If wallet app opens — sign there, then return here"
+                                : "Processing..."}
                         </div>
                     </div>
                 )}
@@ -554,19 +517,21 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                         </div>
                         <button
                             onClick={function () {
-                                // PATCH: При "Try Again" — сбрасываем ref тоже
+                                // PATCH: Явный сброс ref при "Try Again"
                                 isLockingRef.current = false;
                                 setStatus("idle");
                                 setError("");
+                                setStatusText("");
                             }}
                             style={{
                                 padding: "12px 24px", borderRadius: 12,
                                 border: "1px solid rgba(255,255,255,0.25)",
                                 background: "rgba(255,255,255,0.08)", color: "#fff",
                                 cursor: "pointer", fontSize: 14, fontWeight: 600,
+                                touchAction: "manipulation",
                             }}
                         >
-                            Try Again
+                            🔄 Try Again
                         </button>
                     </div>
                 )}
@@ -580,6 +545,7 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                             background: "transparent",
                             color: "rgba(255,255,255,0.5)", fontSize: 14,
                             cursor: "pointer", width: "100%",
+                            touchAction: "manipulation",
                         }}
                     >
                         Cancel

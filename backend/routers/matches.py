@@ -361,43 +361,67 @@ async def register_deposits(
     # Сохраняем депозиты в БД
     try:
         async for session in get_session():
-            # Удаляем старые депозиты игрока для этого матча
-            old_deposits = await session.execute(
+            # PATCH: Идемпотентность — проверяем существующие депозиты игрока.
+            # На мобилке клиент может прислать запрос дважды (retry после сетевой ошибки).
+            # Не удаляем и не дублируем — если token_id уже есть, обновляем image/wallet.
+            existing_result = await session.execute(
                 select(MatchDeposit).where(
                     MatchDeposit.match_id == match_id,
                     MatchDeposit.player_id == player_id
                 )
             )
-            for dep in old_deposits.scalars().all():
-                await session.delete(dep)
+            existing_deposits = existing_result.scalars().all()
+            existing_token_ids = {d.token_id for d in existing_deposits}
+
+            print(f"[MATCHES] register_deposits: match={match_id} player={player_id} "
+                  f"existing={len(existing_deposits)} new={len(request.token_ids)}")
 
             for i, token_id in enumerate(request.token_ids):
                 image = request.images[i] if request.images and i < len(request.images) else None
                 if not image and nft_contract:
                     image = await fetch_nft_image(token_id, nft_contract)
-                session.add(MatchDeposit(
-                    match_id=match_id,
-                    player_id=player_id,
-                    token_id=token_id,
-                    nft_contract_id=nft_contract,
-                    image=image,
-                    near_wallet=request.near_wallet,
-                ))
+
+                if token_id in existing_token_ids:
+                    # PATCH: Обновляем существующий депозит (image мог не загрузиться с первого раза)
+                    for dep in existing_deposits:
+                        if dep.token_id == token_id:
+                            if image and not dep.image:
+                                dep.image = image
+                            if request.near_wallet and not dep.near_wallet:
+                                dep.near_wallet = request.near_wallet
+                            break
+                else:
+                    # Новый депозит
+                    session.add(MatchDeposit(
+                        match_id=match_id,
+                        player_id=player_id,
+                        token_id=token_id,
+                        nft_contract_id=nft_contract,
+                        image=image,
+                        near_wallet=request.near_wallet,
+                    ))
+
             await session.commit()
 
             # Проверяем оба депозита
-            all_deposits = await session.execute(
+            all_deposits_result = await session.execute(
                 select(MatchDeposit).where(MatchDeposit.match_id == match_id)
             )
-            all_deps = all_deposits.scalars().all()
+            all_deps = all_deposits_result.scalars().all()
             p1_id = match_data.get("player1_id")
             p2_id = match_data.get("player2_id")
-            p1_has = any(d.player_id == p1_id for d in all_deps)
-            p2_has = any(d.player_id == p2_id for d in all_deps)
+            p1_token_ids = [d.token_id for d in all_deps if d.player_id == p1_id]
+            p2_token_ids = [d.token_id for d in all_deps if d.player_id == p2_id]
+            p1_has = len(p1_token_ids) >= 5
+            p2_has = len(p2_token_ids) >= 5
+
+            print(f"[MATCHES] register_deposits check: p1={p1_id}({len(p1_token_ids)}) "
+                  f"p2={p2_id}({len(p2_token_ids)}) → both={p1_has and p2_has}")
 
             if p1_id and p2_id and p1_has and p2_has:
                 match_data["escrow_locked"] = True
                 match_data["status"] = "active"
+                print(f"[MATCHES] BOTH DEPOSITED → escrow_locked=True match={match_id}")
 
     except Exception as e:
         print(f"[MATCHES] register_deposits DB error: {e}")

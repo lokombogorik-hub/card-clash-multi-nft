@@ -4,7 +4,6 @@ var API_BASE = (typeof import.meta !== "undefined" && import.meta.env && import.
 
 var PROXY_RPC_URL = API_BASE ? API_BASE + "/api/near/rpc" : "";
 
-// Для картинок — только быстрые гейтвеи, без прокси
 var IPFS_GATEWAYS = [
     function (cid, path) { return "https://" + cid + ".ipfs.w3s.link" + path; },
     function (cid, path) { return "https://cloudflare-ipfs.com/ipfs/" + cid + path; },
@@ -26,7 +25,6 @@ function toB64(str) {
 function fixProto(url) {
     if (!url) return "";
     var s = String(url).trim();
-    // Сразу на w3s.link — самый быстрый для этой коллекции
     if (s.startsWith("ipfs://")) return "https://ipfs.near.social/ipfs/" + s.slice(7);
     if (s.startsWith("ar://")) return "https://arweave.net/" + s.slice(5);
     return s;
@@ -53,7 +51,61 @@ async function getJson(url) {
     } catch (e) { return null; }
 }
 
-async function rpc(contractId, method, args) {
+// PATCH: RPC с таймаутом — на мобилке запросы могут висеть вечно
+async function fetchWithTimeout(url, opts, timeoutMs) {
+    var ms = timeoutMs || 8000;
+    var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = controller
+        ? setTimeout(function () { controller.abort(); }, ms)
+        : null;
+    try {
+        var res = await fetch(url, Object.assign({}, opts, controller ? { signal: controller.signal } : {}));
+        return res;
+    } finally {
+        if (timer) clearTimeout(timer);
+    }
+}
+
+// PATCH: RPC кэш — не делаем повторные запросы для одинаковых вызовов.
+// nft_tokens_for_owner кэшируется на 30 секунд.
+// nft_metadata кэшируется на 5 минут (меняется редко).
+var _rpcCache = new Map();
+
+function _rpcCacheKey(contractId, method, args) {
+    return contractId + ":" + method + ":" + JSON.stringify(args || {});
+}
+
+function _rpcCacheGet(key, maxAgeMs) {
+    var entry = _rpcCache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.ts > maxAgeMs) {
+        _rpcCache.delete(key);
+        return null;
+    }
+    return entry.value;
+}
+
+function _rpcCacheSet(key, value) {
+    _rpcCache.set(key, { value: value, ts: Date.now() });
+    // Не даём кэшу расти бесконечно
+    if (_rpcCache.size > 200) {
+        var firstKey = _rpcCache.keys().next().value;
+        _rpcCache.delete(firstKey);
+    }
+}
+
+async function rpc(contractId, method, args, opts) {
+    var cacheMaxAge = (opts && opts.cacheMaxAge) || 0;
+    var cacheKey = _rpcCacheKey(contractId, method, args);
+
+    // PATCH: Проверяем кэш
+    if (cacheMaxAge > 0) {
+        var cached = _rpcCacheGet(cacheKey, cacheMaxAge);
+        if (cached !== null) {
+            return cached;
+        }
+    }
+
     var payload = {
         jsonrpc: "2.0", id: "q", method: "query",
         params: {
@@ -63,51 +115,60 @@ async function rpc(contractId, method, args) {
         },
     };
 
-    // Сначала через бэкенд прокси
+    var result = null;
+
+    // PATCH: Сначала через бэкенд прокси (с таймаутом 6s)
     if (PROXY_RPC_URL) {
         try {
-            var proxyRes = await fetch(PROXY_RPC_URL, {
+            var proxyRes = await fetchWithTimeout(PROXY_RPC_URL, {
                 method: "POST",
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify(payload),
-            });
+            }, 6000);
             if (proxyRes.ok) {
                 var proxyJ = await proxyRes.json();
-                if (!proxyJ.error) {
-                    return JSON.parse(new TextDecoder().decode(new Uint8Array(proxyJ.result.result)));
+                if (!proxyJ.error && proxyJ.result && proxyJ.result.result) {
+                    result = JSON.parse(new TextDecoder().decode(new Uint8Array(proxyJ.result.result)));
                 }
             }
-        } catch (e) { }
+        } catch (e) {
+            console.warn("[nearNft] proxy RPC failed:", e?.message, "— falling back to direct");
+        }
     }
 
-    // Прямой RPC
-    var res = await fetch(DIRECT_RPC_URL, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-    });
-    var j = await res.json();
-    if (j.error) throw new Error(j.error.message || "RPC err");
-    return JSON.parse(new TextDecoder().decode(new Uint8Array(j.result.result)));
+    // PATCH: Прямой RPC (с таймаутом 8s)
+    if (result === null) {
+        var res = await fetchWithTimeout(DIRECT_RPC_URL, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(payload),
+        }, 8000);
+        var j = await res.json();
+        if (j.error) throw new Error(j.error.message || "RPC err");
+        result = JSON.parse(new TextDecoder().decode(new Uint8Array(j.result.result)));
+    }
+
+    // PATCH: Сохраняем в кэш
+    if (cacheMaxAge > 0 && result !== null) {
+        _rpcCacheSet(cacheKey, result);
+    }
+
+    return result;
 }
 
 export function parseIpfs(url) {
     if (!url) return null;
     var s = String(url).trim();
-
     if (s.startsWith("ipfs://")) {
         var rest = s.slice(7);
         var idx = rest.indexOf("/");
         if (idx >= 0) return { cid: rest.substring(0, idx), path: rest.substring(idx) };
         return { cid: rest, path: "" };
     }
-
     var subMatch = s.match(/^https?:\/\/([a-zA-Z0-9]{20,})\.ipfs\.[^/]+(\/.*)?$/);
     if (subMatch) return { cid: subMatch[1], path: subMatch[2] || "" };
-
     var pathMatch = s.match(/\/ipfs\/([a-zA-Z0-9]{20,})(\/.*)?/);
     if (pathMatch) return { cid: pathMatch[1], path: pathMatch[2] || "" };
-
     return null;
 }
 
@@ -128,40 +189,52 @@ export function proxyImageUrl(originalUrl) {
     return API_BASE + "/api/proxy/image?url=" + encodeURIComponent(originalUrl);
 }
 
-// Кэш картинок — чтобы не пересчитывать URL каждый раз
 var resolvedImageCache = new Map();
 
 function resolveMediaUrl(media, originalMedia) {
     if (!media) return { display: "", original: "" };
-
     var cacheKey = originalMedia || media;
     if (resolvedImageCache.has(cacheKey)) return resolvedImageCache.get(cacheKey);
-
     var result;
-
-    // Если это IPFS URL — используем прямой gateway (не прокси)
-    // Это быстрее и работает везде включая ПК
     if (isIpfsUrl(originalMedia || media)) {
         var directUrl = ipfsGatewayUrl(originalMedia || media, 0);
         result = { display: directUrl, original: originalMedia || media };
     } else if (media && !media.startsWith("http") && API_BASE) {
-        // Не-IPFS, не-http — через прокси
         result = { display: proxyImageUrl(media), original: originalMedia || media };
     } else {
         result = { display: media, original: originalMedia || media };
     }
-
     resolvedImageCache.set(cacheKey, result);
     return result;
 }
 
+// PATCH: Кэш для nearNftTokensForOwner — 30 секунд.
+// Основная причина медленного лока на мобилке:
+// LockEscrowModal вызывал nearNftTokensForOwner при каждой попытке,
+// каждый раз делая 3-5 RPC запросов (~3-8 секунд на мобилке).
+// С кэшем второй и последующие вызовы мгновенные.
+var _ownerTokensCache = new Map();
+var OWNER_CACHE_TTL_MS = 30000; // 30 секунд
+
 export async function nearNftTokensForOwner(contractId, accountId) {
+    // PATCH: Проверяем кэш владельца
+    var ownerCacheKey = contractId + ":" + accountId;
+    var ownerCached = _ownerTokensCache.get(ownerCacheKey);
+    if (ownerCached && (Date.now() - ownerCached.ts) < OWNER_CACHE_TTL_MS) {
+        console.warn("[nearNft] nearNftTokensForOwner: cache hit for", accountId,
+            "count=", ownerCached.tokens.length,
+            "age=", Math.round((Date.now() - ownerCached.ts) / 1000) + "s"
+        );
+        return ownerCached.tokens;
+    }
+
     var debugLog = [];
 
+    // PATCH: nft_metadata кэшируем 5 минут — меняется крайне редко
     var cBaseUri = "";
     var cIcon = "";
     try {
-        var cm = await rpc(contractId, "nft_metadata", {});
+        var cm = await rpc(contractId, "nft_metadata", {}, { cacheMaxAge: 300000 });
         cBaseUri = cm.base_uri || "";
         cIcon = cm.icon || "";
         debugLog.push("contract_base_uri=" + (cBaseUri || "(empty)"));
@@ -173,12 +246,13 @@ export async function nearNftTokensForOwner(contractId, accountId) {
     var all = [];
     var useNumericIndex = false;
 
+    // PATCH: Запрос токенов — кэшируем 30 секунд
     try {
         var firstBatch = await rpc(contractId, "nft_tokens_for_owner", {
             account_id: accountId,
             from_index: "0",
             limit: 100,
-        });
+        }, { cacheMaxAge: 30000 });
         if (Array.isArray(firstBatch)) {
             all = firstBatch;
             debugLog.push("first_batch_string_idx=" + firstBatch.length);
@@ -191,7 +265,7 @@ export async function nearNftTokensForOwner(contractId, accountId) {
                 account_id: accountId,
                 from_index: 0,
                 limit: 100,
-            });
+            }, { cacheMaxAge: 30000 });
             if (Array.isArray(firstBatch2)) {
                 all = firstBatch2;
                 debugLog.push("first_batch_numeric_idx=" + firstBatch2.length);
@@ -209,7 +283,7 @@ export async function nearNftTokensForOwner(contractId, accountId) {
                     account_id: accountId,
                     from_index: fromIdx,
                     limit: 100,
-                });
+                }, { cacheMaxAge: 30000 });
                 if (!Array.isArray(batch) || batch.length === 0) break;
                 all = all.concat(batch);
                 if (batch.length < 100) break;
@@ -225,7 +299,7 @@ export async function nearNftTokensForOwner(contractId, accountId) {
             var noIdx = await rpc(contractId, "nft_tokens_for_owner", {
                 account_id: accountId,
                 limit: 500,
-            });
+            }, { cacheMaxAge: 30000 });
             if (Array.isArray(noIdx) && noIdx.length > 0) {
                 all = noIdx;
                 debugLog.push("no_index_fallback=" + noIdx.length);
@@ -240,15 +314,16 @@ export async function nearNftTokensForOwner(contractId, accountId) {
     var deduped = [];
     for (var d = 0; d < all.length; d++) {
         var tid = all[d].token_id;
-        if (!seen[tid]) {
-            seen[tid] = true;
-            deduped.push(all[d]);
-        }
+        if (!seen[tid]) { seen[tid] = true; deduped.push(all[d]); }
     }
     all = deduped;
 
+    // PATCH: nft_supply_for_owner — тоже кэшируем
     try {
-        var supply = await rpc(contractId, "nft_supply_for_owner", { account_id: accountId });
+        var supply = await rpc(contractId, "nft_supply_for_owner",
+            { account_id: accountId },
+            { cacheMaxAge: 30000 }
+        );
         var expectedCount = parseInt(supply, 10) || 0;
         debugLog.push("expected_supply=" + expectedCount);
         if (expectedCount > all.length) {
@@ -258,7 +333,7 @@ export async function nearNftTokensForOwner(contractId, accountId) {
                     var bigBatch = await rpc(contractId, "nft_tokens_for_owner", {
                         account_id: accountId,
                         limit: expectedCount + 10,
-                    });
+                    }, { cacheMaxAge: 30000 });
                     if (Array.isArray(bigBatch) && bigBatch.length > all.length) {
                         all = bigBatch;
                         debugLog.push("big_batch_retry=" + bigBatch.length);
@@ -273,12 +348,12 @@ export async function nearNftTokensForOwner(contractId, accountId) {
     }
 
     debugLog.push("total_tokens=" + all.length);
+    console.warn("[nearNft] nearNftTokensForOwner:", accountId, "tokens:", all.length, debugLog);
 
-    // Обрабатываем токены параллельно вместо последовательно
-    var out = await Promise.all(all.map(async function (t, i) {
+    // Обрабатываем токены параллельно
+    var out = await Promise.all(all.map(async function (t) {
         var md = t.metadata || {};
         var bUri = md.base_uri || cBaseUri || "";
-
         var media = "";
         var title = md.title || md.name || "";
         var desc = md.description || "";
@@ -288,7 +363,6 @@ export async function nearNftTokensForOwner(contractId, accountId) {
             media = join(bUri, md.media);
         }
 
-        // reference грузим только если нет media
         if (!media && md.reference && md.reference !== "NO_REF") {
             var refUrl = join(bUri, md.reference);
             var rj = await getJson(refUrl);
@@ -309,8 +383,6 @@ export async function nearNftTokensForOwner(contractId, accountId) {
         }
 
         var originalMedia = media;
-
-        // Резолвим URL картинки — IPFS идёт напрямую, не через прокси
         var resolved = resolveMediaUrl(media, originalMedia);
         media = resolved.display;
         originalMedia = resolved.original;
@@ -328,6 +400,24 @@ export async function nearNftTokensForOwner(contractId, accountId) {
         };
     }));
 
+    // PATCH: Сохраняем в кэш владельца
+    _ownerTokensCache.set(ownerCacheKey, { tokens: out, ts: Date.now() });
+
     out._debug = debugLog;
     return out;
+}
+
+// PATCH: Функция для инвалидации кэша владельца.
+// Вызывать после успешного lock — чтобы при следующей проверке
+// не показывало устаревшие данные.
+export function invalidateOwnerCache(contractId, accountId) {
+    var key = contractId + ":" + accountId;
+    _ownerTokensCache.delete(key);
+    // Также чистим RPC кэш для этого владельца
+    for (var k of _rpcCache.keys()) {
+        if (k.includes(accountId)) {
+            _rpcCache.delete(k);
+        }
+    }
+    console.warn("[nearNft] invalidateOwnerCache:", key);
 }
