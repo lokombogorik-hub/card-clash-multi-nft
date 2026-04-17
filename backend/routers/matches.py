@@ -141,7 +141,17 @@ async def _save_match(match_data: Dict):
 
 @router.get("/active")
 async def get_active_match(authorization: Optional[str] = Header(None)):
-    """Возвращает активный матч текущего игрока"""
+    """
+    Возвращает активный матч текущего игрока.
+
+    PATCH: Ищем сначала в active_matches (in-memory),
+    потом в БД — на случай перезапуска сервера.
+    Статусы которые считаются "активными":
+      - waiting_escrow: матч создан, ждём лока
+      - waiting: матч создан, ждём второго игрока
+      - active: оба залочили, игра идёт
+    НЕ возвращаем: cancelled, finished
+    """
     player_id = None
     if authorization:
         token = authorization.replace("Bearer ", "")
@@ -149,33 +159,102 @@ async def get_active_match(authorization: Optional[str] = Header(None)):
     if not player_id:
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    # [PATCH] Ищем в active_matches из matchmaking
+    ACTIVE_STATUSES = {"waiting_escrow", "active", "waiting"}
+
+    # PATCH: Шаг 1 — ищем в in-memory active_matches
     from routers.matchmaking import active_matches
 
-    for mid, match in active_matches.items():
+    for mid, match in list(active_matches.items()):
         p1 = str(match.get("player1_id") or "")
         p2 = str(match.get("player2_id") or "")
         if player_id not in (p1, p2):
             continue
-        # Только живые матчи
-        if match.get("status") in ("waiting_escrow", "active", "waiting"):
-            return {
-                "match_id": mid,
-                "status": match.get("status"),
-                "escrow_locked": match.get("escrow_locked", False),
-                "player1_id": p1,
-                "player2_id": p2,
-                "player1_escrow_confirmed": match.get("player1_escrow_confirmed", False),
-                "player2_escrow_confirmed": match.get("player2_escrow_confirmed", False),
-                "my_escrow_confirmed": (
-                    match.get("player1_escrow_confirmed", False) if player_id == p1
-                    else match.get("player2_escrow_confirmed", False)
-                ),
-                "escrow_timeout_at": match.get("escrow_timeout_at"),
-                "created_at": match.get("created_at"),
-            }
+        match_status = match.get("status", "")
+        if match_status not in ACTIVE_STATUSES:
+            continue
 
-    raise HTTPException(status_code=404, detail="Match not found")
+        # Нашли в памяти
+        my_escrow_confirmed = (
+            match.get("player1_escrow_confirmed", False) if player_id == p1
+            else match.get("player2_escrow_confirmed", False)
+        )
+        print(f"[MATCHES] /active found in memory: match={mid} player={player_id} status={match_status}")
+        return {
+            "match_id": mid,
+            "status": match_status,
+            "escrow_locked": match.get("escrow_locked", False),
+            "player1_id": p1,
+            "player2_id": p2,
+            "player1_escrow_confirmed": match.get("player1_escrow_confirmed", False),
+            "player2_escrow_confirmed": match.get("player2_escrow_confirmed", False),
+            "my_escrow_confirmed": my_escrow_confirmed,
+            "escrow_timeout_at": match.get("escrow_timeout_at"),
+            "created_at": match.get("created_at"),
+        }
+
+    # PATCH: Шаг 2 — ищем в БД (на случай перезапуска сервера)
+    # active_matches in-memory сброшен, но матч может быть в PostgreSQL
+    try:
+        async for session in get_session():
+            from sqlalchemy import or_
+            stmt = (
+                select(PvPMatch)
+                .where(
+                    or_(
+                        PvPMatch.player1_id == player_id,
+                        PvPMatch.player2_id == player_id,
+                    ),
+                    PvPMatch.status.in_(list(ACTIVE_STATUSES)),
+                )
+                .order_by(PvPMatch.created_at.desc())
+                .limit(1)
+            )
+            result = await session.execute(stmt)
+            db_match = result.scalar_one_or_none()
+
+            if db_match:
+                p1 = str(db_match.player1_id or "")
+                p2 = str(db_match.player2_id or "")
+                mid = str(db_match.id or db_match.match_id or "")
+
+                # PATCH: Подгружаем матч в in-memory чтобы не лезть в БД при следующем запросе
+                match_dict = {
+                    "match_id": mid,
+                    "player1_id": p1,
+                    "player2_id": p2,
+                    "status": db_match.status,
+                    "escrow_locked": getattr(db_match, "escrow_locked", False) or False,
+                    "player1_escrow_confirmed": getattr(db_match, "player1_escrow_confirmed", False) or False,
+                    "player2_escrow_confirmed": getattr(db_match, "player2_escrow_confirmed", False) or False,
+                    "created_at": str(db_match.created_at) if db_match.created_at else None,
+                    "escrow_timeout_at": getattr(db_match, "escrow_timeout_at", None),
+                }
+                # Кладём в in-memory
+                active_matches[mid] = match_dict
+
+                my_escrow_confirmed = (
+                    match_dict.get("player1_escrow_confirmed", False) if player_id == p1
+                    else match_dict.get("player2_escrow_confirmed", False)
+                )
+                print(f"[MATCHES] /active found in DB: match={mid} player={player_id} status={db_match.status}")
+                return {
+                    "match_id": mid,
+                    "status": db_match.status,
+                    "escrow_locked": match_dict["escrow_locked"],
+                    "player1_id": p1,
+                    "player2_id": p2,
+                    "player1_escrow_confirmed": match_dict["player1_escrow_confirmed"],
+                    "player2_escrow_confirmed": match_dict["player2_escrow_confirmed"],
+                    "my_escrow_confirmed": my_escrow_confirmed,
+                    "escrow_timeout_at": match_dict.get("escrow_timeout_at"),
+                    "created_at": match_dict.get("created_at"),
+                }
+    except Exception as e:
+        print(f"[MATCHES] /active DB search error: {e}")
+        traceback.print_exc()
+
+    # PATCH: Ничего не нашли — 404, фронт поймает и скроет баннер
+    raise HTTPException(status_code=404, detail="No active match found")
 
 
 @router.get("/leaderboard")
@@ -394,6 +473,19 @@ async def confirm_escrow(match_id: str, body: dict):
         match_data["game_started_at"] = datetime.utcnow().isoformat()
 
     await _save_match(match_data)
+
+    # PATCH: Если оба залочили — уведомляем WS что можно стартовать
+    if p1_confirmed and p2_confirmed:
+        try:
+            from routers.ws_match import ws_manager
+            await ws_manager.broadcast_all(match_id, {
+                "type": "escrow_locked",
+                "message": "Both players locked NFTs. Game starting!",
+            })
+            print(f"[MATCHES] confirm_escrow: broadcasted escrow_locked for match {match_id}")
+        except Exception as e:
+            print(f"[MATCHES] confirm_escrow WS broadcast error: {e}")
+
     return {
         "success": True,
         "escrow_locked": match_data.get("escrow_locked", False),

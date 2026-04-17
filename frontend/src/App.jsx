@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
 import Game from "./Game";
 import StormBg from "./components/StormBg";
 import { apiFetch } from "./api.js";
@@ -307,26 +307,60 @@ function AppContent() {
     var bottomStackRef = useRef(null);
     var [authState, setAuthState] = useState({ status: "idle", error: "" });
 
-    // [PATCH] State для активного матча
+    // State для активного матча
     var [activeMatch, setActiveMatch] = useState(null);
     var [activeMatchLoading, setActiveMatchLoading] = useState(false);
+    // Ref чтобы не делать двойные запросы
+    var activeMatchFetchingRef = useRef(false);
 
-    // [PATCH] Проверка активного матча при загрузке
-    useEffect(function () {
-        if (!token) return;
-        (async function () {
-            try {
-                var data = await apiFetch("/api/matches/active", { token: token });
-                if (data && data.match_id && data.status !== "cancelled") {
-                    setActiveMatch(data);
-                } else {
-                    setActiveMatch(null);
-                }
-            } catch (e) {
+    // PATCH: Функция проверки активного матча вынесена в useCallback
+    // чтобы можно было вызывать и при mount, и при возврате на home
+    var checkActiveMatch = useCallback(async function () {
+        var t = token || getStoredToken();
+        if (!t) return;
+        if (activeMatchFetchingRef.current) return;
+        activeMatchFetchingRef.current = true;
+        try {
+            var data = await apiFetch("/api/matches/active", { token: t });
+            if (data && data.match_id && data.status !== "cancelled") {
+                setActiveMatch(data);
+            } else {
                 setActiveMatch(null);
             }
-        })();
+        } catch (e) {
+            // 404 — нет активного матча, это норма
+            setActiveMatch(null);
+        } finally {
+            activeMatchFetchingRef.current = false;
+        }
     }, [token]);
+
+    // PATCH: Проверяем активный матч при получении токена
+    useEffect(function () {
+        if (!token) return;
+        checkActiveMatch();
+    }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // PATCH: Проверяем активный матч при КАЖДОМ возврате на home
+    // (не только при первом рендере с токеном)
+    useEffect(function () {
+        if (screen === "home") {
+            checkActiveMatch();
+        }
+    }, [screen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // PATCH: Также слушаем visibilitychange — когда пользователь
+    // возвращается из кошелька (мобильный deep-link redirect)
+    useEffect(function () {
+        var onVisible = function () {
+            if (document.visibilityState === "visible" && screen === "home") {
+                console.warn("[App] visibilitychange → visible, checking active match");
+                checkActiveMatch();
+            }
+        };
+        document.addEventListener("visibilitychange", onVisible);
+        return function () { document.removeEventListener("visibilitychange", onVisible); };
+    }, [screen, checkActiveMatch]);
 
     useEffect(function () {
         var t = getStoredToken();
@@ -418,6 +452,10 @@ function AppContent() {
         setPlayerDeck(null);
         setStage2MatchId("");
         setGameMode("ai");
+        // PATCH: После выхода из игры сразу проверяем — вдруг матч ещё активен
+        // (например игрок вышел случайно через кнопку back)
+        // Небольшая задержка чтобы screen успел смениться
+        setTimeout(function () { checkActiveMatch(); }, 300);
     };
 
     var showRotateGame = isMobile && screen === "game" && !isLandscape;
@@ -455,7 +493,7 @@ function AppContent() {
                     <div className="home-center">
                         <div className="home-wallet-row"><WalletConnector /></div>
 
-                        {/* [PATCH] Баннер активного матча */}
+                        {/* Баннер активного матча */}
                         {activeMatch && (
                             <div style={{
                                 margin: "8px 16px 0",
@@ -482,24 +520,48 @@ function AppContent() {
                                     }
                                 </div>
                                 <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                                    {/* PATCH: "Вернуться в игру" — только если escrow_locked */}
                                     {activeMatch.escrow_locked && (
                                         <button
                                             onClick={async function () {
                                                 setActiveMatchLoading(true);
                                                 try {
                                                     var t = token || getStoredToken();
-                                                    var deckRes = await apiFetch(
-                                                        "/api/decks/active/full", { token: t }
+                                                    // PATCH: Получаем полные данные матча чтобы взять деки
+                                                    var matchFull = await apiFetch(
+                                                        "/api/matches/" + activeMatch.match_id,
+                                                        { token: t }
                                                     );
-                                                    if (deckRes?.cards?.length === 5) {
-                                                        setPlayerDeck(deckRes.cards);
+                                                    // Пробуем получить колоду из матча или из decks API
+                                                    var deck = null;
+                                                    if (matchFull) {
+                                                        var myId = String(me?.id || "");
+                                                        var isP1 = String(matchFull.player1_id) === myId;
+                                                        var deckField = isP1 ? matchFull.player1_deck : matchFull.player2_deck;
+                                                        if (Array.isArray(deckField) && deckField.length === 5) {
+                                                            deck = deckField;
+                                                        }
                                                     }
+                                                    // Fallback: decks API
+                                                    if (!deck || deck.length !== 5) {
+                                                        try {
+                                                            var deckRes = await apiFetch("/api/decks/active/full", { token: t });
+                                                            if (deckRes?.cards?.length === 5) {
+                                                                deck = deckRes.cards;
+                                                            }
+                                                        } catch (_) { }
+                                                    }
+                                                    if (!deck || deck.length !== 5) {
+                                                        alert("Не удалось восстановить колоду. Попробуй ещё раз.");
+                                                        return;
+                                                    }
+                                                    setPlayerDeck(deck);
                                                     setGameMode("pvp");
                                                     setStage2MatchId(activeMatch.match_id);
                                                     setActiveMatch(null);
                                                     setScreen("game");
                                                 } catch (e) {
-                                                    alert("Ошибка восстановления матча: " + e.message);
+                                                    alert("Ошибка восстановления матча: " + (e?.message || e));
                                                 } finally {
                                                     setActiveMatchLoading(false);
                                                 }
@@ -515,6 +577,36 @@ function AppContent() {
                                             }}
                                         >
                                             {activeMatchLoading ? "⏳..." : "🎮 Вернуться в игру"}
+                                        </button>
+                                    )}
+                                    {/* PATCH: Если escrow не залочен — кнопка "Залочить NFT" вместо "Вернуться" */}
+                                    {!activeMatch.escrow_locked && activeMatch.my_escrow_confirmed && (
+                                        <div style={{
+                                            flex: 1, padding: "10px 16px", borderRadius: 10,
+                                            background: "rgba(255,255,0,0.1)",
+                                            border: "1px solid rgba(255,255,0,0.3)",
+                                            color: "#ffd700", fontSize: 13, textAlign: "center",
+                                        }}>
+                                            ⏳ Ждём оппонента...
+                                        </div>
+                                    )}
+                                    {!activeMatch.escrow_locked && !activeMatch.my_escrow_confirmed && (
+                                        <button
+                                            onClick={function () {
+                                                // Возвращаем в matchmaking для повторного лока
+                                                setStage2MatchId(activeMatch.match_id);
+                                                setGameMode("pvp");
+                                                setScreen("matchmaking");
+                                            }}
+                                            style={{
+                                                flex: 1, padding: "10px 16px",
+                                                borderRadius: 10, border: "none",
+                                                background: "linear-gradient(135deg, #4facfe, #00f2fe)",
+                                                color: "#000", fontWeight: 900, fontSize: 14,
+                                                cursor: "pointer",
+                                            }}
+                                        >
+                                            🔒 Залочить NFT
                                         </button>
                                     )}
                                     <button
