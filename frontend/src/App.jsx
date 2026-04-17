@@ -9,8 +9,6 @@ import WalletConnector from "./components/MultiChainWallet/WalletConnector";
 import Matchmaking from "./components/Stage2/Matchmaking";
 import WalletConnectProvider from "./context/WalletConnectContext";
 
-/* ── helpers ── */
-
 function useIsMobile() {
     var check = function () {
         if (typeof window === "undefined") return false;
@@ -61,7 +59,6 @@ function getStoredToken() {
     } catch (_) { return ""; }
 }
 
-/* ── leaderboard ── */
 function Leaderboard({ token }) {
     var [leaders, setLeaders] = useState([]);
     var [loading, setLoading] = useState(true);
@@ -120,7 +117,6 @@ function Leaderboard({ token }) {
     );
 }
 
-/* ── tournament data ── */
 var TOURNAMENTS = [
     {
         id: 1,
@@ -163,7 +159,6 @@ var TOURNAMENTS = [
     }
 ];
 
-/* ── season bar ── */
 function SeasonBar({ onGoTournament }) {
     var [idx, setIdx] = useState(0);
     var t = TOURNAMENTS[idx];
@@ -198,13 +193,11 @@ function SeasonBar({ onGoTournament }) {
     );
 }
 
-/* ── tournament page ── */
 function TournamentPage() {
     var [expandedId, setExpandedId] = useState(null);
 
     return (
         <div className="tournament-page-v2">
-            {/* Header — как в Market */}
             <div className="tournament-header">
                 <h2 className="tournament-title">
                     <span className="tournament-title-icon">🏆</span>Турниры
@@ -212,7 +205,6 @@ function TournamentPage() {
                 <div className="tournament-subtitle">Участвуй в турнирах и выигрывай призы</div>
             </div>
 
-            {/* Stats chips */}
             <div className="tournament-stats-row">
                 <div className="tournament-stat-chip">
                     <span className="stat-chip-icon">🎮</span>
@@ -224,7 +216,6 @@ function TournamentPage() {
                 </div>
             </div>
 
-            {/* Tournament List */}
             <div className="tournament-list-v2">
                 {TOURNAMENTS.map(function (t, i) {
                     var isExpanded = expandedId === t.id;
@@ -235,12 +226,9 @@ function TournamentPage() {
                             style={{ animationDelay: (i * 0.1) + "s" }}
                             onClick={function () { setExpandedId(isExpanded ? null : t.id); }}
                         >
-                            {/* Card Glow */}
                             <div className="tournament-card-glow" style={{ background: "linear-gradient(135deg, " + t.gradient[0] + "40, " + t.gradient[1] + "40)" }} />
 
-                            {/* Main Content */}
                             <div className="tournament-card-main">
-                                {/* Avatar */}
                                 <div className="tournament-avatar-wrap">
                                     <div className="tournament-avatar-ring" style={{ background: "linear-gradient(135deg, " + t.gradient[0] + ", " + t.gradient[1] + ")" }}>
                                         <div className="tournament-avatar">
@@ -250,14 +238,12 @@ function TournamentPage() {
                                     <div className="tournament-avatar-badge">SOON</div>
                                 </div>
 
-                                {/* Info */}
                                 <div className="tournament-card-info">
                                     <div className="tournament-card-title-row">
                                         <h3>{t.title}</h3>
                                     </div>
                                     <p className="tournament-card-subtitle">{t.subtitle}</p>
 
-                                    {/* Quick Stats */}
                                     <div className="tournament-quick-stats">
                                         <div className="quick-stat">
                                             <span className="quick-stat-icon">👥</span>
@@ -274,7 +260,6 @@ function TournamentPage() {
                                     </div>
                                 </div>
 
-                                {/* Expand Arrow */}
                                 <div className={"tournament-expand-arrow" + (isExpanded ? " rotated" : "")}>
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                                         <path d="M6 9l6 6 6-6" stroke="white" strokeWidth="2" strokeLinecap="round" />
@@ -282,12 +267,10 @@ function TournamentPage() {
                                 </div>
                             </div>
 
-                            {/* Expanded Details */}
                             {isExpanded && (
                                 <div className="tournament-expanded">
                                     <div className="tournament-divider" />
 
-                                    {/* Prize Pool */}
                                     <div className="tournament-prize-section">
                                         <div className="prize-section-title">Призовой фонд</div>
                                         <div className="prize-places">
@@ -303,7 +286,6 @@ function TournamentPage() {
                                         </div>
                                     </div>
 
-                                    {/* Format Info */}
                                     <div className="tournament-format-section">
                                         <div className="format-item">
                                             <span className="format-icon">📋</span>
@@ -317,7 +299,6 @@ function TournamentPage() {
                                         </div>
                                     </div>
 
-                                    {/* Action Button */}
                                     <button
                                         className="tournament-action-btn"
                                         style={{ background: "linear-gradient(135deg, " + t.gradient[0] + ", " + t.gradient[1] + ")" }}
@@ -333,7 +314,6 @@ function TournamentPage() {
                 })}
             </div>
 
-            {/* Bottom Info */}
             <div className="tournament-bottom-info">
                 <div className="bottom-info-icon">💡</div>
                 <div className="bottom-info-text">
@@ -344,7 +324,6 @@ function TournamentPage() {
     );
 }
 
-/* ── rotate gates ── */
 function RotateGateGame({ onBack }) {
     return (
         <div className="rotate-gate">
@@ -370,7 +349,6 @@ function RotateGateMenu() {
     );
 }
 
-/* ── app content ── */
 function AppContent() {
     var [screen, setScreen] = useState("home");
     var isLandscape = useIsLandscape();
@@ -384,19 +362,35 @@ function AppContent() {
     var [logoOk, setLogoOk] = useState(true);
     var bottomStackRef = useRef(null);
     var [authState, setAuthState] = useState({ status: "idle", error: "" });
-    // В AppContent, после получения token, добавь:
+
+    // [PATCH] Debug state для отображения active match
+    var [debugMatchData, setDebugMatchData] = useState(null);
+
+    // [PATCH] Проверка активного матча при загрузке
     useEffect(function () {
         if (!token) return;
-
-        // [DEBUG] Проверка активного матча
         (async function () {
             try {
                 var active = await apiFetch("/api/matches/active", { token: token });
-                console.log("[DEBUG active match]", JSON.stringify(active, null, 2));
-                alert("ACTIVE MATCH:\n" + JSON.stringify(active, null, 2));
+                console.log("[DEBUG] ACTIVE MATCH:", active);
+                setDebugMatchData(active);
+
+                try {
+                    window.Telegram?.WebApp?.showAlert?.(
+                        "ACTIVE MATCH:\n" + JSON.stringify(active, null, 2).slice(0, 200)
+                    );
+                } catch (e) { }
             } catch (e) {
-                console.log("[DEBUG active match] error:", e.message);
-                // 404 — это норма если матча нет
+                console.log("[DEBUG] active match error:", e.message);
+                setDebugMatchData({ error: e.message });
+
+                if (e.message.indexOf("404") === -1) {
+                    try {
+                        window.Telegram?.WebApp?.showAlert?.(
+                            "MATCH CHECK ERROR:\n" + e.message
+                        );
+                    } catch (e2) { }
+                }
             }
         })();
     }, [token]);
@@ -471,7 +465,6 @@ function AppContent() {
         return (
             <div className="shell">
                 <StormBg />
-
                 <div className={"game-host" + (showRotateGame ? " is-hidden" : "")}>
                     {playerDeck && playerDeck.length === 5 ? (
                         <Game onExit={onExitGame} me={me} playerDeck={playerDeck} matchId={stage2MatchId} mode={gameMode} />
@@ -490,6 +483,24 @@ function AppContent() {
             {showRotateMenu && <RotateGateMenu />}
 
             <div className="shell-content">
+                {/* [PATCH] Debug overlay для active match */}
+                {screen === "home" && debugMatchData && (
+                    <div style={{
+                        position: "fixed", top: 0, left: 0, right: 0,
+                        background: "rgba(0,0,0,0.95)", color: "lime",
+                        padding: 20, zIndex: 999999, maxHeight: 300,
+                        overflow: "auto", fontSize: 11, fontFamily: "monospace",
+                        whiteSpace: "pre-wrap", wordBreak: "break-all",
+                        borderBottom: "2px solid lime"
+                    }}>
+                        {JSON.stringify(debugMatchData, null, 2)}
+                        <button onClick={function () { setDebugMatchData(null); }}
+                            style={{ marginTop: 10, padding: 8, background: "red", color: "#fff", border: "none", borderRadius: 4 }}>
+                            CLOSE DEBUG
+                        </button>
+                    </div>
+                )}
+
                 {screen === "home" && (
                     <div className="home-center">
                         <div className="home-wallet-row"><WalletConnector /></div>
