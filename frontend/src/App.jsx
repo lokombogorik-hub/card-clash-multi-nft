@@ -384,20 +384,23 @@ function AppContent() {
     var [logoOk, setLogoOk] = useState(true);
     var bottomStackRef = useRef(null);
     var [authState, setAuthState] = useState({ status: "idle", error: "" });
-    var [debugInfo, setDebugInfo] = useState(null);
-
+    // В AppContent, после получения token, добавь:
     useEffect(function () {
-        if (authState.status === "ok") {
-            var t = token || getStoredToken();
-            apiFetch("/api/matches/active", { token: t })
-                .then(function (data) {
-                    setDebugInfo(JSON.stringify(data, null, 2));
-                })
-                .catch(function (err) {
-                    setDebugInfo("Ошибка: " + err.message);
-                });
-        }
-    }, [authState.status]);
+        if (!token) return;
+
+        // [DEBUG] Проверка активного матча
+        (async function () {
+            try {
+                var active = await apiFetch("/api/matches/active", { token: token });
+                console.log("[DEBUG active match]", JSON.stringify(active, null, 2));
+                alert("ACTIVE MATCH:\n" + JSON.stringify(active, null, 2));
+            } catch (e) {
+                console.log("[DEBUG active match] error:", e.message);
+                // 404 — это норма если матча нет
+            }
+        })();
+    }, [token]);
+
     useEffect(function () {
         var t = getStoredToken();
         if (t) { setToken(t); setAuthState(function (s) { return s.status === "idle" ? { status: "ok", error: "" } : s; }); }
@@ -468,16 +471,7 @@ function AppContent() {
         return (
             <div className="shell">
                 <StormBg />
-                {debugInfo && (
-                    <div style={{
-                        position: "fixed", top: 10, left: 10, right: 10,
-                        background: "black", color: "lime", padding: 20,
-                        fontSize: 10, zIndex: 999999, maxHeight: 300,
-                        overflow: "auto", whiteSpace: "pre-wrap", border: "2px solid lime"
-                    }}>
-                        {debugInfo}
-                    </div>
-                )}
+
                 <div className={"game-host" + (showRotateGame ? " is-hidden" : "")}>
                     {playerDeck && playerDeck.length === 5 ? (
                         <Game onExit={onExitGame} me={me} playerDeck={playerDeck} matchId={stage2MatchId} mode={gameMode} />

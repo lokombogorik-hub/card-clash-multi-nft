@@ -644,8 +644,20 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     // CLAIM LOGIC
     // ══════════════════════════════════════════════
 
+    // СТАЛО — добавь ref-guard от двойного вызова:
+    // Добавь рядом с другими refs в начале компонента:
+    const prepareClaimCalledRef = useRef(false);
+
+    // И саму функцию измени:
     const prepareClaimCards = async () => {
-        setClaimLoading(true); // ← ДОБАВЛЕНО
+        // [PATCH] Guard от двойного вызова (handleGameState + handleGameOver)
+        if (prepareClaimCalledRef.current) {
+            console.warn("[prepareClaimCards] already called — skipped");
+            return;
+        }
+        prepareClaimCalledRef.current = true;
+
+        setClaimLoading(true);
         if (isPvP && matchId) {
             try {
                 const token = getStoredToken();
@@ -659,7 +671,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                         image: d.image || null,
                         imageUrl: d.image || null,
                     })));
-                    setClaimLoading(false); // ← ДОБАВЛЕНО
+                    setClaimLoading(false);
                     return;
                 }
             } catch (e) { console.error("[prepareClaimCards]", e); }
@@ -673,9 +685,8 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                 imageUrl: c.imageUrl || c.image || null,
             })));
         }
-        setClaimLoading(false); // ← ДОБАВЛЕНО
+        setClaimLoading(false);
     };
-
     const onClaimPick = (index) => {
         if (claimDone || claimBusy || claimRevealed) return;
         setClaimPickIndex(index);
@@ -827,6 +838,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
     const startRound = ({ keepSeries = true, enemyDeckOverride = null } = {}) => {
         if (isPvP) return;
+        prepareClaimCalledRef.current = false;
         const ed = enemyDeckOverride || enemyDeck;
         setBoard(Array(9).fill(null));
         setBoardElems(makeBoardElements());

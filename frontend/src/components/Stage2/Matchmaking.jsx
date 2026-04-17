@@ -7,7 +7,41 @@ function getStoredToken() {
         return localStorage.getItem("token") || localStorage.getItem("accessToken") || localStorage.getItem("access_token") || "";
     } catch (e) { return ""; }
 }
+// Добавить перед export default function Matchmaking:
+function LockWaitTimer({ timeoutMs, onTimeout }) {
+    var [secsLeft, setSecsLeft] = useState(Math.ceil((timeoutMs || 180000) / 1000));
+    var onTimeoutRef = useRef(onTimeout);
+    onTimeoutRef.current = onTimeout;
 
+    useEffect(function () {
+        var start = Date.now();
+        var total = timeoutMs || 180000;
+
+        var interval = setInterval(function () {
+            var elapsed = Date.now() - start;
+            var remaining = Math.max(0, Math.ceil((total - elapsed) / 1000));
+            setSecsLeft(remaining);
+            if (remaining <= 0) {
+                clearInterval(interval);
+                onTimeoutRef.current?.();
+            }
+        }, 1000);
+
+        return function () { clearInterval(interval); };
+    }, [timeoutMs]);
+
+    var mins = Math.floor(secsLeft / 60);
+    var secs = secsLeft % 60;
+
+    return (
+        <div style={{
+            fontSize: 12, opacity: 0.7, marginTop: 8,
+            color: secsLeft < 30 ? "#ff6b6b" : "inherit"
+        }}>
+            Auto-cancel in {mins}:{secs.toString().padStart(2, "0")}
+        </div>
+    );
+}
 export default function Matchmaking({ me, playerDeck, onBack, onMatched }) {
     var [phase, setPhase] = useState("idle"); // idle | searching | found | locking | ready
     var [searchMode, setSearchMode] = useState(null);
@@ -162,16 +196,20 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched }) {
     };
 
     // Cancel during any phase
+    // СТАЛО:
     var onCancel = function () {
-        // TODO: If NFTs were locked, need to refund
         if (myLockDone && matchId) {
-            // Call refund endpoint
             var token = getStoredToken();
+            // [PATCH] Явно запрашиваем возврат NFT при отмене
             apiFetch("/api/matches/" + matchId + "/cancel", {
                 method: "POST",
                 token: token,
+                body: JSON.stringify({
+                    refund: true,           // явный флаг возврата
+                    reason: "player_cancel"
+                }),
             }).catch(function (e) {
-                console.error("Cancel error:", e);
+                console.error("Cancel/refund error:", e);
             });
         }
         stopSearch();
@@ -257,6 +295,7 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched }) {
     }
 
     // Phase: Waiting for opponent to lock
+    // СТАЛО — добавлен таймер 3 минуты и кнопка реконнекта:
     if (phase === "locking" && waitingForOpponentLock) {
         return (
             <div className="matchmaking-page">
@@ -271,8 +310,20 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched }) {
                     <div style={{ fontSize: 12, opacity: 0.6, marginTop: 8 }}>
                         Game will start when both players are ready
                     </div>
-                    <button className="matchmaking-cancel-btn" onClick={onCancel}>
-                        Cancel & Refund
+
+                    {/* [PATCH] Таймер ожидания + авто-отмена через 3 минуты */}
+                    <LockWaitTimer
+                        timeoutMs={180000}
+                        onTimeout={function () {
+                            // Автоматически отменяем и возвращаем NFT через 3 минуты
+                            console.warn("[Matchmaking] opponent lock timeout — auto cancel");
+                            onCancel();
+                        }}
+                    />
+
+                    <button className="matchmaking-cancel-btn" onClick={onCancel}
+                        style={{ marginTop: 16 }}>
+                        Cancel & Refund NFTs
                     </button>
                 </div>
             </div>
