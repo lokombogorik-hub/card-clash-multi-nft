@@ -7,14 +7,11 @@ import json
 import random
 import asyncio
 from datetime import datetime, timedelta
+import sys
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["websocket"])
 
-
-# ═══════════════════════════════════════════
-# Состояние матчей (in-memory)
-# ═══════════════════════════════════════════
 
 class MatchState:
     def __init__(
@@ -72,20 +69,11 @@ class WSManager:
     def __init__(self):
         self.connections: Dict[str, Dict[str, WebSocket]] = {}
         self.match_states: Dict[str, MatchState] = {}
-        # PATCH: Храним задачи auto-cancel чтобы отменять при reconnect
-        self._cancel_tasks: Dict[str, asyncio.Task] = {}
 
     async def connect(self, ws: WebSocket, match_id: str, player_id: str):
         if match_id not in self.connections:
             self.connections[match_id] = {}
         self.connections[match_id][str(player_id)] = ws
-
-        # PATCH: Если есть pending задача auto-cancel для этого игрока — отменяем
-        task_key = f"{match_id}:{player_id}"
-        existing_task = self._cancel_tasks.pop(task_key, None)
-        if existing_task and not existing_task.done():
-            existing_task.cancel()
-            logger.info("[WS] Cancelled auto-cancel task for player=%s match=%s (reconnected)", player_id, match_id)
 
     def disconnect(self, match_id: str, player_id: str):
         player_id = str(player_id)
@@ -328,164 +316,6 @@ class WSManager:
             logger.info("[WS] game_over match=%s winner=%s %d:%d",
                         match_id, state.winner, p1_score, p2_score)
 
-    # PATCH: Вспомогательный метод для старта игры
-    # Вынесен чтобы вызывать и при первом подключении обоих, и при reconnect
-    async def try_start_game(self, match_id: str, match_data: dict, p1_id: str, p2_id: str):
-        """
-        Инициализирует MatchState и отправляет game_start + game_state обоим игрокам.
-        Вызывается только если:
-          1. Оба игрока подключены по WS
-          2. escrow_locked == True
-          3. MatchState ещё не создан (или нужно восстановить для reconnect)
-        """
-        conns = self.connections.get(match_id, {})
-        both_connected = p1_id in conns and p2_id in conns
-
-        if not both_connected:
-            logger.info("[WS] try_start_game: not both connected yet for match=%s", match_id)
-            return
-
-        escrow_locked = match_data.get("escrow_locked", False)
-        if not escrow_locked:
-            logger.info("[WS] try_start_game: escrow not locked for match=%s", match_id)
-            # Сообщаем обоим о статусе эскроу
-            await self.broadcast_all(match_id, {
-                "type": "waiting_for_escrow",
-                "message": "Waiting for both players to lock NFTs",
-                "player1_locked": match_data.get("player1_escrow_confirmed", False),
-                "player2_locked": match_data.get("player2_escrow_confirmed", False),
-            })
-            return
-
-        # PATCH: Создаём MatchState только если ещё не создан
-        if match_id not in self.match_states:
-            try:
-                from routers.decks import _decks_storage
-                p1_deck_data = _decks_storage.get(p1_id) or {}
-                p2_deck_data = _decks_storage.get(p2_id) or {}
-                p1_hand = p1_deck_data.get("full_cards") or []
-                p2_hand = p2_deck_data.get("full_cards") or []
-            except Exception as e:
-                logger.warning("[WS] Could not load decks: %s", e)
-                p1_hand, p2_hand = [], []
-
-            if len(p1_hand) < 5:
-                p1_hand = _make_random_hand(p1_id)
-            if len(p2_hand) < 5:
-                p2_hand = _make_random_hand(p2_id)
-
-            elements = WSManager.ELEMENTS
-            board_elements = [
-                random.choice(elements) if random.random() < 0.38 else None
-                for _ in range(9)
-            ]
-
-            first_turn = random.choice([p1_id, p2_id])
-
-            state = MatchState(
-                match_id=match_id,
-                player1_id=p1_id,
-                player2_id=p2_id,
-                player1_hand=p1_hand[:5],
-                player2_hand=p2_hand[:5],
-                board_elements=board_elements,
-                first_turn=first_turn,
-            )
-            self.match_states[match_id] = state
-            logger.info("[WS] MatchState CREATED: match=%s first=%s", match_id, first_turn)
-        else:
-            state = self.match_states[match_id]
-            logger.info("[WS] MatchState RESTORED: match=%s status=%s", match_id, state.status)
-
-        # PATCH: Если игра уже закончена — отправляем game_over повторно (для reconnect)
-        if state.status == "finished":
-            p1_score = sum(1 for c in state.board if c and c.get("owner") == state.player1_id)
-            p2_score = sum(1 for c in state.board if c and c.get("owner") == state.player2_id)
-            await self.broadcast_all(match_id, {
-                "type": "game_over",
-                "winner": state.winner,
-                "board": state.board,
-                "player1_score": p1_score,
-                "player2_score": p2_score,
-            })
-            return
-
-        # Отправляем game_start обоим
-        await self.broadcast_all(match_id, {
-            "type": "game_start",
-            "first_turn": state.current_turn,
-        })
-
-        # Отправляем game_state каждому персонально
-        for pid in [p1_id, p2_id]:
-            role = "player1" if pid == p1_id else "player2"
-            hand = state.get_hand(pid)
-            normalized_hand = [self._normalize_card(c, pid) for c in hand]
-            await self.send(match_id, pid, {
-                "type": "game_state",
-                "you_are": role,
-                "your_hand": normalized_hand,
-                "state": state.to_state_dict(),
-            })
-
-    def schedule_auto_cancel(self, match_id: str, player_id: str, delay_seconds: int = 180):
-        """
-        PATCH: Запускает фоновую задачу auto-cancel.
-        Хранит задачу в _cancel_tasks чтобы отменить при reconnect.
-        """
-        task_key = f"{match_id}:{player_id}"
-
-        # Отменяем предыдущую задачу если есть
-        existing = self._cancel_tasks.pop(task_key, None)
-        if existing and not existing.done():
-            existing.cancel()
-
-        async def _auto_cancel():
-            try:
-                await asyncio.sleep(delay_seconds)
-
-                # PATCH: Проверяем — может уже вернулся
-                if player_id in self.connections.get(match_id, {}):
-                    logger.info("[WS] Auto-cancel skipped: player %s reconnected", player_id)
-                    return
-
-                logger.warning("[WS] Auto-cancel TRIGGERED: match=%s player=%s timeout=%ds",
-                               match_id, player_id, delay_seconds)
-
-                try:
-                    from routers.matchmaking import get_match, save_match
-                    match_info = await get_match(match_id)
-                    if match_info and match_info.get("status") in ("active", "waiting_escrow", "waiting"):
-                        match_info["status"] = "cancelled"
-                        match_info["cancelled_reason"] = "player_reconnect_timeout"
-                        match_info["cancelled_at"] = datetime.utcnow().isoformat()
-                        await save_match(match_info)
-
-                        await self.broadcast_all(match_id, {
-                            "type": "match_cancelled",
-                            "reason": "opponent_timeout",
-                            "message": "Opponent did not reconnect in time. NFTs will be refunded.",
-                        })
-
-                        # PATCH: Возвращаем NFT
-                        from routers.matches import refund_remaining_nfts
-                        await refund_remaining_nfts(match_id)
-
-                        logger.info("[WS] Match %s cancelled and NFTs refunded", match_id)
-                    else:
-                        logger.info("[WS] Auto-cancel: match %s already in status=%s, skipping",
-                                    match_id, match_info.get("status") if match_info else "not found")
-                except Exception as e:
-                    logger.error("[WS] Auto-cancel inner error match=%s: %s", match_id, e)
-
-            except asyncio.CancelledError:
-                logger.info("[WS] Auto-cancel task cancelled (player reconnected): match=%s player=%s",
-                            match_id, player_id)
-
-        task = asyncio.create_task(_auto_cancel())
-        self._cancel_tasks[task_key] = task
-        logger.info("[WS] Scheduled auto-cancel: match=%s player=%s in %ds", match_id, player_id, delay_seconds)
-
 
 ws_manager = WSManager()
 
@@ -493,12 +323,17 @@ ws_manager = WSManager()
 @router.websocket("/ws/match/{match_id}")
 async def ws_match_endpoint(websocket: WebSocket, match_id: str):
     await websocket.accept()
-    logger.info("[WS] Accepted match %s", match_id)
+
+    # DEBUG
+    print(f"\n{'=' * 80}", file=sys.stderr)
+    print(f"[WS DEBUG] NEW WS connection to match {match_id}", file=sys.stderr)
+    print(f"[WS DEBUG] Time: {datetime.utcnow()}", file=sys.stderr)
+    print(f"{'=' * 80}\n", file=sys.stderr)
 
     player_id: Optional[str] = None
 
     try:
-        # ══ 1. AUTH ══════════════════════════════════════
+        # AUTH
         try:
             raw = await websocket.receive_text()
             auth_msg = json.loads(raw)
@@ -533,9 +368,9 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
             await websocket.close(1008)
             return
 
-        logger.info("[WS] Player %s auth OK for match %s", player_id, match_id)
+        print(f"[WS DEBUG] Player {player_id} authenticated", file=sys.stderr)
 
-        # ══ 2. ПОЛУЧАЕМ МАТЧ ════════════════════════════
+        # GET MATCH
         try:
             from routers.matchmaking import get_match
             match_data = await get_match(match_id)
@@ -556,50 +391,110 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
             await websocket.close(1008)
             return
 
-        # PATCH: Проверяем статус матча — не пускаем в отменённый/завершённый
-        match_status = match_data.get("status", "")
-        if match_status == "cancelled":
-            await websocket.send_json({
-                "type": "match_cancelled",
-                "reason": "match_already_cancelled",
-                "message": "This match was cancelled.",
-            })
-            await websocket.close(1008)
-            return
-
         you_are = "player1" if player_id == p1_id else "player2"
-        is_reconnect = match_id in ws_manager.match_states  # PATCH: флаг reconnect
 
-        logger.info("[WS] Init: p1=%s p2=%s you=%s reconnect=%s", p1_id, p2_id, you_are, is_reconnect)
-
-        # ══ 3. РЕГИСТРИРУЕМ СОЕДИНЕНИЕ ══════════════════
-        # PATCH: connect() уже отменяет pending auto-cancel задачу
+        # REGISTER CONNECTION
         await ws_manager.connect(websocket, match_id, player_id)
 
-        # ══ 4. ОТПРАВЛЯЕМ connected ══════════════════════
+        # SEND connected
         await websocket.send_json({
             "type": "connected",
             "you_are": you_are,
             "player_id": player_id,
             "match_id": match_id,
-            "is_reconnect": is_reconnect,  # PATCH: фронт знает что это reconnect
         })
 
-        # ══ 5. УВЕДОМЛЯЕМ ВТОРОГО ИГРОКА ════════════════
-        other_id = p2_id if player_id == p1_id else p1_id
+        # NOTIFY OTHER PLAYER
         await ws_manager.broadcast_except(match_id, {
             "type": "player_connected",
             "player_id": player_id,
-            "is_reconnect": is_reconnect,
         }, exclude_id=player_id)
 
-        # ══ 6. ПРОВЕРЯЕМ УСЛОВИЯ СТАРТА ═════════════════
-        # PATCH: Вся логика старта вынесена в try_start_game()
-        # Вызываем и при первом подключении, и при reconnect
-        # try_start_game сам проверит: оба подключены + escrow_locked
-        await ws_manager.try_start_game(match_id, match_data, p1_id, p2_id)
+        # CHECK IF SHOULD START
+        conns = ws_manager.connections.get(match_id, {})
+        both_connected = p1_id in conns and p2_id in conns
+        escrow_locked = match_data.get("escrow_locked", False)
 
-        # ══ 7. ОСНОВНОЙ ЦИКЛ ════════════════════════════
+        # DEBUG
+        print(f"\n[WS DEBUG] CHECK START CONDITIONS:", file=sys.stderr)
+        print(f"  match_id: {match_id}", file=sys.stderr)
+        print(f"  both_connected: {both_connected}", file=sys.stderr)
+        print(f"  escrow_locked: {escrow_locked}", file=sys.stderr)
+        print(f"  p1_escrow: {match_data.get('player1_escrow_confirmed')}", file=sys.stderr)
+        print(f"  p2_escrow: {match_data.get('player2_escrow_confirmed')}", file=sys.stderr)
+        print(f"  match_status: {match_data.get('status')}", file=sys.stderr)
+        print(f"  connections: {list(conns.keys())}", file=sys.stderr)
+        print(f"", file=sys.stderr)
+
+        if both_connected and not escrow_locked:
+            await websocket.send_json({
+                "type": "waiting_for_escrow",
+                "message": "Waiting for both players to lock NFTs",
+            })
+            print(f"[WS DEBUG] Sent waiting_for_escrow", file=sys.stderr)
+
+        if both_connected and escrow_locked:
+            print(f"[WS DEBUG] STARTING GAME!", file=sys.stderr)
+
+            if match_id not in ws_manager.match_states:
+                try:
+                    from routers.decks import _decks_storage
+                    p1_deck_data = _decks_storage.get(p1_id) or {}
+                    p2_deck_data = _decks_storage.get(p2_id) or {}
+                    p1_hand = p1_deck_data.get("full_cards") or []
+                    p2_hand = p2_deck_data.get("full_cards") or []
+                except Exception as e:
+                    logger.warning("[WS] Could not load decks: %s", e)
+                    p1_hand, p2_hand = [], []
+
+                if len(p1_hand) < 5:
+                    p1_hand = _make_random_hand(p1_id)
+                if len(p2_hand) < 5:
+                    p2_hand = _make_random_hand(p2_id)
+
+                elements = WSManager.ELEMENTS
+                board_elements = [
+                    random.choice(elements) if random.random() < 0.38 else None
+                    for _ in range(9)
+                ]
+
+                first_turn = random.choice([p1_id, p2_id])
+
+                state = MatchState(
+                    match_id=match_id,
+                    player1_id=p1_id,
+                    player2_id=p2_id,
+                    player1_hand=p1_hand[:5],
+                    player2_hand=p2_hand[:5],
+                    board_elements=board_elements,
+                    first_turn=first_turn,
+                )
+                ws_manager.match_states[match_id] = state
+                logger.info("[WS] MatchState created: match=%s first=%s", match_id, first_turn)
+            else:
+                state = ws_manager.match_states[match_id]
+
+            await ws_manager.broadcast_all(match_id, {
+                "type": "game_start",
+                "first_turn": state.current_turn,
+            })
+
+            for pid in [p1_id, p2_id]:
+                role = "player1" if pid == p1_id else "player2"
+                hand = state.get_hand(pid)
+                normalized_hand = [
+                    ws_manager._normalize_card(c, pid) for c in hand
+                ]
+                await ws_manager.send(match_id, pid, {
+                    "type": "game_state",
+                    "you_are": role,
+                    "your_hand": normalized_hand,
+                    "state": state.to_state_dict(),
+                })
+
+            print(f"[WS DEBUG] Game started successfully", file=sys.stderr)
+
+        # MAIN LOOP
         while True:
             try:
                 raw = await websocket.receive_text()
@@ -619,15 +514,7 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
 
             elif msg_type == "pong":
                 pass
-            elif msg_type == "escrow_locked":
-                # Перечитываем match — стартуем если оба залочили
-                try:
-                    from routers.matchmaking import get_match
-                    match_data = await get_match(match_id)
-                    if match_data and match_data.get("escrow_locked"):
-                        await ws_manager.try_start_game(match_id, match_data, p1_id, p2_id)
-                except Exception as e:
-                    logger.error("[WS] escrow_locked error: %s", e)
+
             elif msg_type == "play_card":
                 try:
                     card_index = int(data["card_index"])
@@ -643,17 +530,6 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
                     match_id, player_id, card_index, cell_index, websocket
                 )
 
-            # PATCH: Обрабатываем escrow_locked событие от backend (через confirm_escrow broadcast)
-            elif msg_type == "escrow_locked":
-                # Перечитываем матч и пробуем стартовать
-                try:
-                    from routers.matchmaking import get_match
-                    fresh_match = await get_match(match_id)
-                    if fresh_match:
-                        await ws_manager.try_start_game(match_id, fresh_match, p1_id, p2_id)
-                except Exception as e:
-                    logger.error("[WS] escrow_locked handler error: %s", e)
-
             else:
                 logger.debug("[WS] Unknown msg type=%s from player=%s", msg_type, player_id)
 
@@ -664,25 +540,8 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
     finally:
         if player_id:
             ws_manager.disconnect(match_id, player_id)
-
-            deadline = datetime.utcnow() + timedelta(seconds=180)
-
-            await ws_manager.broadcast_all(match_id, {
-                "type": "player_disconnected",
-                "player_id": player_id,
-                "reconnect_deadline": deadline.isoformat(),
-            })
-
-            # PATCH: Используем schedule_auto_cancel вместо inline asyncio.create_task
-            # Это позволяет отменить задачу при reconnect через ws_manager.connect()
-            ws_manager.schedule_auto_cancel(match_id, player_id, delay_seconds=180)
-
             logger.info("[WS] Cleaned up: player=%s match=%s", player_id, match_id)
 
-
-# ═══════════════════════════════════════════
-# Helpers
-# ═══════════════════════════════════════════
 
 def _make_random_hand(owner_id: str) -> List[dict]:
     ELEMENTS = WSManager.ELEMENTS

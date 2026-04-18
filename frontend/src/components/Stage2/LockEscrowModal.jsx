@@ -125,19 +125,8 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
 
             setStatusText("Opening wallet...");
 
-            setStatusText("Opening wallet...");
-
-            // PATCH: Ждём selector до 5 секунд (на мобилке после redirect он появляется с задержкой)
-            var maxWait = 5000;
-            var waited = 0;
-            var interval = 200;
-            while (!ctx.selector && waited < maxWait) {
-                await new Promise(function (r) { setTimeout(r, interval); });
-                waited += interval;
-            }
-
             if (!ctx.selector) {
-                throw new Error("Selector not ready after " + (maxWait / 1000) + "s. Reload page.");
+                throw new Error("Selector is null. Wallet not initialized.");
             }
 
             var selectorState = null;
@@ -147,45 +136,35 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                 throw new Error("Cannot read selector state: " + (e?.message || e));
             }
 
+            console.warn("[LockEscrow] selector state:", JSON.stringify({
+                selectedWalletId: selectorState?.selectedWalletId,
+                accounts: selectorState?.accounts,
+                modules: selectorState?.modules?.map(function (m) { return m.id; }),
+            }));
+
             var selectedWalletId = selectorState?.selectedWalletId || null;
             var isSignedIn = selectorState?.accounts?.length > 0;
 
             if (!isSignedIn) {
-                throw new Error("Not signed in. Reconnect wallet from main screen.");
+                throw new Error("Not signed in to any wallet. Please reconnect wallet from main screen.");
             }
 
             setStatusText("Getting wallet: " + (selectedWalletId || "hot-wallet") + "...");
 
             var wallet = null;
+            var walletError = null;
 
-            // Попытка 1: selectedWalletId с retry
             if (selectedWalletId) {
-                for (var attempt = 0; attempt < 3; attempt++) {
-                    try {
-                        wallet = await ctx.selector.wallet(selectedWalletId);
-                        if (wallet) break;
-                    } catch (e) {
-                        console.warn("[Lock] wallet(" + selectedWalletId + ") attempt " + (attempt + 1) + " failed:", e?.message);
-                        if (attempt < 2) await new Promise(function (r) { setTimeout(r, 800); });
-                    }
+                try {
+                    wallet = await retryAsync(
+                        function () { return ctx.selector.wallet(selectedWalletId); },
+                        2,
+                        600
+                    );
+                } catch (e) {
+                    walletError = "wallet(" + selectedWalletId + ") failed after retries: " + (e?.message || e);
+                    console.warn("[LockEscrow]", walletError);
                 }
-            }
-
-            // Попытка 2: hot-wallet fallback
-            if (!wallet) {
-                for (var attempt = 0; attempt < 3; attempt++) {
-                    try {
-                        wallet = await ctx.selector.wallet("hot-wallet");
-                        if (wallet) break;
-                    } catch (e) {
-                        console.warn("[Lock] hot-wallet attempt " + (attempt + 1) + " failed:", e?.message);
-                        if (attempt < 2) await new Promise(function (r) { setTimeout(r, 800); });
-                    }
-                }
-            }
-
-            if (!wallet) {
-                throw new Error("Cannot get wallet after 6 attempts. Reload page and reconnect.");
             }
 
             if (!wallet) {
