@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
-import { initSelector, resetSelectorSingleton, fetchBalance } from "../libs/walletSelector";
+import { initSelector, fetchBalance } from "../libs/walletSelector";
 
 var WalletContext = createContext({
     selector: null, accountId: null, balance: 0, isLoading: true,
@@ -238,22 +238,16 @@ export function WalletConnectProvider({ children }) {
         await w.signIn({ contractId: "retardo-s.near", methodNames: [] });
     }, [getWallet]);
 
-    var disconnect = useCallback(async function () {
-        var sel = _cachedSelector || selector;
-        if (!sel) return;
+    var disconnect = async function () {
+        if (!selector) return;
         try {
-            var w = await getWallet();
+            var st = selector.store.getState();
+            var wid = st.selectedWalletId;
+            if (!wid) return;
+            var w = await selector.wallet(wid);
             await w.signOut();
-            applyAccountId(null);
-            // PATCH: При disconnect сбрасываем singleton — пользователь может
-            // захотеть войти с другим аккаунтом
-            resetSelectorSingleton();
-            _cachedSelector = null;
-            setSelector(null);
-        } catch (e) {
-            console.warn("[wallet] disconnect error:", e);
-        }
-    }, [selector, getWallet, applyAccountId]);
+        } catch (e) { }
+    };
 
     var sendNear = useCallback(async function (params) {
         if (!accountId) throw new Error("Wallet not connected");
