@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { initSelector, fetchBalance } from "../libs/walletSelector";
 
+var _globalSelector = null;
 var WalletContext = createContext({
     selector: null, accountId: null, balance: 0, isLoading: true,
     connected: false, connect: async function () { }, disconnect: async function () { },
@@ -52,6 +53,7 @@ export function WalletConnectProvider({ children }) {
                 } catch (e) { }
 
                 var sel = await initSelector({ miniApp: isMiniApp, telegramInitData: initData });
+                _globalSelector = sel;
                 if (cancelled) return;
                 setSelector(sel);
 
@@ -158,7 +160,7 @@ export function WalletConnectProvider({ children }) {
 
     return (
         <WalletContext.Provider value={{
-            selector: selector,
+            selector: selector || _globalSelector,
             accountId: accountId,
             balance: balance,
             isLoading: isLoading,
