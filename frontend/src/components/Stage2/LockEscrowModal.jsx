@@ -219,13 +219,8 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                 console.warn("[LockEscrow] TX result:", txResult);
             } catch (txErr) {
                 console.error("[LockEscrow] TX error:", txErr?.message, txErr);
-
-                if (txErr.message && txErr.message.indexOf("TX_TIMEOUT") === 0) {
-                    setStatusText("Wallet redirect detected, checking backend...");
-                    console.warn("[LockEscrow] TX_TIMEOUT — proceeding to backend check");
-                } else {
-                    throw txErr;
-                }
+                // При любой ошибке TX — бросаем ошибку, не идём дальше
+                throw txErr;
             }
 
             setStatusText("Registering deposits...");
