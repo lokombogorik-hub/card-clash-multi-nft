@@ -73,6 +73,7 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
     }, [open]);
 
     var handleLock = useCallback(async function () {
+
         // [ПРАВКА] Guard
         if (isLockingRef.current) {
             console.warn("[LockEscrow] already locking, skip");
@@ -420,7 +421,21 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                         </div>
                     </div>
                 )}
-
+                {/* DEBUG — временно, удалим потом */}
+                <div style={{
+                    fontSize: 10, color: "#aaa", marginTop: 12,
+                    padding: "8px", background: "rgba(255,255,255,0.05)",
+                    borderRadius: 8, textAlign: "left", wordBreak: "break-all"
+                }}>
+                    <div>wallet: {walletAddress || "NULL"}</div>
+                    <div>selector: {ctx.selector ? "OK" : "NULL"}</div>
+                    <div>selectedWallet: {ctx.selector?.store?.getState()?.selectedWalletId || "none"}</div>
+                    <div>accounts: {ctx.selector?.store?.getState()?.accounts?.length || 0}</div>
+                    <div>tokens: {deckTokenIds.length}</div>
+                    <div>matchId: {existingMatchId?.slice(0, 8)}</div>
+                    <div>escrow: {escrowContractId?.slice(0, 20)}</div>
+                    <div>status: {status}</div>
+                </div>
                 {status === "error" && (
                     <div style={{ padding: 24 }}>
                         <div style={{ fontSize: 40, marginBottom: 16 }}>❌</div>
