@@ -49,7 +49,7 @@ async function getJson(url) {
     } catch (e) { return null; }
 }
 
-// PATCH: fetch с таймаутом — на мобилке запросы зависают без таймаута
+// fetch с таймаутом
 function fetchWithTimeout(url, opts, ms) {
     ms = ms || 8000;
     var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
@@ -62,7 +62,7 @@ function fetchWithTimeout(url, opts, ms) {
     });
 }
 
-// PATCH: RPC кэш — не делаем одинаковые запросы повторно
+// RPC кэш 
 // nft_tokens_for_owner: 30s TTL
 // nft_metadata: 5min TTL
 // nft_supply_for_owner: 30s TTL
@@ -105,7 +105,7 @@ async function rpc(contractId, method, args, cacheMaxAgeMs) {
 
     var result = null;
 
-    // Прокси (быстрее на мобилке — обходит CORS и медленный DNS)
+    // Прокси 
     if (PROXY_RPC_URL) {
         try {
             var pr = await fetchWithTimeout(PROXY_RPC_URL, {
@@ -187,8 +187,8 @@ function resolveMediaUrl(media, original) {
     return r;
 }
 
-// PATCH: Кэш NFT токенов владельца — 30 секунд.
-// До этого каждый вызов nearNftTokensForOwner делал 3-5 RPC запросов (~3-8s на мобилке).
+// Кэш NFT токенов владельца — 30 секунд.
+// До этого каждый вызов nearNftTokensForOwner делал 3-5 RPC запросов (~3-8s на трубке).
 // С кэшем повторные вызовы в течение 30s мгновенные.
 // LockEscrowModal вызывает эту функцию при каждой попытке лока — кэш критичен.
 var _ownerCache = new Map();
@@ -218,7 +218,7 @@ export async function nearNftTokensForOwner(contractId, accountId) {
     var all = [];
     var numericIdx = false;
 
-    // Попытка 1: from_index как строка
+    // Попытка 1
     try {
         var b1 = await rpc(contractId, "nft_tokens_for_owner",
             { account_id: accountId, from_index: "0", limit: 100 }, 30000);
@@ -226,7 +226,7 @@ export async function nearNftTokensForOwner(contractId, accountId) {
     } catch (e) {
         debugLog.push("str_err=" + e.message);
         numericIdx = true;
-        // Попытка 2: from_index как число
+        // Попытка 2
         try {
             var b2 = await rpc(contractId, "nft_tokens_for_owner",
                 { account_id: accountId, from_index: 0, limit: 100 }, 30000);
@@ -331,7 +331,7 @@ export async function nearNftTokensForOwner(contractId, accountId) {
     return out;
 }
 
-// PATCH: Инвалидация кэша — вызывать после успешного lock NFT
+//  Инвалидация кэша
 export function invalidateOwnerCache(contractId, accountId) {
     var k = contractId + ":" + accountId;
     _ownerCache.delete(k);

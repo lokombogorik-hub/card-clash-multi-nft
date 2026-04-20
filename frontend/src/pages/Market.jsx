@@ -226,7 +226,6 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                     🎁 {caseItem.name}
                 </h3>
 
-                {/* ДО reveal: только видео без лишних элементов */}
                 {!revealed && (
                     <>
                         <div style={{
@@ -277,7 +276,6 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                     </>
                 )}
 
-                {/* ПОСЛЕ reveal: карта */}
                 {revealed && card && (
                     <>
                         <div style={{
@@ -548,7 +546,7 @@ export default function Market() {
                                 top: 8,
                                 left: 8,
                                 background: loadingInventory
-                                    ? "rgba(120,200,255,0.9)"  // Синий пока загружается
+                                    ? "rgba(120,200,255,0.9)"
                                     : isOutOfStock
                                         ? "rgba(255,80,80,0.9)"
                                         : available < 10

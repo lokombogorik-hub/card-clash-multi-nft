@@ -392,10 +392,10 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
         you_are = "player1" if player_id == p1_id else "player2"
         logger.info("[WS] Init: p1=%s, p2=%s, you=%s", p1_id, p2_id, you_are)
 
-        # ══ 3. РЕГИСТРИРУЕМ СОЕДИНЕНИЕ ══════════════════
+        # ══ 3. РЕГИСТРИРУЮ СОЕДИНЕНИЕ ══════════════════
         await ws_manager.connect(websocket, match_id, player_id)
 
-        # ══ 4. ОТПРАВЛЯЕМ connected ══════════════════════
+        # ══ 4. ОТПРАВЛЯЮ connected ══════════════════════
         await websocket.send_json({
             "type": "connected",
             "you_are": you_are,
@@ -403,7 +403,7 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
             "match_id": match_id,
         })
 
-        # ══ 5. УВЕДОМЛЯЕМ ВТОРОГО ИГРОКА ════════════════
+        # ══ 5. УВЕДОМЛЯЮ ВТОРОГО ИГРОКА ════════════════
         other_id = p2_id if player_id == p1_id else p1_id
         await ws_manager.broadcast_except(match_id, {
             "type": "player_connected",
@@ -414,7 +414,7 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
         conns = ws_manager.connections.get(match_id, {})
         both_connected = p1_id in conns and p2_id in conns
 
-        # [PATCH] Игра стартует ТОЛЬКО если оба залочили NFT
+        # Игра стартует ТОЛЬКО если оба залочили NFT
         escrow_locked = match_data.get("escrow_locked", False)
 
         if both_connected and not escrow_locked:
@@ -531,7 +531,7 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
         if player_id:
             ws_manager.disconnect(match_id, player_id)
 
-            # [PATCH] Deadline для реконнекта
+            # Deadline для реконнекта
             deadline = datetime.utcnow() + timedelta(seconds=180)
 
             await ws_manager.broadcast_all(match_id, {
@@ -540,11 +540,11 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
                 "reconnect_deadline": deadline.isoformat(),
             })
 
-            # [PATCH] Фоновый таймер авто-cancel через 3 минуты
+            # Фоновый таймер авто-cancel через 3 минуты
             async def _auto_cancel(mid: str, pid: str):
                 await asyncio.sleep(180)
 
-                # Проверяем — может уже вернулся
+                # Проверяю — может уже вернулся
                 if pid in ws_manager.connections.get(mid, {}):
                     logger.info("[WS] Player %s reconnected — auto-cancel skipped", pid)
                     return
@@ -561,14 +561,14 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
                         match_info["cancelled_at"] = datetime.utcnow().isoformat()
                         await save_match(match_info)
 
-                        # Уведомляем оставшегося игрока
+                        # Уведомляю оставшегося игрока
                         await ws_manager.broadcast_all(mid, {
                             "type": "match_cancelled",
                             "reason": "opponent_timeout",
                             "message": "Opponent did not reconnect. NFTs will be refunded.",
                         })
 
-                        # Возвращаем NFT
+                        # Возвращаю NFT
                         from routers.matches import refund_remaining_nfts
                         await refund_remaining_nfts(mid)
 

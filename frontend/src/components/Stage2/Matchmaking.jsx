@@ -9,7 +9,6 @@ function getStoredToken() {
 }
 // СТАЛО:
 function LockWaitTimer({ timeoutMs, onTimeout }) {
-    // [PATCH] startRef фиксирует время старта чтобы не сбрасываться при ре-рендере
     var startRef = useRef(Date.now());
     var totalMs = timeoutMs || 180000;
     var [secsLeft, setSecsLeft] = useState(Math.ceil(totalMs / 1000));
@@ -31,7 +30,6 @@ function LockWaitTimer({ timeoutMs, onTimeout }) {
         }, 1000);
 
         return function () { clearInterval(interval); };
-        // [PATCH] пустой deps — запускается один раз при маунте
     }, []);
 
     var mins = Math.floor(secsLeft / 60);
@@ -101,7 +99,7 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched }) {
         startPvPSearch();
     };
 
-    // Step 1: Search for opponent
+    // Шаг1
     var startPvPSearch = async function () {
         var token = getStoredToken();
         if (!token) {
@@ -150,7 +148,7 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched }) {
         }
     };
 
-    // Step 2: Opponent found → show lock modal
+    // Шаг2
     var onOpponentFound = function (newMatchId, opponentId) {
         setMatchId(newMatchId);
         setOpponentInfo({ id: opponentId });
@@ -159,17 +157,15 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched }) {
         try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("success"); } catch (e) { }
 
         if (stage2Enabled) {
-            // Show lock modal
             setTimeout(function () {
                 setShowLockModal(true);
             }, 500);
         } else {
-            // No escrow — go directly to game
             onMatched({ mode: "pvp", matchId: newMatchId });
         }
     };
 
-    // Step 3: Player locked NFTs → wait for opponent
+    // Шаг3
     var onLockReady = function (data) {
         setShowLockModal(false);
         setMyLockDone(true);
@@ -201,16 +197,15 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched }) {
     };
 
     // Cancel during any phase
-    // СТАЛО:
     var onCancel = function () {
         if (myLockDone && matchId) {
             var token = getStoredToken();
-            // [PATCH] Явно запрашиваем возврат NFT при отмене
+
             apiFetch("/api/matches/" + matchId + "/cancel", {
                 method: "POST",
                 token: token,
                 body: JSON.stringify({
-                    refund: true,           // явный флаг возврата
+                    refund: true,
                     reason: "player_cancel"
                 }),
             }).catch(function (e) {
@@ -222,7 +217,7 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched }) {
 
     // ==================== RENDER ====================
 
-    // Phase: Searching for opponent
+    //Searching for opponent
     if (phase === "searching") {
         return (
             <div className="matchmaking-page">
@@ -242,7 +237,7 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched }) {
         );
     }
 
-    // Phase: Found opponent, showing lock modal
+    // Found opponent, showing lock modal
     if (phase === "found") {
         return (
             <div className="matchmaking-page">
@@ -299,8 +294,7 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched }) {
         );
     }
 
-    // Phase: Waiting for opponent to lock
-    // СТАЛО — добавлен таймер 3 минуты и кнопка реконнекта:
+    // Waiting for opponent to lock
     if (phase === "locking" && waitingForOpponentLock) {
         return (
             <div className="matchmaking-page">
@@ -316,7 +310,6 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched }) {
                         Game will start when both players are ready
                     </div>
 
-                    {/* [PATCH] Таймер ожидания + авто-отмена через 3 минуты */}
                     <LockWaitTimer
                         timeoutMs={180000}
                         onTimeout={function () {
@@ -335,7 +328,7 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched }) {
         );
     }
 
-    // Phase: Both locked, starting game
+    //Both locked, starting game
     if (phase === "ready") {
         return (
             <div className="matchmaking-page">
@@ -352,7 +345,7 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched }) {
         );
     }
 
-    // Phase: Idle — show mode selection
+    // Idle — show mode selection
     return (
         <div className="matchmaking-page">
             <div className="matchmaking-header">

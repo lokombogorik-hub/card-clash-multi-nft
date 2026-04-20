@@ -78,7 +78,7 @@ async def ensure_all_tables(engine):
             """))
 
             # ── pvp_matches ────────────────────────────────────────────
-            # Создаём таблицу если нет (с новой структурой)
+            # Создаю таблицу если нет (с новой структурой)
             await conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS pvp_matches (
                     id VARCHAR(64) PRIMARY KEY,
@@ -118,7 +118,7 @@ async def ensure_all_tables(engine):
                 )
             """))
 
-            # ── Добавляем колонки если таблица уже существует со старой структурой ──
+            # ── Добавляю колонки если таблица уже существует со старой структурой ──
             pvp_columns = [
                 ("winner",                   "VARCHAR(64)",  "NULL"),
                 ("mode",                     "VARCHAR(20)",  "'pvp'"),

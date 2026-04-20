@@ -657,13 +657,9 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     // CLAIM LOGIC
     // ══════════════════════════════════════════════
 
-    // СТАЛО — добавь ref-guard от двойного вызова:
-    // Добавь рядом с другими refs в начале компонента:
-    const prepareClaimCalledRef = useRef(false);
 
-    // И саму функцию измени:
+    const prepareClaimCalledRef = useRef(false);
     const prepareClaimCards = async () => {
-        // [PATCH] Guard от двойного вызова (handleGameState + handleGameOver)
         if (prepareClaimCalledRef.current) {
             console.warn("[prepareClaimCards] already called — skipped");
             return;
@@ -706,7 +702,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         haptic("light");
     };
 
-    // ← ИСПРАВЛЕНО: убран дублирующий запрос opponent_deposits
     const onClaimConfirm = async () => {
         if (claimPickIndex === null || claimBusy || claimDone) return;
         setClaimBusy(true);
@@ -716,7 +711,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             const pickedCard = claimCards[claimPickIndex] || {};
 
             if (isPvP && matchId) {
-                // Imagen уже есть в claimCards — не грузим повторно
                 const realImage = pickedCard?.image || pickedCard?.imageUrl || null;
 
                 await apiFetch(`/api/matches/${matchId}/finish`, {
@@ -875,7 +869,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
         setClaimDone(false);
         setClaimError("");
         setClaimedCard(null);
-        setClaimLoading(false); // ← ДОБАВЛЕНО
+        setClaimLoading(false);
         if (!keepSeries) {
             setSeries({ player: 0, enemy: 0 });
             setRoundNo(1);
@@ -1257,8 +1251,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                         : <>Раунд {roundNo} • Серия до {MATCH_WINS_TARGET} • Счёт {series.player}:{series.enemy}</>
                                     }
                                 </div>
-
-                                {/* ← ИСПРАВЛЕНО: один источник карт + лоадер */}
                                 {matchOver && (isPvP ? roundWinner : matchWinner) === "player" && !claimDone && (
                                     <>
                                         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8, color: "#ffd700" }}>

@@ -313,7 +313,7 @@ function AppContent() {
     // Ref чтобы не делать двойные запросы
     var activeMatchFetchingRef = useRef(false);
 
-    // PATCH: Функция проверки активного матча вынесена в useCallback
+    // Функция проверки активного матча вынесена в useCallback
     // чтобы можно было вызывать и при mount, и при возврате на home
     var checkActiveMatch = useCallback(async function () {
         var t = token || getStoredToken();
@@ -335,13 +335,13 @@ function AppContent() {
         }
     }, [token]);
 
-    // PATCH: Проверяем активный матч при получении токена
+    // Проверяем активный матч при получении токена
     useEffect(function () {
         if (!token) return;
         checkActiveMatch();
     }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // PATCH: Проверяем активный матч при КАЖДОМ возврате на home
+    // Проверяем активный матч при КАЖДОМ возврате на home
     // (не только при первом рендере с токеном)
     useEffect(function () {
         if (screen === "home") {
@@ -349,7 +349,7 @@ function AppContent() {
         }
     }, [screen]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // PATCH: Также слушаем visibilitychange — когда пользователь
+    // Также слушаем visibilitychange — когда пользователь
     // возвращается из кошелька (мобильный deep-link redirect)
     useEffect(function () {
         var onVisible = function () {
@@ -452,7 +452,7 @@ function AppContent() {
         setPlayerDeck(null);
         setStage2MatchId("");
         setGameMode("ai");
-        // PATCH: После выхода из игры сразу проверяем — вдруг матч ещё активен
+        // После выхода из игры сразу проверяем — вдруг матч ещё активен
         // (например игрок вышел случайно через кнопку back)
         // Небольшая задержка чтобы screen успел смениться
         setTimeout(function () { checkActiveMatch(); }, 300);
@@ -579,7 +579,7 @@ function AppContent() {
                                             {activeMatchLoading ? "⏳..." : "🎮 Вернуться в игру"}
                                         </button>
                                     )}
-                                    {/* PATCH: Если escrow не залочен — кнопка "Залочить NFT" вместо "Вернуться" */}
+                                    {/* Если escrow не залочен — кнопка "Залочить NFT" вместо "Вернуться" */}
                                     {!activeMatch.escrow_locked && activeMatch.my_escrow_confirmed && (
                                         <div style={{
                                             flex: 1, padding: "10px 16px", borderRadius: 10,

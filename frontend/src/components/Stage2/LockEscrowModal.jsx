@@ -47,7 +47,7 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
     var [statusText, setStatusText] = useState("");
     var [error, setError] = useState("");
 
-    // [ЕДИНСТВЕННАЯ ПРАВКА] Guard от двойного клика
+    // Guard от двойного клика
     var isLockingRef = useRef(false);
 
     var escrowContractId = (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim();
@@ -65,7 +65,7 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
 
     useEffect(function () {
         if (!open) {
-            isLockingRef.current = false; // [ПРАВКА] Сброс при закрытии
+            isLockingRef.current = false; //  Сброс при закрытии
             setStatus("idle");
             setStatusText("");
             setError("");
@@ -74,7 +74,7 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
 
     var handleLock = useCallback(async function () {
 
-        // [ПРАВКА] Guard
+        //  Guard
         if (isLockingRef.current) {
             console.warn("[LockEscrow] already locking, skip");
             return;
@@ -84,7 +84,7 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
             return;
         }
 
-        isLockingRef.current = true; // [ПРАВКА] Ставим guard ДО await
+        isLockingRef.current = true;
 
         if (!walletAddress) {
             setError("Wallet not connected. AccountId: " + (ctx.accountId || "null"));
@@ -219,7 +219,7 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                 console.warn("[LockEscrow] TX result:", txResult);
             } catch (txErr) {
                 console.error("[LockEscrow] TX error:", txErr?.message, txErr);
-                // При любой ошибке TX — бросаем ошибку, не идём дальше
+                // При любой ошибке TX
                 throw txErr;
             }
 
@@ -279,7 +279,7 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
             setStatus("error");
 
         } finally {
-            isLockingRef.current = false; // [ПРАВКА] Снимаем guard
+            isLockingRef.current = false;
         }
 
     }, [
@@ -416,7 +416,7 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                         </div>
                     </div>
                 )}
-                {/* DEBUG — временно, удалим потом */}
+
                 <div style={{
                     fontSize: 10, color: "#aaa", marginTop: 12,
                     padding: "8px", background: "rgba(255,255,255,0.05)",

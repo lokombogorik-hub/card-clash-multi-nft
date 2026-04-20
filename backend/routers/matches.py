@@ -126,13 +126,13 @@ async def transfer_nft_from_escrow(to_wallet: str, token_id: str, nft_contract_i
 
 
 async def _get_match(match_id: str) -> Optional[Dict]:
-    """Получаем матч из памяти или БД"""
+    """Получаю матч из памяти или БД"""
     from routers.matchmaking import get_match
     return await get_match(match_id)
 
 
 async def _save_match(match_data: Dict):
-    """Сохраняем матч в память и БД"""
+    """Сохраняю матч в память и БД"""
     from routers.matchmaking import save_match
     await save_match(match_data)
 
@@ -143,14 +143,6 @@ async def _save_match(match_data: Dict):
 async def get_active_match(authorization: Optional[str] = Header(None)):
     """
     Возвращает активный матч текущего игрока.
-
-    PATCH: Ищем сначала в active_matches (in-memory),
-    потом в БД — на случай перезапуска сервера.
-    Статусы которые считаются "активными":
-      - waiting_escrow: матч создан, ждём лока
-      - waiting: матч создан, ждём второго игрока
-      - active: оба залочили, игра идёт
-    НЕ возвращаем: cancelled, finished
     """
     player_id = None
     if authorization:
@@ -161,7 +153,7 @@ async def get_active_match(authorization: Optional[str] = Header(None)):
 
     ACTIVE_STATUSES = {"waiting_escrow", "active", "waiting"}
 
-    # PATCH: Шаг 1 — ищем в in-memory active_matches
+    #  Шаг 1 — ищем в in-memory active_matches
     from routers.matchmaking import active_matches
 
     for mid, match in list(active_matches.items()):
@@ -192,8 +184,7 @@ async def get_active_match(authorization: Optional[str] = Header(None)):
             "created_at": match.get("created_at"),
         }
 
-    # PATCH: Шаг 2 — ищем в БД (на случай перезапуска сервера)
-    # active_matches in-memory сброшен, но матч может быть в PostgreSQL
+    #  Шаг 2 — ищем в БД (на случай перезапуска сервера)
     try:
         async for session in get_session():
             from sqlalchemy import or_
@@ -217,7 +208,7 @@ async def get_active_match(authorization: Optional[str] = Header(None)):
                 p2 = str(db_match.player2_id or "")
                 mid = str(db_match.id or db_match.match_id or "")
 
-                # PATCH: Подгружаем матч в in-memory чтобы не лезть в БД при следующем запросе
+                #  Подгружаем матч в in-memory
                 match_dict = {
                     "match_id": mid,
                     "player1_id": p1,
@@ -253,7 +244,7 @@ async def get_active_match(authorization: Optional[str] = Header(None)):
         print(f"[MATCHES] /active DB search error: {e}")
         traceback.print_exc()
 
-    # PATCH: Ничего не нашли — 404, фронт поймает и скроет баннер
+
     raise HTTPException(status_code=404, detail="No active match found")
 
 
@@ -391,9 +382,7 @@ async def register_deposits(
     # Сохраняем депозиты в БД
     try:
         async for session in get_session():
-            # PATCH: Идемпотентность — проверяем существующие депозиты игрока.
-            # На мобилке клиент может прислать запрос дважды (retry после сетевой ошибки).
-            # Не удаляем и не дублируем — если token_id уже есть, обновляем image/wallet.
+            # Идемпотентность — проверяем существующие депозиты игрока.
             existing_result = await session.execute(
                 select(MatchDeposit).where(
                     MatchDeposit.match_id == match_id,
@@ -412,7 +401,7 @@ async def register_deposits(
                     image = await fetch_nft_image(token_id, nft_contract)
 
                 if token_id in existing_token_ids:
-                    # PATCH: Обновляем существующий депозит (image мог не загрузиться с первого раза)
+                    # Обновляем существующий депозит (image мог не загрузиться с первого раза)
                     for dep in existing_deposits:
                         if dep.token_id == token_id:
                             if image and not dep.image:
