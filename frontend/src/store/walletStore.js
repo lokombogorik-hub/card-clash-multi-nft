@@ -1,5 +1,4 @@
-// frontend/src/store/walletStore.js
-// Legacy compatibility wrapper — real logic is in WalletConnectContext
+
 
 export var walletStore = {
     getState: function () {

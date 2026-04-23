@@ -32,14 +32,14 @@ def get_db() -> Session:
 
 def init_db():
     """Инициализация базы данных"""
-    # Импортируем все модели
+    #  модели
     from .models import user, nft_card, user_deck
 
-    # Создаем таблицы
+    #  таблицы
     Base.metadata.create_all(bind=engine)
     print("✅ База данных инициализирована")
 
-    # Создаем демо-данные
+    #  демо-данные
     create_demo_data()
 
 
@@ -49,11 +49,11 @@ def create_demo_data():
 
     db = SessionLocal()
     try:
-        # Проверяем, есть ли уже демо-пользователь
+        #  демо-пользователь
         demo_user = db.query(User).filter(User.wallet_address == "demo.near").first()
 
         if not demo_user:
-            # Создаем демо-пользователя
+            #  демо-пользователя
             demo_user = User(
                 wallet_address="demo.near",
                 username="DemoPlayer",
@@ -66,7 +66,7 @@ def create_demo_data():
             db.add(demo_user)
             db.commit()
 
-            # Создаем демо-карты
+            #  демо-карты
             cards = CardGenerator.generate_starter_deck("demo.near", "near")
 
             for card_data in cards:
@@ -90,7 +90,7 @@ def create_demo_data():
                 )
                 db.add(nft_card)
 
-            # Создаем демо-колоду
+            #  демо-колоду
             demo_deck = UserDeck(
                 user_id=demo_user.id,
                 name="Стартовая колода",

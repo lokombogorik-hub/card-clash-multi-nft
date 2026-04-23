@@ -173,7 +173,7 @@ function showHotWalletConnectModal() {
                 return;
             }
 
-            // basic validation (должен содержать . или быть implicit)
+            // Басик
             if (!accountId.includes('.') && accountId.length < 64) {
                 input.style.borderColor = "rgba(239, 68, 68, 0.85)";
                 input.value = "";
@@ -261,7 +261,7 @@ export function setupHotWallet() {
                 try {
                     console.log("[HOT] connect() — showing manual input modal");
 
-                    // Показываем modal сразу (т.к. автоподключение не работает)
+                    //  modal сразу (т.к. автоподключение не работает)
                     const accountId = await showHotWalletConnectModal();
 
                     if (!accountId) {
@@ -308,8 +308,7 @@ export function setupHotWallet() {
             },
 
             signAndSendTransaction: async ({ receiverId, actions }) => {
-                // Транзакции пока делаем заглушкой (HOT не поддерживает tx deep links для сторонних приложений)
-                // В будущем можно добавить @here-wallet/core для подписи или near-api-js с ключами
+                // заглушка
                 throw new Error(
                     "Подписание транзакций через HOT в WebApp пока не поддерживается.\n\n" +
                     "Для Stage2 (lock/claim NFT) используй MyNearWallet или подожди интеграцию HERE SDK."

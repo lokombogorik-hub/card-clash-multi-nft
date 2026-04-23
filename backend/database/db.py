@@ -18,12 +18,12 @@ async def connect_to_mongo():
     try:
         _client = AsyncIOMotorClient(MONGO_URL)
         _database = _client[DB_NAME]
-        # Test connection
+        # тест подключения
         await _client.admin.command('ping')
         print(f"[DB] Connected to MongoDB: {DB_NAME}")
     except Exception as e:
         print(f"[DB] MongoDB connection failed: {e}")
-        # Fallback to in-memory storage
+
         _database = None
 
 
@@ -39,7 +39,7 @@ def get_database():
     """Get database instance - used as FastAPI dependency"""
     global _database
     if _database is None:
-        # Return in-memory fallback
+        # Врзврат
         return InMemoryDB()
     return _database
 
@@ -69,7 +69,7 @@ class InMemoryCollection:
             match = True
             for key, value in filter_dict.items():
                 if key == "$or":
-                    # Handle $or operator
+                    # Оператор
                     or_match = False
                     for condition in value:
                         cond_match = True
@@ -106,11 +106,11 @@ class InMemoryCollection:
         doc = await self.find_one(filter_dict)
 
         if doc:
-            # Apply $set
+
             if "$set" in update:
                 for key, value in update["$set"].items():
                     doc[key] = value
-            # Apply $inc
+
             if "$inc" in update:
                 for key, value in update["$inc"].items():
                     doc[key] = doc.get(key, 0) + value
@@ -121,7 +121,7 @@ class InMemoryCollection:
 
             return UpdateResult()
         elif upsert:
-            # Create new document
+            # Новыйв документ
             new_doc = {}
             for key, value in filter_dict.items():
                 if not key.startswith("$"):

@@ -342,7 +342,7 @@ async def clear_reservations():
     global reserved_tokens, _pool_inventory_cache_time
     count = len(reserved_tokens)
     reserved_tokens.clear()
-    _pool_inventory_cache_time = 0  # Инвалидируем кэш
+    _pool_inventory_cache_time = 0
     return {"cleared": count, "message": "All reservations cleared"}
 
 

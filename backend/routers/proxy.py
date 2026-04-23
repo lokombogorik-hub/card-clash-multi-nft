@@ -5,7 +5,7 @@ import re
 
 router = APIRouter(prefix="/api/proxy", tags=["proxy"])
 
-# Gateways to try if original fails (path-based format)
+
 IPFS_GATEWAYS = [
     "https://{cid}.ipfs.w3s.link{path}",
     "https://w3s.link/ipfs/{cid}{path}",
@@ -24,7 +24,7 @@ def parse_ipfs_url(url: str):
     if not url:
         return None, None
 
-    # ipfs:// protocol
+    # ipfs
     if url.startswith("ipfs://"):
         rest = url[7:]
         idx = rest.find("/")
@@ -32,12 +32,12 @@ def parse_ipfs_url(url: str):
             return rest[:idx], rest[idx:]
         return rest, ""
 
-    # subdomain: https://CID.ipfs.gateway/path
+    #  https://CID.ipfs.gateway/path
     m = re.match(r"https?://([a-zA-Z0-9]{20,})\.ipfs\.[^/]+(/.*)?\s*$", url)
     if m:
         return m.group(1), m.group(2) or ""
 
-    # path-based: https://gateway/ipfs/CID/path
+    #  https://gateway/ipfs/CID/path
     m = re.search(r"/ipfs/([a-zA-Z0-9]{20,})(/.*)?\s*$", url)
     if m:
         return m.group(1), m.group(2) or ""
@@ -54,10 +54,10 @@ async def proxy_image(url: str = Query(..., description="Original image URL")):
 
     urls_to_try = []
 
-    # ALWAYS try original URL first - it might work!
+
     urls_to_try.append(url)
 
-    # If it's an IPFS URL, add alternative gateways
+
     if cid:
         for gw in IPFS_GATEWAYS:
             candidate = gw.format(cid=cid, path=path or "")
@@ -75,7 +75,7 @@ async def proxy_image(url: str = Query(..., description="Original image URL")):
                 })
                 if resp.status_code == 200:
                     content_type = resp.headers.get("content-type", "image/png")
-                    # Make sure it's actually an image
+
                     if "image" in content_type or "octet-stream" in content_type:
                         return Response(
                             content=resp.content,
@@ -88,7 +88,7 @@ async def proxy_image(url: str = Query(..., description="Original image URL")):
             except Exception:
                 continue
 
-    # All failed — return 1x1 transparent PNG
+
     transparent_png = (
         b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
         b"\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"

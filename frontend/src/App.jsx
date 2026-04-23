@@ -313,8 +313,7 @@ function AppContent() {
     // Ref чтобы не делать двойные запросы
     var activeMatchFetchingRef = useRef(false);
 
-    // Функция проверки активного матча вынесена в useCallback
-    // чтобы можно было вызывать и при mount, и при возврате на home
+    // Функция проверки активного матча 
     var checkActiveMatch = useCallback(async function () {
         var t = token || getStoredToken();
         if (!t) return;
@@ -328,26 +327,26 @@ function AppContent() {
                 setActiveMatch(null);
             }
         } catch (e) {
-            // 404 — нет активного матча, это норма
+            // 404 — если нет активного матча
             setActiveMatch(null);
         } finally {
             activeMatchFetchingRef.current = false;
         }
     }, [token]);
 
-    // Проверяем активный матч при получении токена
+    // Проверяю активный матч при получении токена
     useEffect(function () {
         if (!token) return;
         checkActiveMatch();
     }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Проверяем активный матч при КАЖДОМ возврате на home
+    // Проверяю активный матч при КАЖДОМ возврате на home
     // (не только при первом рендере с токеном)
     useEffect(function () {
         if (screen === "home") {
             checkActiveMatch();
         }
-    }, [screen]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [screen]);
 
     // Также слушаем visibilitychange — когда пользователь
     // возвращается из кошелька (мобильный deep-link redirect)
@@ -520,19 +519,19 @@ function AppContent() {
                                     }
                                 </div>
                                 <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                                    {/* PATCH: "Вернуться в игру" — только если escrow_locked */}
+                                    {/* "Вернуться в игру" — только если escrow_locked */}
                                     {activeMatch.escrow_locked && (
                                         <button
                                             onClick={async function () {
                                                 setActiveMatchLoading(true);
                                                 try {
                                                     var t = token || getStoredToken();
-                                                    // PATCH: Получаем полные данные матча чтобы взять деки
+                                                    // Получаем полные данные матча чтобы взять деки
                                                     var matchFull = await apiFetch(
                                                         "/api/matches/" + activeMatch.match_id,
                                                         { token: t }
                                                     );
-                                                    // Пробуем получить колоду из матча или из decks API
+                                                    // Пробую получить колоду из матча или из decks API
                                                     var deck = null;
                                                     if (matchFull) {
                                                         var myId = String(me?.id || "");

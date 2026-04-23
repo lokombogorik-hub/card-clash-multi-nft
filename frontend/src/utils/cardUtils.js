@@ -1,4 +1,3 @@
-// frontend/src/utils/cardUtils.js
 // Единая детерминированная логика для stats, elements, rarity
 // Используется в Inventory.jsx, Game.jsx и везде где нужны карты
 
@@ -142,7 +141,7 @@ export function nftToCard(nft) {
     const tokenId = nft.token_id || nft.tokenId || `unknown_${Date.now()}`;
     const metadata = nft.metadata || {};
 
-    // Пробуем взять stats из metadata.extra
+    // Пробую взять stats из metadata.extra
     let stats = null;
     let element = null;
 

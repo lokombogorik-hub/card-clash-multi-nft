@@ -25,7 +25,7 @@ def create_access_token(data: Dict[str, Any]) -> str:
 
 
 def decode_access_token(token: str) -> Dict[str, Any]:
-    """Decode and verify JWT token."""
+    
     if not settings.JWT_SECRET:
         raise RuntimeError("JWT_SECRET is not set")
 

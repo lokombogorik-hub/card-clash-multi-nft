@@ -8,6 +8,6 @@ class UserDeck(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(String, nullable=False, unique=True, index=True)
-    cards = Column(JSON, default=list)        # card IDs
-    full_cards = Column(JSON, default=list)   # full card objects
+    cards = Column(JSON, default=list)      
+    full_cards = Column(JSON, default=list)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

@@ -275,7 +275,7 @@ async def my_nfts(
             if items:
                 return {"items": [n.model_dump() for n in items]}
         except Exception:
-            # fallback to mock
+
             pass
 
     items = _gen_inventory_for_user(user_id, count=16)
@@ -292,8 +292,7 @@ async def get_active_deck(current_user: User = Depends(get_current_user)):
 @router.put("/decks/active")
 async def put_active_deck(payload: Any = Body(...), current_user: User = Depends(get_current_user)):
     """
-    Обновляет активную колоду.
-    Принимает: ["key1","key2",...] или {"cards":[...]}
+    Обновляю активную колоду.
     """
     user_id = int(current_user.id)
 
@@ -310,7 +309,7 @@ async def put_active_deck(payload: Any = Body(...), current_user: User = Depends
     if not isinstance(keys, list) or len(keys) != 5:
         raise HTTPException(status_code=400, detail="Deck must contain exactly 5 card keys")
 
-    # валидируем по mock инвентарю (Stage1). near-ключи тоже допускаем, но не валидируем строго.
+    # валидируем по mock инвентарю (Stage1)
     inv_map = _get_inventory_map(user_id)
     missing = [k for k in keys if (k.startswith("mock:") and k not in inv_map)]
     if missing:

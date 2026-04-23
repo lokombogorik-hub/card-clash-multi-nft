@@ -368,7 +368,7 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
 
         logger.info("[WS] Player %s auth OK for match %s", player_id, match_id)
 
-        # ══ 2. ПОЛУЧАЕМ МАТЧ ════════════════════════════
+        # ══ 2.  МАТЧ ════════════════════════════
         try:
             from routers.matchmaking import get_match
             match_data = await get_match(match_id)

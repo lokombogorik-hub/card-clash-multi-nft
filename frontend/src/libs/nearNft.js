@@ -81,7 +81,7 @@ function _cacheGet(key, maxAgeMs) {
 
 function _cacheSet(key, value) {
     _rpcCache.set(key, { value: value, ts: Date.now() });
-    // LRU: удаляем самые старые если кэш > 300 записей
+    // Деличу самые старые если кэш > 300 записей
     if (_rpcCache.size > 300) {
         _rpcCache.delete(_rpcCache.keys().next().value);
     }

@@ -65,7 +65,7 @@ async def link_near_account(
             await session.commit()
             break
     except Exception:
-        # DB может быть временно недоступна — UI всё равно будет работать
+        
         pass
 
     return {"ok": True, "accountId": account_id}

@@ -39,7 +39,7 @@ async def play_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Когда нажимают на кнопку"""
     query = update.callback_query
-    await query.answer()  # Убираем "часики" на кнопке
+    await query.answer()  
 
     if query.data == "play":
         await query.edit_message_text(

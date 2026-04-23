@@ -34,7 +34,7 @@ async function loadTokenMetadata(tokenId) {
     var fallbackUrl = IPFS_BASE + "/" + nftNumber + ".png";
     var fallbackTitle = "BUNNY #" + nftNumber;
 
-    // Если нет контракта — сразу возвращаем URL по номеру
+    // Если нет контракта — сразу возвращаю URL по номеру
     if (!NFT_CONTRACT_ID) {
         return { imageUrl: fallbackUrl, title: fallbackTitle };
     }
@@ -76,7 +76,6 @@ async function loadTokenMetadata(tokenId) {
                     var cid = media.slice(7);
                     imageUrl = "https://ipfs.io/ipfs/" + cid;
                 } else {
-                    // Относительный путь типа "1128.png"
                     imageUrl = IPFS_BASE + "/" + media;
                 }
             }
@@ -107,7 +106,7 @@ function CardImage({ imageUrl, name }) {
     var handleError = function () {
         var nextGateway = currentGateway + 1;
         if (nextGateway < IPFS_GATEWAYS.length) {
-            // Пробуем следующий gateway
+            // Пробую следующий gateway
             var filename = imageUrl.split("/").pop();
             var newSrc = IPFS_GATEWAYS[nextGateway] + "/" + filename;
             console.log("[CASE] Trying gateway " + nextGateway + ": " + newSrc);
@@ -154,7 +153,7 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
     var [videoError, setVideoError] = useState(false);
     var [resolvedCards, setResolvedCards] = useState(cards);
 
-    // Грузим метадату в фоне пока играет видео
+    // Грузжу метадату 
     useEffect(function () {
         var alive = true;
 
@@ -365,7 +364,7 @@ export default function Market() {
         token = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
     } catch (e) { }
 
-    // Загрузка количества доступных NFT для каждого кейса
+    //  количества доступных NFT для каждого кейса
     useEffect(function () {
         var alive = true;
 
@@ -380,7 +379,7 @@ export default function Market() {
                 console.log("[MARKET] Inventory response:", resp);
 
                 if (alive && resp && typeof resp === "object") {
-                    // Ожидаем формат: { "starter": 150, "premium": 80, "legendary": 30, "ultimate": 10 }
+
                     setCaseInventory(resp);
                 }
             } catch (e) {
@@ -448,7 +447,7 @@ export default function Market() {
                 throw new Error("Нет карт в ответе");
             }
 
-            // 3. Обновляем инвентарь локально
+            // 3.  инвентарь локально
             setCaseInventory(function (prev) {
                 var updated = { ...prev };
                 if (updated[c.id] > 0) {
@@ -457,7 +456,7 @@ export default function Market() {
                 return updated;
             });
 
-            // 4. Показываем модалку
+            // 4.модалкв
             setBuyingStatus("");
             setOpenModal({ caseItem: c, cards: cards });
 
@@ -479,7 +478,7 @@ export default function Market() {
                     cards={openModal.cards}
                     onClose={function () {
                         setOpenModal(null);
-                        // Перезагружаем инвентарь после закрытия
+                        // Перезагрузка инвентаря после закрытия
                         apiFetch("/api/cases/inventory", { method: "GET", token: token })
                             .then(function (resp) {
                                 if (resp && typeof resp === "object") {
@@ -531,7 +530,7 @@ export default function Market() {
             <div className="market-cases-grid">
                 {CASES.map(function (c) {
                     var available = caseInventory[c.id] || 0;
-                    var isOutOfStock = !loadingInventory && available <= 0;  // Добавлена проверка loadingInventory
+                    var isOutOfStock = !loadingInventory && available <= 0;
                     var canBuy = connected && balance >= c.price && !isOutOfStock && !loadingInventory;
                     var isBuying = buying === c.id;
 
@@ -540,7 +539,7 @@ export default function Market() {
                             opacity: isOutOfStock ? 0.5 : 1,
                             position: "relative",
                         }}>
-                            {/* Индикатор количества в ЛЕВОМ верхнем углу */}
+                            {/* количество кейсрв в ЛЕВОМ верхнем углу */}
                             <div style={{
                                 position: "absolute",
                                 top: 8,
@@ -563,7 +562,7 @@ export default function Market() {
                                 {loadingInventory ? "⏳" : (isOutOfStock ? "0 NFT" : available + " NFT")}
                             </div>
 
-                            {/* Показываем Sold Out только если НЕ загружается */}
+                            {/*  Sold Out только если НЕ загружается */}
                             {isOutOfStock && !loadingInventory && (
                                 <div style={{
                                     position: "absolute",

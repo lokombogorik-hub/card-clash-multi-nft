@@ -9,10 +9,8 @@ class UserDeck(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(BigInteger, nullable=False, index=True)
 
-    # Store full NFT data as JSON array
     cards_json = Column(Text, nullable=False, default="[]")
 
-    # Card keys for quick lookup
     card_keys = Column(Text, nullable=False, default="[]")
 
     created_at = Column(DateTime, server_default=func.now())

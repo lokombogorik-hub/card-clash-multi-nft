@@ -68,12 +68,11 @@ export default function StormBg() {
         let tick = 0;
 
         // 20 секунд = 20000ms / (1000/60) ≈ 1200 тиков при 60fps
-        // Используем время вместо тиков — точнее
         let lastBoltTime = 0;
-        // Интервал молнии: 20 секунд ± небольшой разброс
+        // Интервал молнии: 20 секунд 
         const BOLT_INTERVAL_MS = 20000;
-        const BOLT_JITTER_MS = 3000; // ±3 сек случайность
-        let nextBoltIn = 0; // когда следующая молния (ms от старта)
+        const BOLT_JITTER_MS = 3000;
+        let nextBoltIn = 0;
 
         const fog = [];
         const bolts = [];
@@ -83,8 +82,7 @@ export default function StormBg() {
         let bandGrad = null;
         let bandTop = 0;
 
-        let startTime = null; // время первого кадра
-
+        let startTime = null;
         const resize = () => {
             const dpr = Math.min(window.devicePixelRatio || 1, 2);
             w = Math.max(1, window.innerWidth);
@@ -195,7 +193,7 @@ export default function StormBg() {
         const hHigh = () => h * 1.12;
 
         const frame = (timestamp) => {
-            // Инициализируем стартовое время
+            // стартовое время
             if (startTime === null) {
                 startTime = timestamp;
                 // Первая молния через 3-5 сек после старта
@@ -256,7 +254,7 @@ export default function StormBg() {
 
             // Молния — раз в ~20 секунд по реальному времени
             if (!reduceMotion && elapsed >= nextBoltIn) {
-                // Спавним 1 большую молнию
+                // Спавним
                 spawn(true);
 
                 // Иногда добавляем маленькую рядом
