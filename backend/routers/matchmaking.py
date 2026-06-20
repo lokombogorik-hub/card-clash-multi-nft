@@ -5,9 +5,13 @@ from datetime import datetime, timedelta
 import uuid
 import asyncio
 
+from sqlalchemy import select
+
 from database.session import get_session
 from database.models.pvp_match import PvPMatch
 from database.models.match_deposit import MatchDeposit
+from database.models.user import User
+from database.models.user_deck import UserDeck
 
 router = APIRouter(prefix="/api/matchmaking", tags=["matchmaking"])
 
@@ -56,6 +60,56 @@ def get_user_deck(user_id: str) -> List[Dict]:
 
     print(f"[Matchmaking] No deck found for {user_id}")
     return []
+
+
+async def get_user_elo(user_id: str) -> int:
+    """Реальный рейтинг игрока из БД (а не хардкод). По умолчанию 0 — Новичок."""
+    try:
+        async for session in get_session():
+            u = await session.get(User, int(user_id))
+            if u and u.elo_rating is not None:
+                return int(u.elo_rating)
+            break
+    except Exception as e:
+        print(f"[Matchmaking] get_user_elo error: {e}")
+    return 0
+
+
+async def load_user_deck(user_id: str) -> List[Dict]:
+    """Колода игрока (его 5 NFT): сначала из БД, потом из памяти.
+    Без подмены на чужой default_user — иначе оба игрока получат одну колоду."""
+    uid = str(user_id)
+    # 1) БД
+    try:
+        async for session in get_session():
+            result = await session.execute(
+                select(UserDeck).where(UserDeck.user_id == uid)
+            )
+            deck = result.scalar_one_or_none()
+            if deck and deck.full_cards and len(deck.full_cards) == 5:
+                return deck.full_cards
+            break
+    except Exception as e:
+        print(f"[Matchmaking] load_user_deck DB error: {e}")
+    # 2) in-memory ровно по ключу пользователя
+    try:
+        from routers.decks import _decks_storage
+        d = _decks_storage.get(uid)
+        if d and d.get("full_cards") and len(d["full_cards"]) == 5:
+            return d["full_cards"]
+    except Exception:
+        pass
+    return []
+
+
+def find_active_match_for(user_id: str) -> Optional[str]:
+    """Возвращает id незавершённого матча игрока, если он есть (защита от дублей)."""
+    uid = str(user_id)
+    for mid, m in list(active_matches.items()):
+        if uid in (str(m.get("player1_id")), str(m.get("player2_id"))):
+            if m.get("status") in ("waiting_escrow", "active", "waiting"):
+                return mid
+    return None
 
 
 def calculate_elo_range(wait_time_seconds: float, max_diff: int = 300) -> int:
@@ -322,12 +376,27 @@ async def join_queue(
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authorization required")
 
-    user_deck = get_user_deck(user_id)
+    user_deck = await load_user_deck(user_id)
     if not user_deck or len(user_deck) < 5:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No deck saved. Select 5 cards first.")
 
-    user_elo = 1000
+    user_elo = await get_user_elo(user_id)
     max_elo_diff = request.max_elo_diff or 300
+
+    # Защита от дублей комнат: если у игрока уже есть незавершённый матч —
+    # возвращаем его вместо создания нового.
+    existing_match_id = find_active_match_for(user_id)
+    if existing_match_id:
+        m = active_matches.get(existing_match_id, {})
+        opp = m.get("player2_id") if str(m.get("player1_id")) == str(user_id) else m.get("player1_id")
+        if user_id in matchmaking_queue:
+            del matchmaking_queue[user_id]
+        return {
+            "status": "matched",
+            "match_id": existing_match_id,
+            "opponent_id": opp,
+            "message": "Resuming existing match",
+        }
 
     # Проверяем существующую запись в очереди
     if user_id in matchmaking_queue:
@@ -355,7 +424,7 @@ async def join_queue(
     if opponent_id and opponent_id in matchmaking_queue:
         match_id = str(uuid.uuid4())
         now = datetime.utcnow()
-        opponent_deck = get_user_deck(opponent_id)
+        opponent_deck = await load_user_deck(opponent_id)
 
         match_data = {
             "match_id": match_id,

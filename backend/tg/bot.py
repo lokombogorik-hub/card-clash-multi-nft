@@ -1,10 +1,18 @@
+import os
 import requests
 import time
 
-TOKEN = "8201762688:AAE2E0AjbTKfBa9ad8NE89BZDir8qv9mZxc"
+# ВАЖНО: токен больше НЕ хранится в коде. Задаётся через переменную окружения.
+# Старый токен, который был тут раньше, СЧИТАЙ СКОМПРОМЕТИРОВАННЫМ —
+# отзови его в @BotFather (/revoke) и выпусти новый.
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+if not TOKEN:
+    raise RuntimeError(
+        "TELEGRAM_BOT_TOKEN is not set. Put it in env (telegram.env) before starting the bot."
+    )
 API_URL = f"https://api.telegram.org/bot{TOKEN}"
 
-WEBAPP_URL = "https://card-clash-multi-nft.vercel.app"
+WEBAPP_URL = os.getenv("WEBAPP_URL", "https://card-clash-multi-nft.vercel.app")
 
 
 def send_message(chat_id, text, keyboard=None):

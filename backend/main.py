@@ -62,10 +62,17 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Card Clash API", lifespan=lifespan)
 
+# Авторизация идёт через заголовок Authorization (Bearer), cookies не
+# используются, поэтому allow_credentials=False — это снимает невалидную
+# и небезопасную комбинацию "*" + credentials. Список доменов можно
+# сузить через переменную окружения ALLOWED_ORIGINS (через запятую).
+import os as _os
+_allowed = [o.strip() for o in _os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()] or ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=_allowed,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

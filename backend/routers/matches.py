@@ -5,6 +5,7 @@ from datetime import datetime
 from sqlalchemy import select
 import uuid
 import os
+import asyncio
 import httpx
 import json
 import base64
@@ -21,6 +22,80 @@ router = APIRouter(prefix="/api/matches", tags=["matches"])
 ESCROW_WALLET = os.getenv("ESCROW_WALLET", "escrow.near")
 ESCROW_PRIVATE_KEY = os.getenv("ESCROW_PRIVATE_KEY", "")
 NFT_CONTRACT_ID = os.getenv("NFT_CONTRACT_ID", "")
+
+# Сколько NFT каждый игрок лочит в эскроу для старта матча
+ESCROW_CARDS_REQUIRED = 5
+
+# Пер-матчевые блокировки против гонок при параллельных register/confirm/lock.
+_match_locks: Dict[str, asyncio.Lock] = {}
+
+
+def _get_match_lock(match_id: str) -> asyncio.Lock:
+    lock = _match_locks.get(match_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _match_locks[match_id] = lock
+    return lock
+
+
+async def _deposit_counts(match_id: str) -> Dict[str, int]:
+    """Сколько депозитов в БД у каждого игрока этого матча."""
+    counts: Dict[str, int] = {}
+    try:
+        async for session in get_session():
+            result = await session.execute(
+                select(MatchDeposit).where(MatchDeposit.match_id == match_id)
+            )
+            for dep in result.scalars().all():
+                counts[dep.player_id] = counts.get(dep.player_id, 0) + 1
+            break
+    except Exception as e:
+        print(f"[MATCHES] _deposit_counts error: {e}")
+    return counts
+
+
+def _player_locked(match_data: Dict, player_key: str, deposit_count: int) -> bool:
+    """Игрок считается залочившим, если выставлен флаг confirm ИЛИ
+    в БД лежит достаточно его депозитов. Единый критерий для обоих путей."""
+    if match_data.get(f"{player_key}_escrow_confirmed"):
+        return True
+    return deposit_count >= ESCROW_CARDS_REQUIRED
+
+
+async def recompute_escrow_lock(match_data: Dict) -> bool:
+    """ЕДИНЫЙ источник правды по локу. Матч залочен, когда ОБА игрока
+    подтвердили эскроу (по флагу или по депозитам). Возвращает True,
+    если матч ИМЕННО СЕЙЧАС перешёл в состояние locked."""
+    if match_data.get("escrow_locked"):
+        return False
+    p1 = match_data.get("player1_id")
+    p2 = match_data.get("player2_id")
+    if not p1 or not p2:
+        return False
+    counts = await _deposit_counts(match_data.get("match_id"))
+    p1_locked = _player_locked(match_data, "player1", counts.get(p1, 0))
+    p2_locked = _player_locked(match_data, "player2", counts.get(p2, 0))
+    if p1_locked and p2_locked:
+        match_data["escrow_locked"] = True
+        match_data["status"] = "active"
+        match_data["game_started_at"] = datetime.utcnow().isoformat()
+        print(f"[MATCHES] escrow LOCKED for match {match_data.get('match_id')}")
+        return True
+    return False
+
+
+async def _notify_escrow_locked(match_id: str):
+    """Сообщаем по WS, что оба залочили, и пытаемся стартовать игру
+    (на случай, если оба игрока уже подключены к матчу)."""
+    try:
+        from routers.ws_match import ws_manager
+        await ws_manager.broadcast_all(match_id, {
+            "type": "escrow_locked",
+            "message": "Both players locked NFTs. Game starting!",
+        })
+        await ws_manager.try_start_game(match_id)
+    except Exception as e:
+        print(f"[MATCHES] _notify_escrow_locked error: {e}")
 
 
 class CreateMatchRequest(BaseModel):
@@ -275,37 +350,6 @@ async def get_leaderboard(limit: int = 50):
         traceback.print_exc()
         return {"leaders": [], "total": 0}
 
-@router.get("/active")
-async def get_active_match(authorization: Optional[str] = Header(None)):
-    player_id = None
-    if authorization:
-        token = authorization.replace("Bearer ", "")
-        player_id = get_player_id_from_token(token)
-    if not player_id:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    from routers.matchmaking import active_matches
-    for mid, match in active_matches.items():
-        p1 = str(match.get("player1_id") or "")
-        p2 = str(match.get("player2_id") or "")
-        if player_id not in (p1, p2):
-            continue
-        if match.get("status") in ("waiting_escrow", "active", "waiting"):
-            return {
-                "match_id": mid,
-                "status": match.get("status"),
-                "escrow_locked": match.get("escrow_locked", False),
-                "player1_id": p1,
-                "player2_id": p2,
-                "player1_escrow_confirmed": match.get("player1_escrow_confirmed", False),
-                "player2_escrow_confirmed": match.get("player2_escrow_confirmed", False),
-                "my_escrow_confirmed": (
-                    match.get("player1_escrow_confirmed", False) if player_id == p1
-                    else match.get("player2_escrow_confirmed", False)
-                ),
-            }
-    raise HTTPException(status_code=404, detail="No active match")
-
 @router.get("/config/status")
 async def get_escrow_status():
     return {
@@ -422,31 +466,27 @@ async def register_deposits(
 
             await session.commit()
 
-            # Проверяем оба депозита
-            all_deposits_result = await session.execute(
-                select(MatchDeposit).where(MatchDeposit.match_id == match_id)
-            )
-            all_deps = all_deposits_result.scalars().all()
-            p1_id = match_data.get("player1_id")
-            p2_id = match_data.get("player2_id")
-            p1_token_ids = [d.token_id for d in all_deps if d.player_id == p1_id]
-            p2_token_ids = [d.token_id for d in all_deps if d.player_id == p2_id]
-            p1_has = len(p1_token_ids) >= 5
-            p2_has = len(p2_token_ids) >= 5
-
-            print(f"[MATCHES] register_deposits check: p1={p1_id}({len(p1_token_ids)}) "
-                  f"p2={p2_id}({len(p2_token_ids)}) → both={p1_has and p2_has}")
-
-            if p1_id and p2_id and p1_has and p2_has:
-                match_data["escrow_locked"] = True
-                match_data["status"] = "active"
-                print(f"[MATCHES] BOTH DEPOSITED → escrow_locked=True match={match_id}")
-
     except Exception as e:
         print(f"[MATCHES] register_deposits DB error: {e}")
         traceback.print_exc()
 
-    await _save_match(match_data)
+    # Единый пересчёт лока под пер-матчевой блокировкой (без гонок).
+    just_locked = False
+    async with _get_match_lock(match_id):
+        # Если этот игрок положил достаточно карт — помечаем его confirmed,
+        # чтобы register и confirm_escrow считали одинаково.
+        counts = await _deposit_counts(match_id)
+        if counts.get(player_id, 0) >= ESCROW_CARDS_REQUIRED:
+            if player_id == match_data.get("player1_id"):
+                match_data["player1_escrow_confirmed"] = True
+            elif player_id == match_data.get("player2_id"):
+                match_data["player2_escrow_confirmed"] = True
+        just_locked = await recompute_escrow_lock(match_data)
+        await _save_match(match_data)
+
+    if just_locked:
+        await _notify_escrow_locked(match_id)
+
     return {
         "success": True,
         "deposits_count": len(request.token_ids),
@@ -489,12 +529,21 @@ async def confirm_escrow(match_id: str, body: dict):
             if near_wallet:
                 match_data["player2_near_wallet"] = near_wallet
 
-    # Сохраняем депозиты если есть
+    # Сохраняем депозиты если есть (идемпотентно — без дублей по token_id игрока)
     if token_ids:
         try:
             async for session in get_session():
                 contract = NFT_CONTRACT_ID or ""
+                existing_result = await session.execute(
+                    select(MatchDeposit).where(
+                        MatchDeposit.match_id == match_id,
+                        MatchDeposit.player_id == player_id,
+                    )
+                )
+                existing_token_ids = {d.token_id for d in existing_result.scalars().all()}
                 for tid in token_ids:
+                    if tid in existing_token_ids:
+                        continue
                     image = await fetch_nft_image(tid, contract)
                     session.add(MatchDeposit(
                         match_id=match_id,
@@ -505,49 +554,28 @@ async def confirm_escrow(match_id: str, body: dict):
                         image=image,
                     ))
                 await session.commit()
+                break
         except Exception as e:
             print(f"[MATCHES] confirm_escrow deposit error: {e}")
 
-    p1_confirmed = match_data.get("player1_escrow_confirmed", False)
-    p2_confirmed = match_data.get("player2_escrow_confirmed", False)
-    if p1_confirmed and p2_confirmed:
-        match_data["escrow_locked"] = True
-        match_data["status"] = "active"
-        match_data["game_started_at"] = datetime.utcnow().isoformat()
+    # Единый пересчёт лока под пер-матчевой блокировкой.
+    just_locked = False
+    async with _get_match_lock(match_id):
+        just_locked = await recompute_escrow_lock(match_data)
+        await _save_match(match_data)
 
-    await _save_match(match_data)
+    if just_locked:
+        await _notify_escrow_locked(match_id)
 
-    # PATCH: Если оба залочили — уведомляем WS что можно стартовать
-    if p1_confirmed and p2_confirmed:
-        try:
-            from routers.ws_match import ws_manager
-            await ws_manager.broadcast_all(match_id, {
-                "type": "escrow_locked",
-                "message": "Both players locked NFTs. Game starting!",
-            })
-            print(f"[MATCHES] confirm_escrow: broadcasted escrow_locked for match {match_id}")
-        except Exception as e:
-            print(f"[MATCHES] confirm_escrow WS broadcast error: {e}")
-
+    both_locked = bool(match_data.get("escrow_locked"))
     return {
         "success": True,
-        "escrow_locked": match_data.get("escrow_locked", False),
+        "escrow_locked": both_locked,
         "status": match_data.get("status"),
-        "both_locked": p1_confirmed and p2_confirmed,
+        "both_locked": both_locked,
     }
 
-    if p1_confirmed and p2_confirmed:
-        match_data["escrow_locked"] = True
-        match_data["status"] = "active"
-        match_data["game_started_at"] = datetime.utcnow().isoformat()
 
-        # [ДОБАВЬ ЭТО]
-        try:
-            from routers.ws_match import ws_manager
-            await ws_manager.broadcast_all(match_id, {"type": "escrow_locked"})
-        except Exception as e:
-            print(f"[MATCHES] WS broadcast error: {e}")
-            
 @router.get("/{match_id}/opponent_deposits")
 async def get_opponent_deposits(
         match_id: str,
@@ -856,38 +884,30 @@ async def finish_match(
     if player_id not in [match_data.get("player1_id"), match_data.get("player2_id")]:
         raise HTTPException(status_code=403, detail="Not a participant")
 
-    if match_data.get("status") == "finished":
-        return {"success": True, "winner": match_data.get("winner"), "already_finished": True}
+    p1_id = match_data.get("player1_id")
+    p2_id = match_data.get("player2_id")
 
     winner_user_id = body.get("winner_user_id")
     winner_near_wallet = body.get("winner_near_wallet")
-
-    if winner_user_id and str(winner_user_id) not in [
-        match_data.get("player1_id"),
-        match_data.get("player2_id")
-    ]:
-        raise HTTPException(status_code=400, detail="Invalid winner")
-
-    match_data["status"] = "finished"
-    match_data["winner"] = str(winner_user_id) if winner_user_id else None
     if winner_near_wallet:
         match_data["winner_near_wallet"] = winner_near_wallet
-    match_data["finished_at"] = datetime.utcnow().isoformat()
 
-    rating_update = None
-    p1_id = match_data.get("player1_id")
-    p2_id = match_data.get("player2_id")
-    if p1_id and p2_id and winner_user_id:
-        loser_id = p2_id if str(winner_user_id) == str(p1_id) else p1_id
-        rating_update = await update_player_ratings(
-            winner_id=str(winner_user_id),
-            loser_id=str(loser_id),
-        )
-        if rating_update:
-            match_data["rating_update"] = rating_update
+    # Авторитетный победитель ставится игровым движком (WS). Клиентскому
+    # winner доверяем ТОЛЬКО если сервер его ещё не зафиксировал и это участник.
+    # Так проигравший не сможет объявить победителем себя.
+    server_winner = match_data.get("winner")
+    effective_winner = str(server_winner) if server_winner else None
+    if not effective_winner and winner_user_id and str(winner_user_id) in [str(p1_id), str(p2_id)]:
+        effective_winner = str(winner_user_id)
 
-    await _save_match(match_data)
-    return {"success": True, "winner": winner_user_id, "rating_update": rating_update}
+    already = match_data.get("status") == "finished"
+    rating_update = await _finalize_match_result(match_data, effective_winner, reason="client_finish")
+    return {
+        "success": True,
+        "winner": match_data.get("winner"),
+        "rating_update": rating_update,
+        "already_finished": already,
+    }
 
 
 async def update_player_ratings(winner_id: str, loser_id: str) -> Optional[Dict]:
@@ -948,6 +968,46 @@ async def update_player_ratings(winner_id: str, loser_id: str) -> Optional[Dict]
         print(f"[RATING] Error: {e}")
         traceback.print_exc()
         return None
+
+
+async def _finalize_match_result(
+        match_data: Dict,
+        winner_id: Optional[str],
+        reason: str = "normal",
+) -> Optional[Dict]:
+    """Идемпотентно завершает матч: фиксирует winner/status и РОВНО ОДИН РАЗ
+    начисляет рейтинг. Никогда не переопределяет уже зафиксированного сервером
+    победителя. Используется и из WS (game_over / форфейт), и из finish_match."""
+    p1 = match_data.get("player1_id")
+    p2 = match_data.get("player2_id")
+
+    existing_winner = match_data.get("winner")
+    if existing_winner:
+        winner_id = str(existing_winner)
+    elif winner_id is not None:
+        winner_id = str(winner_id)
+
+    match_data["status"] = "finished"
+    if winner_id:
+        match_data["winner"] = winner_id
+    if not match_data.get("finished_at"):
+        match_data["finished_at"] = datetime.utcnow().isoformat()
+    if reason and reason != "normal":
+        match_data["finish_reason"] = reason
+
+    rating_update = match_data.get("rating_update")
+    if winner_id and p1 and p2 and not match_data.get("rating_applied"):
+        loser_id = p2 if str(winner_id) == str(p1) else p1
+        rating_update = await update_player_ratings(
+            winner_id=str(winner_id),
+            loser_id=str(loser_id),
+        )
+        if rating_update:
+            match_data["rating_update"] = rating_update
+            match_data["rating_applied"] = True
+
+    await _save_match(match_data)
+    return rating_update
 
 
 @router.post("/{match_id}/claim_tx")
