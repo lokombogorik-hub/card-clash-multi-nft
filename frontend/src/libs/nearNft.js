@@ -2,11 +2,12 @@ var DIRECT_RPC_URL = (typeof import.meta !== "undefined" && import.meta.env && i
 var API_BASE = (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_BASE_URL) || "";
 var PROXY_RPC_URL = API_BASE ? API_BASE + "/api/near/rpc" : "";
 
-// Шлюзы IPFS в порядке надёжности. w3s.link (web3.storage) и cloudflare-ipfs
-// фактически мертвы — убраны. Первый — родной шлюз коллекции HOT (ipfs.hotdao.ai),
-// он точнее всего отдаёт эти NFT; дальше — публичные резервы.
+// Шлюзы IPFS в порядке попытки. w3s.link (web3.storage) реально отдаёт эти NFT —
+// он первый. Дальше живые резервы на случай его флакости. Card перебирает их
+// по очереди при ошибке загрузки (onError), а не зависит от одного шлюза.
 var IPFS_GATEWAYS = [
-    function (cid, path) { return "https://ipfs.hotdao.ai/ipfs/" + cid + path; },
+    function (cid, path) { return "https://" + cid + ".ipfs.w3s.link" + path; },
+    function (cid, path) { return "https://w3s.link/ipfs/" + cid + path; },
     function (cid, path) { return "https://ipfs.io/ipfs/" + cid + path; },
     function (cid, path) { return "https://" + cid + ".ipfs.dweb.link" + path; },
     function (cid, path) { return "https://gateway.pinata.cloud/ipfs/" + cid + path; },
@@ -23,7 +24,7 @@ function toB64(str) {
 function fixProto(url) {
     if (!url) return "";
     var s = String(url).trim();
-    if (s.startsWith("ipfs://")) return "https://ipfs.hotdao.ai/ipfs/" + s.slice(7);
+    if (s.startsWith("ipfs://")) return "https://ipfs.near.social/ipfs/" + s.slice(7);
     if (s.startsWith("ar://")) return "https://arweave.net/" + s.slice(5);
     return s;
 }
@@ -165,7 +166,10 @@ export function ipfsGatewayUrl(url, idx) {
 }
 
 export function proxyImageUrl(url) {
-    if (!url || !API_BASE) return url || "";
+    if (!url) return "";
+    if (!API_BASE) return url;
+    if (url.indexOf("/api/proxy/image") >= 0) return url; // уже проксировано
+    if (!/^https?:\/\//.test(url) && url.indexOf("ipfs://") !== 0) return url;
     return API_BASE + "/api/proxy/image?url=" + encodeURIComponent(url);
 }
 
@@ -177,7 +181,9 @@ function resolveMediaUrl(media, original) {
     if (_imageCache.has(k)) return _imageCache.get(k);
     var r;
     if (isIpfsUrl(original || media)) {
-        r = { display: ipfsGatewayUrl(original || media, 0), original: original || media };
+        // Гоним через наш бэкенд-прокси: он перебирает шлюзы и кэширует,
+        // поэтому не зависим от флакающего конкретного IPFS-шлюза.
+        r = { display: proxyImageUrl(original || media), original: original || media };
     } else if (media && !media.startsWith("http") && API_BASE) {
         r = { display: proxyImageUrl(media), original: original || media };
     } else {

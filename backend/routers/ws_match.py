@@ -192,7 +192,6 @@ class WSManager:
                or meta.get("media") or meta.get("image") or meta.get("originalMedia")
                or nftd.get("imageUrl") or nftd.get("image")
                or nftd_meta.get("media") or nftd_meta.get("image") or "")
-        img = _ipfs_to_hotdao(img)
 
         return {
             "id": card.get("id") or card.get("token_id") or f"card_{random.randint(1000, 9999)}",

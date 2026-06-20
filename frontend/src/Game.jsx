@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import confetti from "canvas-confetti";
 import { apiFetch } from "./api.js";
 import { useWalletConnect } from "./context/WalletConnectContext";
+import { proxyImageUrl } from "./libs/nearNft.js";
 
 /* ═══════════════════════════════════════════════
    CONSTANTS
@@ -1445,7 +1446,7 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
     };
 
     const imgSrc = !imgFailed
-        ? (card.imageUrl || card.image || card.nftData?.imageUrl || card.nftData?.image || "")
+        ? proxyImageUrl(card.imageUrl || card.image || card.nftData?.imageUrl || card.nftData?.image || "")
         : "";
 
     return (
