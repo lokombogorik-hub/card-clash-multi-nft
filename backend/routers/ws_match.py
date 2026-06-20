@@ -4,6 +4,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from typing import Dict, List, Optional
 import logging
 import json
+import re
 import random
 import asyncio
 from datetime import datetime, timedelta
@@ -16,6 +17,25 @@ router = APIRouter(tags=["websocket"])
 # ему техническое поражение (форфейт). Держим локально, чтобы не плодить
 # импорты между роутерами.
 RECONNECT_TIMEOUT_SECONDS = 180
+
+
+def _ipfs_to_hotdao(url):
+    """Переписывает любой IPFS-URL на рабочий шлюз HOT (ipfs.hotdao.ai).
+    Мёртвые шлюзы (w3s.link/cloudflare/nftstorage) в media токенов BUNNY больше
+    не отдают картинки; IPFS адресуется по CID, тянем тот же контент с живого шлюза."""
+    if not url or not isinstance(url, str):
+        return url
+    if "ipfs.hotdao.ai" in url:
+        return url
+    m = re.match(r"^https?://([a-zA-Z0-9]+)\.ipfs\.[^/]+(/.*)?$", url)
+    if m:
+        return "https://ipfs.hotdao.ai/ipfs/" + m.group(1) + (m.group(2) or "")
+    m2 = re.search(r"/ipfs/([a-zA-Z0-9]+)(/.*)?$", url)
+    if m2:
+        return "https://ipfs.hotdao.ai/ipfs/" + m2.group(1) + (m2.group(2) or "")
+    if url.startswith("ipfs://"):
+        return "https://ipfs.hotdao.ai/ipfs/" + url[7:]
+    return url
 
 
 class MatchState:
@@ -172,6 +192,7 @@ class WSManager:
                or meta.get("media") or meta.get("image") or meta.get("originalMedia")
                or nftd.get("imageUrl") or nftd.get("image")
                or nftd_meta.get("media") or nftd_meta.get("image") or "")
+        img = _ipfs_to_hotdao(img)
 
         return {
             "id": card.get("id") or card.get("token_id") or f"card_{random.randint(1000, 9999)}",

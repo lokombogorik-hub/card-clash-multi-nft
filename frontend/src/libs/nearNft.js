@@ -2,15 +2,15 @@ var DIRECT_RPC_URL = (typeof import.meta !== "undefined" && import.meta.env && i
 var API_BASE = (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_BASE_URL) || "";
 var PROXY_RPC_URL = API_BASE ? API_BASE + "/api/near/rpc" : "";
 
+// Шлюзы IPFS в порядке надёжности. w3s.link (web3.storage) и cloudflare-ipfs
+// фактически мертвы — убраны. Первый — родной шлюз коллекции HOT (ipfs.hotdao.ai),
+// он точнее всего отдаёт эти NFT; дальше — публичные резервы.
 var IPFS_GATEWAYS = [
-    function (cid, path) { return "https://" + cid + ".ipfs.w3s.link" + path; },
-    function (cid, path) { return "https://cloudflare-ipfs.com/ipfs/" + cid + path; },
-    function (cid, path) { return "https://nftstorage.link/ipfs/" + cid + path; },
-    function (cid, path) { return "https://ipfs.near.social/ipfs/" + cid + path; },
-    function (cid, path) { return "https://w3s.link/ipfs/" + cid + path; },
-    function (cid, path) { return "https://gateway.pinata.cloud/ipfs/" + cid + path; },
-    function (cid, path) { return "https://" + cid + ".ipfs.dweb.link" + path; },
+    function (cid, path) { return "https://ipfs.hotdao.ai/ipfs/" + cid + path; },
     function (cid, path) { return "https://ipfs.io/ipfs/" + cid + path; },
+    function (cid, path) { return "https://" + cid + ".ipfs.dweb.link" + path; },
+    function (cid, path) { return "https://gateway.pinata.cloud/ipfs/" + cid + path; },
+    function (cid, path) { return "https://ipfs.near.social/ipfs/" + cid + path; },
 ];
 
 export var GATEWAY_COUNT = IPFS_GATEWAYS.length;
@@ -23,7 +23,7 @@ function toB64(str) {
 function fixProto(url) {
     if (!url) return "";
     var s = String(url).trim();
-    if (s.startsWith("ipfs://")) return "https://ipfs.near.social/ipfs/" + s.slice(7);
+    if (s.startsWith("ipfs://")) return "https://ipfs.hotdao.ai/ipfs/" + s.slice(7);
     if (s.startsWith("ar://")) return "https://arweave.net/" + s.slice(5);
     return s;
 }
