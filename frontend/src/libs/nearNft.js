@@ -167,14 +167,12 @@ export function ipfsGatewayUrl(url, idx) {
 
 export function proxyImageUrl(url) {
     if (!url) return "";
-    var s = String(url);
-    if (s.indexOf("wsrv.nl") >= 0) return s; // уже через CDN
-    if (!/^https?:\/\//.test(s) && s.indexOf("ipfs://") !== 0) return s;
-    // Как HotCraft: IPFS -> стабильный шлюз ipfs.io -> бесплатный CDN wsrv.nl
-    // (кэш + ресайз + webp, без нагрузки на наш бэкенд).
-    var p = parseIpfs(s);
-    var gateway = p ? ("https://ipfs.io/ipfs/" + p.cid + p.path) : s;
-    return "https://wsrv.nl/?url=" + encodeURIComponent(gateway) + "&w=512&h=512&fit=inside&output=webp";
+    if (!API_BASE) return url;
+    if (url.indexOf("/api/proxy/image") >= 0) return url; // уже проксировано
+    if (!/^https?:\/\//.test(url) && url.indexOf("ipfs://") !== 0) return url;
+    // Через наш бэкенд-прокси: он бьёт прямо в w3s.link (единственный живой
+    // источник этой коллекции), даёт большой таймаут и кэширует байты.
+    return API_BASE + "/api/proxy/image?url=" + encodeURIComponent(url);
 }
 
 var _imageCache = new Map();

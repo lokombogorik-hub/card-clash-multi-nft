@@ -11,6 +11,7 @@ router = APIRouter(prefix="/api/proxy", tags=["proxy"])
 IPFS_GATEWAYS = [
     "https://{cid}.ipfs.w3s.link{path}",
     "https://w3s.link/ipfs/{cid}{path}",
+    "https://ipfs.hotdao.ai/ipfs/{cid}{path}",
     "https://ipfs.io/ipfs/{cid}{path}",
     "https://{cid}.ipfs.dweb.link{path}",
     "https://dweb.link/ipfs/{cid}{path}",
