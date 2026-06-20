@@ -788,6 +788,59 @@ async def refund_remaining_nfts(match_id: str):
     await _save_match(match_data)
 
 
+async def auto_settle_forfeit(match_id: str, winner_id: str):
+    """Автоматический расчёт эскроу при форфейте (никто не жмёт claim):
+    победитель получает 1 NFT проигравшего, остальное возвращается владельцам.
+    Если кошелёк победителя/эскроу недоступен — просто возвращаем всё (без потерь)."""
+    match_data = await _get_match(match_id)
+    if not match_data or match_data.get("claimed") or match_data.get("refunded"):
+        return
+    p1 = match_data.get("player1_id")
+    p2 = match_data.get("player2_id")
+    winner_id = str(winner_id)
+    loser_id = p2 if winner_id == str(p1) else p1
+    winner_wallet = match_data.get(
+        "player1_near_wallet" if winner_id == str(p1) else "player2_near_wallet"
+    )
+
+    transferred = None
+    try:
+        async for session in get_session():
+            res = await session.execute(
+                select(MatchDeposit).where(
+                    MatchDeposit.match_id == match_id,
+                    MatchDeposit.player_id == loser_id,
+                    MatchDeposit.refunded == False,
+                )
+            )
+            loser_deps = res.scalars().all()
+            if loser_deps and winner_wallet and is_escrow_configured():
+                dep = loser_deps[0]
+                r = await transfer_nft_from_escrow(
+                    to_wallet=winner_wallet,
+                    token_id=dep.token_id,
+                    nft_contract_id=dep.nft_contract_id or NFT_CONTRACT_ID,
+                )
+                if r.get("success"):
+                    dep.refunded = True
+                    transferred = dep.token_id
+                    await session.commit()
+            break
+    except Exception as e:
+        print(f"[MATCHES] auto_settle_forfeit error: {e}")
+        traceback.print_exc()
+
+    if transferred:
+        match_data["claimed"] = True
+        match_data["claimed_token_id"] = transferred
+        match_data["claimed_at"] = datetime.utcnow().isoformat()
+        await _save_match(match_data)
+        print(f"[MATCHES] forfeit auto-claim: {transferred} -> {winner_wallet}")
+
+    # Возвращаем всё остальное (свои NFT победителя + остаток проигравшего).
+    await refund_remaining_nfts(match_id)
+
+
 @router.get("/{match_id}/deposits")
 async def get_all_deposits(match_id: str):
     match_data = await _get_match(match_id)

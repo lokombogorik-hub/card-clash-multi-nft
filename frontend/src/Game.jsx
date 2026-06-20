@@ -265,6 +265,13 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const [opponentConnected, setOpponentConnected] = useState(false);
     const [waitingForOpponent, setWaitingForOpponent] = useState(false);
     const [reconnectDeadline, setReconnectDeadline] = useState(null);
+    // Тик раз в секунду, чтобы таймер реконнекта реально отсчитывал, а не висел.
+    const [nowTick, setNowTick] = useState(Date.now());
+    useEffect(() => {
+        if (!reconnectDeadline) return;
+        const id = setInterval(() => setNowTick(Date.now()), 1000);
+        return () => clearInterval(id);
+    }, [reconnectDeadline]);
 
     const isPvP = mode === "pvp" && Boolean(matchId);
     const isStage2 = isPvP;
@@ -357,7 +364,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             if (!state) return;
 
             setWaitingForOpponent(false);
-            setOpponentConnected(true);
+            setOpponentConnected(data.opponent_connected !== false);
             setPvpState(state);
             pvpStateRef.current = state;
 
@@ -594,7 +601,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
                         case "game_state":
                             setWaitingForOpponent(false);
-                            setOpponentConnected(true);
+                            setOpponentConnected(data.opponent_connected !== false);
                             handleGameState(data);
                             break;
 
@@ -1111,7 +1118,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     }
 
     if (isPvP && reconnectDeadline && !opponentConnected) {
-        const sec = Math.max(0, Math.ceil((reconnectDeadline.getTime() - Date.now()) / 1000));
+        const sec = Math.max(0, Math.ceil((reconnectDeadline.getTime() - nowTick) / 1000));
         return (
             <div className="game-root">
                 <div className="game-ui tt-layout">

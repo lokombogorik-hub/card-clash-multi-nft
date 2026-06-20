@@ -164,6 +164,15 @@ class WSManager:
             h = sum(ord(c) for c in card_id)
             elem = self.ELEMENTS[h % len(self.ELEMENTS)]
 
+        # Картинку ищем во ВСЕХ возможных местах NFT, иначе карта пустая.
+        meta = card.get("metadata") if isinstance(card.get("metadata"), dict) else {}
+        nftd = card.get("nftData") if isinstance(card.get("nftData"), dict) else {}
+        nftd_meta = nftd.get("metadata") if isinstance(nftd.get("metadata"), dict) else {}
+        img = (card.get("imageUrl") or card.get("image")
+               or meta.get("media") or meta.get("image") or meta.get("originalMedia")
+               or nftd.get("imageUrl") or nftd.get("image")
+               or nftd_meta.get("media") or nftd_meta.get("image") or "")
+
         return {
             "id": card.get("id") or card.get("token_id") or f"card_{random.randint(1000, 9999)}",
             "token_id": card.get("token_id") or card.get("id") or "",
@@ -172,8 +181,8 @@ class WSManager:
             "element": elem,
             "rank": str(card.get("rank") or card.get("rarity") or "common"),
             "rankLabel": card.get("rankLabel") or (str(card.get("rank") or card.get("rarity") or "c")[:1].upper()),
-            "imageUrl": card.get("imageUrl") or card.get("image") or "",
-            "image": card.get("imageUrl") or card.get("image") or "",
+            "imageUrl": img,
+            "image": img,
         }
 
     def _resolve_placement(
@@ -309,6 +318,11 @@ class WSManager:
                 "type": "turn_change",
                 "current_turn": next_turn,
             })
+            # Авторитетная синхронизация рук/поля после хода: иначе у игрока
+            # рука не убавляется и индексы карт рассинхронизируются с сервером
+            # (отсюда «не ставится на клетку» и «зависшая карта»).
+            await self.send_full_state(match_id, state.player1_id)
+            await self.send_full_state(match_id, state.player2_id)
 
         if state.status == "finished":
             p1_score = sum(1 for c in state.board if c and c.get("owner") == state.player1_id)
@@ -335,12 +349,16 @@ class WSManager:
             return
         pid = str(player_id)
         role = "player1" if pid == state.player1_id else "player2"
+        opp_id = state.player2_id if pid == state.player1_id else state.player1_id
+        conns = self.connections.get(match_id, {})
+        opp_connected = str(opp_id) in conns
         hand = state.get_hand(pid)
         normalized = [self._normalize_card(c, pid) for c in hand]
         await self.send(match_id, pid, {
             "type": "game_state",
             "you_are": role,
             "your_hand": normalized,
+            "opponent_connected": opp_connected,
             "state": state.to_state_dict(),
         })
 
@@ -456,12 +474,15 @@ class WSManager:
 
         try:
             from routers.matchmaking import get_match
-            from routers.matches import _finalize_match_result
+            from routers.matches import _finalize_match_result, auto_settle_forfeit
             match_data = await get_match(match_id)
             if match_data:
                 await _finalize_match_result(match_data, winner, reason="forfeit_disconnect")
+            # Авто-расчёт эскроу: победитель забирает 1 NFT проигравшего,
+            # остальное возвращается — иначе NFT застрянут в эскроу.
+            await auto_settle_forfeit(match_id, winner)
         except Exception as e:
-            logger.warning("[WS] forfeit finalize error: %s", e)
+            logger.warning("[WS] forfeit finalize/settle error: %s", e)
 
         await self.broadcast_all(match_id, {
             "type": "game_over",
