@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import { apiFetch } from "../../api.js";
 import { useWalletConnect } from "../../context/WalletConnectContext";
-import { nearNftTokensForOwner } from "../../libs/nearNft.js";
+import { nearNftTokensForOwner, invalidateOwnerCache } from "../../libs/nearNft.js";
 
 function getStoredToken() {
     try {
@@ -117,11 +117,20 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
         setError("");
 
         try {
+            // Всегда берём СВЕЖИЙ список владения. Иначе после первого лока
+            // 30-сек кэш показывает уже отправленные в эскроу NFT как «свои»,
+            // и мы шлём заведомо провальную транзакцию -> HOT отдаёт RequestFailed.
+            try { invalidateOwnerCache(nftContractId, walletAddress); } catch (e) { }
+
             var owned = await nearNftTokensForOwner(nftContractId, walletAddress);
             var ownedIds = new Set(owned.map(function (t) { return t.token_id; }));
             var missing = deckTokenIds.filter(function (id) { return !ownedIds.has(id); });
             if (missing.length > 0) {
-                throw new Error("You don't own these NFTs: " + missing.join(", "));
+                throw new Error(
+                    "Эти NFT сейчас не на твоём кошельке — возможно, уже залочены в другом матче " +
+                    "или ещё не вернулись из эскроу. Дождись возврата/завершения матча и попробуй снова. " +
+                    "Token IDs: " + missing.join(", ")
+                );
             }
 
             setStatusText("Opening wallet...");
@@ -248,6 +257,10 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                     near_wallet: walletAddress,
                 }),
             });
+
+            // NFT ушли в эскроу — сбрасываем кэш владения, чтобы повторная
+            // попытка лока сразу видела актуальное состояние.
+            try { invalidateOwnerCache(nftContractId, walletAddress); } catch (e) { }
 
             setStatus("success");
             setStatusText("NFTs locked!");
