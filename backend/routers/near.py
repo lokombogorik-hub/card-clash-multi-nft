@@ -14,7 +14,7 @@ from database.models.user import User
 
 router = APIRouter(prefix="/api/near", tags=["near"])
 
-NEAR_RPC_URL = os.getenv("NEAR_RPC_URL", "https://rpc.mainnet.near.org")
+NEAR_RPC_URL = os.getenv("NEAR_RPC_URL", "https://free.rpc.fastnear.com")
 
 
 def _is_valid_account_id(account_id: str) -> bool:

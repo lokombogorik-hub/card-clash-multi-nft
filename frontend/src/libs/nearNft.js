@@ -1,4 +1,4 @@
-var DIRECT_RPC_URL = "https://rpc.mainnet.near.org";
+var DIRECT_RPC_URL = (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_NEAR_RPC_URL) || "https://free.rpc.fastnear.com";
 var API_BASE = (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_BASE_URL) || "";
 var PROXY_RPC_URL = API_BASE ? API_BASE + "/api/near/rpc" : "";
 

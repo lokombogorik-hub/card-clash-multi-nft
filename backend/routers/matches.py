@@ -22,6 +22,8 @@ router = APIRouter(prefix="/api/matches", tags=["matches"])
 ESCROW_WALLET = os.getenv("ESCROW_WALLET", "escrow.near")
 ESCROW_PRIVATE_KEY = os.getenv("ESCROW_PRIVATE_KEY", "")
 NFT_CONTRACT_ID = os.getenv("NFT_CONTRACT_ID", "")
+# Устойчивый NEAR RPC (публичный rpc.mainnet.near.org ложится при большом онлайне).
+NEAR_RPC_URL = os.getenv("NEAR_RPC_URL", "https://free.rpc.fastnear.com")
 
 # Сколько NFT каждый игрок лочит в эскроу для старта матча
 ESCROW_CARDS_REQUIRED = 5
@@ -140,7 +142,7 @@ async def fetch_nft_image(token_id: str, nft_contract: str) -> str:
         args_b64 = base64.b64encode(args.encode()).decode()
         async with httpx.AsyncClient(timeout=8) as client:
             resp = await client.post(
-                "https://rpc.mainnet.near.org",
+                NEAR_RPC_URL,
                 json={
                     "jsonrpc": "2.0", "id": "1", "method": "query",
                     "params": {
@@ -175,7 +177,13 @@ async def transfer_nft_from_escrow(to_wallet: str, token_id: str, nft_contract_i
         private_key = ESCROW_PRIVATE_KEY
         if not private_key.startswith("ed25519:"):
             private_key = "ed25519:" + private_key
-        account = Account(ESCROW_WALLET, private_key)
+        # RPC для отправки tx: если NEAR_RPC_URL задан явно — используем его
+        # (важно при большом онлайне), иначе оставляем дефолт py_near (рабочий).
+        _tx_rpc = os.getenv("NEAR_RPC_URL", "").strip()
+        if _tx_rpc:
+            account = Account(ESCROW_WALLET, private_key, _tx_rpc)
+        else:
+            account = Account(ESCROW_WALLET, private_key)
         await account.startup()
         result = await account.function_call(
             nft_contract_id or NFT_CONTRACT_ID,

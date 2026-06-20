@@ -1,6 +1,10 @@
 import { setupWalletSelector } from "@near-wallet-selector/core";
 import { setupHotWallet } from "@near-wallet-selector/hot-wallet";
 
+// Устойчивый NEAR RPC из env (публичный rpc.mainnet.near.org перегружается при
+// большом онлайне). Задаётся через VITE_NEAR_RPC_URL.
+var NEAR_RPC_URL = (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_NEAR_RPC_URL) || "https://free.rpc.fastnear.com";
+
 export async function initSelector({ miniApp = false, telegramInitData = "" }) {
     await new Promise(function (resolve) { setTimeout(resolve, 300); });
 
@@ -29,7 +33,7 @@ export async function initSelector({ miniApp = false, telegramInitData = "" }) {
 
 export async function fetchBalance(accountId) {
     try {
-        var res = await fetch("https://rpc.mainnet.near.org", {
+        var res = await fetch(NEAR_RPC_URL, {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
