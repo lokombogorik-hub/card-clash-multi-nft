@@ -216,20 +216,71 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                 };
             });
 
-            var txResult;
-            try {
-                txResult = await withMobileTxTimeout(
-                    wallet.signAndSendTransaction({
-                        receiverId: nftContractId,
-                        actions: actions,
-                    }),
-                    120000
-                );
-                console.warn("[LockEscrow] TX result:", txResult);
-            } catch (txErr) {
-                console.error("[LockEscrow] TX error:", txErr?.message, txErr);
-                // При любой ошибке TX
-                throw txErr;
+            // HOT-кошелёк периодически отвечает "All RPCs are unavailable":
+            // публичный NEAR RPC перегружен, транзакция НЕ отправлена. На повторе
+            // обычно проходит. Поэтому ретраим, а перед повтором проверяем — вдруг
+            // NFT всё же ушли в эскроу (тогда не дублируем перевод).
+            var isTransientTxError = function (e) {
+                if (e && e.name === "RequestFailed") return true;
+                var msg = String((e && (e.payload || e.message)) || e || "").toLowerCase();
+                return msg.indexOf("rpc") >= 0 || msg.indexOf("unavailable") >= 0 ||
+                    msg.indexOf("timeout") >= 0 || msg.indexOf("network") >= 0 ||
+                    msg.indexOf("failed to fetch") >= 0;
+            };
+            var nftsGone = async function () {
+                try {
+                    invalidateOwnerCache(nftContractId, walletAddress);
+                    var ow = await nearNftTokensForOwner(nftContractId, walletAddress);
+                    var ids = new Set(ow.map(function (t) { return t.token_id; }));
+                    return deckTokenIds.filter(function (id) { return ids.has(id); }).length === 0;
+                } catch (e) { return false; }
+            };
+
+            var txResult = null;
+            var MAX_TX_ATTEMPTS = 3;
+            var lastTxErr = null;
+            for (var attempt = 1; attempt <= MAX_TX_ATTEMPTS; attempt++) {
+                try {
+                    setStatusText(attempt === 1
+                        ? "Отправляю " + deckTokenIds.length + " NFT в эскроу — подтверди в кошельке..."
+                        : "Сеть NEAR занята. Повтор " + attempt + "/" + MAX_TX_ATTEMPTS + " — подтверди в кошельке ещё раз...");
+                    txResult = await withMobileTxTimeout(
+                        wallet.signAndSendTransaction({
+                            receiverId: nftContractId,
+                            actions: actions,
+                        }),
+                        120000
+                    );
+                    console.warn("[LockEscrow] TX result (attempt " + attempt + "):", txResult);
+                    lastTxErr = null;
+                    break;
+                } catch (txErr) {
+                    lastTxErr = txErr;
+                    console.warn("[LockEscrow] TX attempt " + attempt + " failed:",
+                        (txErr && (txErr.payload || txErr.message)) || txErr);
+                    // Вдруг перевод всё же прошёл — тогда не повторяем
+                    if (await nftsGone()) {
+                        console.warn("[LockEscrow] NFTs already in escrow — treating as success");
+                        txResult = { recovered: true };
+                        lastTxErr = null;
+                        break;
+                    }
+                    if (attempt < MAX_TX_ATTEMPTS && isTransientTxError(txErr)) {
+                        await new Promise(function (r) { setTimeout(r, 2500); });
+                        continue;
+                    }
+                    break;
+                }
+            }
+            if (lastTxErr) {
+                var pl = String((lastTxErr.payload || lastTxErr.message) || lastTxErr);
+                if (isTransientTxError(lastTxErr)) {
+                    throw new Error(
+                        "Сеть NEAR временно перегружена (RPC недоступен). " +
+                        "Это временно — подожди 10-20 секунд и нажми «Try Again». (" + pl + ")"
+                    );
+                }
+                throw lastTxErr;
             }
 
             setStatusText("Registering deposits...");
