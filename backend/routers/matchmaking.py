@@ -21,6 +21,9 @@ active_matches: Dict[str, Dict[str, Any]] = {}
 
 ESCROW_LOCK_TIMEOUT_SECONDS = 150
 GAME_RECONNECT_TIMEOUT_SECONDS = 180
+# Матч залочен (status=active), но игра так и не пошла (никто не сделал ход).
+# Через столько секунд отменяем матч и возвращаем NFT обоим игрокам.
+STUCK_ACTIVE_TIMEOUT_SECONDS = 180
 
 
 class JoinQueueRequest(BaseModel):
@@ -319,6 +322,104 @@ async def check_and_refund_stale_match(match_id: str) -> bool:
     return True
 
 
+def _parse_dt(value) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        if isinstance(value, str):
+            return datetime.fromisoformat(value.replace("Z", ""))
+        return value
+    except Exception:
+        return None
+
+
+async def _refund_match_deposits(match_id: str, match_data: Dict) -> int:
+    """Возвращает все незачищенные депозиты матча владельцам. Возвращает кол-во."""
+    from routers.matches import transfer_nft_from_escrow, is_escrow_configured
+    if not is_escrow_configured():
+        return 0
+    refunded = 0
+    try:
+        async for session in get_session():
+            result = await session.execute(
+                select(MatchDeposit).where(
+                    MatchDeposit.match_id == match_id,
+                    MatchDeposit.refunded == False,
+                )
+            )
+            deposits = result.scalars().all()
+            for dep in deposits:
+                near_wallet = dep.near_wallet
+                if not near_wallet:
+                    if dep.player_id == match_data.get("player1_id"):
+                        near_wallet = match_data.get("player1_near_wallet")
+                    else:
+                        near_wallet = match_data.get("player2_near_wallet")
+                if near_wallet:
+                    r = await transfer_nft_from_escrow(
+                        to_wallet=near_wallet,
+                        token_id=dep.token_id,
+                        nft_contract_id=dep.nft_contract_id or "",
+                    )
+                    if r.get("success"):
+                        dep.refunded = True
+                        refunded += 1
+            await session.commit()
+            break
+    except Exception as e:
+        print(f"[Matchmaking] _refund_match_deposits error: {e}")
+    return refunded
+
+
+async def resolve_stuck_active_match(match_id: str) -> bool:
+    """Матч залочился, но игра так и не началась/не сделано ни одного хода.
+    По таймауту отменяем матч и возвращаем NFT обоим. Настоящую идущую
+    партию (есть ходы) НЕ трогаем."""
+    match_data = await get_match(match_id)
+    if not match_data:
+        return False
+    if match_data.get("status") != "active":
+        return False
+    if match_data.get("winner") or match_data.get("refunded"):
+        return False
+
+    # Если в WS реально идёт партия (хотя бы один ход) — это не «зависание»
+    try:
+        from routers.ws_match import ws_manager
+        st = ws_manager.match_states.get(match_id)
+        if st is not None and st.status == "active" and st.moves_count > 0:
+            return False
+    except Exception:
+        pass
+
+    started = _parse_dt(match_data.get("game_started_at")) or _parse_dt(match_data.get("created_at"))
+    if started is None:
+        return False
+    if (datetime.utcnow() - started).total_seconds() < STUCK_ACTIVE_TIMEOUT_SECONDS:
+        return False
+
+    print(f"[Matchmaking] Stuck active match {match_id}: game never started, refunding both")
+    refunded = await _refund_match_deposits(match_id, match_data)
+
+    match_data["status"] = "cancelled"
+    match_data["cancelled_reason"] = "stuck_active_no_start"
+    match_data["cancelled_at"] = datetime.utcnow().isoformat()
+    match_data["refunded"] = True
+    match_data["refund_count"] = refunded
+    await save_match(match_data)
+
+    # Сообщаем подключённым игрокам, чтобы вышли в меню
+    try:
+        from routers.ws_match import ws_manager
+        await ws_manager.broadcast_all(match_id, {
+            "type": "match_cancelled",
+            "message": "Match cancelled — NFTs refunded.",
+        })
+    except Exception as e:
+        print(f"[Matchmaking] stuck-active broadcast error: {e}")
+    return True
+
+
 async def cleanup_stale_matches():
     """Background task: cleanup stale matches"""
     while True:
@@ -346,6 +447,15 @@ async def cleanup_stale_matches():
                     await check_and_refund_stale_match(match_id)
                 except Exception as e:
                     print(f"[Matchmaking] Error refunding stale match {match_id}: {e}")
+
+            # Зависшие залоченные матчи (status=active, но игра не пошла) —
+            # отменяем и возвращаем NFT обоим.
+            for match_id, match_data in list(active_matches.items()):
+                if match_data.get("status") == "active" and not match_data.get("winner"):
+                    try:
+                        await resolve_stuck_active_match(match_id)
+                    except Exception as e:
+                        print(f"[Matchmaking] Error resolving stuck match {match_id}: {e}")
 
             # Чистим очередь
             stale_queue = []

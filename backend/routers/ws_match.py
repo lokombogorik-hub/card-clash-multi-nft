@@ -170,8 +170,8 @@ class WSManager:
             "owner": str(owner),
             "values": values,
             "element": elem,
-            "rank": card.get("rank") or card.get("rarity") or "common",
-            "rankLabel": card.get("rankLabel") or (card.get("rank") or "c")[0].upper(),
+            "rank": str(card.get("rank") or card.get("rarity") or "common"),
+            "rankLabel": card.get("rankLabel") or (str(card.get("rank") or card.get("rarity") or "c")[:1].upper()),
             "imageUrl": card.get("imageUrl") or card.get("image") or "",
             "image": card.get("imageUrl") or card.get("image") or "",
         }
