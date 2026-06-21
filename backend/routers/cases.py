@@ -25,6 +25,10 @@ class ClaimNFTRequest(BaseModel):
 
 NFT_CONTRACT_ID = os.getenv("NFT_CONTRACT_ID", "")
 TREASURY_WALLET = os.getenv("TREASURY_WALLET", "retardo-s.near")
+# Устойчивый RPC: чтения через env (по умолч. fastnear-free), отправка tx — через
+# env если задан, иначе публичный (чтобы не сломать рабочие переводы).
+NEAR_RPC_URL = os.getenv("NEAR_RPC_URL", "https://free.rpc.fastnear.com")
+_POOL_TX_RPC = os.getenv("NEAR_RPC_URL", "").strip() or "https://rpc.mainnet.near.org"
 
 # IPFS gateway для картинок коллекции
 IPFS_BASE = "https://bafybeibqzbodfn3xczppxh2k2ek3bgvojhivqy4ntbkprcxesulth3yy5e.ipfs.w3s.link"
@@ -73,7 +77,7 @@ async def get_pool_account(wallet: str, private_key: str):
     account = Account(
         account_id=wallet,
         private_key=private_key,
-        rpc_addr="https://rpc.mainnet.near.org"
+        rpc_addr=_POOL_TX_RPC
     )
     await account.startup()
     _account_cache[wallet] = account
@@ -105,7 +109,7 @@ async def fetch_pool_tokens(wallet: str) -> List[str]:
         args_base64 = base64.b64encode(args.encode()).decode()
         async with httpx.AsyncClient(timeout=15) as client:
             resp = await client.post(
-                "https://rpc.mainnet.near.org",
+                NEAR_RPC_URL,
                 json={
                     "jsonrpc": "2.0", "id": "1", "method": "query",
                     "params": {
@@ -299,7 +303,7 @@ async def check_balances():
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.post(
-                    "https://rpc.mainnet.near.org",
+                    NEAR_RPC_URL,
                     json={
                         "jsonrpc": "2.0", "id": "1",
                         "method": "query",
