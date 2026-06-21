@@ -20,3 +20,4 @@ frontend/public/ui/photo_*.jpg
 frontend/dist/
 contracts/near/escrow/target/
 contracts/near/escrow/Cargo.lock
+out.car

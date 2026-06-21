@@ -8,6 +8,7 @@ import Market from "./pages/Market";
 import WalletConnector from "./components/MultiChainWallet/WalletConnector";
 import Matchmaking from "./components/Stage2/Matchmaking";
 import WalletConnectProvider from "./context/WalletConnectContext";
+import Tournaments from "./pages/Tournaments";
 
 function useIsMobile() {
     var check = function () {
@@ -441,6 +442,25 @@ function AppContent() {
 
     var onPlay = function () { requestFullscreen(); setScreen("inventory"); };
 
+    var onEnterTournamentMatch = async function (matchId) {
+        if (!matchId) return;
+        try {
+            var t = token || getStoredToken();
+            var deckRes = await apiFetch("/api/decks/active/full", { token: t });
+            var deck = (deckRes && deckRes.cards) || [];
+            if (!Array.isArray(deck) || deck.length !== 5) {
+                alert("Сначала собери колоду из 5 карт в разделе «Колода».");
+                return;
+            }
+            setPlayerDeck(deck);
+            setGameMode("pvp");
+            setStage2MatchId(matchId);
+            setScreen("game");
+        } catch (e) {
+            alert("Не удалось войти в матч: " + (e && e.message || e));
+        }
+    };
+
     var onDeckReady = function (selectedNfts) {
         if (Array.isArray(selectedNfts) && selectedNfts.length === 5) setPlayerDeck(selectedNfts);
         setScreen("matchmaking");
@@ -690,7 +710,13 @@ function AppContent() {
                 {screen === "market" && <Market />}
                 {screen === "inventory" && <Inventory token={token || getStoredToken()} onDeckReady={onDeckReady} />}
                 {screen === "profile" && <Profile token={token || getStoredToken()} me={me} />}
-                {screen === "tournament" && <TournamentPage />}
+                {screen === "tournament" && (
+                    <Tournaments
+                        token={token || getStoredToken()}
+                        me={me && me.id}
+                        onEnterMatch={onEnterTournamentMatch}
+                    />
+                )}
             </div>
 
             <div className="bottom-stack" ref={bottomStackRef}>

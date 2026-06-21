@@ -19,6 +19,7 @@ from routers.proxy import router as proxy_router
 from routers.decks import router as decks_router
 from routers.ws_match import router as ws_game_router
 from routers.user import router as user_router
+from routers.tournaments import router as tournaments_router
 
 logger = logging.getLogger(__name__)
 
@@ -90,12 +91,17 @@ def read_root():
 
 app.include_router(auth_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
+# ВАЖНО: decks_router (реальная БД-колода) регистрируем ДО mock_nfts_router,
+# иначе mock перехватывает /api/decks/active/full и /api/decks/ai_opponent и
+# отдаёт случайные карты в неверном формате (фронт ждёт {cards:[...]}).
+# Уникальные mock-роуты (/api/nfts/my, /api/decks/active GET/PUT) остаются за mock.
+app.include_router(decks_router)
 app.include_router(mock_nfts_router)
 app.include_router(near_router)
 app.include_router(matches_router)
 app.include_router(matchmaking_router)
 app.include_router(cases_router)
 app.include_router(proxy_router)
-app.include_router(decks_router)
 app.include_router(ws_game_router)
 app.include_router(user_router)
+app.include_router(tournaments_router)

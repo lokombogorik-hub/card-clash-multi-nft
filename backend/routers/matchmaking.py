@@ -382,6 +382,10 @@ async def resolve_stuck_active_match(match_id: str) -> bool:
         return False
     if match_data.get("winner") or match_data.get("refunded"):
         return False
+    # Турнирные матчи без NFT-депозитов фоновая чистка НЕ трогает: игроки могут
+    # подключаться не сразу (ждут предыдущий раунд), а возвращать нечего.
+    if match_data.get("mode") == "tournament":
+        return False
 
     # Если в WS реально идёт партия (хотя бы один ход) — это не «зависание»
     try:
