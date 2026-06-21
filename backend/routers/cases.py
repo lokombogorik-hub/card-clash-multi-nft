@@ -6,6 +6,7 @@ from database.models.user import User
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 import random
+import asyncio
 import httpx
 import os
 import json
@@ -209,6 +210,50 @@ async def transfer_nft(from_wallet: str, to_wallet: str, token_id: str, private_
         return {"success": False, "error": str(e)}
 
 
+async def verify_case_payment(tx_hash: str, sender: str, treasury: str, min_yocto: int):
+    """On-chain проверка оплаты кейса: транзакция успешна, отправитель = игрок,
+    получатель = казна, суммарный Transfer >= цены. С небольшим ретраем на
+    случай, если tx ещё не проиндексирована."""
+    if not sender:
+        return False, "no sender wallet"
+    last = "unknown"
+    for _ in range(3):
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.post(NEAR_RPC_URL, json={
+                    "jsonrpc": "2.0", "id": "1", "method": "tx",
+                    "params": [tx_hash, sender],
+                })
+                data = resp.json()
+                if "error" in data:
+                    last = str(data["error"])
+                    await asyncio.sleep(1.5)
+                    continue
+                res = data.get("result", {}) or {}
+                status = res.get("status", {})
+                if isinstance(status, dict) and "Failure" in status:
+                    return False, "transaction failed on-chain"
+                tx = res.get("transaction", {}) or {}
+                if tx.get("receiver_id") != treasury:
+                    return False, f"wrong receiver: {tx.get('receiver_id')}"
+                if tx.get("signer_id") and tx.get("signer_id") != sender:
+                    return False, "signer mismatch"
+                total = 0
+                for a in tx.get("actions", []) or []:
+                    if isinstance(a, dict) and "Transfer" in a:
+                        try:
+                            total += int(a["Transfer"].get("deposit", "0"))
+                        except Exception:
+                            pass
+                if total < min_yocto:
+                    return False, f"insufficient payment ({total} < {min_yocto})"
+                return True, "ok"
+        except Exception as e:
+            last = str(e)
+            await asyncio.sleep(1.5)
+    return False, f"tx not verifiable: {last}"
+
+
 def pick_rarity(mode: str) -> str:
     if mode in RARITY_WEIGHTS:
         return mode
@@ -365,6 +410,20 @@ async def open_case(
 
     if data.tx_hash in used_tx_hashes:
         raise HTTPException(400, "Transaction already used")
+
+    # Проверка оплаты в блокчейне (отключается env CASE_PAYMENT_VERIFY=0,
+    # если механика оплаты иная — мгновенный откат без редеплоя).
+    if os.getenv("CASE_PAYMENT_VERIFY", "1") == "1":
+        payer = getattr(user, "near_account_id", None)
+        if not payer:
+            raise HTTPException(400, "Подключи NEAR-кошелёк, которым оплачивал кейс")
+        price_near = float(case.get("price", 0.1) or 0.1)
+        min_yocto = int(price_near * (10 ** 24) * 0.99)  # 1% допуск на округление
+        ok, reason = await verify_case_payment(data.tx_hash, payer, TREASURY_WALLET, min_yocto)
+        if not ok:
+            print(f"[CASES] payment verify FAILED tx={data.tx_hash} payer={payer}: {reason}")
+            raise HTTPException(400, f"Оплата не подтверждена: {reason}")
+        print(f"[CASES] payment verified tx={data.tx_hash} payer={payer}")
 
     # Проверяем доступность NFT перед открытием
     inventory = await get_pool_inventory_cached()
