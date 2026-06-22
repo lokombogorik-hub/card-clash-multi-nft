@@ -113,6 +113,18 @@ async def _require_admin(authorization: Optional[str]) -> str:
     )
 
 
+async def _check_is_admin(authorization: Optional[str]) -> bool:
+    """Не бросает исключение — просто True/False, для фронта (показывать ли
+    кнопку «Создать турнир»)."""
+    try:
+        await _require_admin(authorization)
+        return True
+    except HTTPException:
+        return False
+    except Exception:
+        return False
+
+
 def _loser_of(m: TournamentMatch) -> Optional[str]:
     if not m.winner_id:
         return None
@@ -585,7 +597,7 @@ async def list_tournaments(authorization: str = Header(None)):
                 select(TournamentParticipant).where(TournamentParticipant.tournament_id == t.id)
             )).scalars().all())
             out.append(_tournament_view(t, cnt))
-        return {"tournaments": out}
+        return {"tournaments": out, "am_admin": await _check_is_admin(authorization)}
 
 
 @router.get("/{tid}")
@@ -603,6 +615,7 @@ async def get_tournament(tid: str, authorization: str = Header(None)):
         view["participants"] = parts
         view["bracket"] = bracket
         view["am_registered"] = bool(me and any(str(p["user_id"]) == str(me) for p in parts))
+        view["am_admin"] = await _check_is_admin(authorization)
         return view
 
 

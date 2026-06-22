@@ -3536,3 +3536,84 @@ img {
 }
 .t-winner-row.place-1 { background: rgba(255, 215, 0, 0.1); border-color: rgba(255, 215, 0, 0.2); }
 .t-winner-prize { color: #7CFC9A; font-weight: 600; }
+
+/* ===== Tournaments v2 — premium game look ===== */
+.t-hero {
+    position: relative;
+    border-radius: 24px;
+    padding: 26px 18px 20px;
+    margin-bottom: 18px;
+    background: linear-gradient(135deg, #1b2240, #2a1a4a 55%, #3a1d52);
+    border: 1px solid rgba(150, 180, 255, 0.18);
+    overflow: hidden;
+    box-shadow: 0 12px 40px rgba(80, 60, 180, 0.28);
+}
+.t-hero::before {
+    content: "";
+    position: absolute;
+    inset: -40%;
+    background:
+        radial-gradient(circle at 28% 18%, rgba(120, 160, 255, 0.38), transparent 45%),
+        radial-gradient(circle at 82% 88%, rgba(190, 80, 220, 0.32), transparent 42%);
+    animation: tHeroGlow 8s ease-in-out infinite alternate;
+}
+@keyframes tHeroGlow { from { transform: translate(0, 0) scale(1); } to { transform: translate(4%, 3%) scale(1.12); } }
+.t-hero-shine {
+    position: absolute; top: 0; left: -60%; width: 45%; height: 100%;
+    background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+    animation: tShine 6s ease-in-out infinite; pointer-events: none;
+}
+@keyframes tShine { 0%, 55% { left: -60%; } 100% { left: 170%; } }
+.t-hero-content { position: relative; z-index: 1; text-align: center; }
+.t-hero-icon { font-size: 46px; filter: drop-shadow(0 6px 18px rgba(255, 215, 0, 0.5)); animation: tFloat 3.5s ease-in-out infinite; }
+@keyframes tFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+.t-hero-title { font-size: 26px; font-weight: 900; color: #fff; margin: 8px 0 4px; letter-spacing: 0.5px; }
+.t-hero-sub { font-size: 12.5px; color: rgba(255, 255, 255, 0.6); }
+.t-hero-stats { display: flex; justify-content: center; gap: 10px; margin-top: 16px; }
+.t-hero-stat { flex: 1; max-width: 130px; background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px; padding: 9px 8px; }
+.t-hero-stat b { display: block; font-size: 18px; color: #fff; font-weight: 800; }
+.t-hero-stat span { font-size: 10px; color: rgba(255, 255, 255, 0.55); text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* premium card */
+.t-card { position: relative; border-radius: 20px; overflow: hidden; cursor: pointer; margin-bottom: 14px;
+    background: linear-gradient(145deg, rgba(28, 34, 56, 0.92), rgba(16, 20, 36, 0.96));
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: transform 0.25s, border-color 0.25s, box-shadow 0.25s;
+    animation: cardSlideIn 0.45s ease backwards; }
+.t-card:hover, .t-card:active { transform: translateY(-3px); border-color: rgba(120, 180, 255, 0.35); box-shadow: 0 12px 30px rgba(60, 80, 200, 0.28); }
+.t-card-accent { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: linear-gradient(180deg, #667eea, #b450dc); }
+.t-card-body { display: flex; align-items: center; gap: 14px; padding: 15px 15px 15px 18px; }
+.t-card-badge { width: 56px; height: 56px; border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 27px; flex-shrink: 0;
+    background: linear-gradient(135deg, #667eea, #764ba2); box-shadow: 0 4px 16px rgba(102, 126, 234, 0.45); }
+.t-card-mid { flex: 1; min-width: 0; }
+.t-card-name { font-size: 16px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.t-card-meta { display: flex; gap: 12px; margin-top: 7px; font-size: 12px; color: rgba(255, 255, 255, 0.6); }
+.t-card-pool { display: inline-flex; align-items: center; gap: 5px; margin-top: 9px; padding: 4px 11px; border-radius: 11px; font-size: 12px; font-weight: 700;
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.18), rgba(255, 160, 0, 0.12)); color: #ffd76a; border: 1px solid rgba(255, 215, 0, 0.25); }
+
+/* status pill with pulsing dot */
+.t-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; padding: 5px 11px; border-radius: 999px; letter-spacing: 0.3px; white-space: nowrap; }
+.t-pill .dot { width: 7px; height: 7px; border-radius: 50%; }
+.t-pill.registration { background: rgba(80, 200, 120, 0.16); color: #7CFC9A; }
+.t-pill.registration .dot { background: #7CFC9A; box-shadow: 0 0 8px #7CFC9A; animation: tPulse 1.6s infinite; }
+.t-pill.running { background: rgba(255, 200, 80, 0.16); color: #ffd76a; }
+.t-pill.running .dot { background: #ffd76a; box-shadow: 0 0 8px #ffd76a; animation: tPulse 1.2s infinite; }
+.t-pill.finished { background: rgba(255, 255, 255, 0.1); color: #bbb; }
+.t-pill.finished .dot { background: #bbb; }
+.t-pill.cancelled { background: rgba(255, 120, 120, 0.14); color: #ff9a9a; }
+.t-pill.cancelled .dot { background: #ff9a9a; }
+@keyframes tPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* centered back button at top */
+.t-back-row { display: flex; justify-content: center; margin-bottom: 16px; }
+.t-back-row .t-back { margin-bottom: 0; }
+
+/* podium for finished tournaments */
+.t-podium { display: flex; align-items: flex-end; justify-content: center; gap: 10px; margin: 10px 0 16px; }
+.t-pod { flex: 1; max-width: 108px; border-radius: 14px 14px 0 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding: 10px 6px; }
+.t-pod .m { font-size: 26px; }
+.t-pod .n { font-size: 12px; font-weight: 700; color: #fff; margin: 5px 0 2px; }
+.t-pod .p { font-size: 11px; color: #ffd76a; font-weight: 700; }
+.t-pod.p1 { height: 122px; background: linear-gradient(180deg, rgba(255, 215, 0, 0.32), rgba(255, 215, 0, 0.05)); border: 1px solid rgba(255, 215, 0, 0.25); border-bottom: none; }
+.t-pod.p2 { height: 96px; background: linear-gradient(180deg, rgba(200, 200, 210, 0.26), rgba(200, 200, 210, 0.04)); border: 1px solid rgba(200, 200, 210, 0.2); border-bottom: none; }
+.t-pod.p3 { height: 80px; background: linear-gradient(180deg, rgba(205, 127, 50, 0.3), rgba(205, 127, 50, 0.04)); border: 1px solid rgba(205, 127, 50, 0.22); border-bottom: none; }

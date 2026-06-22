@@ -2,8 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
 
-// Страница турниров в стиле приложения (классы tournament-* + t-* из index.css).
-// Бэкенд: /api/tournaments(...)
+// Турниры — премиум «игровой» UI. Бэкенд: /api/tournaments(...)
 
 var GRAD = "linear-gradient(135deg, #667eea, #764ba2)";
 
@@ -13,7 +12,7 @@ function fmtNear(n) {
 }
 
 var STATUS_LABEL = {
-    registration: "Регистрация открыта",
+    registration: "Регистрация",
     running: "Идёт",
     finished: "Завершён",
     cancelled: "Отменён",
@@ -38,8 +37,12 @@ function useCountdown(iso) {
     return left;
 }
 
-function StatusBadge({ status }) {
-    return <span className={"t-status-badge t-status-" + status}>{STATUS_LABEL[status] || status}</span>;
+function Pill({ status }) {
+    return (
+        <span className={"t-pill " + status}>
+            <span className="dot" />{STATUS_LABEL[status] || status}
+        </span>
+    );
 }
 
 function Bracket({ bracket, me }) {
@@ -79,6 +82,33 @@ function Bracket({ bracket, me }) {
     );
 }
 
+function Podium({ winners, me }) {
+    var byPlace = {};
+    winners.forEach(function (w) { byPlace[w.place] = w; });
+    var order = [2, 1, 3];
+    var label = function (w) {
+        if (!w) return "—";
+        return me && String(w.user_id) === String(me) ? "Вы" : "#" + String(w.user_id).slice(-4);
+    };
+    var medal = { 1: "🥇", 2: "🥈", 3: "🥉" };
+    return (
+        <div className="t-podium">
+            {order.map(function (pl) {
+                var w = byPlace[pl];
+                if (!w) return null;
+                var prize = Number(w.prize_yocto || "0") / 1e24;
+                return (
+                    <div key={pl} className={"t-pod p" + pl}>
+                        <div className="m">{medal[pl]}</div>
+                        <div className="n">{label(w)}</div>
+                        <div className="p">{fmtNear(prize)} Ⓝ</div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
 function CreateForm({ token, onCreated }) {
     var [open, setOpen] = useState(false);
     var [name, setName] = useState("Card Clash Cup");
@@ -100,15 +130,14 @@ function CreateForm({ token, onCreated }) {
             });
             setOpen(false);
             onCreated && onCreated();
-        } catch (e) {
-            setErr((e && e.message || e) + "");
-        } finally { setBusy(false); }
+        } catch (e) { setErr((e && e.message || e) + ""); }
+        finally { setBusy(false); }
     };
 
     if (!open) {
         return (
             <button className="t-create-toggle" onClick={function () { setOpen(true); }}>
-                + Создать турнир (админ)
+                + Создать турнир
             </button>
         );
     }
@@ -183,21 +212,23 @@ function TournamentDetail({ tid, token, me, onEnterMatch, onBack }) {
 
     return (
         <div className="tournament-page-v2">
-            <button className="t-back" onClick={onBack}>← Назад</button>
+            <div className="t-back-row"><button className="t-back" onClick={onBack}>← Назад</button></div>
 
-            <div className="tournament-header" style={{ padding: "8px 0 12px" }}>
-                <h2 className="tournament-title"><span className="tournament-title-icon">🏆</span>{t.name}</h2>
-                <div className="tournament-subtitle">
-                    <StatusBadge status={t.status} />
-                    {t.status === "registration" && regLeft ? "  ·  до старта " + regLeft : ""}
+            <div className="t-hero">
+                <div className="t-hero-shine" />
+                <div className="t-hero-content">
+                    <div className="t-hero-icon">🏆</div>
+                    <div className="t-hero-title">{t.name}</div>
+                    <div className="t-hero-sub">
+                        <Pill status={t.status} />
+                        {t.status === "registration" && regLeft ? "  ·  до старта " + regLeft : ""}
+                    </div>
+                    <div className="t-hero-stats">
+                        <div className="t-hero-stat"><b>{t.participants_count}{t.max_participants ? "/" + t.max_participants : ""}</b><span>Игроков</span></div>
+                        <div className="t-hero-stat"><b>{fmtNear(t.prize_pool_near)}</b><span>Фонд Ⓝ</span></div>
+                        <div className="t-hero-stat"><b>{fmtNear(t.entry_fee_near)}</b><span>Взнос Ⓝ</span></div>
+                    </div>
                 </div>
-            </div>
-
-            <div className="tournament-stats-row" style={{ flexWrap: "wrap" }}>
-                <div className="tournament-stat-chip"><span className="stat-chip-icon">👥</span>{t.participants_count}{t.max_participants ? "/" + t.max_participants : ""}</div>
-                <div className="tournament-stat-chip"><span className="stat-chip-icon">🎟</span>{fmtNear(t.entry_fee_near)} Ⓝ</div>
-                <div className="tournament-stat-chip"><span className="stat-chip-icon">💰</span>{fmtNear(t.prize_pool_near)} Ⓝ</div>
-                <div className="tournament-stat-chip"><span className="stat-chip-icon">🏆</span>{(t.prize_distribution || []).join("/")}%</div>
             </div>
 
             {msg && <div className="t-msg">{msg}</div>}
@@ -219,26 +250,26 @@ function TournamentDetail({ tid, token, me, onEnterMatch, onBack }) {
                 </button>
             )}
 
-            {t.status !== "registration" && t.bracket && (
-                <>
-                    <div className="t-section-title">Сетка</div>
-                    <Bracket bracket={t.bracket} me={me} />
-                </>
-            )}
-
             {t.status === "finished" && winners.length > 0 && (
                 <>
                     <div className="t-section-title">Призёры</div>
-                    {winners.map(function (w, i) {
-                        var medal = ["🥇", "🥈", "🥉", "🏅"][w.place - 1] || "🏅";
+                    <Podium winners={winners} me={me} />
+                    {winners.filter(function (w) { return w.place > 3; }).map(function (w, i) {
                         var prize = Number(w.prize_yocto || "0") / 1e24;
                         return (
                             <div key={i} className={"t-winner-row place-" + w.place}>
-                                <span>{medal} {me && String(w.user_id) === String(me) ? "Вы" : "#" + String(w.user_id).slice(-4)}</span>
+                                <span>🏅 {me && String(w.user_id) === String(me) ? "Вы" : "#" + String(w.user_id).slice(-4)}</span>
                                 <span className="t-winner-prize">{fmtNear(prize)} Ⓝ {w.paid ? "✓" : ""}</span>
                             </div>
                         );
                     })}
+                </>
+            )}
+
+            {t.status !== "registration" && t.bracket && (
+                <>
+                    <div className="t-section-title">Сетка</div>
+                    <Bracket bracket={t.bracket} me={me} />
                 </>
             )}
         </div>
@@ -247,12 +278,14 @@ function TournamentDetail({ tid, token, me, onEnterMatch, onBack }) {
 
 export default function Tournaments({ token, me, onEnterMatch }) {
     var [list, setList] = useState(null);
+    var [amAdmin, setAmAdmin] = useState(false);
     var [openId, setOpenId] = useState(null);
 
     var load = useCallback(async function () {
         try {
             var d = await apiFetch("/api/tournaments", { token: token });
             setList((d && d.tournaments) || []);
+            setAmAdmin(!!(d && d.am_admin));
         } catch (e) { setList([]); }
     }, [token]);
 
@@ -267,49 +300,46 @@ export default function Tournaments({ token, me, onEnterMatch }) {
 
     return (
         <div className="tournament-page-v2">
-            <div className="tournament-header">
-                <h2 className="tournament-title"><span className="tournament-title-icon">🏆</span>Турниры</h2>
-                <div className="tournament-subtitle">Платный вход · призовой фонд NEAR · сетка на выбывание</div>
+            <div className="t-hero">
+                <div className="t-hero-shine" />
+                <div className="t-hero-content">
+                    <div className="t-hero-icon">🏆</div>
+                    <div className="t-hero-title">Турниры</div>
+                    <div className="t-hero-sub">Сразись за призовой фонд NEAR · сетка на выбывание</div>
+                    <div className="t-hero-stats">
+                        <div className="t-hero-stat"><b>{(list || []).length}</b><span>Турниров</span></div>
+                        <div className="t-hero-stat"><b>{fmtNear(totalPool)}</b><span>Фонд Ⓝ</span></div>
+                    </div>
+                </div>
             </div>
 
-            <div className="tournament-stats-row">
-                <div className="tournament-stat-chip"><span className="stat-chip-icon">🎮</span>{(list || []).length} турниров</div>
-                <div className="tournament-stat-chip"><span className="stat-chip-icon">💰</span>{fmtNear(totalPool)} Ⓝ фонд</div>
-            </div>
-
-            <CreateForm token={token} onCreated={load} />
+            {amAdmin && <CreateForm token={token} onCreated={load} />}
 
             {list === null && <div className="t-empty">Загрузка...</div>}
             {list && list.length === 0 && (
-                <div className="t-empty">Пока нет турниров.<br />Создай первый (нужны права админа).</div>
+                <div className="t-empty">Пока нет активных турниров.<br />Загляни позже ⚔️</div>
             )}
 
-            <div className="tournament-list-v2">
-                {list && list.map(function (t, i) {
-                    return (
-                        <div key={t.id} className="tournament-card-v2" style={{ animationDelay: (i * 0.08) + "s" }}
-                            onClick={function () { setOpenId(t.id); }}>
-                            <div className="tournament-card-glow" style={{ background: "linear-gradient(135deg,#667eea40,#764ba240)" }} />
-                            <div className="tournament-card-main">
-                                <div className="tournament-avatar-wrap">
-                                    <div className="tournament-avatar-ring" style={{ background: GRAD }}>
-                                        <div className="tournament-avatar" style={{ display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🏆</div>
-                                    </div>
+            {list && list.map(function (t, i) {
+                return (
+                    <div key={t.id} className="t-card" style={{ animationDelay: (i * 0.07) + "s" }}
+                        onClick={function () { setOpenId(t.id); }}>
+                        <div className="t-card-accent" />
+                        <div className="t-card-body">
+                            <div className="t-card-badge">🏆</div>
+                            <div className="t-card-mid">
+                                <div className="t-card-name">{t.name}</div>
+                                <div className="t-card-meta">
+                                    <span>👥 {t.participants_count}{t.max_participants ? "/" + t.max_participants : ""}</span>
+                                    <span>🎟 {fmtNear(t.entry_fee_near)} Ⓝ</span>
                                 </div>
-                                <div className="tournament-card-info">
-                                    <div className="tournament-card-title-row"><h3>{t.name}</h3></div>
-                                    <p className="tournament-card-subtitle">Вход {fmtNear(t.entry_fee_near)} Ⓝ · сетка на выбывание</p>
-                                    <div className="tournament-quick-stats">
-                                        <div className="quick-stat"><span className="quick-stat-icon">👥</span>{t.participants_count}{t.max_participants ? "/" + t.max_participants : ""}</div>
-                                        <div className="quick-stat prize"><span className="quick-stat-icon">💰</span>{fmtNear(t.prize_pool_near)} Ⓝ</div>
-                                    </div>
-                                </div>
-                                <StatusBadge status={t.status} />
+                                <span className="t-card-pool">💰 {fmtNear(t.prize_pool_near)} Ⓝ фонд</span>
                             </div>
+                            <Pill status={t.status} />
                         </div>
-                    );
-                })}
-            </div>
+                    </div>
+                );
+            })}
 
             <div className="tournament-bottom-info">
                 <div className="bottom-info-icon">💡</div>
