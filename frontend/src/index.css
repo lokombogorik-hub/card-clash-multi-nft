@@ -3411,3 +3411,128 @@ img {
         transform: none !important
     }
 }
+/* ===== Tournaments — live page (под общий стиль) ===== */
+.t-back {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border-radius: 12px;
+    padding: 9px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    margin-bottom: 16px;
+    transition: all 0.2s;
+}
+.t-back:hover { background: rgba(255, 255, 255, 0.14); }
+
+.t-status-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 12px;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+.t-status-registration { background: rgba(80, 200, 120, 0.18); color: #7CFC9A; }
+.t-status-running { background: rgba(255, 200, 80, 0.18); color: #ffd76a; }
+.t-status-finished { background: rgba(255, 255, 255, 0.12); color: #bbb; }
+.t-status-cancelled { background: rgba(255, 120, 120, 0.15); color: #ff9a9a; }
+
+.t-msg { font-size: 13px; color: #ffd76a; margin-bottom: 14px; text-align: center; }
+.t-note { color: #7CFC9A; font-size: 13px; margin-bottom: 14px; text-align: center; }
+
+.t-create-toggle {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+    color: #cfe3ff;
+    border-radius: 16px;
+    padding: 13px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 16px;
+    transition: all 0.2s;
+}
+.t-create-toggle:hover { border-color: rgba(120, 200, 255, 0.4); background: rgba(120, 200, 255, 0.06); }
+
+.t-create {
+    background: rgba(20, 25, 40, 0.8);
+    border: 1px solid rgba(120, 200, 255, 0.25);
+    border-radius: 20px;
+    padding: 16px;
+    margin-bottom: 16px;
+    animation: cardSlideIn 0.4s ease;
+}
+.t-create-label { font-size: 11px; color: rgba(255, 255, 255, 0.5); margin: 0 0 5px 2px; }
+.t-input {
+    width: 100%;
+    padding: 11px 13px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(0, 0, 0, 0.25);
+    color: #fff;
+    font-size: 14px;
+    margin-bottom: 12px;
+    box-sizing: border-box;
+}
+.t-input::placeholder { color: rgba(255, 255, 255, 0.35); }
+.t-err { color: #ff8a8a; font-size: 12px; margin-bottom: 10px; }
+.t-row { display: flex; gap: 10px; }
+
+.t-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 20px 0 12px;
+}
+.t-empty { opacity: 0.6; font-size: 14px; text-align: center; padding: 36px 12px; }
+
+/* Bracket */
+.tbracket { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px; }
+.tbracket-round { min-width: 152px; flex-shrink: 0; }
+.tbracket-round-title {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+    text-align: center;
+}
+.tbracket-match {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 5px;
+    margin-bottom: 10px;
+    background: rgba(20, 25, 40, 0.6);
+}
+.tbracket-match.third { background: rgba(205, 127, 50, 0.1); border-color: rgba(205, 127, 50, 0.18); }
+.tbracket-tag { font-size: 9px; text-align: center; letter-spacing: 0.4px; margin: 2px 0; }
+.tbracket-tag.live { color: #ffd76a; }
+.tbracket-tag.bye { color: #99a; }
+.tbracket-tag.third { color: #cd7f32; }
+.tbracket-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 9px;
+    border-radius: 8px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.7);
+}
+.tbracket-row.win { background: rgba(80, 200, 120, 0.18); color: #fff; font-weight: 700; }
+
+.t-winner-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 11px 14px;
+    margin-bottom: 8px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.t-winner-row.place-1 { background: rgba(255, 215, 0, 0.1); border-color: rgba(255, 215, 0, 0.2); }
+.t-winner-prize { color: #7CFC9A; font-weight: 600; }

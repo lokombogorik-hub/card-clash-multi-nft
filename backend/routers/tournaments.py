@@ -90,6 +90,29 @@ def _is_admin(uid: str) -> bool:
     return str(uid) in TOURNAMENT_ADMIN_IDS
 
 
+async def _require_admin(authorization: Optional[str]) -> str:
+    """Админ = id из токена ИЛИ привязанный NEAR-аккаунт в TOURNAMENT_ADMIN_IDS.
+    Пустой список = разрешено всем (тестовый режим)."""
+    uid = _require_uid(authorization)
+    if not TOURNAMENT_ADMIN_IDS:
+        return uid
+    if str(uid) in TOURNAMENT_ADMIN_IDS:
+        return uid
+    try:
+        from database.models.user import User
+        async for session in get_session():
+            u = await session.get(User, int(uid))
+            if u and u.near_account_id and str(u.near_account_id) in TOURNAMENT_ADMIN_IDS:
+                return uid
+            break
+    except Exception as e:
+        print(f"[Tournaments] admin check error: {e}")
+    raise HTTPException(
+        status_code=403,
+        detail="Only admins. Set TOURNAMENT_ADMIN_IDS to your Telegram user id or your NEAR account.",
+    )
+
+
 def _loser_of(m: TournamentMatch) -> Optional[str]:
     if not m.winner_id:
         return None
@@ -520,9 +543,7 @@ class CreateTournamentRequest(BaseModel):
 
 @router.post("")
 async def create_tournament(body: CreateTournamentRequest, authorization: str = Header(None)):
-    uid = _require_uid(authorization)
-    if not _is_admin(uid):
-        raise HTTPException(status_code=403, detail="Only admins can create tournaments")
+    uid = await _require_admin(authorization)
 
     dist = [int(x) for x in (body.prize_distribution or []) if int(x) > 0]
     if sum(dist) > 100:
@@ -651,9 +672,7 @@ async def register_tournament(tid: str, body: RegisterRequest, authorization: st
 
 @router.post("/{tid}/start")
 async def start_tournament_now(tid: str, authorization: str = Header(None)):
-    uid = _require_uid(authorization)
-    if not _is_admin(uid):
-        raise HTTPException(status_code=403, detail="Only admins can start tournaments")
+    uid = await _require_admin(authorization)
     async for session in get_session():
         t = await session.get(Tournament, tid)
         if not t:
@@ -680,9 +699,7 @@ async def report_match(tid: str, body: Dict[str, Any] = Body(default={}), author
 @router.post("/{tid}/settle")
 async def settle_tournament(tid: str, authorization: str = Header(None)):
     """Выплатить призы (если задан ключ казны) и пометить турнир рассчитанным."""
-    uid = _require_uid(authorization)
-    if not _is_admin(uid):
-        raise HTTPException(status_code=403, detail="Only admins can settle tournaments")
+    uid = await _require_admin(authorization)
     async for session in get_session():
         t = await session.get(Tournament, tid)
         if not t:
