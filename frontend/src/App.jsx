@@ -144,39 +144,83 @@ var TOURNAMENTS = [
 ];
 
 function SeasonBar({ token, onOpen }) {
-    var [items, setItems] = useState([]);
+    var [items, setItems] = useState(null); // null = идёт загрузка
     var [idx, setIdx] = useState(0);
+    var touchX = useRef(null);
+    var swiped = useRef(false);
+
     useEffect(function () {
         var alive = true;
         apiFetch("/api/tournaments", { token: token || getStoredToken() })
             .then(function (d) {
                 if (!alive) return;
                 var all = (d && d.tournaments) || [];
-                setItems(all.filter(function (t) { return t.status === "registration" || t.status === "running"; }));
+                var active = all.filter(function (t) { return t.status === "registration" || t.status === "running"; });
+                var finished = all.filter(function (t) { return t.status === "finished"; });
+                setItems(active.length ? active : finished.slice(0, 5));
             })
-            .catch(function () { });
+            .catch(function () { if (alive) setItems([]); });
         return function () { alive = false; };
     }, [token]);
+
     useEffect(function () {
-        if (items.length < 2) return;
+        if (!items || items.length < 2) return;
         var id = setInterval(function () { setIdx(function (i) { return (i + 1) % items.length; }); }, 4000);
         return function () { clearInterval(id); };
-    }, [items.length]);
-    if (!items.length) return null;
+    }, [items && items.length]);
+
+    var go = function (dir) {
+        if (!items || items.length < 2) return;
+        setIdx(function (i) { return (i + (dir > 0 ? 1 : items.length - 1)) % items.length; });
+    };
+    var onTouchStart = function (e) { touchX.current = e.touches[0].clientX; swiped.current = false; };
+    var onTouchEnd = function (e) {
+        if (touchX.current == null) return;
+        var dx = e.changedTouches[0].clientX - touchX.current;
+        touchX.current = null;
+        if (Math.abs(dx) > 40) { swiped.current = true; go(dx < 0 ? 1 : -1); }
+    };
+
+    // Контейнер рендерим ВСЕГДА (даже в загрузке/пусто) — чтобы не было прыжка layout.
+    if (!items) {
+        return (
+            <div className="season-bar" style={{ opacity: 0.55 }}>
+                <div className="season-bar-avatar" style={{ background: "linear-gradient(135deg,#3a4256,#2a3040)" }}><div className="t-ava-emoji">🏆</div></div>
+                <div style={{ flex: 1, minWidth: 0 }}><div className="season-title">Турниры</div><div className="season-sub">Загрузка…</div></div>
+            </div>
+        );
+    }
+    if (!items.length) {
+        return (
+            <div className="season-bar" style={{ cursor: "pointer" }} onClick={function () { onOpen(""); }}>
+                <div className="season-bar-avatar" style={{ background: "linear-gradient(135deg,#667eea,#764ba2)" }}><div className="t-ava-emoji">🏆</div></div>
+                <div style={{ flex: 1, minWidth: 0 }}><div className="season-title">Турниры</div><div className="season-sub">Скоро ⚔️</div></div>
+            </div>
+        );
+    }
+
     var t = items[idx % items.length];
     var live = t.status === "running";
-    var grad = live ? ["#ffb020", "#ff8a00"] : ["#22c55e", "#16a34a"];
+    var fin = t.status === "finished";
+    var grad = live ? ["#ffb020", "#ff8a00"] : fin ? ["#8a93a6", "#5b6273"] : ["#22c55e", "#16a34a"];
+    var cls = live ? "is-live" : fin ? "is-fin" : "is-reg";
+    var champ = fin ? (t.winners || []).filter(function (w) { return w.place === 1; })[0] : null;
+    var sub = live ? "Идёт · " + t.participants_count + " игроков"
+        : fin ? (champ ? "🏆 Победитель #" + String(champ.user_id).slice(-4) : "Завершён · фонд " + (Math.round(Number(t.prize_pool_near || 0) * 100) / 100) + " Ⓝ")
+            : "Регистрация · фонд " + (Math.round(Number(t.prize_pool_near || 0) * 100) / 100) + " Ⓝ";
     return (
-        <div className={"season-bar " + (live ? "is-live" : "is-reg")} style={{ cursor: "pointer" }} onClick={function () { onOpen(t.id); }}>
+        <div className={"season-bar " + cls} style={{ cursor: "pointer" }}
+            onClick={function () { if (swiped.current) { swiped.current = false; return; } onOpen(t.id); }}
+            onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
             <div className={"season-bar-avatar" + (t.image_url ? " img" : "")} style={{ background: "linear-gradient(135deg, " + grad[0] + ", " + grad[1] + ")" }}>
                 {t.image_url ? <img src={t.image_url} alt="" /> : <div className="t-ava-emoji">🏆</div>}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="season-title">{t.name}</div>
-                <div className="season-sub">{live ? "Идёт · " + t.participants_count + " игроков" : "Регистрация · фонд " + (Math.round(Number(t.prize_pool_near || 0) * 100) / 100) + " Ⓝ"}</div>
+                <div className="season-sub">{sub}</div>
             </div>
             <div className="season-right">
-                <div className={"season-live-badge " + (live ? "live" : "reg")}><span className="d" />{live ? "LIVE" : "ОТКРЫТ"}</div>
+                <div className={"season-live-badge " + (live ? "live" : fin ? "fin" : "reg")}><span className="d" />{live ? "LIVE" : fin ? "ЗАВЕРШЁН" : "ОТКРЫТ"}</div>
                 {items.length > 1 && (
                     <div style={{ display: "flex", gap: 5, marginTop: 6, justifyContent: "flex-end" }}>
                         {items.map(function (_, i) {
