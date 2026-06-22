@@ -3630,3 +3630,50 @@ img {
 }
 .t-info b { display: block; font-size: 19px; font-weight: 900; color: #78c8ff; }
 .t-info span { font-size: 10px; color: rgba(160, 216, 255, 0.7); text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* ===== Tournaments — живой апгрейд дизайна заглушки + анимация ===== */
+/* центрируем колонку на ПК (как market-page) */
+.tournament-page-v2 { max-width: min(1080px, 96vw); margin: 0 auto; }
+
+/* блик, бегущий по карточке */
+.t-card-shine {
+    position: absolute; top: 0; left: -70%; width: 55%; height: 100%;
+    background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.10), transparent);
+    transform: skewX(-18deg); animation: tCardShine 5.5s ease-in-out infinite;
+    pointer-events: none; z-index: 1;
+}
+@keyframes tCardShine { 0%, 62% { left: -70%; } 100% { left: 175%; } }
+
+/* аватар-кубок по центру кольца */
+.t-ava-emoji { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: 30px; }
+
+/* цвет статус-бейджа на аватаре */
+.tournament-avatar-badge.reg { background: linear-gradient(135deg, #22c55e, #16a34a); }
+.tournament-avatar-badge.run { background: linear-gradient(135deg, #ffb020, #ff8a00); }
+.tournament-avatar-badge.fin { background: linear-gradient(135deg, #8a93a6, #5b6273); }
+.tournament-avatar-badge.cancel { background: linear-gradient(135deg, #ef4444, #b91c1c); }
+
+/* живой пульс на бейдже регистрации/идёт */
+.tournament-avatar-badge.reg, .tournament-avatar-badge.run { animation: tBadgePulse 1.8s ease-in-out infinite; }
+@keyframes tBadgePulse {
+    0%, 100% { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); }
+    50% { box-shadow: 0 2px 16px rgba(255, 215, 0, 0.55); }
+}
+
+/* призовые места «подъезжают» при раскрытии */
+.tournament-expanded .prize-place { animation: tRise 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) backwards; }
+.tournament-expanded .prize-place:nth-child(1) { animation-delay: 0.05s; }
+.tournament-expanded .prize-place:nth-child(2) { animation-delay: 0.12s; }
+.tournament-expanded .prize-place:nth-child(3) { animation-delay: 0.19s; }
+@keyframes tRise { from { opacity: 0; transform: translateY(14px) scale(0.92); } to { opacity: 1; transform: none; } }
+
+.prize-place .place-amount { font-size: 13px; font-weight: 900; color: #fff; }
+.prize-place .place-pct { font-size: 10px; color: rgba(255, 255, 255, 0.5); margin-top: 2px; }
+
+/* кнопка действия — подсветка по статусу */
+.t-act-reg { background: linear-gradient(135deg, #22c55e, #16a34a); box-shadow: 0 6px 20px rgba(34, 197, 94, 0.35) !important; }
+.t-act-run { background: linear-gradient(135deg, #78c8ff, #5096ff); color: #001 !important; box-shadow: 0 6px 20px rgba(80, 150, 255, 0.35) !important; }
+.t-act-fin { background: linear-gradient(135deg, #8a93a6, #5b6273); }
+.t-act-play { background: linear-gradient(135deg, #ffb020, #ff7a00); box-shadow: 0 6px 22px rgba(255, 150, 0, 0.4) !important; animation: tPlayGlow 1.6s ease-in-out infinite; }
+@keyframes tPlayGlow { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+.t-act-done { opacity: 0.7; cursor: default !important; }

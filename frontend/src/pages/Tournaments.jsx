@@ -2,27 +2,21 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
 
-// Турниры — в стиле маркета (классы market-*). Бэкенд: /api/tournaments(...)
-
-var BLUE = "linear-gradient(135deg, #78c8ff, #5096ff)";
+// Турниры — дизайн раскрывающихся карточек (как заглушка) на живой логике.
+// Бэкенд: /api/tournaments(...)
 
 function fmtNear(n) {
     if (!n && n !== 0) return "0";
     return (Math.round(Number(n) * 10000) / 10000).toString();
 }
 
-var STATUS_LABEL = {
-    registration: "Регистрация",
-    running: "Идёт",
-    finished: "Завершён",
-    cancelled: "Отменён",
+var STATUS = {
+    registration: { label: "Регистрация", badge: "reg", grad: ["#22c55e", "#16a34a"] },
+    running: { label: "Идёт", badge: "run", grad: ["#ffb020", "#ff8a00"] },
+    finished: { label: "Завершён", badge: "fin", grad: ["#8a93a6", "#5b6273"] },
+    cancelled: { label: "Отменён", badge: "cancel", grad: ["#ef4444", "#b91c1c"] },
 };
-var STATUS_COLOR = {
-    registration: "rgba(34,197,94,0.9)",
-    running: "rgba(255,165,0,0.9)",
-    finished: "rgba(120,130,150,0.9)",
-    cancelled: "rgba(255,80,80,0.9)",
-};
+function st(s) { return STATUS[s] || STATUS.finished; }
 
 function useCountdown(iso) {
     var [left, setLeft] = useState("");
@@ -62,12 +56,8 @@ function Bracket({ bracket, me }) {
                             return (
                                 <div key={m.id} className={"tbracket-match" + (m.is_third_place ? " third" : "")}>
                                     {m.is_third_place && <div className="tbracket-tag third">За 3-е место</div>}
-                                    <div className={"tbracket-row" + (w1 ? " win" : "")}>
-                                        <span>{nameOf(m.player1_id)}</span>{w1 && <span>✓</span>}
-                                    </div>
-                                    <div className={"tbracket-row" + (w2 ? " win" : "")}>
-                                        <span>{nameOf(m.player2_id)}</span>{w2 && <span>✓</span>}
-                                    </div>
+                                    <div className={"tbracket-row" + (w1 ? " win" : "")}><span>{nameOf(m.player1_id)}</span>{w1 && <span>✓</span>}</div>
+                                    <div className={"tbracket-row" + (w2 ? " win" : "")}><span>{nameOf(m.player2_id)}</span>{w2 && <span>✓</span>}</div>
                                     {m.status === "active" && <div className="tbracket-tag live">идёт</div>}
                                     {m.status === "bye" && <div className="tbracket-tag bye">авто-проход</div>}
                                 </div>
@@ -81,19 +71,14 @@ function Bracket({ bracket, me }) {
 }
 
 function Podium({ winners, me }) {
-    var byPlace = {};
-    winners.forEach(function (w) { byPlace[w.place] = w; });
+    var byPlace = {}; winners.forEach(function (w) { byPlace[w.place] = w; });
     var order = [2, 1, 3];
-    var label = function (w) {
-        if (!w) return "—";
-        return me && String(w.user_id) === String(me) ? "Вы" : "#" + String(w.user_id).slice(-4);
-    };
+    var label = function (w) { return !w ? "—" : (me && String(w.user_id) === String(me) ? "Вы" : "#" + String(w.user_id).slice(-4)); };
     var medal = { 1: "🥇", 2: "🥈", 3: "🥉" };
     return (
         <div className="t-podium">
             {order.map(function (pl) {
-                var w = byPlace[pl];
-                if (!w) return null;
+                var w = byPlace[pl]; if (!w) return null;
                 var prize = Number(w.prize_yocto || "0") / 1e24;
                 return (
                     <div key={pl} className={"t-pod p" + pl}>
@@ -103,6 +88,161 @@ function Podium({ winners, me }) {
                     </div>
                 );
             })}
+        </div>
+    );
+}
+
+function TournamentCard({ summary, token, me, onEnterMatch, onChanged, delay }) {
+    var ctx = useWalletConnect();
+    var [open, setOpen] = useState(false);
+    var [t, setT] = useState(null);
+    var [busy, setBusy] = useState(false);
+    var [msg, setMsg] = useState("");
+    var pollRef = useRef(null);
+    var data = t || summary;
+    var s = st(data.status);
+    var regLeft = useCountdown(data.registration_ends_at);
+
+    var loadDetail = useCallback(async function () {
+        try {
+            var d = await apiFetch("/api/tournaments/" + summary.id, { token: token });
+            setT(d);
+        } catch (_) { }
+    }, [summary.id, token]);
+
+    useEffect(function () {
+        if (!open) { if (pollRef.current) clearInterval(pollRef.current); return; }
+        loadDetail();
+        pollRef.current = setInterval(loadDetail, 8000);
+        return function () { if (pollRef.current) clearInterval(pollRef.current); };
+    }, [open, loadDetail]);
+
+    var pool = Number(data.prize_pool_near || 0);
+    var dist = data.prize_distribution || [50, 30, 20];
+    var medals = ["🥇", "🥈", "🥉"];
+
+    var register = async function (e) {
+        e.stopPropagation();
+        if (!ctx.connected || !ctx.accountId) { alert("Подключи HOT Wallet!"); return; }
+        setBusy(true); setMsg("");
+        try {
+            var txHash = null;
+            if (Number(data.entry_fee_near) > 0) {
+                setMsg("⏳ Оплата взноса...");
+                var pay = await ctx.sendNear({ receiverId: data.treasury, amount: String(data.entry_fee_near) });
+                txHash = (pay && pay.txHash) || "";
+                if (!txHash) throw new Error("Транзакция не прошла");
+            }
+            setMsg("📝 Регистрирую...");
+            await apiFetch("/api/tournaments/" + summary.id + "/register", {
+                method: "POST", token: token,
+                body: JSON.stringify({ tx_hash: txHash, near_account: ctx.accountId }),
+            });
+            setMsg("✅ Вы в турнире!");
+            await loadDetail(); onChanged && onChanged();
+        } catch (err) { setMsg("❌ " + (err && err.message || err)); }
+        finally { setBusy(false); }
+    };
+
+    var myMatch = t && t.bracket && t.bracket.my_match;
+    var winners = (t && t.winners) || [];
+
+    var renderAction = function () {
+        if (data.status === "registration") {
+            if (t && t.am_registered) {
+                return <button className="tournament-action-btn t-act-done" disabled>✅ Вы в турнире — ждём старта</button>;
+            }
+            return (
+                <button className="tournament-action-btn t-act-reg" disabled={busy} onClick={register}>
+                    <span className="btn-icon">🎟</span>
+                    <span>{busy ? "..." : (Number(data.entry_fee_near) > 0 ? "Участвовать за " + fmtNear(data.entry_fee_near) + " Ⓝ" : "Участвовать (бесплатно)")}</span>
+                </button>
+            );
+        }
+        if (data.status === "running" && myMatch) {
+            return (
+                <button className="tournament-action-btn t-act-play" onClick={function (e) { e.stopPropagation(); onEnterMatch(myMatch.match_id); }}>
+                    <span className="btn-icon">⚔️</span><span>Играть свой матч</span>
+                </button>
+            );
+        }
+        return null;
+    };
+
+    return (
+        <div className={"tournament-card-v2" + (open ? " expanded" : "")} style={{ animationDelay: delay + "s" }}
+            onClick={function () { setOpen(!open); }}>
+            <div className="tournament-card-glow" style={{ background: "linear-gradient(135deg, " + s.grad[0] + "40, " + s.grad[1] + "40)" }} />
+            <div className="t-card-shine" />
+            <div className="tournament-card-main">
+                <div className="tournament-avatar-wrap">
+                    <div className="tournament-avatar-ring" style={{ background: "linear-gradient(135deg, " + s.grad[0] + ", " + s.grad[1] + ")" }}>
+                        <div className="tournament-avatar"><div className="t-ava-emoji">🏆</div></div>
+                    </div>
+                    <div className={"tournament-avatar-badge " + s.badge}>{s.label}</div>
+                </div>
+                <div className="tournament-card-info">
+                    <div className="tournament-card-title-row"><h3>{data.name}</h3></div>
+                    <p className="tournament-card-subtitle">
+                        {data.status === "registration" && regLeft ? "до старта " + regLeft : "Single Elimination"}
+                    </p>
+                    <div className="tournament-quick-stats">
+                        <div className="quick-stat"><span className="quick-stat-icon">👥</span><span>{data.participants_count}{data.max_participants ? "/" + data.max_participants : ""}</span></div>
+                        <div className="quick-stat"><span className="quick-stat-icon">🎟</span><span>{fmtNear(data.entry_fee_near)} Ⓝ</span></div>
+                        <div className="quick-stat prize"><span className="quick-stat-icon">💰</span><span>{fmtNear(pool)} Ⓝ</span></div>
+                    </div>
+                </div>
+                <div className={"tournament-expand-arrow" + (open ? " rotated" : "")}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="white" strokeWidth="2" strokeLinecap="round" /></svg>
+                </div>
+            </div>
+
+            {open && (
+                <div className="tournament-expanded">
+                    <div className="tournament-divider" />
+
+                    {msg && <div className="t-msg">{msg}</div>}
+
+                    <div className="tournament-prize-section">
+                        <div className="prize-section-title">Призовой фонд · {fmtNear(pool)} Ⓝ</div>
+                        <div className="prize-places">
+                            {dist.slice(0, 3).map(function (pct, i) {
+                                return (
+                                    <div key={i} className={"prize-place place-" + (i + 1)}>
+                                        <span className="place-icon">{medals[i]}</span>
+                                        <span className="place-amount">{fmtNear(pool * pct / 100)} Ⓝ</span>
+                                        <span className="place-pct">{pct}%</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    <div className="tournament-format-section">
+                        <div className="format-item"><span className="format-icon">📋</span><span className="format-label">Формат:</span><span className="format-value">Single Elimination</span></div>
+                        <div className="format-item"><span className="format-icon">👥</span><span className="format-label">Участники:</span><span className="format-value">{data.participants_count}{data.max_participants ? " / " + data.max_participants : " (без лимита)"}</span></div>
+                        <div className="format-item"><span className="format-icon">🎟</span><span className="format-label">Взнос:</span><span className="format-value">{fmtNear(data.entry_fee_near)} Ⓝ</span></div>
+                        {data.status === "registration" && regLeft &&
+                            <div className="format-item"><span className="format-icon">⏳</span><span className="format-label">До старта:</span><span className="format-value">{regLeft}</span></div>}
+                    </div>
+
+                    {renderAction()}
+
+                    {data.status === "finished" && winners.length > 0 && (
+                        <>
+                            <div className="t-section-title">Призёры</div>
+                            <Podium winners={winners} me={me} />
+                        </>
+                    )}
+
+                    {t && data.status !== "registration" && t.bracket && (
+                        <>
+                            <div className="t-section-title">Сетка</div>
+                            <Bracket bracket={t.bracket} me={me} />
+                        </>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
@@ -120,25 +260,14 @@ function CreateForm({ token, onCreated }) {
         try {
             await apiFetch("/api/tournaments", {
                 method: "POST", token: token,
-                body: JSON.stringify({
-                    name: name, entry_fee_near: Number(fee) || 0,
-                    prize_distribution: [50, 30, 20],
-                    registration_minutes: Number(minutes) || 30,
-                }),
+                body: JSON.stringify({ name: name, entry_fee_near: Number(fee) || 0, prize_distribution: [50, 30, 20], registration_minutes: Number(minutes) || 30 }),
             });
-            setOpen(false);
-            onCreated && onCreated();
+            setOpen(false); onCreated && onCreated();
         } catch (e) { setErr((e && e.message || e) + ""); }
         finally { setBusy(false); }
     };
 
-    if (!open) {
-        return (
-            <button className="t-create-toggle" onClick={function () { setOpen(true); }}>
-                + Создать турнир
-            </button>
-        );
-    }
+    if (!open) return <button className="t-create-toggle" onClick={function () { setOpen(true); }}>+ Создать турнир</button>;
     return (
         <div className="t-create">
             <div className="t-create-label">Название</div>
@@ -149,122 +278,9 @@ function CreateForm({ token, onCreated }) {
             <input className="t-input" value={minutes} onChange={function (e) { setMinutes(e.target.value); }} placeholder="30" inputMode="numeric" />
             {err && <div className="t-err">{err}</div>}
             <div className="t-row">
-                <button className="market-case-buy-btn" style={{ margin: 0, width: "100%", color: "#000" }} disabled={busy} onClick={submit}>
-                    {busy ? "..." : "Создать"}
-                </button>
+                <button className="tournament-action-btn t-act-reg" disabled={busy} onClick={submit}>{busy ? "..." : "Создать"}</button>
                 <button className="t-back" style={{ marginBottom: 0 }} onClick={function () { setOpen(false); }}>Отмена</button>
             </div>
-        </div>
-    );
-}
-
-function TournamentDetail({ tid, token, me, onEnterMatch, onBack }) {
-    var ctx = useWalletConnect();
-    var [t, setT] = useState(null);
-    var [busy, setBusy] = useState(false);
-    var [msg, setMsg] = useState("");
-    var pollRef = useRef(null);
-    var regLeft = useCountdown(t && t.registration_ends_at);
-
-    var load = useCallback(async function () {
-        try {
-            var d = await apiFetch("/api/tournaments/" + tid, { token: token });
-            setT(d);
-        } catch (e) { setMsg("Ошибка загрузки: " + (e && e.message || e)); }
-    }, [tid, token]);
-
-    useEffect(function () {
-        load();
-        pollRef.current = setInterval(load, 8000);
-        return function () { if (pollRef.current) clearInterval(pollRef.current); };
-    }, [load]);
-
-    var register = async function () {
-        if (!t) return;
-        if (!ctx.connected || !ctx.accountId) { alert("Подключи HOT Wallet!"); return; }
-        setBusy(true); setMsg("");
-        try {
-            var txHash = null;
-            if (Number(t.entry_fee_near) > 0) {
-                setMsg("⏳ Оплата взноса...");
-                var pay = await ctx.sendNear({ receiverId: t.treasury, amount: String(t.entry_fee_near) });
-                txHash = (pay && pay.txHash) || "";
-                if (!txHash) throw new Error("Транзакция не прошла");
-            }
-            setMsg("📝 Регистрирую...");
-            await apiFetch("/api/tournaments/" + tid + "/register", {
-                method: "POST", token: token,
-                body: JSON.stringify({ tx_hash: txHash, near_account: ctx.accountId }),
-            });
-            setMsg("✅ Вы зарегистрированы!");
-            await load();
-        } catch (e) { setMsg("❌ " + (e && e.message || e)); }
-        finally { setBusy(false); }
-    };
-
-    if (!t) return <div className="market-page"><div className="t-empty">Загрузка...</div></div>;
-
-    var myMatch = t.bracket && t.bracket.my_match;
-    var canRegister = t.status === "registration" && !t.am_registered;
-    var winners = t.winners || [];
-
-    return (
-        <div className="market-page">
-            <div className="t-back-row"><button className="t-back" onClick={onBack}>← Назад</button></div>
-
-            <div className="market-header">
-                <h2 className="market-title"><span className="market-title-icon">🏆</span>{t.name}</h2>
-                <div className="market-subtitle">
-                    {STATUS_LABEL[t.status]}{t.status === "registration" && regLeft ? " · до старта " + regLeft : ""}
-                </div>
-            </div>
-
-            <div className="t-info-row">
-                <div className="t-info"><b>{t.participants_count}{t.max_participants ? "/" + t.max_participants : ""}</b><span>Игроков</span></div>
-                <div className="t-info"><b>{fmtNear(t.prize_pool_near)}</b><span>Фонд Ⓝ</span></div>
-                <div className="t-info"><b>{fmtNear(t.entry_fee_near)}</b><span>Взнос Ⓝ</span></div>
-            </div>
-
-            {msg && <div className="t-msg">{msg}</div>}
-
-            {canRegister && (
-                <button className="market-case-buy-btn" style={{ margin: "0 0 14px", width: "100%", color: "#000" }} disabled={busy} onClick={register}>
-                    {busy ? "⏳..." : (Number(t.entry_fee_near) > 0 ? "🎟 Участвовать за " + fmtNear(t.entry_fee_near) + " Ⓝ" : "🎟 Участвовать (бесплатно)")}
-                </button>
-            )}
-            {t.am_registered && t.status === "registration" && (
-                <div className="t-note">✅ Вы зарегистрированы. Ждём старта.</div>
-            )}
-
-            {myMatch && (
-                <button className="market-case-buy-btn" style={{ margin: "0 0 14px", width: "100%", background: "linear-gradient(135deg,#22c55e,#16a34a)", color: "#fff" }}
-                    onClick={function () { onEnterMatch(myMatch.match_id); }}>
-                    ⚔️ Играть свой матч
-                </button>
-            )}
-
-            {t.status === "finished" && winners.length > 0 && (
-                <>
-                    <div className="t-section-title">Призёры</div>
-                    <Podium winners={winners} me={me} />
-                    {winners.filter(function (w) { return w.place > 3; }).map(function (w, i) {
-                        var prize = Number(w.prize_yocto || "0") / 1e24;
-                        return (
-                            <div key={i} className={"t-winner-row place-" + w.place}>
-                                <span>🏅 {me && String(w.user_id) === String(me) ? "Вы" : "#" + String(w.user_id).slice(-4)}</span>
-                                <span className="t-winner-prize">{fmtNear(prize)} Ⓝ {w.paid ? "✓" : ""}</span>
-                            </div>
-                        );
-                    })}
-                </>
-            )}
-
-            {t.status !== "registration" && t.bracket && (
-                <>
-                    <div className="t-section-title">Сетка</div>
-                    <Bracket bracket={t.bracket} me={me} />
-                </>
-            )}
         </div>
     );
 }
@@ -272,7 +288,6 @@ function TournamentDetail({ tid, token, me, onEnterMatch, onBack }) {
 export default function Tournaments({ token, me, onEnterMatch }) {
     var [list, setList] = useState(null);
     var [amAdmin, setAmAdmin] = useState(false);
-    var [openId, setOpenId] = useState(null);
 
     var load = useCallback(async function () {
         try {
@@ -284,65 +299,35 @@ export default function Tournaments({ token, me, onEnterMatch }) {
 
     useEffect(function () { load(); }, [load]);
 
-    if (openId) {
-        return <TournamentDetail tid={openId} token={token} me={me}
-            onEnterMatch={onEnterMatch} onBack={function () { setOpenId(null); load(); }} />;
-    }
+    var totalPool = (list || []).reduce(function (a, t) { return a + Number(t.prize_pool_near || 0); }, 0);
 
     return (
-        <div className="market-page">
-            <div className="market-header">
-                <h2 className="market-title"><span className="market-title-icon">🏆</span>Турниры</h2>
-                <div className="market-subtitle">Сразись за призовой фонд NEAR</div>
+        <div className="tournament-page-v2">
+            <div className="tournament-header">
+                <h2 className="tournament-title"><span className="tournament-title-icon">🏆</span>Турниры</h2>
+                <div className="tournament-subtitle">Сражайся за призовой фонд NEAR</div>
+            </div>
+
+            <div className="tournament-stats-row">
+                <div className="tournament-stat-chip"><span className="stat-chip-icon">🎮</span><span>{(list || []).length} турниров</span></div>
+                <div className="tournament-stat-chip"><span className="stat-chip-icon">💎</span><span>{fmtNear(totalPool)} Ⓝ фонд</span></div>
             </div>
 
             {amAdmin && <CreateForm token={token} onCreated={load} />}
 
             {list === null && <div className="t-empty">Загрузка...</div>}
-            {list && list.length === 0 && (
-                <div className="t-empty">Пока нет активных турниров.<br />Загляни позже ⚔️</div>
-            )}
+            {list && list.length === 0 && <div className="t-empty">Пока нет активных турниров.<br />Загляни позже ⚔️</div>}
 
-            <div className="market-cases-grid">
-                {list && list.map(function (t) {
-                    var statusBtn = t.status === "registration"
-                        ? (Number(t.entry_fee_near) > 0 ? "🎟 " + fmtNear(t.entry_fee_near) + " Ⓝ" : "🎟 Участвовать")
-                        : t.status === "running" ? "👀 Открыть сетку"
-                        : t.status === "finished" ? "🏆 Результаты" : "Открыть";
-                    return (
-                        <div key={t.id} className="market-case-card" style={{ cursor: "pointer" }}
-                            onClick={function () { setOpenId(t.id); }}>
-                            <div style={{
-                                position: "absolute", top: 8, left: 8, zIndex: 10,
-                                background: STATUS_COLOR[t.status] || "rgba(120,130,150,0.9)",
-                                color: "#fff", padding: "4px 10px", borderRadius: 12,
-                                fontSize: 11, fontWeight: 700, boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
-                            }}>{STATUS_LABEL[t.status]}</div>
-
-                            <div className="market-case-image" style={{
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                                background: "linear-gradient(135deg, #1b2240, #2a1a4a 55%, #3a1d52)",
-                            }}>
-                                <span style={{ fontSize: 72, filter: "drop-shadow(0 6px 18px rgba(255,215,0,0.5))" }}>🏆</span>
-                            </div>
-
-                            <div className="market-case-name">{t.name}</div>
-                            <div className="market-case-desc">
-                                👥 {t.participants_count}{t.max_participants ? "/" + t.max_participants : ""} игроков · сетка на выбывание
-                            </div>
-                            <div className="market-case-price">💰 {fmtNear(t.prize_pool_near)} Ⓝ фонд</div>
-                            <button className="market-case-buy-btn" style={{ color: "#000" }}
-                                onClick={function (e) { e.stopPropagation(); setOpenId(t.id); }}>
-                                {statusBtn}
-                            </button>
-                        </div>
-                    );
+            <div className="tournament-list-v2">
+                {list && list.map(function (t, i) {
+                    return <TournamentCard key={t.id} summary={t} token={token} me={me}
+                        onEnterMatch={onEnterMatch} onChanged={load} delay={i * 0.08} />;
                 })}
             </div>
 
-            <div className="market-footer">
-                <div className="market-footer-icon">⚔️</div>
-                <div className="market-footer-text">Побеждай в матчах и забирай призовой фонд NEAR</div>
+            <div className="tournament-bottom-info">
+                <div className="bottom-info-icon">💡</div>
+                <div className="bottom-info-text">Нажми на турнир, чтобы открыть детали, сетку и регистрацию</div>
             </div>
         </div>
     );
