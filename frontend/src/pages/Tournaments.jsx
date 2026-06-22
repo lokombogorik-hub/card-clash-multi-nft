@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
 
-// Турниры — дизайн раскрывающихся карточек (как заглушка) на живой логике.
+// Турниры — раскрывающиеся карточки на живой логике + фон-картинка + админ-загрузка фото.
 // Бэкенд: /api/tournaments(...)
 
 function fmtNear(n) {
@@ -17,6 +17,32 @@ var STATUS = {
     cancelled: { label: "Отменён", badge: "cancel", grad: ["#ef4444", "#b91c1c"] },
 };
 function st(s) { return STATUS[s] || STATUS.finished; }
+
+// Выбор фото с телефона + ресайз -> JPEG dataURL (лёгкий, лезет в БД).
+function pickImage(cb) {
+    var input = document.createElement("input");
+    input.type = "file"; input.accept = "image/*";
+    input.onchange = function () {
+        var file = input.files && input.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function () {
+            var img = new Image();
+            img.onload = function () {
+                var max = 720, w = img.width, h = img.height;
+                if (w > h && w > max) { h = Math.round(h * max / w); w = max; }
+                else if (h >= w && h > max) { w = Math.round(w * max / h); h = max; }
+                var c = document.createElement("canvas");
+                c.width = w; c.height = h;
+                c.getContext("2d").drawImage(img, 0, 0, w, h);
+                cb(c.toDataURL("image/jpeg", 0.78));
+            };
+            img.src = reader.result;
+        };
+        reader.readAsDataURL(file);
+    };
+    input.click();
+}
 
 function useCountdown(iso) {
     var [left, setLeft] = useState("");
@@ -92,9 +118,9 @@ function Podium({ winners, me }) {
     );
 }
 
-function TournamentCard({ summary, token, me, onEnterMatch, onChanged, delay }) {
+function TournamentCard({ summary, token, me, amAdmin, onEnterMatch, onChanged, delay, defaultOpen }) {
     var ctx = useWalletConnect();
-    var [open, setOpen] = useState(false);
+    var [open, setOpen] = useState(!!defaultOpen);
     var [t, setT] = useState(null);
     var [busy, setBusy] = useState(false);
     var [msg, setMsg] = useState("");
@@ -113,8 +139,6 @@ function TournamentCard({ summary, token, me, onEnterMatch, onChanged, delay }) 
     useEffect(function () {
         if (!open) { if (pollRef.current) clearInterval(pollRef.current); return; }
         loadDetail();
-        // Бережём бэкенд: часто опрашиваем только идущий турнир (меняется сетка),
-        // регистрацию — реже (счётчик времени и так клиентский), завершённый — не опрашиваем.
         var status = (t || summary).status;
         var interval = status === "running" ? 10000 : status === "registration" ? 25000 : 0;
         if (interval) pollRef.current = setInterval(loadDetail, interval);
@@ -124,6 +148,7 @@ function TournamentCard({ summary, token, me, onEnterMatch, onChanged, delay }) 
     var pool = Number(data.prize_pool_near || 0);
     var dist = data.prize_distribution || [50, 30, 20];
     var medals = ["🥇", "🥈", "🥉"];
+    var bg = data.image_url || null;
 
     var register = async function (e) {
         e.stopPropagation();
@@ -148,14 +173,28 @@ function TournamentCard({ summary, token, me, onEnterMatch, onChanged, delay }) 
         finally { setBusy(false); }
     };
 
+    var changeBg = function (e) {
+        e.stopPropagation();
+        pickImage(async function (dataUrl) {
+            setBusy(true); setMsg("🖼 Сохраняю фон...");
+            try {
+                await apiFetch("/api/tournaments/" + summary.id + "/image", {
+                    method: "POST", token: token,
+                    body: JSON.stringify({ image_url: dataUrl }),
+                });
+                setMsg("✅ Фон обновлён");
+                await loadDetail(); onChanged && onChanged();
+            } catch (err) { setMsg("❌ " + (err && err.message || err)); }
+            finally { setBusy(false); }
+        });
+    };
+
     var myMatch = t && t.bracket && t.bracket.my_match;
     var winners = (t && t.winners) || [];
 
     var renderAction = function () {
         if (data.status === "registration") {
-            if (t && t.am_registered) {
-                return <button className="tournament-action-btn t-act-done" disabled>✅ Вы в турнире — ждём старта</button>;
-            }
+            if (t && t.am_registered) return <button className="tournament-action-btn t-act-done" disabled>✅ Вы в турнире — ждём старта</button>;
             return (
                 <button className="tournament-action-btn t-act-reg" disabled={busy} onClick={register}>
                     <span className="btn-icon">🎟</span>
@@ -176,12 +215,16 @@ function TournamentCard({ summary, token, me, onEnterMatch, onChanged, delay }) 
     return (
         <div className={"tournament-card-v2" + (open ? " expanded" : "")} style={{ animationDelay: delay + "s" }}
             onClick={function () { setOpen(!open); }}>
-            <div className="tournament-card-glow" style={{ background: "linear-gradient(135deg, " + s.grad[0] + "40, " + s.grad[1] + "40)" }} />
+            {bg && <div className="t-card-bg" style={{ backgroundImage: "url(" + bg + ")" }} />}
+            {bg && <div className="t-card-bg-overlay" />}
+            {!bg && <div className="tournament-card-glow" style={{ background: "linear-gradient(135deg, " + s.grad[0] + "40, " + s.grad[1] + "40)" }} />}
             <div className="t-card-shine" />
             <div className="tournament-card-main">
                 <div className="tournament-avatar-wrap">
                     <div className="tournament-avatar-ring" style={{ background: "linear-gradient(135deg, " + s.grad[0] + ", " + s.grad[1] + ")" }}>
-                        <div className="tournament-avatar"><div className="t-ava-emoji">🏆</div></div>
+                        <div className="tournament-avatar">
+                            {bg ? <img src={bg} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div className="t-ava-emoji">🏆</div>}
+                        </div>
                     </div>
                     <div className={"tournament-avatar-badge " + s.badge}>{s.label}</div>
                 </div>
@@ -204,7 +247,6 @@ function TournamentCard({ summary, token, me, onEnterMatch, onChanged, delay }) 
             {open && (
                 <div className="tournament-expanded">
                     <div className="tournament-divider" />
-
                     {msg && <div className="t-msg">{msg}</div>}
 
                     <div className="tournament-prize-section">
@@ -232,6 +274,12 @@ function TournamentCard({ summary, token, me, onEnterMatch, onChanged, delay }) 
 
                     {renderAction()}
 
+                    {amAdmin && (
+                        <button className="t-photo-btn" style={{ marginTop: 10 }} disabled={busy} onClick={changeBg}>
+                            🖼 {bg ? "Сменить фон" : "Поставить фон с телефона"}
+                        </button>
+                    )}
+
                     {data.status === "finished" && winners.length > 0 && (
                         <>
                             <div className="t-section-title">Призёры</div>
@@ -256,6 +304,7 @@ function CreateForm({ token, onCreated }) {
     var [name, setName] = useState("Card Clash Cup");
     var [fee, setFee] = useState("1");
     var [minutes, setMinutes] = useState("30");
+    var [image, setImage] = useState("");
     var [busy, setBusy] = useState(false);
     var [err, setErr] = useState("");
 
@@ -264,9 +313,14 @@ function CreateForm({ token, onCreated }) {
         try {
             await apiFetch("/api/tournaments", {
                 method: "POST", token: token,
-                body: JSON.stringify({ name: name, entry_fee_near: Number(fee) || 0, prize_distribution: [50, 30, 20], registration_minutes: Number(minutes) || 30 }),
+                body: JSON.stringify({
+                    name: name, entry_fee_near: Number(fee) || 0,
+                    prize_distribution: [50, 30, 20], registration_minutes: Number(minutes) || 30,
+                    image_url: image || null,
+                }),
             });
-            setOpen(false); onCreated && onCreated();
+            setOpen(false); setImage("");
+            onCreated && onCreated();
         } catch (e) { setErr((e && e.message || e) + ""); }
         finally { setBusy(false); }
     };
@@ -280,6 +334,9 @@ function CreateForm({ token, onCreated }) {
             <input className="t-input" value={fee} onChange={function (e) { setFee(e.target.value); }} placeholder="1" inputMode="decimal" />
             <div className="t-create-label">Регистрация, минут</div>
             <input className="t-input" value={minutes} onChange={function (e) { setMinutes(e.target.value); }} placeholder="30" inputMode="numeric" />
+            <div className="t-create-label">Фон турнира (необязательно)</div>
+            {image && <img className="t-photo-preview" src={image} alt="" />}
+            <button className="t-photo-btn" onClick={function () { pickImage(setImage); }}>🖼 {image ? "Сменить фото" : "Выбрать фото с телефона"}</button>
             {err && <div className="t-err">{err}</div>}
             <div className="t-row">
                 <button className="tournament-action-btn t-act-reg" disabled={busy} onClick={submit}>{busy ? "..." : "Создать"}</button>
@@ -289,7 +346,7 @@ function CreateForm({ token, onCreated }) {
     );
 }
 
-export default function Tournaments({ token, me, onEnterMatch }) {
+export default function Tournaments({ token, me, onEnterMatch, initialOpenId }) {
     var [list, setList] = useState(null);
     var [amAdmin, setAmAdmin] = useState(false);
 
@@ -324,8 +381,9 @@ export default function Tournaments({ token, me, onEnterMatch }) {
 
             <div className="tournament-list-v2">
                 {list && list.map(function (t, i) {
-                    return <TournamentCard key={t.id} summary={t} token={token} me={me}
-                        onEnterMatch={onEnterMatch} onChanged={load} delay={i * 0.08} />;
+                    return <TournamentCard key={t.id} summary={t} token={token} me={me} amAdmin={amAdmin}
+                        onEnterMatch={onEnterMatch} onChanged={load} delay={i * 0.08}
+                        defaultOpen={initialOpenId && String(initialOpenId) === String(t.id)} />;
                 })}
             </div>
 

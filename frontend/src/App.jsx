@@ -143,33 +143,51 @@ var TOURNAMENTS = [
     }
 ];
 
-function SeasonBar({ onGoTournament }) {
+function SeasonBar({ token, onOpen }) {
+    var [items, setItems] = useState([]);
     var [idx, setIdx] = useState(0);
-    var t = TOURNAMENTS[idx];
     useEffect(function () {
-        var id = setInterval(function () { setIdx(function (i) { return (i + 1) % TOURNAMENTS.length; }); }, 4000);
+        var alive = true;
+        apiFetch("/api/tournaments", { token: token || getStoredToken() })
+            .then(function (d) {
+                if (!alive) return;
+                var all = (d && d.tournaments) || [];
+                setItems(all.filter(function (t) { return t.status === "registration" || t.status === "running"; }));
+            })
+            .catch(function () { });
+        return function () { alive = false; };
+    }, [token]);
+    useEffect(function () {
+        if (items.length < 2) return;
+        var id = setInterval(function () { setIdx(function (i) { return (i + 1) % items.length; }); }, 4000);
         return function () { clearInterval(id); };
-    }, []);
+    }, [items.length]);
+    if (!items.length) return null;
+    var t = items[idx % items.length];
+    var live = t.status === "running";
+    var grad = live ? ["#ffb020", "#ff8a00"] : ["#22c55e", "#16a34a"];
     return (
-        <div className="season-bar" style={{ cursor: "pointer" }} onClick={onGoTournament}>
-            <div className="season-bar-avatar" style={{ background: "linear-gradient(135deg, " + t.gradient[0] + ", " + t.gradient[1] + ")" }}>
-                <img src={t.avatar} alt={t.title} onError={function (e) { e.target.style.display = "none"; }} />
+        <div className={"season-bar " + (live ? "is-live" : "is-reg")} style={{ cursor: "pointer" }} onClick={function () { onOpen(t.id); }}>
+            <div className={"season-bar-avatar" + (t.image_url ? " img" : "")} style={{ background: "linear-gradient(135deg, " + grad[0] + ", " + grad[1] + ")" }}>
+                {t.image_url ? <img src={t.image_url} alt="" /> : <div className="t-ava-emoji">🏆</div>}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="season-title">{t.title}</div>
-                <div className="season-sub">{t.subtitle}</div>
+                <div className="season-title">{t.name}</div>
+                <div className="season-sub">{live ? "Идёт · " + t.participants_count + " игроков" : "Регистрация · фонд " + (Math.round(Number(t.prize_pool_near || 0) * 100) / 100) + " Ⓝ"}</div>
             </div>
             <div className="season-right">
-                <div className="season-soon-badge">SOON</div>
-                <div style={{ display: "flex", gap: 5, marginTop: 6 }}>
-                    {TOURNAMENTS.map(function (_, i) {
-                        return <div key={i} onClick={function (e) { e.stopPropagation(); setIdx(i); }} style={{
-                            width: i === idx ? 16 : 6, height: 6, borderRadius: 3,
-                            background: i === idx ? "#78c8ff" : "rgba(255,255,255,.25)",
-                            transition: "width .3s, background .3s", cursor: "pointer",
-                        }} />;
-                    })}
-                </div>
+                <div className={"season-live-badge " + (live ? "live" : "reg")}><span className="d" />{live ? "LIVE" : "ОТКРЫТ"}</div>
+                {items.length > 1 && (
+                    <div style={{ display: "flex", gap: 5, marginTop: 6, justifyContent: "flex-end" }}>
+                        {items.map(function (_, i) {
+                            return <div key={i} onClick={function (e) { e.stopPropagation(); setIdx(i); }} style={{
+                                width: i === idx ? 16 : 6, height: 6, borderRadius: 3,
+                                background: i === idx ? "#fff" : "rgba(255,255,255,.25)",
+                                transition: "width .3s, background .3s", cursor: "pointer",
+                            }} />;
+                        })}
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -303,6 +321,7 @@ function AppContent() {
     var [playerDeck, setPlayerDeck] = useState(null);
     var [gameMode, setGameMode] = useState("ai");
     var [stage2MatchId, setStage2MatchId] = useState("");
+    var [tournamentOpenId, setTournamentOpenId] = useState("");
     var logoRef = useRef(null);
     var [logoOk, setLogoOk] = useState(true);
     var bottomStackRef = useRef(null);
@@ -720,13 +739,14 @@ function AppContent() {
                         token={token || getStoredToken()}
                         me={me && me.id}
                         onEnterMatch={onEnterTournamentMatch}
+                        initialOpenId={tournamentOpenId}
                     />
                 )}
             </div>
 
             <div className="bottom-stack" ref={bottomStackRef}>
-                {screen === "home" && <SeasonBar onGoTournament={function () { setScreen("tournament"); }} />}
-                <BottomNav active={screen} onChange={setScreen} />
+                {screen === "home" && <SeasonBar token={token || getStoredToken()} onOpen={function (id) { setTournamentOpenId(id); setScreen("tournament"); }} />}
+                <BottomNav active={screen} onChange={function (k) { setTournamentOpenId(""); setScreen(k); }} />
             </div>
         </div>
     );

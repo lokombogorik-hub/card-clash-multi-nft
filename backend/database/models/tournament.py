@@ -8,6 +8,7 @@ class Tournament(Base):
 
     id = Column(String, primary_key=True)  # uuid
     name = Column(String, nullable=False)
+    image_url = Column(String, nullable=True)  # фон турнира (URL или data:base64)
     # registration / running / finished / cancelled
     status = Column(String, default="registration", nullable=False)
 

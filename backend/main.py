@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from database.session import engine
 from database.models import Base
-from database.migrations_bootstrap import ensure_users_columns, ensure_all_tables
+from database.migrations_bootstrap import ensure_users_columns, ensure_all_tables, ensure_tournament_columns
 
 from api.auth import router as auth_router
 from api.users import router as users_router
@@ -39,6 +39,7 @@ async def lifespan(app: FastAPI):
                 await conn.run_sync(Base.metadata.create_all)
             await ensure_users_columns(engine)
             await ensure_all_tables(engine)
+            await ensure_tournament_columns(engine)
             logger.info("DB schema ensured")
         except Exception:
             logger.exception("DB init failed")

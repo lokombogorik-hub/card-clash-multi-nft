@@ -482,6 +482,7 @@ def _tournament_view(t: Tournament, count: int) -> Dict[str, Any]:
     return {
         "id": t.id,
         "name": t.name,
+        "image_url": t.image_url,
         "status": t.status,
         "entry_fee_yocto": t.entry_fee_yocto,
         "entry_fee_near": round(int(t.entry_fee_yocto or "0") / YOCTO, 4),
@@ -551,6 +552,7 @@ class CreateTournamentRequest(BaseModel):
     registration_minutes: int = 30
     max_participants: Optional[int] = None
     treasury: Optional[str] = None
+    image_url: Optional[str] = None
 
 
 @router.post("")
@@ -576,6 +578,7 @@ async def create_tournament(body: CreateTournamentRequest, authorization: str = 
         max_participants=body.max_participants,
         prize_pool_yocto="0",
         winners=[],
+        image_url=(body.image_url or None),
     )
     async for session in get_session():
         session.add(t)
@@ -694,6 +697,26 @@ async def start_tournament_now(tid: str, authorization: str = Header(None)):
             raise HTTPException(status_code=400, detail=f"Cannot start: status={t.status}")
         await _start_tournament(t, session)
         return {"ok": True, "status": t.status}
+
+
+class ImageRequest(BaseModel):
+    image_url: str
+
+
+@router.post("/{tid}/image")
+async def set_tournament_image(tid: str, body: ImageRequest, authorization: str = Header(None)):
+    """Админ ставит фон турнира (URL или data:base64). Размер режем на клиенте."""
+    await _require_admin(authorization)
+    img = (body.image_url or "").strip()
+    if len(img) > 600000:
+        raise HTTPException(status_code=413, detail="Image too large (resize on client)")
+    async for session in get_session():
+        t = await session.get(Tournament, tid)
+        if not t:
+            raise HTTPException(status_code=404, detail="Tournament not found")
+        t.image_url = img or None
+        await session.commit()
+        return {"ok": True}
 
 
 @router.post("/{tid}/report")

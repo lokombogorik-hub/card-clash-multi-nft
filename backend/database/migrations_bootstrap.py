@@ -207,3 +207,26 @@ async def ensure_all_tables(engine):
         logger.info("All tables ensured")
     except Exception as e:
         logger.exception(f"Table creation failed: {e}")
+
+
+async def ensure_tournament_columns(engine):
+    """Add missing columns to tournaments table (image_url) — таблица могла быть
+    создана раньше без него."""
+    if engine is None:
+        return
+    try:
+        async with engine.begin() as conn:
+            exists = await conn.execute(text(
+                "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'tournaments')"
+            ))
+            if not exists.scalar():
+                return
+            check = await conn.execute(text(
+                "SELECT EXISTS (SELECT FROM information_schema.columns "
+                "WHERE table_name = 'tournaments' AND column_name = 'image_url')"
+            ))
+            if not check.scalar():
+                await conn.execute(text("ALTER TABLE tournaments ADD COLUMN image_url TEXT"))
+                logger.info("Added column: tournaments.image_url")
+    except Exception as e:
+        logger.warning(f"tournament columns migration: {e}")
