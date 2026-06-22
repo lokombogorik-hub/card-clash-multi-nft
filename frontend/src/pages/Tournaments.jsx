@@ -113,9 +113,13 @@ function TournamentCard({ summary, token, me, onEnterMatch, onChanged, delay }) 
     useEffect(function () {
         if (!open) { if (pollRef.current) clearInterval(pollRef.current); return; }
         loadDetail();
-        pollRef.current = setInterval(loadDetail, 8000);
+        // Бережём бэкенд: часто опрашиваем только идущий турнир (меняется сетка),
+        // регистрацию — реже (счётчик времени и так клиентский), завершённый — не опрашиваем.
+        var status = (t || summary).status;
+        var interval = status === "running" ? 10000 : status === "registration" ? 25000 : 0;
+        if (interval) pollRef.current = setInterval(loadDetail, interval);
         return function () { if (pollRef.current) clearInterval(pollRef.current); };
-    }, [open, loadDetail]);
+    }, [open, loadDetail, (t || summary).status]);
 
     var pool = Number(data.prize_pool_near || 0);
     var dist = data.prize_distribution || [50, 30, 20];
