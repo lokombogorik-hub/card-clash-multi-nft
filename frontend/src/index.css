@@ -3617,3 +3617,16 @@ img {
 .t-pod.p1 { height: 122px; background: linear-gradient(180deg, rgba(255, 215, 0, 0.32), rgba(255, 215, 0, 0.05)); border: 1px solid rgba(255, 215, 0, 0.25); border-bottom: none; }
 .t-pod.p2 { height: 96px; background: linear-gradient(180deg, rgba(200, 200, 210, 0.26), rgba(200, 200, 210, 0.04)); border: 1px solid rgba(200, 200, 210, 0.2); border-bottom: none; }
 .t-pod.p3 { height: 80px; background: linear-gradient(180deg, rgba(205, 127, 50, 0.3), rgba(205, 127, 50, 0.04)); border: 1px solid rgba(205, 127, 50, 0.22); border-bottom: none; }
+
+/* Tournament detail — инфо-блок в стиле маркета */
+.t-info-row { display: flex; gap: 10px; margin-bottom: 18px; }
+.t-info {
+    flex: 1;
+    background: linear-gradient(135deg, rgba(20, 20, 30, 0.98), rgba(10, 10, 20, 0.98));
+    border: 1px solid rgba(120, 200, 255, 0.18);
+    border-radius: 14px;
+    padding: 12px 8px;
+    text-align: center;
+}
+.t-info b { display: block; font-size: 19px; font-weight: 900; color: #78c8ff; }
+.t-info span { font-size: 10px; color: rgba(160, 216, 255, 0.7); text-transform: uppercase; letter-spacing: 0.5px; }
