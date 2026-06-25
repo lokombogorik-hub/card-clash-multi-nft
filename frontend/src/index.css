@@ -3884,3 +3884,18 @@ img {
 .pf-ach-nm { font-size: 10px; color: rgba(255, 255, 255, 0.8); margin-top: 5px; }
 
 .pf-empty { text-align: center; color: rgba(255, 255, 255, 0.45); font-size: 13px; padding: 20px; }
+
+/* история матчей — внутренний скролл (видно ~10, остальное листается) */
+.pf-matches {
+    max-height: min(64vh, 620px);
+    overflow-y: auto;
+    padding-right: 4px;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(120,180,255,0.4) transparent;
+}
+.pf-matches::-webkit-scrollbar { width: 6px; }
+.pf-matches::-webkit-scrollbar-track { background: transparent; }
+.pf-matches::-webkit-scrollbar-thumb { background: rgba(120,180,255,0.35); border-radius: 6px; }
+.pf-matches::-webkit-scrollbar-thumb:hover { background: rgba(120,180,255,0.6); }
