@@ -543,6 +543,21 @@ export default function Inventory({ token, onDeckReady }) {
                 <div className="inv-subtitle">Выбери 5 карт для игры • {selected.size}/5</div>
             </div>
 
+            <div className="inv-deck-slots">
+                {[0, 1, 2, 3, 4].map(function (i) {
+                    var card = selectedNfts[i];
+                    if (card) {
+                        return (
+                            <button key={i} type="button" className="inv-slot filled" onClick={function () { toggle(nftKey(card)); }}>
+                                <img src={card.imageUrl} alt="" draggable="false" onError={function (e) { e.currentTarget.style.display = "none"; }} />
+                                <span className="inv-slot-no">{i + 1}</span>
+                            </button>
+                        );
+                    }
+                    return <div key={i} className="inv-slot empty"><span>{i + 1}</span></div>;
+                })}
+            </div>
+
             {connected && accountId ? (
                 <div className="inv-info-box">
                     <div className="inv-info-label" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -618,7 +633,7 @@ export default function Inventory({ token, onDeckReady }) {
                     <button className="inv-btn inv-btn-secondary" onClick={resetSelection} disabled={!selected.size || saving}>
                         Сбросить
                     </button>
-                    <button className="inv-btn inv-btn-primary" disabled={selected.size !== 5 || saving} onClick={saveDeck}>
+                    <button className={"inv-btn inv-btn-primary" + (selected.size === 5 ? " ready" : "")} disabled={selected.size !== 5 || saving} onClick={saveDeck}>
                         {saving ? "Сохранение..." : selected.size === 5 ? "Играть! →" : "Выбери " + (5 - selected.size) + " карт"}
                     </button>
                 </div>
