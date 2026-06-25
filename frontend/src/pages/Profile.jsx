@@ -1,234 +1,185 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
 
-var RANK_COLORS = {
-    "Новичок": "#6b7280",
-    "Мастер": "#3b82f6",
-    "Профи": "#f59e0b",
-    "Легенда": "#a855f7"
-};
+var RANK_COLORS = { "Новичок": "#8a93a6", "Мастер": "#3b82f6", "Профи": "#f59e0b", "Легенда": "#a855f7" };
 
-function getDisplayName(me) {
+function displayName(me) {
     if (!me) return "Guest";
     if (me.username) return "@" + me.username;
     var full = [me.first_name, me.last_name].filter(Boolean).join(" ").trim();
     return full || "Guest";
 }
-
-function getAvatarUrl(me) {
-    if (!me) return null;
-    // photo_url приходит из Telegram при авторизации
-    if (me.photo_url) return me.photo_url;
-    // UI Avatars как fallback
-    var name = encodeURIComponent(
-        [me.first_name, me.last_name].filter(Boolean).join(" ").trim() ||
-        (me.username ? me.username : "User")
-    );
-    return "https://ui-avatars.com/api/?name=" + name + "&background=1a2232&color=78c8ff&size=128&bold=true";
+function avatarUrl(me) {
+    if (me && me.photo_url) return me.photo_url;
+    return null;
 }
+function timeAgo(iso) {
+    if (!iso) return "";
+    var s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 60) return "только что";
+    if (s < 3600) return Math.floor(s / 60) + " мин назад";
+    if (s < 86400) return Math.floor(s / 3600) + " ч назад";
+    return Math.floor(s / 86400) + " дн назад";
+}
+var MODE = { tournament: "Турнир", pvp: "PvP", ai: "AI" };
+var RES = { win: "W", loss: "L", draw: "=", cancelled: "×" };
+var RES_TXT = { win: "Победа", loss: "Поражение", draw: "Ничья", cancelled: "Отменён" };
+
+function MatchRow({ m }) {
+    var [open, setOpen] = useState(false);
+    var initial = (m.opponent_name || "?").replace(/^@/, "").charAt(0).toUpperCase();
+    return (
+        <div>
+            <div className={"pf-match " + m.result} onClick={function () { setOpen(!open); }}>
+                <div className="pf-res">{RES[m.result] || "•"}</div>
+                {m.opponent_photo
+                    ? <img className="pf-mava" src={m.opponent_photo} alt="" referrerPolicy="no-referrer" onError={function (e) { e.currentTarget.style.display = "none"; }} />
+                    : <div className="pf-mava">{initial}</div>}
+                <div className="pf-mmid">
+                    <div className="pf-mname">{m.opponent_name}</div>
+                    <div className="pf-mmeta">{(MODE[m.mode] || m.mode)} · {timeAgo(m.finished_at)}</div>
+                </div>
+            </div>
+            {open && (
+                <div className="pf-mexp">
+                    <div className="row"><span>Результат</span><span>{RES_TXT[m.result] || m.result}</span></div>
+                    <div className="row"><span>Режим</span><span>{MODE[m.mode] || m.mode}</span></div>
+                    <div className="row"><span>Ходов</span><span>{m.moves || 0}</span></div>
+                    <div className="row"><span>Когда</span><span>{m.finished_at ? new Date(m.finished_at).toLocaleString() : "—"}</span></div>
+                    <div className="row"><span>ID матча</span><span style={{ fontFamily: "monospace", fontSize: 10 }}>{String(m.match_id).slice(0, 14)}…</span></div>
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function Profile({ token, me }) {
     var { accountId, balance, connected } = useWalletConnect();
     var [profile, setProfile] = useState(null);
+    var [matches, setMatches] = useState(null);
     var [loading, setLoading] = useState(true);
     var [avatarOk, setAvatarOk] = useState(true);
 
     useEffect(function () {
-        if (!token) {
-            setLoading(false);
-            return;
-        }
+        if (!token) { setLoading(false); return; }
         var alive = true;
         apiFetch("/api/users/me", { token: token })
-            .then(function (data) {
-                if (!alive) return;
-                setProfile(data);
-            })
-            .catch(function (e) {
-                console.error("Profile load error:", e);
-            })
-            .finally(function () {
-                if (alive) setLoading(false);
-            });
+            .then(function (d) { if (alive) setProfile(d); })
+            .catch(function (e) { console.error("Profile load error:", e); })
+            .finally(function () { if (alive) setLoading(false); });
+        apiFetch("/api/matches/history?limit=20", { token: token })
+            .then(function (d) { if (alive) setMatches((d && d.matches) || []); })
+            .catch(function () { if (alive) setMatches([]); });
         return function () { alive = false; };
     }, [token]);
 
-    var displayName = getDisplayName(me);
-    var avatarUrl = getAvatarUrl(me);
-    var initials = displayName.replace(/^@/, "").charAt(0).toUpperCase() || "?";
-    var tgId = me && me.id ? "ID: " + me.id : "";
-
-    var rankColor = profile ? (RANK_COLORS[profile.rank] || "#6b7280") : "#6b7280";
+    var name = displayName(me);
+    var av = avatarUrl(me);
+    var initials = name.replace(/^@/, "").charAt(0).toUpperCase() || "?";
+    var rankColor = profile ? (RANK_COLORS[profile.rank] || "#8a93a6") : "#8a93a6";
+    var prog = profile && profile.next_rank ? (profile.progress_to_next || 0) : 100;
 
     return (
-        <div className="profile-page">
-            <div className="profile-header-card">
-                <div className="profile-avatar-wrapper">
-                    <div className="profile-avatar-ring" />
-                    {avatarUrl && avatarOk ? (
-                        <img
-                            className="profile-avatar"
-                            src={avatarUrl}
-                            alt=""
-                            draggable="false"
-                            referrerPolicy="no-referrer"
-                            onError={function () { setAvatarOk(false); }}
-                        />
-                    ) : (
-                        <div className="profile-avatar-fallback">{initials}</div>
+        <div className="pf">
+            <div className="pf-hero">
+                <div className="pf-shine" />
+                <div className="pf-hero-in">
+                    <div className="pf-ring" style={{ "--p": prog, background: "conic-gradient(" + rankColor + " calc(" + prog + " * 1%), rgba(255,255,255,0.12) 0)" }}>
+                        {av && avatarOk
+                            ? <img className="pf-ava" src={av} alt="" referrerPolicy="no-referrer" onError={function () { setAvatarOk(false); }} />
+                            : <div className="pf-ava">{initials}</div>}
+                    </div>
+                    <div className="pf-name">{name}</div>
+                    {profile && (
+                        <div className="pf-rankchip" style={{ borderColor: rankColor, color: rankColor }}>
+                            <span>{profile.rank_icon || "🎖️"}</span><span>{profile.rank}</span>
+                        </div>
                     )}
+                    {me && me.id && <div className="pf-id">ID: {me.id}</div>}
                 </div>
-                <h2 className="profile-name">{displayName}</h2>
-                {tgId && <p className="profile-tg-id">{tgId}</p>}
 
-                {/* Rank Section */}
                 {profile && (
-                    <div className="profile-rank-section">
-                        <div
-                            className="profile-rank-badge"
-                            style={{
-                                borderColor: rankColor,
-                                boxShadow: "0 0 12px " + rankColor + "50"
-                            }}
-                        >
-                            <span className="profile-rank-icon">{profile.rank_icon}</span>
-                            <span className="profile-rank-name" style={{ color: rankColor }}>
-                                {profile.rank}
-                            </span>
-                        </div>
-
-                        <div className="profile-rating">
-                            <span className="profile-rating-value">{profile.elo_rating}</span>
-                            <span className="profile-rating-label">рейтинг</span>
-                        </div>
-
+                    <div className="pf-rating">
+                        <div className="pf-rating-num">{profile.elo_rating}</div>
+                        <div className="pf-rating-lbl">Рейтинг</div>
                         {profile.next_rank && (
-                            <div className="profile-rank-progress">
-                                <div className="profile-rank-progress-bar">
-                                    <div
-                                        className="profile-rank-progress-fill"
-                                        style={{
-                                            width: profile.progress_to_next + "%",
-                                            background: rankColor
-                                        }}
-                                    />
-                                </div>
-                                <div className="profile-rank-progress-text">
-                                    До {profile.next_rank}: {profile.points_to_next} очков
-                                </div>
+                            <div className="pf-prog">
+                                <div className="pf-prog-bar"><div className="pf-prog-fill" style={{ width: prog + "%" }} /></div>
+                                <div className="pf-prog-txt">До «{profile.next_rank}»: {profile.points_to_next} очков</div>
                             </div>
                         )}
                     </div>
                 )}
 
-                <div className="profile-wallet-box">
-                    <div className="profile-wallet-label">CONNECTED WALLET</div>
-                    <div className="profile-wallet-account">
-                        {connected ? accountId : "Not Connected"}
+                <div className="pf-wallet">
+                    <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 10, color: "rgba(255,255,255,.5)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 3 }}>Кошелёк</div>
+                        <div className="acc">{connected ? accountId : "Не подключён"}</div>
                     </div>
-                    {connected && (
-                        <div className="profile-wallet-balance">
-                            {Number(balance).toFixed(4)} Ⓝ
-                        </div>
-                    )}
-                    {!connected && (
-                        <div className="profile-wallet-disconnected">
-                            Подключи кошелёк на главной странице
-                        </div>
-                    )}
+                    {connected && <div className="bal">{Number(balance).toFixed(2)} Ⓝ</div>}
                 </div>
             </div>
 
             {loading ? (
-                <div className="profile-loading">
-                    <div className="profile-loading-spinner" />
-                    <div>Загрузка профиля...</div>
-                </div>
+                <div className="pf-empty">Загрузка профиля…</div>
             ) : profile ? (
                 <>
-                    <div className="profile-stats-grid">
-                        <div className="profile-stat-card">
-                            <div className="profile-stat-icon">⚔️</div>
-                            <div className="profile-stat-value">{profile.pvp_wins + profile.pvp_losses}</div>
-                            <div className="profile-stat-label">PvP игр</div>
+                    <div className="pf-tiles">
+                        <div className="pf-tile" style={{ "--c": "#78c8ff" }}>
+                            <div className="pf-tile-ic">⚔️</div>
+                            <div className="pf-tile-val">{(profile.pvp_wins || 0) + (profile.pvp_losses || 0)}</div>
+                            <div className="pf-tile-lbl">Игр</div>
                         </div>
-                        <div className="profile-stat-card">
-                            <div className="profile-stat-icon">🏆</div>
-                            <div className="profile-stat-value">{profile.pvp_wins}</div>
-                            <div className="profile-stat-label">Побед</div>
+                        <div className="pf-tile" style={{ "--c": "#4ade80" }}>
+                            <div className="pf-tile-ic">🏆</div>
+                            <div className="pf-tile-val">{profile.pvp_wins || 0}</div>
+                            <div className="pf-tile-lbl">Побед</div>
                         </div>
-                        <div className="profile-stat-card">
-                            <div className="profile-stat-icon">💔</div>
-                            <div className="profile-stat-value">{profile.pvp_losses}</div>
-                            <div className="profile-stat-label">Поражений</div>
+                        <div className="pf-tile" style={{ "--c": "#f87171" }}>
+                            <div className="pf-tile-ic">💔</div>
+                            <div className="pf-tile-val">{profile.pvp_losses || 0}</div>
+                            <div className="pf-tile-lbl">Поражений</div>
                         </div>
-                        <div className="profile-stat-card">
-                            <div className="profile-stat-icon">📊</div>
-                            <div className="profile-stat-value">{profile.win_rate}%</div>
-                            <div className="profile-stat-label">Винрейт</div>
+                        <div className="pf-tile" style={{ "--c": "#ffd76a" }}>
+                            <div className="pf-tile-ic">📊</div>
+                            <div className="pf-tile-val">{profile.win_rate || 0}%</div>
+                            <div className="pf-tile-lbl">Винрейт</div>
                         </div>
                     </div>
 
-                    {/* Ranks Info */}
-                    {profile.all_ranks && (
-                        <div className="profile-ranks-info">
-                            <div className="profile-section-title">🎖️ Система рангов</div>
-                            <div className="profile-ranks-list">
-                                {profile.all_ranks.map(function (rank) {
-                                    var isCurrent = profile.rank === rank.name;
-                                    var color = RANK_COLORS[rank.name] || "#6b7280";
-                                    return (
-                                        <div
-                                            key={rank.name}
-                                            className={"profile-rank-item" + (isCurrent ? " current" : "")}
-                                            style={{ borderColor: isCurrent ? color : "rgba(255,255,255,0.1)" }}
-                                        >
-                                            <span className="rank-icon">{rank.icon}</span>
-                                            <span className="rank-name" style={{ color: isCurrent ? color : "#fff" }}>
-                                                {rank.name}
-                                            </span>
-                                            <span className="rank-range">{rank.min}+</span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                    <div className="pf-sec">📜 История матчей</div>
+                    {matches === null ? (
+                        <div className="pf-empty">Загрузка…</div>
+                    ) : matches.length === 0 ? (
+                        <div className="pf-empty">Пока нет сыгранных матчей. Сыграй первый бой! ⚔️</div>
+                    ) : (
+                        <div className="pf-matches">
+                            {matches.map(function (m) { return <MatchRow key={m.match_id} m={m} />; })}
                         </div>
                     )}
 
-                    <div className="profile-achievements">
-                        <div className="profile-section-title">🏅 Достижения</div>
-                        <div className="profile-achievements-grid">
-                            <div className={"profile-achievement" + (profile.pvp_wins >= 1 ? "" : " locked")}>
-                                <div className="profile-achievement-icon">🥇</div>
-                                <div className="profile-achievement-name">Первая победа</div>
-                            </div>
-                            <div className={"profile-achievement" + (profile.pvp_wins >= 10 ? "" : " locked")}>
-                                <div className="profile-achievement-icon">⚡</div>
-                                <div className="profile-achievement-name">10 побед</div>
-                            </div>
-                            <div className={"profile-achievement" + (profile.total_matches >= 50 ? "" : " locked")}>
-                                <div className="profile-achievement-icon">🎯</div>
-                                <div className="profile-achievement-name">50 матчей</div>
-                            </div>
-                            <div className={"profile-achievement" + (connected ? "" : " locked")}>
-                                <div className="profile-achievement-icon">🔗</div>
-                                <div className="profile-achievement-name">Кошелёк</div>
-                            </div>
-                            <div className={"profile-achievement" + (profile.elo_rating >= 1200 ? "" : " locked")}>
-                                <div className="profile-achievement-icon">⚔️</div>
-                                <div className="profile-achievement-name">Мастер</div>
-                            </div>
-                            <div className={"profile-achievement" + (profile.elo_rating >= 1500 ? "" : " locked")}>
-                                <div className="profile-achievement-icon">🏆</div>
-                                <div className="profile-achievement-name">Профи</div>
-                            </div>
-                        </div>
+                    <div className="pf-sec">🏅 Достижения</div>
+                    <div className="pf-ach">
+                        {[
+                            { ok: (profile.pvp_wins || 0) >= 1, ic: "🥇", nm: "Первая победа" },
+                            { ok: (profile.pvp_wins || 0) >= 10, ic: "⚡", nm: "10 побед" },
+                            { ok: (profile.total_matches || 0) >= 50, ic: "🎯", nm: "50 матчей" },
+                            { ok: connected, ic: "🔗", nm: "Кошелёк" },
+                            { ok: (profile.elo_rating || 0) >= 1200, ic: "⚔️", nm: "Мастер" },
+                            { ok: (profile.elo_rating || 0) >= 1500, ic: "👑", nm: "Профи" },
+                        ].map(function (a, i) {
+                            return (
+                                <div key={i} className={"pf-ach-item" + (a.ok ? "" : " locked")}>
+                                    <div className="pf-ach-ic">{a.ic}</div>
+                                    <div className="pf-ach-nm">{a.nm}</div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </>
             ) : (
-                <div className="profile-loading">
-                    <div>Не удалось загрузить профиль</div>
-                </div>
+                <div className="pf-empty">Не удалось загрузить профиль</div>
             )}
         </div>
     );

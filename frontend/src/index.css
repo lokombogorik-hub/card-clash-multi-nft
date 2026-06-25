@@ -3794,3 +3794,93 @@ img {
 /* секции и ранги — чуть премиальнее */
 .profile-section-title { font-weight: 800; letter-spacing: 0.3px; }
 .profile-rank-item.current { background: rgba(255, 255, 255, 0.06); box-shadow: 0 0 14px rgba(120, 180, 255, 0.25); }
+
+/* ===================== PROFILE v3 — premium ===================== */
+.pf { max-width: min(640px, 96vw); margin: 0 auto; padding: 14px 14px 110px; animation: fadeInUp .5s ease; }
+
+/* герой */
+.pf-hero {
+    position: relative; overflow: hidden; border-radius: 24px; padding: 26px 18px 22px; margin-bottom: 16px;
+    background: linear-gradient(160deg, #1a2140 0%, #241a44 55%, #321a44 100%);
+    border: 1px solid rgba(140, 170, 255, 0.28); box-shadow: 0 16px 48px rgba(70, 60, 170, 0.32);
+}
+.pf-hero::before { content: ""; position: absolute; inset: -45%; pointer-events: none;
+    background: radial-gradient(circle at 28% 12%, rgba(120, 170, 255, 0.4), transparent 45%),
+                radial-gradient(circle at 82% 96%, rgba(200, 90, 230, 0.32), transparent 42%);
+    animation: tHeroGlow 9s ease-in-out infinite alternate; }
+.pf-shine { position: absolute; top: 0; left: -60%; width: 45%; height: 100%; pointer-events: none; z-index: 1;
+    background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.12), transparent); animation: tShine 6s ease-in-out infinite; }
+.pf-hero-in { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; }
+
+/* аватар с кольцом прогресса (conic) */
+.pf-ring { width: 116px; height: 116px; border-radius: 50%; padding: 5px;
+    background: conic-gradient(#7cc4ff calc(var(--p, 0) * 1%), rgba(255, 255, 255, 0.12) 0);
+    box-shadow: 0 0 22px rgba(120, 180, 255, 0.4); animation: ringGlow 3.5s ease-in-out infinite; }
+.pf-ava { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; background: #11162a;
+    display: grid; place-items: center; font-size: 40px; font-weight: 900; color: #fff; border: 3px solid #11162a; }
+.pf-name { font-size: 22px; font-weight: 900; color: #fff; margin: 12px 0 6px; }
+.pf-rankchip { display: inline-flex; align-items: center; gap: 7px; padding: 5px 14px; border-radius: 999px;
+    font-size: 13px; font-weight: 800; border: 1.5px solid; background: rgba(255, 255, 255, 0.06); backdrop-filter: blur(6px); }
+.pf-id { font-size: 11px; color: rgba(255, 255, 255, 0.45); margin-top: 8px; }
+
+/* рейтинг */
+.pf-rating { position: relative; z-index: 2; text-align: center; margin-top: 16px; }
+.pf-rating-num { font-size: 50px; font-weight: 900; line-height: 1;
+    background: linear-gradient(135deg, #9fd0ff, #d3a6ff); -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; filter: drop-shadow(0 2px 16px rgba(150, 170, 255, 0.55)); }
+.pf-rating-lbl { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: rgba(255, 255, 255, 0.5); margin-top: 4px; }
+.pf-prog { margin-top: 14px; }
+.pf-prog-bar { height: 8px; border-radius: 6px; background: rgba(0, 0, 0, 0.35); overflow: hidden; position: relative; }
+.pf-prog-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, #667eea, #b450dc); box-shadow: 0 0 12px rgba(140, 120, 255, 0.6); position: relative; transition: width .6s; }
+.pf-prog-fill::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.5), transparent); transform: translateX(-100%); animation: tShine 2.4s ease-in-out infinite; }
+.pf-prog-txt { font-size: 11px; color: rgba(255, 255, 255, 0.55); margin-top: 6px; text-align: center; }
+
+/* кошелёк */
+.pf-wallet { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 16px;
+    padding: 11px 14px; border-radius: 14px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(120, 200, 255, 0.22); position: relative; z-index: 2; }
+.pf-wallet .acc { font-family: monospace; font-size: 12px; color: #cfe3ff; word-break: break-all; }
+.pf-wallet .bal { font-size: 14px; font-weight: 800; color: #78c8ff; white-space: nowrap; }
+
+/* плитки статов */
+.pf-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin: 16px 0; }
+.pf-tile { position: relative; overflow: hidden; text-align: center; padding: 14px 6px; border-radius: 16px;
+    background: linear-gradient(160deg, rgba(26, 32, 54, 0.95), rgba(14, 18, 32, 0.95)); border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: transform .2s, box-shadow .2s; }
+.pf-tile::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--c, #78c8ff); }
+.pf-tile:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35); }
+.pf-tile-ic { font-size: 20px; }
+.pf-tile-val { font-size: 22px; font-weight: 900; color: var(--c, #78c8ff); margin: 4px 0 2px; }
+.pf-tile-lbl { font-size: 10px; color: rgba(255, 255, 255, 0.55); text-transform: uppercase; letter-spacing: .5px; }
+
+.pf-sec { font-size: 13px; font-weight: 800; color: #fff; margin: 20px 0 10px; display: flex; align-items: center; gap: 8px; }
+
+/* история матчей */
+.pf-matches { display: flex; flex-direction: column; gap: 8px; }
+.pf-match { display: flex; align-items: center; gap: 12px; padding: 11px 13px; border-radius: 14px; cursor: pointer;
+    background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.07); border-left: 4px solid #8a93a6; transition: background .2s, transform .15s; }
+.pf-match:active { transform: scale(0.99); }
+.pf-match.win { border-left-color: #4ade80; }
+.pf-match.loss { border-left-color: #f87171; }
+.pf-match.draw, .pf-match.cancelled { border-left-color: #8a93a6; }
+.pf-res { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-weight: 900; font-size: 15px; flex-shrink: 0; }
+.pf-match.win .pf-res { background: rgba(74, 222, 128, 0.18); color: #4ade80; }
+.pf-match.loss .pf-res { background: rgba(248, 113, 113, 0.18); color: #f87171; }
+.pf-match.draw .pf-res, .pf-match.cancelled .pf-res { background: rgba(140, 147, 166, 0.18); color: #aab; }
+.pf-mava { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; background: #1a2236; flex-shrink: 0; display: grid; place-items: center; font-size: 13px; }
+.pf-mmid { flex: 1; min-width: 0; }
+.pf-mname { font-size: 14px; color: #fff; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-mmeta { font-size: 11px; color: rgba(255, 255, 255, 0.5); margin-top: 2px; }
+.pf-mexp { font-size: 12px; color: rgba(255, 255, 255, 0.7); padding: 0 13px 11px; animation: expandIn .25s ease; }
+.pf-mexp .row { display: flex; justify-content: space-between; padding: 3px 0; border-top: 1px solid rgba(255,255,255,.06); }
+
+/* достижения */
+.pf-ach { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; }
+.pf-ach-item { position: relative; overflow: hidden; text-align: center; padding: 14px 6px; border-radius: 14px;
+    background: linear-gradient(160deg, rgba(255, 215, 0, 0.10), rgba(255, 160, 0, 0.04)); border: 1px solid rgba(255, 215, 0, 0.22); }
+.pf-ach-item.locked { background: rgba(255, 255, 255, 0.03); border-color: rgba(255, 255, 255, 0.07); filter: grayscale(1); opacity: .45; }
+.pf-ach-item:not(.locked)::after { content: ""; position: absolute; top: 0; left: -70%; width: 50%; height: 100%; transform: skewX(-18deg);
+    background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.2), transparent); animation: tCardShine 4.5s ease-in-out infinite; }
+.pf-ach-ic { font-size: 22px; }
+.pf-ach-nm { font-size: 10px; color: rgba(255, 255, 255, 0.8); margin-top: 5px; }
+
+.pf-empty { text-align: center; color: rgba(255, 255, 255, 0.45); font-size: 13px; padding: 20px; }

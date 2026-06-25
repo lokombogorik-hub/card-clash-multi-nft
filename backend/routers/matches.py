@@ -358,6 +358,70 @@ async def get_leaderboard(limit: int = 50):
         traceback.print_exc()
         return {"leaders": [], "total": 0}
 
+@router.get("/history")
+async def get_match_history(limit: int = 20, authorization: Optional[str] = Header(None)):
+    """Последние завершённые матчи текущего игрока — для истории в профиле."""
+    player_id = None
+    if authorization:
+        player_id = get_player_id_from_token(authorization.replace("Bearer ", ""))
+    if not player_id:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    out = []
+    try:
+        async for session in get_session():
+            from sqlalchemy import or_, desc
+            stmt = (
+                select(PvPMatch)
+                .where(
+                    or_(PvPMatch.player1_id == player_id, PvPMatch.player2_id == player_id),
+                    PvPMatch.status.in_(["finished", "cancelled"]),
+                )
+                .order_by(desc(PvPMatch.finished_at), desc(PvPMatch.created_at))
+                .limit(min(int(limit or 20), 50))
+            )
+            rows = (await session.execute(stmt)).scalars().all()
+            for m in rows:
+                p1 = str(m.player1_id or ""); p2 = str(m.player2_id or "")
+                opp = p2 if player_id == p1 else p1
+                winner = str(m.winner) if m.winner else None
+                if m.status == "cancelled":
+                    result = "cancelled"
+                elif not winner:
+                    result = "draw"
+                elif winner == player_id:
+                    result = "win"
+                else:
+                    result = "loss"
+                when = m.finished_at or m.created_at
+                out.append({
+                    "match_id": m.id,
+                    "opponent_id": opp,
+                    "result": result,
+                    "mode": m.mode or "pvp",
+                    "moves": m.moves_count or 0,
+                    "finished_at": (when.isoformat() + "Z") if when else None,
+                })
+            # обогащаем именами/аватарами соперников
+            opp_ids = list({o["opponent_id"] for o in out if o["opponent_id"] and o["opponent_id"].isdigit()})
+            names = {}
+            if opp_ids:
+                ures = await session.execute(select(User).where(User.id.in_([int(x) for x in opp_ids])))
+                for u in ures.scalars().all():
+                    names[str(u.id)] = {
+                        "name": u.username or u.first_name or ("Player #" + str(u.id)),
+                        "photo": getattr(u, "photo_url", None) or "",
+                    }
+            for o in out:
+                info = names.get(o["opponent_id"])
+                o["opponent_name"] = info["name"] if info else ("#" + o["opponent_id"][-4:] if o["opponent_id"] else "Соперник")
+                o["opponent_photo"] = info["photo"] if info else ""
+            break
+    except Exception as e:
+        print(f"[MATCHES] history error: {e}")
+    return {"matches": out}
+
+
 @router.get("/config/status")
 async def get_escrow_status():
     return {
