@@ -3699,3 +3699,98 @@ img {
 .season-live-badge .d { width: 7px; height: 7px; border-radius: 50%; background: #fff; animation: tPulse 1.3s infinite; }
 .season-bar-avatar.img { padding: 0; overflow: hidden; }
 .season-bar-avatar .t-ava-emoji { font-size: 24px; }
+
+/* виджет: завершённый турнир */
+.season-bar.is-fin { border: 1px solid rgba(150,160,180,0.35); box-shadow: 0 0 16px rgba(120,130,150,0.18); }
+.season-live-badge.fin { background: linear-gradient(135deg,#8a93a6,#5b6273); }
+.season-live-badge.fin .d { animation: none; opacity: 0.7; }
+
+/* ===== Profile — премиум «игровой» вид (оверрайды поверх базовых) ===== */
+.profile-header-card {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(150deg, #1a2140 0%, #241a44 55%, #2e1a40 100%) !important;
+    border: 1px solid rgba(140, 170, 255, 0.3) !important;
+    box-shadow: 0 14px 44px rgba(70, 60, 170, 0.3);
+}
+.profile-header-card::before {
+    content: "";
+    position: absolute;
+    inset: -45%;
+    background:
+        radial-gradient(circle at 30% 15%, rgba(120, 170, 255, 0.35), transparent 45%),
+        radial-gradient(circle at 80% 95%, rgba(190, 90, 220, 0.30), transparent 42%);
+    animation: tHeroGlow 9s ease-in-out infinite alternate;
+    pointer-events: none;
+}
+.profile-header-card > * { position: relative; z-index: 1; }
+
+/* крупный светящийся рейтинг */
+.profile-rating-value {
+    font-size: clamp(34px, 9vw, 52px) !important;
+    font-weight: 900;
+    background: linear-gradient(135deg, #9fd0ff, #c9a3ff);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 2px 14px rgba(140, 170, 255, 0.5));
+    line-height: 1;
+}
+.profile-rating-label { letter-spacing: 1px; text-transform: uppercase; opacity: 0.6; }
+
+/* бейдж ранга — свечение и стекло */
+.profile-rank-badge {
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(6px);
+    border-width: 1.5px !important;
+}
+
+/* прогресс ранга — анимированный блеск */
+.profile-rank-progress-bar { background: rgba(0, 0, 0, 0.35) !important; overflow: hidden; }
+.profile-rank-progress-fill { position: relative; box-shadow: 0 0 12px currentColor; }
+.profile-rank-progress-fill::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+    transform: translateX(-100%); animation: tShine 2.4s ease-in-out infinite;
+}
+
+/* стат-карточки: верхний акцент, ховер, цвет значения по типу */
+.profile-stat-card {
+    position: relative;
+    background: linear-gradient(160deg, rgba(26, 32, 54, 0.95), rgba(14, 18, 32, 0.95)) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    transition: transform 0.25s, border-color 0.25s, box-shadow 0.25s;
+    overflow: hidden;
+}
+.profile-stat-card::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, #667eea, #b450dc);
+}
+.profile-stat-card:hover { transform: translateY(-3px); border-color: rgba(120, 180, 255, 0.4); box-shadow: 0 10px 26px rgba(60, 80, 200, 0.28); }
+.profile-stat-card:nth-child(1) .profile-stat-value { color: #78c8ff; }
+.profile-stat-card:nth-child(2) .profile-stat-value { color: #4ade80; }
+.profile-stat-card:nth-child(3) .profile-stat-value { color: #f87171; }
+.profile-stat-card:nth-child(4) .profile-stat-value { color: #ffd76a; }
+.profile-stat-value { font-size: clamp(22px, 5vw, 32px) !important; filter: drop-shadow(0 1px 8px rgba(0,0,0,0.4)); }
+
+/* достижения: разблокированные светятся, закрытые — тускло-серые */
+.profile-achievement {
+    position: relative; overflow: hidden;
+    background: linear-gradient(160deg, rgba(255, 215, 0, 0.10), rgba(255, 160, 0, 0.04)) !important;
+    border: 1px solid rgba(255, 215, 0, 0.22) !important;
+    transition: transform 0.2s;
+}
+.profile-achievement:not(.locked):hover { transform: translateY(-2px) scale(1.02); }
+.profile-achievement:not(.locked)::after {
+    content: ""; position: absolute; top: 0; left: -70%; width: 50%; height: 100%;
+    background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.18), transparent);
+    transform: skewX(-18deg); animation: tCardShine 4.5s ease-in-out infinite;
+}
+.profile-achievement.locked {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.07) !important;
+    filter: grayscale(1); opacity: 0.45 !important;
+}
+
+/* секции и ранги — чуть премиальнее */
+.profile-section-title { font-weight: 800; letter-spacing: 0.3px; }
+.profile-rank-item.current { background: rgba(255, 255, 255, 0.06); box-shadow: 0 0 14px rgba(120, 180, 255, 0.25); }
