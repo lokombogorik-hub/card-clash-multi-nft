@@ -4035,3 +4035,24 @@ img {
 
 /* онлайн слева, кошелёк справа — в один ряд, одинаковый отступ от краёв */
 .home-wallet-row { justify-content: space-between !important; align-items: center; }
+
+/* ===== Правки раскладки главной + единые шапки ===== */
+/* 1) опустить ряд «онлайн + кошелёк» чуть ниже */
+.home-wallet-row { padding-top: 58px !important; padding-bottom: 12px !important; }
+
+/* 2) единые шапки во всех вкладках (одинаковые отступы/размер заголовка) */
+.market-header, .tournament-header, .inv-header {
+    margin: 0 0 14px !important;
+    padding: 20px 14px 14px !important;
+    text-align: center;
+    border-radius: 22px;
+}
+.market-title, .tournament-title, .inv-title {
+    font-size: 24px !important; font-weight: 900 !important;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+}
+.market-subtitle, .tournament-subtitle, .inv-subtitle { font-size: 13px !important; opacity: 0.85; }
+
+/* 3) лидерборд ближе к виджету турниров (ровный зазор как по бокам) */
+.bottom-stack { padding-top: 6px !important; gap: 8px !important; }
+.home-bottom-area { padding-bottom: 0 !important; margin-bottom: 0 !important; }
