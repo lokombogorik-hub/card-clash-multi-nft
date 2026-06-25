@@ -4032,3 +4032,6 @@ img {
 .reward-card .spark.s5 { bottom: 16%; right: -7px; animation-delay: .6s; }
 .reward-card .spark.s6 { top: -7px; right: 26%; animation-delay: .95s; }
 @keyframes sparkle { 0%, 100% { opacity: 0; transform: scale(.4); } 50% { opacity: 1; transform: scale(1.4); } }
+
+/* онлайн слева, кошелёк справа — в один ряд, одинаковый отступ от краёв */
+.home-wallet-row { justify-content: space-between !important; align-items: center; }

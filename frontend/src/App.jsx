@@ -154,11 +154,10 @@ function OnlineBadge() {
         var id = setInterval(load, 15000);
         return function () { alive = false; clearInterval(id); };
     }, []);
-    if (n === null) return null;
     return (
         <div className="online-badge">
             <span className="online-dot" />
-            <span className="online-num">{n}</span>
+            <span className="online-num">{n === null ? "…" : n}</span>
             <span className="online-lbl">онлайн</span>
         </div>
     );
@@ -609,8 +608,7 @@ function AppContent() {
             <div className="shell-content">
                 {screen === "home" && (
                     <div className="home-center">
-                        <div className="home-wallet-row"><WalletConnector /></div>
-                        <div className="home-online-row"><OnlineBadge /></div>
+                        <div className="home-wallet-row"><OnlineBadge /><WalletConnector /></div>
 
                         {/* Баннер активного матча */}
                         {activeMatch && (
