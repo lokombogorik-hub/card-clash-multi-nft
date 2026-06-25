@@ -340,6 +340,19 @@ export default function Inventory({ token, onDeckReady }) {
         }).filter(Boolean);
     }, [selectedArr, nfts]);
 
+    var deckPower = useMemo(function () {
+        return selectedNfts.reduce(function (sum, c) {
+            var st = c.stats || {};
+            return sum + (st.top || 0) + (st.right || 0) + (st.bottom || 0) + (st.left || 0);
+        }, 0);
+    }, [selectedNfts]);
+
+    var deckElems = useMemo(function () {
+        var m = {};
+        selectedNfts.forEach(function (c) { if (c.element) m[c.element] = (m[c.element] || 0) + 1; });
+        return m;
+    }, [selectedNfts]);
+
     useEffect(function () {
         var handleVisibilityChange = function () {
             if (document.visibilityState === 'visible' && connected && accountId) {
@@ -543,19 +556,21 @@ export default function Inventory({ token, onDeckReady }) {
                 <div className="inv-subtitle">Выбери 5 карт для игры • {selected.size}/5</div>
             </div>
 
-            <div className="inv-deck-slots">
-                {[0, 1, 2, 3, 4].map(function (i) {
-                    var card = selectedNfts[i];
-                    if (card) {
-                        return (
-                            <button key={i} type="button" className="inv-slot filled" onClick={function () { toggle(nftKey(card)); }}>
-                                <img src={card.imageUrl} alt="" draggable="false" onError={function (e) { e.currentTarget.style.display = "none"; }} />
-                                <span className="inv-slot-no">{i + 1}</span>
-                            </button>
-                        );
-                    }
-                    return <div key={i} className="inv-slot empty"><span>{i + 1}</span></div>;
-                })}
+            <div className="inv-deck-power">
+                <div className="inv-dp-main">
+                    <span className="inv-dp-ic">⚡</span>
+                    <div>
+                        <div className="inv-dp-val">{deckPower}</div>
+                        <div className="inv-dp-lbl">Сила колоды · {selected.size}/5</div>
+                    </div>
+                </div>
+                <div className="inv-dp-elems">
+                    {Object.keys(deckElems).length === 0
+                        ? <span className="inv-dp-hint">Выбери 5 карт для боя</span>
+                        : Object.keys(deckElems).map(function (e) {
+                            return <span key={e} className="inv-dp-chip">{ELEM_ICON[e] || "🔮"}{deckElems[e] > 1 ? " ×" + deckElems[e] : ""}</span>;
+                        })}
+                </div>
             </div>
 
             {connected && accountId ? (
@@ -591,7 +606,7 @@ export default function Inventory({ token, onDeckReady }) {
                 </div>
             )}
 
-            {loading && (
+            {loading && nfts.length === 0 && (
                 <div className="inv-loading">
                     <div className="inv-loading-spinner" />
                     <div>Загрузка NFT…</div>
