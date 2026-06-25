@@ -4056,3 +4056,18 @@ img {
 /* 3) лидерборд ближе к виджету турниров (ровный зазор как по бокам) */
 .bottom-stack { padding-top: 6px !important; gap: 8px !important; }
 .home-bottom-area { padding-bottom: 0 !important; margin-bottom: 0 !important; }
+
+/* шапку турниров опустить вровень с остальными вкладками */
+.tournament-page-v2 { padding-top: 16px !important; }
+
+/* фон карточки турнира — скруглить углы (чтобы не торчали острые при развороте) */
+.t-card-bg, .t-card-bg-overlay { border-radius: 20px; }
+
+/* кнопка удаления турнира (админ) */
+.t-del-btn {
+    width: 100%; margin-top: 8px; padding: 10px; border-radius: 12px; cursor: pointer;
+    font-size: 13px; font-weight: 700;
+    background: rgba(255, 80, 80, 0.10); border: 1px solid rgba(255, 120, 120, 0.4); color: #ff9a9a;
+}
+.t-del-btn:hover { background: rgba(255, 80, 80, 0.18); }
+.t-del-btn:disabled { opacity: 0.5; cursor: default; }

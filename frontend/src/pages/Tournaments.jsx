@@ -189,6 +189,15 @@ function TournamentCard({ summary, token, me, amAdmin, onEnterMatch, onChanged, 
         });
     };
 
+    var deleteTournament = function (e) {
+        e.stopPropagation();
+        if (typeof window !== "undefined" && !window.confirm("Удалить турнир «" + data.name + "»? Действие необратимо.")) return;
+        setBusy(true); setMsg("🗑 Удаляю...");
+        apiFetch("/api/tournaments/" + summary.id, { method: "DELETE", token: token })
+            .then(function () { onChanged && onChanged(); })
+            .catch(function (err) { setMsg("❌ " + (err && err.message || err)); setBusy(false); });
+    };
+
     var myMatch = t && t.bracket && t.bracket.my_match;
     var winners = (t && t.winners) || [];
 
@@ -277,6 +286,12 @@ function TournamentCard({ summary, token, me, amAdmin, onEnterMatch, onChanged, 
                     {amAdmin && (
                         <button className="t-photo-btn" style={{ marginTop: 10 }} disabled={busy} onClick={changeBg}>
                             🖼 {bg ? "Сменить фон" : "Поставить фон с телефона"}
+                        </button>
+                    )}
+
+                    {amAdmin && (
+                        <button className="t-del-btn" disabled={busy} onClick={deleteTournament}>
+                            🗑 Удалить турнир
                         </button>
                     )}
 

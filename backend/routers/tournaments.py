@@ -36,7 +36,7 @@ from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, HTTPException, Header, Body
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, delete
 
 from database.session import get_session
 from database.models.tournament import (
@@ -760,3 +760,18 @@ async def settle_tournament(tid: str, authorization: str = Header(None)):
         t.settled = all(w.get("paid") or int(w.get("prize_yocto", "0")) <= 0 for w in winners)
         await session.commit()
         return {"ok": True, "settled": t.settled, "winners": winners}
+
+
+@router.delete("/{tid}")
+async def delete_tournament(tid: str, authorization: str = Header(None)):
+    """Удалить турнир (админ) вместе с участниками и матчами сетки."""
+    await _require_admin(authorization)
+    async for session in get_session():
+        t = await session.get(Tournament, tid)
+        if not t:
+            raise HTTPException(status_code=404, detail="Tournament not found")
+        await session.execute(delete(TournamentMatch).where(TournamentMatch.tournament_id == tid))
+        await session.execute(delete(TournamentParticipant).where(TournamentParticipant.tournament_id == tid))
+        await session.delete(t)
+        await session.commit()
+        return {"ok": True}
