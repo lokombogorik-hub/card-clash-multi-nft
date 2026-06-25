@@ -1272,39 +1272,38 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                             <div style={{ padding: 20, opacity: 0.7, fontSize: 14 }}>
                                                 ⏳ Загрузка карт...
                                             </div>
+                                        ) : claimRevealed ? (
+                                            <div className="reward-stage">
+                                                <div className="reward-win-title">🎉 Карта твоя!</div>
+                                                <div className="reward-card">
+                                                    <img
+                                                        src={(claimedCard?.image || claimedCard?.imageUrl || (claimCards[claimPickIndex] || {}).image || (claimCards[claimPickIndex] || {}).imageUrl) || "/cards/card.jpg"}
+                                                        alt=""
+                                                        onError={e => { e.currentTarget.src = "/cards/card.jpg"; }}
+                                                    />
+                                                    <span className="spark s1" /><span className="spark s2" /><span className="spark s3" />
+                                                    <span className="spark s4" /><span className="spark s5" /><span className="spark s6" />
+                                                </div>
+                                            </div>
                                         ) : (
                                             <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 16, flexWrap: "wrap" }}>
                                                 {claimCards.map((card, idx) => {
                                                     const isSel = claimPickIndex === idx;
-                                                    const showCard = claimRevealed && isSel;
-                                                    const realImg = claimedCard?.image || claimedCard?.imageUrl || card?.image || card?.imageUrl || null;
                                                     return (
                                                         <div
                                                             key={card?.id || card?.token_id || idx}
                                                             onClick={() => onClaimPick(idx)}
                                                             style={{
-                                                                cursor: claimRevealed ? "default" : "pointer",
+                                                                cursor: "pointer",
                                                                 transform: isSel ? "scale(1.1) translateY(-4px)" : "scale(1)",
                                                                 transition: "all 0.25s ease",
-                                                                filter: claimRevealed && !isSel ? "brightness(0.5)" : "none",
                                                             }}
                                                         >
-                                                            {showCard ? (
-                                                                <div style={{ width: 64, height: 88, borderRadius: 10, overflow: "hidden", border: "3px solid #ffd700", boxShadow: "0 0 20px rgba(255,215,0,0.5)", background: "#1a1a2e" }}>
-                                                                    <img
-                                                                        src={realImg || "/cards/card.jpg"}
-                                                                        alt=""
-                                                                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                                                                        onError={e => { e.currentTarget.src = "/cards/card.jpg"; }}
-                                                                    />
+                                                            <div className="card back" style={{ width: 64, height: 88, border: isSel ? "3px solid #ffd700" : "2px solid rgba(255,255,255,0.2)", boxShadow: isSel ? "0 0 20px rgba(255,215,0,0.5)" : "none", borderRadius: 10 }}>
+                                                                <div className="card-back-inner">
+                                                                    <img className="card-back-logo-img" src="/ui/cardclash-logo.png?v=3" alt="" draggable="false" style={{ width: "70%", height: "auto" }} />
                                                                 </div>
-                                                            ) : (
-                                                                <div className="card back" style={{ width: 64, height: 88, border: isSel ? "3px solid #ffd700" : "2px solid rgba(255,255,255,0.2)", boxShadow: isSel ? "0 0 20px rgba(255,215,0,0.5)" : "none", borderRadius: 10 }}>
-                                                                    <div className="card-back-inner">
-                                                                        <img className="card-back-logo-img" src="/ui/cardclash-logo.png?v=3" alt="" draggable="false" style={{ width: "70%", height: "auto" }} />
-                                                                    </div>
-                                                                </div>
-                                                            )}
+                                                            </div>
                                                         </div>
                                                     );
                                                 })}
