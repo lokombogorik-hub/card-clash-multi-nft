@@ -3965,3 +3965,20 @@ img {
 .inv-dp-elems { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: 56%; }
 .inv-dp-chip { font-size: 13px; background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 999px; padding: 3px 10px; color: #fff; white-space: nowrap; }
 .inv-dp-hint { font-size: 12px; color: rgba(255, 255, 255, 0.45); }
+
+/* ===== Шапки Маркета и Турнира — свечение как в профиле/колоде (фон прозрачный) ===== */
+.market-header, .tournament-header {
+    position: relative; overflow: hidden; border-radius: 22px; z-index: 0;
+}
+.market-header::before, .tournament-header::before {
+    content: ""; position: absolute; inset: -45%; pointer-events: none; z-index: 0;
+    background: radial-gradient(circle at 28% 14%, rgba(120, 170, 255, 0.30), transparent 45%),
+                radial-gradient(circle at 82% 92%, rgba(190, 90, 220, 0.24), transparent 42%);
+    animation: tHeroGlow 9s ease-in-out infinite alternate;
+}
+.market-header::after, .tournament-header::after {
+    content: ""; position: absolute; top: 0; left: -60%; width: 45%; height: 100%; pointer-events: none; z-index: 0;
+    background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.10), transparent);
+    animation: tShine 6s ease-in-out infinite;
+}
+.market-header > *, .tournament-header > * { position: relative; z-index: 1; }
