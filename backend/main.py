@@ -20,6 +20,7 @@ from routers.decks import router as decks_router
 from routers.ws_match import router as ws_game_router
 from routers.user import router as user_router
 from routers.tournaments import router as tournaments_router
+from routers.presence import router as presence_router
 
 logger = logging.getLogger(__name__)
 
@@ -106,3 +107,4 @@ app.include_router(proxy_router)
 app.include_router(ws_game_router)
 app.include_router(user_router)
 app.include_router(tournaments_router)
+app.include_router(presence_router)

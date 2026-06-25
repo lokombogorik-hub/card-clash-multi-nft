@@ -143,6 +143,27 @@ var TOURNAMENTS = [
     }
 ];
 
+function OnlineBadge() {
+    var [n, setN] = useState(null);
+    useEffect(function () {
+        var alive = true;
+        var load = function () {
+            apiFetch("/api/online").then(function (d) { if (alive && d) setN(d.online || 0); }).catch(function () { });
+        };
+        load();
+        var id = setInterval(load, 15000);
+        return function () { alive = false; clearInterval(id); };
+    }, []);
+    if (n === null) return null;
+    return (
+        <div className="online-badge">
+            <span className="online-dot" />
+            <span className="online-num">{n}</span>
+            <span className="online-lbl">онлайн</span>
+        </div>
+    );
+}
+
 function SeasonBar({ token, onOpen }) {
     var [items, setItems] = useState(null); // null = идёт загрузка
     var [idx, setIdx] = useState(0);
@@ -501,6 +522,16 @@ function AppContent() {
         if (screen === "home") try { logoRef.current?.play?.(); } catch (_) { }
     }, [screen]);
 
+    useEffect(function () {
+        var t = token || getStoredToken();
+        var ping = function () {
+            try { apiFetch("/api/presence/ping", { method: "POST", token: t }).catch(function () { }); } catch (_) { }
+        };
+        ping();
+        var id = setInterval(ping, 30000);
+        return function () { clearInterval(id); };
+    }, [token]);
+
     var requestFullscreen = async function () {
         try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light"); } catch (_) { }
         try { window.Telegram?.WebApp?.requestFullscreen?.(); } catch (_) { }
@@ -579,6 +610,7 @@ function AppContent() {
                 {screen === "home" && (
                     <div className="home-center">
                         <div className="home-wallet-row"><WalletConnector /></div>
+                        <div className="home-online-row"><OnlineBadge /></div>
 
                         {/* Баннер активного матча */}
                         {activeMatch && (
