@@ -586,21 +586,43 @@ async def create_tournament(body: CreateTournamentRequest, authorization: str = 
         return _tournament_view(t, 0)
 
 
+_LIST_CACHE = {"ts": 0.0, "out": None}
+_ADMIN_CACHE = {}  # uid -> (ts, bool)
+
+
 @router.get("")
 async def list_tournaments(authorization: str = Header(None)):
-    async for session in get_session():
-        ts = (await session.execute(
-            select(Tournament).order_by(Tournament.created_at.desc())
-        )).scalars().all()
-        out = []
-        for t in ts:
-            await _maybe_auto_start(t, session)
-            await _reconcile(t, session)
-            cnt = len((await session.execute(
-                select(TournamentParticipant).where(TournamentParticipant.tournament_id == t.id)
-            )).scalars().all())
-            out.append(_tournament_view(t, cnt))
-        return {"tournaments": out, "am_admin": await _check_is_admin(authorization)}
+    import time as _t
+    now = _t.time()
+    out = _LIST_CACHE["out"]
+    # Тяжёлую работу (reconcile/auto-start/счётчики) делаем максимум раз в 5с,
+    # а не на каждый запрос — это снимает основную нагрузку на БД под онлайном.
+    if out is None or (now - _LIST_CACHE["ts"]) >= 5:
+        async for session in get_session():
+            ts = (await session.execute(
+                select(Tournament).order_by(Tournament.created_at.desc())
+            )).scalars().all()
+            out = []
+            for t in ts:
+                await _maybe_auto_start(t, session)
+                await _reconcile(t, session)
+                cnt = len((await session.execute(
+                    select(TournamentParticipant).where(TournamentParticipant.tournament_id == t.id)
+                )).scalars().all())
+                out.append(_tournament_view(t, cnt))
+            break
+        _LIST_CACHE.update(ts=now, out=out)
+
+    # am_admin кэшируем по пользователю на 30с (иначе на каждый запрос лезли бы в БД)
+    uid = _uid_from_token(authorization) or ""
+    cached = _ADMIN_CACHE.get(uid)
+    if cached and (now - cached[0]) < 30:
+        am = cached[1]
+    else:
+        am = await _check_is_admin(authorization)
+        _ADMIN_CACHE[uid] = (now, am)
+
+    return {"tournaments": out, "am_admin": am}
 
 
 @router.get("/{tid}")
@@ -774,4 +796,5 @@ async def delete_tournament(tid: str, authorization: str = Header(None)):
         await session.execute(delete(TournamentParticipant).where(TournamentParticipant.tournament_id == tid))
         await session.delete(t)
         await session.commit()
+        _LIST_CACHE["ts"] = 0
         return {"ok": True}

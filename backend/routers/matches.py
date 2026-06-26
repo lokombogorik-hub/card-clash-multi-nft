@@ -331,8 +331,15 @@ async def get_active_match(authorization: Optional[str] = Header(None)):
     raise HTTPException(status_code=404, detail="No active match found")
 
 
+_LB_CACHE = {"ts": 0.0, "data": None, "limit": 0}
+
+
 @router.get("/leaderboard")
 async def get_leaderboard(limit: int = 50):
+    import time as _t
+    now = _t.time()
+    if _LB_CACHE["data"] is not None and _LB_CACHE["limit"] == limit and (now - _LB_CACHE["ts"]) < 8:
+        return _LB_CACHE["data"]
     try:
         async for session in get_session():
             from sqlalchemy import desc
@@ -352,11 +359,13 @@ async def get_leaderboard(limit: int = 50):
                     "losses": u.losses or 0,
                     "rank_name": u.rank or "Новичок",
                 })
-            return {"leaders": leaders, "total": len(leaders)}
+            data = {"leaders": leaders, "total": len(leaders)}
+            _LB_CACHE.update(ts=now, data=data, limit=limit)
+            return data
     except Exception as e:
         print(f"[LEADERBOARD] Error: {e}")
         traceback.print_exc()
-        return {"leaders": [], "total": 0}
+        return _LB_CACHE["data"] or {"leaders": [], "total": 0}
 
 @router.get("/history")
 async def get_match_history(limit: int = 20, authorization: Optional[str] = Header(None)):
