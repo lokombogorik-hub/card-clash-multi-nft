@@ -51,3 +51,29 @@ async def stress_match(body: MatchReq):
     active_matches[mid] = md
     await _save_match_to_db(md)
     return {"match_id": mid}
+
+
+class CleanupReq(BaseModel):
+    secret: str
+
+
+@router.post("/cleanup")
+async def stress_cleanup(body: CleanupReq):
+    _check(body.secret)
+    from sqlalchemy import delete
+    from database.session import get_session
+    from database.models.pvp_match import PvPMatch
+    n = 0
+    async for session in get_session():
+        res = await session.execute(delete(PvPMatch).where(PvPMatch.id.like("stress_%")))
+        await session.commit()
+        n = res.rowcount or 0
+        break
+    # подчистим и из памяти
+    try:
+        from routers.matchmaking import active_matches
+        for mid in [k for k in list(active_matches.keys()) if str(k).startswith("stress_")]:
+            active_matches.pop(mid, None)
+    except Exception:
+        pass
+    return {"ok": True, "deleted": n}
