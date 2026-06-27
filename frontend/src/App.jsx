@@ -456,12 +456,7 @@ function AppContent() {
     useEffect(function () {
         var tg = window.Telegram?.WebApp;
         if (!tg) { setMe(null); return; }
-        tg.ready();
-        try { tg.expand && tg.expand(); } catch (_) { }
-        // Полноэкранный режим (Bot API 8.0+): без него на ПК окно открывается
-        // узким/сбоку, а не на весь экран. Старые клиенты просто игнорируют.
-        try { tg.requestFullscreen && tg.requestFullscreen(); } catch (_) { }
-        try { tg.onEvent && tg.onEvent("viewportChanged", function () { try { tg.expand && tg.expand(); } catch (_) { } }); } catch (_) { }
+        tg.ready(); tg.expand();
         try { tg.setHeaderColor?.("#000000"); } catch (_) { }
         try { tg.setBackgroundColor?.("#000000"); } catch (_) { }
         try { tg.setBottomBarColor?.("#000000"); } catch (_) { }
