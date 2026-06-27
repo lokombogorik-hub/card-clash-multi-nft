@@ -1,6 +1,9 @@
 var DIRECT_RPC_URL = (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_NEAR_RPC_URL) || "https://free.rpc.fastnear.com";
 var API_BASE = (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_BASE_URL) || "";
 var PROXY_RPC_URL = API_BASE ? API_BASE + "/api/near/rpc" : "";
+// Свой надёжный CDN с картинками (Cloudflare R2 и т.п.). Если задан — карты
+// берутся оттуда по ИМЕНИ файла (1.png), без IPFS/CID. Самый стабильный путь.
+var IMAGE_BASE = ((typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_IMAGE_BASE) || "").replace(/\/+$/, "");
 
 // Шлюзы IPFS в порядке попытки. w3s.link (web3.storage) реально отдаёт эти NFT —
 // он первый. Дальше живые резервы на случай его флакости. Card перебирает их
@@ -165,13 +168,24 @@ export function ipfsGatewayUrl(url, idx) {
     return IPFS_GATEWAYS[(idx || 0) % IPFS_GATEWAYS.length](p.cid, p.path);
 }
 
+function _fileNameFromUrl(url) {
+    var p = parseIpfs(url);
+    if (p && p.path) return p.path.replace(/^\//, "");
+    var m = String(url || "").match(/\/([^/?#]+\.(png|jpe?g|webp|gif|svg))(?:[?#].*)?$/i);
+    return m ? m[1] : null;
+}
+
 export function proxyImageUrl(url) {
     if (!url) return "";
+    if (url.indexOf("wsrv.nl") >= 0 || url.indexOf("/api/proxy/image") >= 0) return url;
+    // 1) Свой CDN по имени файла — самый надёжный путь (без IPFS).
+    if (IMAGE_BASE) {
+        var fn = _fileNameFromUrl(url);
+        if (fn) return IMAGE_BASE + "/" + fn;
+    }
+    // 2) Иначе — через наш бэкенд-прокси (перебор IPFS-шлюзов + кэш).
     if (!API_BASE) return url;
-    if (url.indexOf("/api/proxy/image") >= 0) return url; // уже проксировано
     if (!/^https?:\/\//.test(url) && url.indexOf("ipfs://") !== 0) return url;
-    // Через наш бэкенд-прокси: он бьёт прямо в w3s.link (единственный живой
-    // источник этой коллекции), даёт большой таймаут и кэширует байты.
     return API_BASE + "/api/proxy/image?url=" + encodeURIComponent(url);
 }
 
