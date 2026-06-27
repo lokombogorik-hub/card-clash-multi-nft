@@ -526,11 +526,12 @@ function AppContent() {
         return function () { clearInterval(id); };
     }, [token]);
 
-    var requestFullscreen = async function () {
+    var requestFullscreen = function () {
+        // Только expand() — он открывает на весь экран как раньше. Вызов
+        // Telegram requestFullscreen()/нативный fullscreen на десктопе давал
+        // боковую панель и «расползание», поэтому их убрали.
         try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("light"); } catch (_) { }
-        try { window.Telegram?.WebApp?.requestFullscreen?.(); } catch (_) { }
         try { window.Telegram?.WebApp?.expand?.(); } catch (_) { }
-        try { if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.(); } catch (_) { }
     };
 
     var onPlay = function () { requestFullscreen(); setScreen("inventory"); };
