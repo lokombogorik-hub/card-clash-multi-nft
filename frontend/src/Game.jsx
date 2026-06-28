@@ -1259,22 +1259,11 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                         : <>Раунд {roundNo} • Серия до {MATCH_WINS_TARGET} • Счёт {series.player}:{series.enemy}</>
                                     }
                                 </div>
-                                {matchOver && (isPvP ? roundWinner : matchWinner) === "player" && !claimDone && (
-                                    <>
-                                        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8, color: "#ffd700" }}>
-                                            🎁 Выбери 1 карту противника
-                                        </div>
-                                        <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 14 }}>
-                                            Карты скрыты — выбирай наугад!
-                                        </div>
-
-                                        {claimLoading ? (
-                                            <div style={{ padding: 20, opacity: 0.7, fontSize: 14 }}>
-                                                ⏳ Загрузка карт...
-                                            </div>
-                                        ) : claimRevealed ? (
+                                {matchOver && (isPvP ? roundWinner : matchWinner) === "player" && (
+                                    claimRevealed ? (
+                                        <div className="reward-wrap">
+                                            <div className="reward-win-title">🎉 Карта твоя!</div>
                                             <div className="reward-stage">
-                                                <div className="reward-win-title">🎉 Карта твоя!</div>
                                                 <div className="reward-card">
                                                     <img
                                                         src={(claimedCard?.image || claimedCard?.imageUrl || (claimCards[claimPickIndex] || {}).image || (claimCards[claimPickIndex] || {}).imageUrl) || "/cards/card.jpg"}
@@ -1285,32 +1274,46 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                                     <span className="spark s4" /><span className="spark s5" /><span className="spark s6" />
                                                 </div>
                                             </div>
-                                        ) : (
-                                            <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 16, flexWrap: "wrap" }}>
-                                                {claimCards.map((card, idx) => {
-                                                    const isSel = claimPickIndex === idx;
-                                                    return (
-                                                        <div
-                                                            key={card?.id || card?.token_id || idx}
-                                                            onClick={() => onClaimPick(idx)}
-                                                            style={{
-                                                                cursor: "pointer",
-                                                                transform: isSel ? "scale(1.1) translateY(-4px)" : "scale(1)",
-                                                                transition: "all 0.25s ease",
-                                                            }}
-                                                        >
-                                                            <div className="card back" style={{ width: 64, height: 88, border: isSel ? "3px solid #ffd700" : "2px solid rgba(255,255,255,0.2)", boxShadow: isSel ? "0 0 20px rgba(255,215,0,0.5)" : "none", borderRadius: 10 }}>
-                                                                <div className="card-back-inner">
-                                                                    <img className="card-back-logo-img" src="/ui/cardclash-logo.png?v=3" alt="" draggable="false" style={{ width: "70%", height: "auto" }} />
+                                            <div className="reward-status">
+                                                {claimBusy && !claimDone ? "⏳ Получаем NFT в инвентарь..." : claimDone ? "✅ NFT в твоём инвентаре" : ""}
+                                            </div>
+                                            {claimError && (
+                                                <div style={{ fontSize: 12, color: "#ff6b6b", marginBottom: 10, padding: "8px 12px", background: "rgba(255,100,100,0.15)", borderRadius: 8, wordBreak: "break-word" }}>❌ {claimError}</div>
+                                            )}
+                                            <button className="reward-take-btn" disabled={claimBusy && !claimDone} onClick={onExit}>
+                                                {claimBusy && !claimDone ? "⏳ Перевод..." : "Забрать 🎁"}
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8, color: "#ffd700" }}>
+                                                🎁 Выбери 1 карту противника
+                                            </div>
+                                            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 14 }}>
+                                                Карты скрыты — выбирай наугад!
+                                            </div>
+                                            {claimLoading ? (
+                                                <div style={{ padding: 20, opacity: 0.7, fontSize: 14 }}>⏳ Загрузка карт...</div>
+                                            ) : (
+                                                <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 16, flexWrap: "wrap" }}>
+                                                    {claimCards.map((card, idx) => {
+                                                        const isSel = claimPickIndex === idx;
+                                                        return (
+                                                            <div
+                                                                key={card?.id || card?.token_id || idx}
+                                                                onClick={() => onClaimPick(idx)}
+                                                                style={{ cursor: "pointer", transform: isSel ? "scale(1.1) translateY(-4px)" : "scale(1)", transition: "all 0.25s ease" }}
+                                                            >
+                                                                <div className="card back" style={{ width: 64, height: 88, border: isSel ? "3px solid #ffd700" : "2px solid rgba(255,255,255,0.2)", boxShadow: isSel ? "0 0 20px rgba(255,215,0,0.5)" : "none", borderRadius: 10 }}>
+                                                                    <div className="card-back-inner">
+                                                                        <img className="card-back-logo-img" src="/ui/cardclash-logo.png?v=3" alt="" draggable="false" style={{ width: "70%", height: "auto" }} />
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
-
-                                        {!claimRevealed && !claimLoading && (
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
                                             <button
                                                 onClick={onClaimConfirm}
                                                 disabled={claimPickIndex === null || claimBusy}
@@ -1318,22 +1321,11 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                             >
                                                 {claimBusy ? "⏳ Загрузка..." : "🎁 Забрать карту"}
                                             </button>
-                                        )}
-                                        {claimRevealed && claimBusy && (
-                                            <div style={{ fontSize: 14, color: "#a0d8ff", marginBottom: 12 }}>⏳ Переводим NFT...</div>
-                                        )}
-                                        {claimError && (
-                                            <div style={{ fontSize: 12, color: "#ff6b6b", marginBottom: 12, padding: "8px 12px", background: "rgba(255,100,100,0.15)", borderRadius: 8, wordBreak: "break-word" }}>
-                                                ❌ {claimError}
-                                            </div>
-                                        )}
-                                    </>
-                                )}
-
-                                {matchOver && (isPvP ? roundWinner : matchWinner) === "player" && claimDone && (
-                                    <div style={{ fontSize: 15, color: "#4ade80", marginBottom: 16, fontWeight: 700, padding: "12px 16px", background: "rgba(74,222,128,0.15)", borderRadius: 12 }}>
-                                        ✅ Карта получена! Проверь инвентарь.
-                                    </div>
+                                            {claimError && (
+                                                <div style={{ fontSize: 12, color: "#ff6b6b", marginBottom: 12, padding: "8px 12px", background: "rgba(255,100,100,0.15)", borderRadius: 8, wordBreak: "break-word" }}>❌ {claimError}</div>
+                                            )}
+                                        </>
+                                    )
                                 )}
 
                                 {matchOver && (isPvP ? roundWinner : matchWinner) === "enemy" && (
@@ -1344,10 +1336,12 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
                                 <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 8, flexWrap: "wrap" }}>
                                     {!matchOver && !isPvP && <button onClick={onNextRound}>Следующий раунд</button>}
-                                    {matchOver && (claimDone || (isPvP ? roundWinner : matchWinner) === "enemy") && (
+                                    {matchOver && (isPvP ? roundWinner : matchWinner) === "enemy" && (
                                         <button onClick={resetMatch}>{isPvP ? "Выйти" : "Новый матч"}</button>
                                     )}
-                                    <button onClick={onExit}>Меню</button>
+                                    {!(matchOver && (isPvP ? roundWinner : matchWinner) === "player" && claimRevealed) && (
+                                        <button onClick={onExit}>Меню</button>
+                                    )}
                                 </div>
                             </div>
                         </div>

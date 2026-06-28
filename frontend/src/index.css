@@ -4071,3 +4071,17 @@ img {
 }
 .t-del-btn:hover { background: rgba(255, 80, 80, 0.18); }
 .t-del-btn:disabled { opacity: 0.5; cursor: default; }
+/* ===== Награда: карта остаётся на экране, кнопка «Забрать» ===== */
+.reward-wrap { display: flex; flex-direction: column; align-items: center; }
+.reward-status { font-size: 14px; margin: 12px 0 4px; color: #a0d8ff; min-height: 18px; font-weight: 600; }
+.reward-take-btn {
+    margin-top: 8px; padding: 13px 36px; border: none; border-radius: 14px;
+    font-size: 16px; font-weight: 900; cursor: pointer; color: #000;
+    background: linear-gradient(135deg, #ffd700, #ff8c00);
+    box-shadow: 0 6px 22px rgba(255, 160, 0, 0.4);
+    transition: transform 0.15s;
+}
+.reward-take-btn:hover:not(:disabled) { transform: translateY(-2px); }
+.reward-take-btn:disabled { opacity: 0.6; cursor: default; background: rgba(255,255,255,0.12); color: #888; box-shadow: none; }
+/* карта чуть крупнее, чтобы рассмотреть */
+.reward-card { width: 210px !important; height: 290px !important; }

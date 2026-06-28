@@ -236,6 +236,16 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                 } catch (e) { return false; }
             };
 
+            // На мобиле HOT часто подписывает tx, но веб теряет ответ. Индексер
+            // обновляется не мгновенно — поэтому опрашиваем несколько раз.
+            var nftsGonePolled = async function (tries, delayMs) {
+                for (var i = 0; i < tries; i++) {
+                    if (await nftsGone()) return true;
+                    await new Promise(function (r) { setTimeout(r, delayMs); });
+                }
+                return false;
+            };
+
             var txResult = null;
             var MAX_TX_ATTEMPTS = 3;
             var lastTxErr = null;
@@ -270,6 +280,16 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                         continue;
                     }
                     break;
+                }
+            }
+            if (lastTxErr) {
+                // Вдруг кошелёк всё же подписал (частый случай на мобиле): ждём
+                // индексер до ~18с и проверяем, не ушли ли NFT в эскроу.
+                setStatusText("Проверяю, ушли ли NFT в эскроу...");
+                if (await nftsGonePolled(6, 3000)) {
+                    console.warn("[LockEscrow] NFTs in escrow after poll — success");
+                    txResult = { recovered: true };
+                    lastTxErr = null;
                 }
             }
             if (lastTxErr) {
