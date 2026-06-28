@@ -125,6 +125,16 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
             var owned = await nearNftTokensForOwner(nftContractId, walletAddress);
             var ownedIds = new Set(owned.map(function (t) { return t.token_id; }));
             var missing = deckTokenIds.filter(function (id) { return !ownedIds.has(id); });
+            // Индексер NEAR иногда отстаёт (особенно на мобиле/у второго игрока):
+            // показывает карты как «не твои», хотя они на кошельке. Дадим догнать.
+            for (var oc = 0; oc < 3 && missing.length > 0; oc++) {
+                setStatusText("Проверяю NFT (индексер догоняет)... " + (oc + 1) + "/3");
+                await new Promise(function (r) { setTimeout(r, 2500); });
+                try { invalidateOwnerCache(nftContractId, walletAddress); } catch (e) { }
+                owned = await nearNftTokensForOwner(nftContractId, walletAddress);
+                ownedIds = new Set(owned.map(function (t) { return t.token_id; }));
+                missing = deckTokenIds.filter(function (id) { return !ownedIds.has(id); });
+            }
             if (missing.length > 0) {
                 throw new Error(
                     "Эти NFT сейчас не на твоём кошельке — возможно, уже залочены в другом матче " +
