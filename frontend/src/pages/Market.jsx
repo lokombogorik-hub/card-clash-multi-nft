@@ -275,71 +275,32 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                     </>
                 )}
 
-                {revealed && card && (
-                    <>
-                        <div style={{
-                            opacity: revealedCards.length > 0 ? 1 : 0,
-                            transform: revealedCards.length > 0
-                                ? "scale(1) translateY(0)"
-                                : "scale(0.7) translateY(20px)",
-                            transition: "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
-                            width: "100%",
-                            maxWidth: 220,
-                            aspectRatio: "3/4",
-                            borderRadius: 18,
-                            overflow: "hidden",
-                            border: "3px solid " + rarityColor,
-                            boxShadow: revealedCards.length > 0
-                                ? "0 0 40px " + rarityColor + "80"
-                                : "none",
-                            background: "#0a0e1a",
-                            position: "relative",
-                            flexShrink: 0,
-                        }}>
-                            <CardImage
-                                imageUrl={card.image_url || card.imageUrl}
-                                name={card.name || card.title}
-                            />
-
-                            <div style={{
-                                position: "absolute", top: 0, left: 0, right: 0,
-                                padding: "8px 10px",
-                                background: "linear-gradient(to bottom, rgba(0,0,0,0.85), transparent)",
-                                fontSize: 11, fontWeight: 700, color: "#fff", textAlign: "center",
-                            }}>
-                                {card.name || card.title}
+                {revealed && card && (function () {
+                    var tier = caseItem.rarity || "common";
+                    var sparkN = tier === "legendary" ? 8 : tier === "epic" ? 6 : tier === "rare" ? 4 : 0;
+                    var hasRays = tier === "epic" || tier === "legendary";
+                    var rcGlow = rarityColor + "80";
+                    var sparks = [];
+                    for (var i = 0; i < sparkN; i++) sparks.push(i);
+                    return (
+                        <div className={"case-reveal tier-" + tier}>
+                            <div className="case-reveal-stage">
+                                {hasRays && (
+                                    <div className="case-rays" style={{ background: "conic-gradient(from 0deg, transparent, " + rarityColor + "66, transparent 25%, transparent 50%, " + rarityColor + "66, transparent 75%, transparent)" }} />
+                                )}
+                                <div className="case-reveal-card" style={{ "--rcGlow": rcGlow, borderColor: rarityColor }}>
+                                    <CardImage imageUrl={card.image_url || card.imageUrl} name={card.name || card.title} />
+                                    <div className="case-card-top">{card.name || card.title}</div>
+                                    <div className="case-card-rarity" style={{ color: rarityColor }}>✦ {card.rarity} ✦</div>
+                                    {sparks.map(function (i) { return <span key={i} className={"case-spark cs" + i} />; })}
+                                </div>
                             </div>
-
-                            <div style={{
-                                position: "absolute", bottom: 0, left: 0, right: 0,
-                                padding: "8px",
-                                background: "linear-gradient(to top, rgba(0,0,0,0.9), transparent)",
-                                fontSize: 12, fontWeight: 900,
-                                color: rarityColor,
-                                textAlign: "center",
-                                textTransform: "uppercase",
-                                letterSpacing: 1,
-                            }}>
-                                ✦ {card.rarity} ✦
-                            </div>
+                            {revealedCards.length > 0 && (
+                                <button className="reward-take-btn" onClick={onClose} style={{ marginTop: 16 }}>Забрать 🎁</button>
+                            )}
                         </div>
-
-                        {revealedCards.length > 0 && (
-                            <button
-                                onClick={onClose}
-                                style={{
-                                    padding: "10px 0", fontSize: 14, fontWeight: 700,
-                                    borderRadius: 12, border: "none",
-                                    background: "linear-gradient(135deg, #22c55e, #16a34a)",
-                                    color: "#fff", cursor: "pointer", width: "60%",
-                                    boxShadow: "0 4px 16px rgba(34,197,94,0.3)",
-                                }}
-                            >
-                                ✅ В инвентарь!
-                            </button>
-                        )}
-                    </>
-                )}
+                    );
+                })()}
             </div>
         </div>
     );

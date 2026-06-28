@@ -4087,3 +4087,67 @@ img {
 .reward-card { width: auto !important; height: min(46vh, 290px) !important; aspect-ratio: 3 / 4; }
 .reward-win-title { font-size: clamp(15px, 4vw, 17px); }
 .reward-wrap { width: 100%; }
+
+/* ===== Вскрытие кейса: эффектная карта с градацией по цене ===== */
+.case-reveal { width: 100%; display: flex; flex-direction: column; align-items: center; perspective: 1000px; }
+.case-reveal-stage { position: relative; display: flex; align-items: center; justify-content: center; padding: 14px 0; }
+
+.case-rays {
+    position: absolute; width: 150%; aspect-ratio: 1; border-radius: 50%;
+    opacity: 0.45; filter: blur(2px); pointer-events: none; z-index: 0;
+    animation: caseRays 9s linear infinite;
+}
+@keyframes caseRays { to { transform: rotate(360deg); } }
+
+.case-reveal-card {
+    position: relative; z-index: 1;
+    width: auto; height: min(46vh, 300px); aspect-ratio: 3 / 4;
+    border-radius: 18px; overflow: hidden; background: #0a0e1a;
+    border: 3px solid #6b7280;
+    transform-style: preserve-3d;
+    animation: caseFlip 0.8s cubic-bezier(0.2, 0.9, 0.3, 1.35) both,
+               caseGlow 1.9s ease-in-out infinite 0.8s;
+}
+@keyframes caseFlip {
+    0% { transform: scale(0.3) rotateY(180deg); opacity: 0; }
+    55% { opacity: 1; }
+    100% { transform: scale(1) rotateY(0deg); opacity: 1; }
+}
+@keyframes caseGlow {
+    0%, 100% { box-shadow: 0 0 22px var(--rcGlow, rgba(255,255,255,0.4)); }
+    50% { box-shadow: 0 0 50px var(--rcGlow, rgba(255,255,255,0.4)), 0 0 95px var(--rcGlow, rgba(255,255,255,0.4)); }
+}
+
+/* интенсивность по тиру (чем дороже кейс, тем эффектнее) */
+.tier-common .case-reveal-card { animation: caseFlip 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.3) both; }
+.tier-rare .case-reveal-card { animation: caseFlip 0.8s cubic-bezier(0.2, 0.9, 0.3, 1.35) both, caseGlow 2.3s ease-in-out infinite 0.8s; }
+.tier-epic .case-reveal-card { animation: caseFlip 0.82s cubic-bezier(0.2, 0.9, 0.3, 1.38) both, caseGlow 1.7s ease-in-out infinite 0.82s; }
+.tier-legendary .case-reveal-card { animation: caseFlip 0.88s cubic-bezier(0.2, 0.9, 0.3, 1.45) both, caseGlow 1.3s ease-in-out infinite 0.88s; }
+.tier-legendary .case-rays, .tier-epic .case-rays { opacity: 0.55; }
+.tier-legendary .case-rays { animation-duration: 6s; }
+
+.case-card-top {
+    position: absolute; top: 0; left: 0; right: 0; padding: 8px 10px; z-index: 2;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.85), transparent);
+    font-size: 12px; font-weight: 700; color: #fff; text-align: center;
+}
+.case-card-rarity {
+    position: absolute; bottom: 0; left: 0; right: 0; padding: 8px; z-index: 2;
+    background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+    font-size: 13px; font-weight: 900; text-align: center; text-transform: uppercase; letter-spacing: 1px;
+}
+
+/* искры */
+.case-spark {
+    position: absolute; width: 12px; height: 12px; border-radius: 50%; z-index: 3; opacity: 0; pointer-events: none;
+    background: radial-gradient(circle, #fff 0%, #ffd700 55%, transparent 72%);
+    animation: sparkle 1.5s ease-in-out infinite;
+}
+.case-spark.cs0 { top: -8px; left: 18%; animation-delay: .1s; }
+.case-spark.cs1 { top: 10%; right: -8px; animation-delay: .4s; }
+.case-spark.cs2 { bottom: -8px; left: 38%; animation-delay: .7s; }
+.case-spark.cs3 { top: 42%; left: -8px; animation-delay: .25s; }
+.case-spark.cs4 { bottom: 16%; right: -7px; animation-delay: .6s; }
+.case-spark.cs5 { top: -7px; right: 24%; animation-delay: .9s; }
+.case-spark.cs6 { bottom: 30%; left: -7px; animation-delay: .5s; }
+.case-spark.cs7 { top: 22%; left: 32%; animation-delay: 1.1s; }
