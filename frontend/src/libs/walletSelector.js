@@ -20,8 +20,17 @@ export async function initSelector({ miniApp = false, telegramInitData = "" }) {
         }
     } catch (e) { }
 
+    // Кастомная сеть с НАДЁЖНЫМ RPC (fastnear). Дефолтный mainnet использует
+    // перегруженный rpc.mainnet.near.org -> кошелёк отдаёт "All RPCs are unavailable"
+    // при рассылке транзакции (особенно на мобиле). Свой nodeUrl это лечит.
     return await setupWalletSelector({
-        network: "mainnet",
+        network: {
+            networkId: "mainnet",
+            nodeUrl: NEAR_RPC_URL,
+            helperUrl: "https://helper.mainnet.near.org",
+            explorerUrl: "https://nearblocks.io",
+            indexerUrl: "https://api.kitwallet.app",
+        },
         modules: [
             setupHotWallet({
                 miniApp: miniApp,
