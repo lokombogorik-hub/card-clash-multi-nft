@@ -4083,5 +4083,7 @@ img {
 }
 .reward-take-btn:hover:not(:disabled) { transform: translateY(-2px); }
 .reward-take-btn:disabled { opacity: 0.6; cursor: default; background: rgba(255,255,255,0.12); color: #888; box-shadow: none; }
-/* карта чуть крупнее, чтобы рассмотреть */
-.reward-card { width: 210px !important; height: 290px !important; }
+/* карта адаптивная: не вылезает за экран на мобиле (чтобы кнопка «Забрать» была видна) */
+.reward-card { width: auto !important; height: min(46vh, 290px) !important; aspect-ratio: 3 / 4; }
+.reward-win-title { font-size: clamp(15px, 4vw, 17px); }
+.reward-wrap { width: 100%; }
