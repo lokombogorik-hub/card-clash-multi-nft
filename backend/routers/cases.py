@@ -56,10 +56,10 @@ RARITY_WEIGHTS = {
 }
 
 CASES = {
-    "starter": {"price": 0.1, "card_count": 1, "rarity_mode": "common"},
-    "premium": {"price": 0.1, "card_count": 1, "rarity_mode": "rare"},
-    "legendary": {"price": 0.1, "card_count": 1, "rarity_mode": "epic"},
-    "ultimate": {"price": 0.1, "card_count": 1, "rarity_mode": "legendary"},
+    "starter": {"price": 0.01, "card_count": 1, "rarity_mode": "common"},
+    "premium": {"price": 0.01, "card_count": 1, "rarity_mode": "rare"},
+    "legendary": {"price": 0.01, "card_count": 1, "rarity_mode": "epic"},
+    "ultimate": {"price": 0.01, "card_count": 1, "rarity_mode": "legendary"},
 }
 
 reserved_tokens: Dict[str, List[dict]] = {}
