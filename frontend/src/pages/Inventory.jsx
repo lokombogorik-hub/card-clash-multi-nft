@@ -274,7 +274,7 @@ var InventoryCard = memo(function InventoryCard({ nft, isSelected, pickNo, onTog
         longFired.current = false;
         pressTimer.current = setTimeout(function () {
             longFired.current = true;
-            try { navigator.vibrate && navigator.vibrate(25); } catch (e) { }
+            try { window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback && window.Telegram.WebApp.HapticFeedback.impactOccurred("medium"); } catch (e) { }
             if (onInspect) onInspect(nft);
         }, 420);
     }, [onInspect, nft]);
@@ -689,9 +689,7 @@ export default function Inventory({ token, onDeckReady }) {
 // осмотр карты крупно (зажал в колоде) — тап по фону закрывает
 function CardInspect({ nft, onClose }) {
     if (!nft) return null;
-    var st = nft.stats || {};
     var rarity = nft.rarity || {};
-    var element = nft.element || genElement(nft.tokenId || nft.token_id || nft.id);
     return (
         <div className="inv-inspect" onClick={onClose}>
             <div
@@ -703,13 +701,6 @@ function CardInspect({ nft, onClose }) {
                     <NftImage src={nft.imageUrl} originalSrc={nft.originalImageUrl} alt={nft.name || ""} cacheKey={nftKey(nft)} />
                 </div>
                 <div className="inv-inspect-name">{nft.name || ("Card #" + (nft.tokenId || nft.token_id))}</div>
-            </div>
-            <div className="inv-inspect-stats">
-                <span>{ELEM_ICON[element] || "🔮"}</span>
-                <span>⬆ {displayStatValue(st.top)}</span>
-                <span>➡ {displayStatValue(st.right)}</span>
-                <span>⬇ {displayStatValue(st.bottom)}</span>
-                <span>⬅ {displayStatValue(st.left)}</span>
             </div>
             <div className="inv-inspect-hint">нажми, чтобы закрыть</div>
         </div>
