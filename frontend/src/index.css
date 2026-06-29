@@ -4206,3 +4206,15 @@ img {
     .pf { padding-top: 2px; }
     .pf-hero { padding-top: 2px !important; }
 }
+
+/* профиль: компактная шапка под низкое окно (ужимается по высоте экрана) */
+.pf-ring { width: clamp(76px, 19vh, 116px) !important; height: clamp(76px, 19vh, 116px) !important; }
+.pf-ava { font-size: clamp(26px, 8vw, 40px) !important; }
+.pf-name { font-size: clamp(17px, 4.5vw, 22px) !important; margin: 8px 0 5px !important; }
+.pf-rankchip { padding: 4px 12px !important; font-size: 12px !important; }
+.pf-id { margin-top: 4px !important; font-size: 10px !important; }
+.pf-rating { margin-top: clamp(8px, 1.4vh, 16px) !important; }
+.pf-rating-num { font-size: clamp(32px, 7.5vh, 50px) !important; }
+.pf-coins { margin-top: 4px !important; font-size: 13px !important; }
+.pf-prog { margin-top: clamp(8px, 1.4vh, 14px) !important; }
+.pf-wallet { margin-top: clamp(8px, 1.4vh, 14px) !important; padding: 9px 12px !important; }
