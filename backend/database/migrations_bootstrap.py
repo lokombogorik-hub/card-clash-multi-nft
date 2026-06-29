@@ -12,6 +12,9 @@ async def ensure_users_columns(engine):
     columns = [
         ("photo_url", "VARCHAR(500)", "NULL"),
         ("near_account_id", "VARCHAR(255)", "NULL"),
+        ("clash_balance", "BIGINT", "0"),
+        ("coins_day", "VARCHAR(20)", "NULL"),
+        ("coins_today", "INTEGER", "0"),
         ("total_matches", "INTEGER", "0"),
         ("wins", "INTEGER", "0"),
         ("losses", "INTEGER", "0"),

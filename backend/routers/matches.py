@@ -1077,6 +1077,21 @@ async def update_player_ratings(winner_id: str, loser_id: str) -> Optional[Dict]
             loser.losses = (loser.losses or 0) + 1
             loser.total_matches = (loser.total_matches or 0) + 1
 
+            # ClashCoin за победу (с дневным потолком от фарма)
+            try:
+                from routers.coins import WIN_REWARD, WIN_DAILY_CAP
+                today = datetime.utcnow().strftime("%Y-%m-%d")
+                if winner.coins_day != today:
+                    winner.coins_day = today
+                    winner.coins_today = 0
+                room = WIN_DAILY_CAP - (winner.coins_today or 0)
+                if room > 0:
+                    inc = min(WIN_REWARD, room)
+                    winner.coins_today = (winner.coins_today or 0) + inc
+                    winner.clash_balance = (winner.clash_balance or 0) + inc
+            except Exception as _e:
+                print(f"[coins] win reward error: {_e}")
+
             await session.commit()
 
             print(f"[RATING] winner {winner_id}: {winner_rating}→{new_winner_rating}")

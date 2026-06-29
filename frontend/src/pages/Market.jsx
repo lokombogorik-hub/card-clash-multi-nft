@@ -320,6 +320,7 @@ export default function Market() {
     var [caseInventory, setCaseInventory] = useState({});
     var [loadingInventory, setLoadingInventory] = useState(true);
     var [caseList, setCaseList] = useState(CASES);
+    var [coins, setCoins] = useState(0);
 
     var token = "";
     try {
@@ -444,6 +445,36 @@ export default function Market() {
         }
     };
 
+    var refreshCoins = function () {
+        apiFetch("/api/coins/me", { token: token }).then(function (d) { if (d) setCoins(d.balance || 0); }).catch(function () { });
+    };
+    useEffect(function () { refreshCoins(); }, [token]);
+
+    // покупка кейса за ClashCoin (без блокчейна — бэк списывает баланс)
+    var handleBuyCoins = async function (c) {
+        var cp = c.coin_price || 0;
+        if (cp <= 0) return;
+        if (coins < cp) { alert("Не хватает ClashCoin: нужно " + cp + ", у тебя " + coins); return; }
+        var available = caseInventory[c.id] || 0;
+        if (available <= 0) { alert("NFT закончились в этом кейсе!"); return; }
+        setBuying(c.id); setError(""); setBuyingStatus("Открываю...");
+        try {
+            var open = await apiFetch("/api/cases/open", {
+                method: "POST", token: token,
+                body: JSON.stringify({ case_id: c.id, pay_with: "coins" }),
+            });
+            var cards = open.cards || [];
+            if (cards.length === 0) throw new Error("Нет карт в ответе");
+            setCaseInventory(function (prev) { var u = { ...prev }; if (u[c.id] > 0) u[c.id] = u[c.id] - 1; return u; });
+            setBuyingStatus("");
+            setOpenModal({ caseItem: c, cards: cards });
+            refreshCoins();
+            try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("success"); } catch (e) { }
+        } catch (e) {
+            setError("Ошибка: " + (e.message || e)); setBuyingStatus("");
+        } finally { setBuying(null); }
+    };
+
     return (
         <div className="market-page">
             {openModal && (
@@ -452,6 +483,7 @@ export default function Market() {
                     cards={openModal.cards}
                     onClose={function () {
                         setOpenModal(null);
+                        refreshCoins();
                         // Перезагрузка инвентаря после закрытия
                         apiFetch("/api/cases/inventory", { method: "GET", token: token })
                             .then(function (resp) {
@@ -483,6 +515,9 @@ export default function Market() {
                 }}>
                     <div style={{ fontSize: 13, color: "#78c8ff" }}>
                         💰 Баланс: {Number(balance).toFixed(4)} Ⓝ
+                    </div>
+                    <div style={{ fontSize: 13, color: "#ffd76a", marginTop: 4 }}>
+                        🪙 {coins} ClashCoin
                     </div>
                     <div style={{ fontSize: 11, opacity: 0.6, marginTop: 4 }}>
                         Treasury: {TREASURY}
@@ -598,6 +633,21 @@ export default function Market() {
                                             : canBuy
                                                 ? "🛒 Купить"
                                                 : "Нужно " + c.price + " Ⓝ"}
+                            </button>
+
+                            <button
+                                className="market-case-buy-btn"
+                                onClick={function () { handleBuyCoins(c); }}
+                                disabled={isBuying || loadingInventory || isOutOfStock || !c.coin_price || coins < c.coin_price}
+                                style={{
+                                    marginTop: 8,
+                                    background: (!isOutOfStock && c.coin_price && coins >= c.coin_price) ? "linear-gradient(135deg,#ffd76a,#ff8c00)" : "#6b7280",
+                                    color: "#000",
+                                    opacity: (!isOutOfStock && c.coin_price && coins >= c.coin_price && !loadingInventory) ? 1 : 0.5,
+                                    cursor: (!isOutOfStock && c.coin_price && coins >= c.coin_price && !isBuying && !loadingInventory) ? "pointer" : "not-allowed",
+                                }}
+                            >
+                                {c.coin_price ? ("🪙 " + c.coin_price + " ClashCoin") : "—"}
                             </button>
                         </div>
                     );

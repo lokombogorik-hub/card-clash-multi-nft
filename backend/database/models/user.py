@@ -28,5 +28,10 @@ class User(Base):
 
     nfts_count = Column(Integer, default=0, nullable=False, server_default="0")
 
+    # ClashCoin — внутриигровая монета
+    clash_balance = Column(BigInteger, default=0, nullable=False, server_default="0")
+    coins_day = Column(String, nullable=True)        # дата последнего начисления (для дневного потолка)
+    coins_today = Column(Integer, default=0, nullable=False, server_default="0")  # сколько накапало за победы сегодня
+
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

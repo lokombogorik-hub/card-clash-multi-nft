@@ -17,7 +17,8 @@ router = APIRouter(prefix="/api/cases", tags=["cases"])
 
 class OpenCaseRequest(BaseModel):
     case_id: str
-    tx_hash: str
+    tx_hash: Optional[str] = None
+    pay_with: str = "near"   # "near" или "coins" (ClashCoin)
 
 
 class ClaimNFTRequest(BaseModel):
@@ -56,10 +57,10 @@ RARITY_WEIGHTS = {
 }
 
 CASES = {
-    "starter": {"price": 0.01, "card_count": 1, "rarity_mode": "common"},
-    "premium": {"price": 0.01, "card_count": 1, "rarity_mode": "rare"},
-    "legendary": {"price": 0.01, "card_count": 1, "rarity_mode": "epic"},
-    "ultimate": {"price": 0.01, "card_count": 1, "rarity_mode": "legendary"},
+    "starter": {"price": 0.01, "coin_price": 50, "card_count": 1, "rarity_mode": "common"},
+    "premium": {"price": 0.01, "coin_price": 150, "card_count": 1, "rarity_mode": "rare"},
+    "legendary": {"price": 0.01, "coin_price": 300, "card_count": 1, "rarity_mode": "epic"},
+    "ultimate": {"price": 0.01, "coin_price": 600, "card_count": 1, "rarity_mode": "legendary"},
 }
 
 reserved_tokens: Dict[str, List[dict]] = {}
@@ -311,7 +312,7 @@ async def get_cases_inventory():
 async def get_catalog():
     # цены кейсов отдаём отсюда -> фронт подтягивает, меняю в одном месте
     return {"cases": [
-        {"id": cid, "price": c["price"], "card_count": c.get("card_count", 1), "rarity_mode": c.get("rarity_mode")}
+        {"id": cid, "price": c["price"], "coin_price": c.get("coin_price"), "card_count": c.get("card_count", 1), "rarity_mode": c.get("rarity_mode")}
         for cid, c in CASES.items()
     ]}
 
@@ -394,25 +395,34 @@ async def open_case(
     if not case:
         raise HTTPException(400, f"Unknown case_id: {data.case_id}")
 
-    if not data.tx_hash or len(data.tx_hash) < 10:
-        raise HTTPException(400, "Invalid tx_hash")
+    paid_with_coins = (data.pay_with == "coins")
 
-    if data.tx_hash in used_tx_hashes:
-        raise HTTPException(400, "Transaction already used")
-
-    # Проверка оплаты в блокчейне (отключается env CASE_PAYMENT_VERIFY=0,
-    # если механика оплаты иная — мгновенный откат без редеплоя).
-    if os.getenv("CASE_PAYMENT_VERIFY", "1") == "1":
-        payer = getattr(user, "near_account_id", None)
-        if not payer:
-            raise HTTPException(400, "Подключи NEAR-кошелёк, которым оплачивал кейс")
-        price_near = float(case.get("price", 0.1) or 0.1)
-        min_yocto = int(price_near * (10 ** 24) * 0.99)  # 1% допуск на округление
-        ok, reason = await verify_case_payment(data.tx_hash, payer, TREASURY_WALLET, min_yocto)
-        if not ok:
-            print(f"[CASES] payment verify FAILED tx={data.tx_hash} payer={payer}: {reason}")
-            raise HTTPException(400, f"Оплата не подтверждена: {reason}")
-        print(f"[CASES] payment verified tx={data.tx_hash} payer={payer}")
+    if paid_with_coins:
+        # оплата ClashCoin — списываем баланс, блокчейн не трогаем
+        coin_price = int(case.get("coin_price") or 0)
+        if coin_price <= 0:
+            raise HTTPException(400, "Этот кейс нельзя купить за монеты")
+        from routers.coins import spend_coins
+        if not await spend_coins(str(user.id), coin_price):
+            raise HTTPException(400, "Недостаточно ClashCoin")
+        print(f"[CASES] paid with coins: user={user.id} case={data.case_id} price={coin_price}")
+    else:
+        if not data.tx_hash or len(data.tx_hash) < 10:
+            raise HTTPException(400, "Invalid tx_hash")
+        if data.tx_hash in used_tx_hashes:
+            raise HTTPException(400, "Transaction already used")
+        # Проверка оплаты в блокчейне (отключается env CASE_PAYMENT_VERIFY=0).
+        if os.getenv("CASE_PAYMENT_VERIFY", "1") == "1":
+            payer = getattr(user, "near_account_id", None)
+            if not payer:
+                raise HTTPException(400, "Подключи NEAR-кошелёк, которым оплачивал кейс")
+            price_near = float(case.get("price", 0.1) or 0.1)
+            min_yocto = int(price_near * (10 ** 24) * 0.99)
+            ok, reason = await verify_case_payment(data.tx_hash, payer, TREASURY_WALLET, min_yocto)
+            if not ok:
+                print(f"[CASES] payment verify FAILED tx={data.tx_hash} payer={payer}: {reason}")
+                raise HTTPException(400, f"Оплата не подтверждена: {reason}")
+            print(f"[CASES] payment verified tx={data.tx_hash} payer={payer}")
 
     # Проверяем доступность NFT перед открытием
     inventory = await get_pool_inventory_cached()
@@ -422,7 +432,8 @@ async def open_case(
     if available_count <= 0:
         raise HTTPException(400, f"No NFTs available for {data.case_id} case (rarity: {rarity})")
 
-    used_tx_hashes.add(data.tx_hash)
+    if not paid_with_coins and data.tx_hash:
+        used_tx_hashes.add(data.tx_hash)
     clear_expired_reservations()
 
     user_id = str(user.id)
@@ -511,6 +522,14 @@ async def open_case(
         print(f"[CASES] Reservation {reservation_id} cleared after successful transfer")
 
     print(f"[CASES] Done: {data.case_id} → {[c['token_id'] for c in cards]}")
+
+    # ClashCoin за открытие (только при оплате NEAR, не за монеты — без петли)
+    if not paid_with_coins:
+        try:
+            from routers.coins import add_coins, CASE_OPEN_REWARD
+            await add_coins(str(user.id), CASE_OPEN_REWARD)
+        except Exception as e:
+            print(f"[coins] case reward error: {e}")
 
     return {
         "success": True,

@@ -60,6 +60,7 @@ export default function Profile({ token, me }) {
     var [matches, setMatches] = useState(null);
     var [loading, setLoading] = useState(true);
     var [avatarOk, setAvatarOk] = useState(true);
+    var [coins, setCoins] = useState(0);
 
     useEffect(function () {
         if (!token) { setLoading(false); return; }
@@ -71,6 +72,9 @@ export default function Profile({ token, me }) {
         apiFetch("/api/matches/history?limit=20", { token: token })
             .then(function (d) { if (alive) setMatches((d && d.matches) || []); })
             .catch(function () { if (alive) setMatches([]); });
+        apiFetch("/api/coins/me", { token: token })
+            .then(function (d) { if (alive && d) setCoins(d.balance || 0); })
+            .catch(function () { });
         return function () { alive = false; };
     }, [token]);
 
@@ -103,6 +107,7 @@ export default function Profile({ token, me }) {
                     <div className="pf-rating">
                         <div className="pf-rating-num">{profile.elo_rating}</div>
                         <div className="pf-rating-lbl">Рейтинг</div>
+                        <div className="pf-coins">🪙 {coins} ClashCoin</div>
                         {profile.next_rank && (
                             <div className="pf-prog">
                                 <div className="pf-prog-bar"><div className="pf-prog-fill" style={{ width: prog + "%" }} /></div>
