@@ -457,6 +457,19 @@ function AppContent() {
         var tg = window.Telegram?.WebApp;
         if (!tg) { setMe(null); return; }
         tg.ready(); tg.expand();
+        // Сколько сверху занято UI Telegram (в фуллскрине — кнопки). Кладём в
+        // --tg-top, чтобы контент не лез под кнопки. В компакте обычно 0.
+        var applyTgInsets = function () {
+            try {
+                var top = (tg.contentSafeAreaInset && tg.contentSafeAreaInset.top) || 0;
+                document.documentElement.style.setProperty("--tg-top", top + "px");
+            } catch (_) { }
+        };
+        applyTgInsets();
+        try { tg.onEvent && tg.onEvent("contentSafeAreaChanged", applyTgInsets); } catch (_) { }
+        try { tg.onEvent && tg.onEvent("safeAreaChanged", applyTgInsets); } catch (_) { }
+        try { tg.onEvent && tg.onEvent("fullscreenChanged", applyTgInsets); } catch (_) { }
+        try { tg.onEvent && tg.onEvent("viewportChanged", applyTgInsets); } catch (_) { }
         try { tg.setHeaderColor?.("#000000"); } catch (_) { }
         try { tg.setBackgroundColor?.("#000000"); } catch (_) { }
         try { tg.setBottomBarColor?.("#000000"); } catch (_) { }
