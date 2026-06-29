@@ -835,7 +835,7 @@ function BottomNav({ active, onChange }) {
         { key: "profile", label: "Профиль", icon: <UserIcon /> },
     ];
     return (
-        <div className="bottom-nav" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
+        <div className="bottom-nav">
             {items.map(function (it) {
                 return (
                     <button

@@ -595,9 +595,9 @@ img {
 
 .bottom-nav {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
-    padding: 10px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: clamp(4px, 1.4vw, 10px);
+    padding: clamp(6px, 1.8vw, 10px);
     border-radius: 18px;
     background: rgba(0, 0, 0, .65);
     border: 1px solid rgba(255, 255, 255, .12);
@@ -606,7 +606,8 @@ img {
 }
 
 .nav-item {
-    padding: 10px 6px;
+    min-width: 0;
+    padding: clamp(7px, 1.8vw, 10px) 4px;
     border-radius: 14px;
     border: 1px solid rgba(255, 255, 255, .08);
     background: rgba(255, 255, 255, .03);
@@ -633,9 +634,13 @@ img {
 }
 
 .nav-txt {
-    font-size: 11px;
+    font-size: clamp(9px, 2.4vw, 11px);
     font-weight: 900;
-    letter-spacing: .2px
+    letter-spacing: .2px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .game-host.is-hidden {
@@ -4043,7 +4048,7 @@ img {
 
 /* ===== Правки раскладки главной + единые шапки ===== */
 /* 1) опустить ряд «онлайн + кошелёк» чуть ниже */
-.home-wallet-row { padding-top: clamp(20px, 5vh, 56px) !important; padding-bottom: clamp(6px, 1.5vh, 12px) !important; }
+.home-wallet-row { padding-top: clamp(8px, 2vh, 22px) !important; padding-bottom: clamp(6px, 1.2vh, 10px) !important; }
 
 /* 2) единые шапки во всех вкладках (одинаковые отступы/размер заголовка) */
 .market-header, .tournament-header, .inv-header {
