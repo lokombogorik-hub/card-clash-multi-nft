@@ -4193,3 +4193,10 @@ img {
 
 /* ClashCoin в профиле */
 .pf-coins { margin-top: 8px; font-size: 14px; font-weight: 800; color: #ffd76a; }
+
+/* ПК (мышь): поднимаем кошелёк/онлайн выше — на десктопе сверху панель окна
+   Telegram, большой отступ не нужен. Тач-устройств (телефон) не касается. */
+@media (hover: hover) and (pointer: fine) {
+    .shell-content { padding-top: calc(var(--safe-t) + 10px); }
+    .home-wallet-row { padding-top: 6px !important; }
+}
