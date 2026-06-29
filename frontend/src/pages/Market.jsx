@@ -319,11 +319,24 @@ export default function Market() {
     var [openModal, setOpenModal] = useState(null);
     var [caseInventory, setCaseInventory] = useState({});
     var [loadingInventory, setLoadingInventory] = useState(true);
+    var [caseList, setCaseList] = useState(CASES);
 
     var token = "";
     try {
         token = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
     } catch (e) { }
+
+    // цены кейсов берём с бэка (catalog) — меняю в одном месте, в cases.py
+    useEffect(function () {
+        var alive = true;
+        apiFetch("/api/cases/catalog").then(function (d) {
+            if (!alive || !d || !d.cases) return;
+            var pm = {};
+            d.cases.forEach(function (c) { pm[c.id] = c.price; });
+            setCaseList(CASES.map(function (c) { return pm[c.id] != null ? { ...c, price: pm[c.id] } : c; }));
+        }).catch(function () { });
+        return function () { alive = false; };
+    }, []);
 
     //  количества доступных NFT для каждого кейса
     useEffect(function () {
@@ -489,7 +502,7 @@ export default function Market() {
             )}
 
             <div className="market-cases-grid">
-                {CASES.map(function (c) {
+                {caseList.map(function (c) {
                     var available = caseInventory[c.id] || 0;
                     var isOutOfStock = !loadingInventory && available <= 0;
                     var canBuy = connected && balance >= c.price && !isOutOfStock && !loadingInventory;

@@ -307,6 +307,15 @@ async def get_cases_inventory():
         return {case_id: 0 for case_id in CASES.keys()}
 
 
+@router.get("/catalog")
+async def get_catalog():
+    # цены кейсов отдаём отсюда -> фронт подтягивает, меняю в одном месте
+    return {"cases": [
+        {"id": cid, "price": c["price"], "card_count": c.get("card_count", 1), "rarity_mode": c.get("rarity_mode")}
+        for cid, c in CASES.items()
+    ]}
+
+
 @router.get("/config")
 async def get_config():
     return {

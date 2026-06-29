@@ -245,7 +245,7 @@ var NftImage = memo(function NftImage({ src, originalSrc, alt, cacheKey }) {
     return prev.cacheKey === next.cacheKey;
 });
 
-var InventoryCard = memo(function InventoryCard({ nft, isSelected, pickNo, onToggle }) {
+var InventoryCard = memo(function InventoryCard({ nft, isSelected, pickNo, onToggle, onInspect }) {
     var k = useMemo(function () { return nftKey(nft); }, [nft]);
 
     var stats = useMemo(function () {
@@ -267,12 +267,36 @@ var InventoryCard = memo(function InventoryCard({ nft, isSelected, pickNo, onTog
         return nft.rarity || getRarityFallback(nft.tokenId);
     }, [nft.rarity, nft.tokenId]);
 
-    var handleClick = useCallback(function () { onToggle(k); }, [onToggle, k]);
+    // зажал -> осмотр карты, короткий тап -> выбор в колоду
+    var pressTimer = useRef(null);
+    var longFired = useRef(false);
+    var startPress = useCallback(function () {
+        longFired.current = false;
+        pressTimer.current = setTimeout(function () {
+            longFired.current = true;
+            try { navigator.vibrate && navigator.vibrate(25); } catch (e) { }
+            if (onInspect) onInspect(nft);
+        }, 420);
+    }, [onInspect, nft]);
+    var endPress = useCallback(function () {
+        if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
+    }, []);
+    var handleClick = useCallback(function () {
+        if (longFired.current) { longFired.current = false; return; }
+        onToggle(k);
+    }, [onToggle, k]);
 
     return (
         <button
             type="button"
             onClick={handleClick}
+            onTouchStart={startPress}
+            onTouchEnd={endPress}
+            onTouchMove={endPress}
+            onMouseDown={startPress}
+            onMouseUp={endPress}
+            onMouseLeave={endPress}
+            onContextMenu={function (e) { e.preventDefault(); }}
             className={"inv-card-game" + (isSelected ? " is-selected" : "")}
             style={{ "--rank": rarity.border, "--rankGlow": rarity.glow }}
         >
@@ -323,6 +347,7 @@ export default function Inventory({ token, onDeckReady }) {
     var [saving, setSaving] = useState(false);
     var [source, setSource] = useState("");
     var [refreshKey, setRefreshKey] = useState(0);
+    var [inspectCard, setInspectCard] = useState(null);
 
     var nftContractId = (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim();
 
@@ -637,7 +662,7 @@ export default function Inventory({ token, onDeckReady }) {
                         var isSelected = selected.has(k);
                         var pickNo = orderMap.get(k) || 0;
                         return (
-                            <InventoryCard key={k} nft={n} isSelected={isSelected} pickNo={pickNo} onToggle={toggle} />
+                            <InventoryCard key={k} nft={n} isSelected={isSelected} pickNo={pickNo} onToggle={toggle} onInspect={setInspectCard} />
                         );
                     })}
                 </div>
@@ -653,6 +678,40 @@ export default function Inventory({ token, onDeckReady }) {
                     </button>
                 </div>
             )}
+
+            {inspectCard && (
+                <CardInspect nft={inspectCard} onClose={function () { setInspectCard(null); }} />
+            )}
+        </div>
+    );
+}
+
+// осмотр карты крупно (зажал в колоде) — тап по фону закрывает
+function CardInspect({ nft, onClose }) {
+    if (!nft) return null;
+    var st = nft.stats || {};
+    var rarity = nft.rarity || {};
+    var element = nft.element || genElement(nft.tokenId || nft.token_id || nft.id);
+    return (
+        <div className="inv-inspect" onClick={onClose}>
+            <div
+                className="inv-inspect-card"
+                style={{ "--rank": rarity.border, "--rankGlow": rarity.glow }}
+                onClick={function (e) { e.stopPropagation(); }}
+            >
+                <div className="inv-card-art-full">
+                    <NftImage src={nft.imageUrl} originalSrc={nft.originalImageUrl} alt={nft.name || ""} cacheKey={nftKey(nft)} />
+                </div>
+                <div className="inv-inspect-name">{nft.name || ("Card #" + (nft.tokenId || nft.token_id))}</div>
+            </div>
+            <div className="inv-inspect-stats">
+                <span>{ELEM_ICON[element] || "🔮"}</span>
+                <span>⬆ {displayStatValue(st.top)}</span>
+                <span>➡ {displayStatValue(st.right)}</span>
+                <span>⬇ {displayStatValue(st.bottom)}</span>
+                <span>⬅ {displayStatValue(st.left)}</span>
+            </div>
+            <div className="inv-inspect-hint">нажми, чтобы закрыть</div>
         </div>
     );
 }
