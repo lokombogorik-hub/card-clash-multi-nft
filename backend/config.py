@@ -9,8 +9,9 @@ SERVER_HOST = "0.0.0.0"
 SERVER_PORT = 8000
 
 
-# Telegram Bot Token
-TELEGRAM_BOT_TOKEN = "8201762688:AAE2E0AjbTKfBa9ad8NE89BZDir8qv9mZxc"
+# Telegram Bot Token (берётся из env, не хардкодим)
+import os as _os
+TELEGRAM_BOT_TOKEN = _os.getenv("TELEGRAM_BOT_TOKEN", "")
 
 
 # Название проекта
