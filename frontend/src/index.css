@@ -379,7 +379,7 @@ img {
     --ui-pad: clamp(8px, 2vw, 14px);
     --gap: clamp(6px, 1.6vw, 10px);
     --edge-inset: 14px;
-    --card-w-max: 170px;
+    --card-w-max: 230px;
     --hand-col-gap: 18px;
     --row-gap: 12px;
     --towards-board: 12px;
@@ -452,6 +452,8 @@ img {
     display: flex;
     flex-direction: column;
     align-items: center;
+    overflow: hidden;
+    min-height: 0;
 }
 
 /* отступ между всеми элементами */
@@ -480,8 +482,8 @@ img {
 
 
 .play-logo {
-    width: min(280px, 58vmin);
-    height: min(280px, 58vmin);
+    width: min(320px, 52vmin);
+    height: min(320px, 52vmin);
     border-radius: 999px;
     padding: 0;
     border: 1px solid rgba(255, 255, 255, .1);
@@ -1392,7 +1394,7 @@ img {
 .leaderboard {
     width: 100%;
     max-width: 280px;
-    height: 192px;
+    height: clamp(108px, 20vh, 192px);
     margin: 0 auto;
     margin-bottom: 2px;
     /* отступ от плашки турниров */
@@ -4038,7 +4040,7 @@ img {
 
 /* ===== Правки раскладки главной + единые шапки ===== */
 /* 1) опустить ряд «онлайн + кошелёк» чуть ниже */
-.home-wallet-row { padding-top: 58px !important; padding-bottom: 12px !important; }
+.home-wallet-row { padding-top: clamp(20px, 5vh, 56px) !important; padding-bottom: clamp(6px, 1.5vh, 12px) !important; }
 
 /* 2) единые шапки во всех вкладках (одинаковые отступы/размер заголовка) */
 .market-header, .tournament-header, .inv-header {
