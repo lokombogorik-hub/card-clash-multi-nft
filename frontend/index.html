@@ -6,22 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Card Clash</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script>
-        // Мобильная консоль для диагностики (вкл флагом ?debug=1 или localStorage cc_debug=1).
-        // В обычном режиме не подгружается и ничего не показывает.
-        (function () {
-            try {
-                var on = location.search.indexOf("debug=1") >= 0 ||
-                    (function () { try { return localStorage.getItem("cc_debug") === "1"; } catch (e) { return false; } })();
-                if (!on) return;
-                try { localStorage.setItem("cc_debug", "1"); } catch (e) { }
-                var s = document.createElement("script");
-                s.src = "https://cdn.jsdelivr.net/npm/eruda";
-                s.onload = function () { try { window.eruda && window.eruda.init(); } catch (e) { } };
-                document.head.appendChild(s);
-            } catch (e) { }
-        })();
-    </script>
 </head>
 
 <body>
