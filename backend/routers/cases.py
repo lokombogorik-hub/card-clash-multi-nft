@@ -384,26 +384,6 @@ async def check_balances():
     return balances
 
 
-@router.get("/debug/reservations")
-async def debug_reservations():
-    """Показать текущие резервации для отладки"""
-    return {
-        "count": len(reserved_tokens),
-        "reservations": {k: [c.get("token_id") for c in v] for k, v in reserved_tokens.items()},
-        "used_tx_count": len(used_tx_hashes),
-    }
-
-
-@router.post("/debug/clear-reservations")
-async def clear_reservations():
-    """Очистить все резервации (для отладки)"""
-    global reserved_tokens, _pool_inventory_cache_time
-    count = len(reserved_tokens)
-    reserved_tokens.clear()
-    _pool_inventory_cache_time = 0
-    return {"cleared": count, "message": "All reservations cleared"}
-
-
 @router.post("/open")
 async def open_case(
         data: OpenCaseRequest,

@@ -258,12 +258,3 @@ async def clear_deck(authorization: str = Header(None)):
         print(f"[Decks] DB clear error: {e}")
 
     return {"success": True, "deleted": deleted}
-
-
-@router.get("/debug/all")
-async def debug_all_decks():
-    return {
-        "storage_keys": list(_decks_storage.keys()),
-        "decks_count": len(_decks_storage),
-        "decks": {k: {"cards": v.get("cards", []), "user_id": v.get("user_id")} for k, v in _decks_storage.items()}
-    }
