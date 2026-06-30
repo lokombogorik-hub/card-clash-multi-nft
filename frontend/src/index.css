@@ -439,7 +439,7 @@ img {
     position: relative;
     z-index: 1;
     height: 100%;
-    padding: calc(var(--safe-t) + var(--tg-top, 0px) + 8px) var(--ui-pad) calc(var(--safe-b) + var(--bottom-stack-h));
+    padding: calc(var(--safe-t) + var(--tg-top, 0px) + 46px) var(--ui-pad) calc(var(--safe-b) + var(--bottom-stack-h));
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
@@ -483,7 +483,7 @@ img {
 .play-logo {
     width: auto;
     height: 100%;
-    max-height: min(420px, 70vmin);
+    max-height: min(340px, 82vmin);
     max-width: 92%;
     aspect-ratio: 1 / 1;
     border-radius: 999px;
@@ -502,12 +502,12 @@ img {
 
 .home-logo-area {
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     justify-content: center;
     width: 100%;
     flex: 1 1 0;
     min-height: 0;
-    padding-bottom: 8px;
+    padding-bottom: clamp(4px, 1.5vh, 12px);
 }
 
 .logo-wrap {
@@ -4196,12 +4196,18 @@ img {
 
 /* ПК (мышь): поднимаем кошелёк/онлайн выше — на десктопе сверху панель окна
    Telegram, большой отступ не нужен. Тач-устройств (телефон) не касается. */
-/* минимальные верхние отступы везде (мобилка + ПК); фуллскрин опускает tg-top */
+/* шапки тесно везде */
 .home-wallet-row { padding-top: 6px !important; }
 .market-header, .tournament-header, .inv-header { padding-top: 8px !important; }
 .tournament-page-v2 { padding-top: 4px !important; }
 .pf { padding-top: 2px; }
 .pf-hero { padding-top: 2px !important; }
+
+/* ПК (мышь): сверху панель окна, отступ минимальный; лого не делаем огромным */
+@media (hover: hover) and (pointer: fine) {
+    .shell-content { padding-top: calc(var(--safe-t) + var(--tg-top, 0px) + 8px); }
+    .play-logo { max-height: min(240px, 42vmin) !important; }
+}
 
 /* профиль: компактная шапка под низкое окно (ужимается по высоте экрана) */
 .pf-ring { width: clamp(76px, 19vh, 116px) !important; height: clamp(76px, 19vh, 116px) !important; }
