@@ -483,7 +483,7 @@ img {
 .play-logo {
     width: auto;
     height: 100%;
-    max-height: min(340px, 82vmin);
+    max-height: min(300px, 72vmin);
     max-width: 92%;
     aspect-ratio: 1 / 1;
     border-radius: 999px;
