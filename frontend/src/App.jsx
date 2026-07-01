@@ -836,7 +836,63 @@ function AppContent() {
 }
 
 export default function App() {
-    return <WalletConnectProvider><AppContent /></WalletConnectProvider>;
+    return <WalletConnectProvider><AppContent /><CoinToaster /></WalletConnectProvider>;
+}
+
+// Глобальные всплывашки «+N ClashCoin» — ловим событие clashcoin откуда угодно
+// (победа в матче, кейс, турнир, буст). Один слушатель на всё приложение.
+function CoinToaster() {
+    var [toasts, setToasts] = useState([]);
+    useEffect(function () {
+        var onCoin = function (e) {
+            var d = (e && e.detail) || {};
+            var amount = d.amount || 0;
+            var reason = d.reason || "";
+            var text;
+            if (reason === "boost") text = "⚡ Буст ×2 активирован!";
+            else if (amount > 0) {
+                var label = reason === "win" ? "за победу"
+                    : reason === "case" ? "за кейс"
+                    : reason === "tournament" ? "за турнир"
+                    : reason === "weekly" ? "за неделю" : "";
+                text = "🪙 +" + amount + " ClashCoin" + (label ? " " + label : "");
+            } else return;
+            var id = Date.now() + Math.random();
+            setToasts(function (p) { return [...p, { id: id, text: text }]; });
+            try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("success"); } catch (er) { }
+            setTimeout(function () {
+                setToasts(function (p) { return p.filter(function (t) { return t.id !== id; }); });
+            }, 3200);
+        };
+        window.addEventListener("clashcoin", onCoin);
+
+        // Опрашиваем бэк на фоновые награды (турнир, неделя) и показываем их
+        var poll = function () {
+            var tk = "";
+            try { tk = localStorage.getItem("token") || localStorage.getItem("accessToken") || ""; } catch (er) { }
+            if (!tk) return;
+            apiFetch("/api/coins/me", { token: tk }).then(function (d) {
+                if (d && d.notify && d.notify.length) {
+                    d.notify.forEach(function (n) {
+                        window.dispatchEvent(new CustomEvent("clashcoin", { detail: { amount: n.amount, reason: n.reason } }));
+                    });
+                }
+            }).catch(function () { });
+        };
+        poll();
+        var iv = setInterval(poll, 25000);
+
+        return function () { window.removeEventListener("clashcoin", onCoin); clearInterval(iv); };
+    }, []);
+
+    if (toasts.length === 0) return null;
+    return (
+        <div className="coin-toaster">
+            {toasts.map(function (t) {
+                return <div key={t.id} className="coin-toast">{t.text}</div>;
+            })}
+        </div>
+    );
 }
 
 function BottomNav({ active, onChange }) {

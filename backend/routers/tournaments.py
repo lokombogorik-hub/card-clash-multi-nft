@@ -407,7 +407,7 @@ async def _finish_tournament(t: Tournament, final_matches: List[TournamentMatch]
         from routers.coins import add_coins, TOURNAMENT_WIN_REWARD
         champ = next((p["user_id"] for p in placements if p.get("place") == 1), None)
         if champ:
-            await add_coins(champ, TOURNAMENT_WIN_REWARD)
+            await add_coins(champ, TOURNAMENT_WIN_REWARD, notify_reason="tournament")
     except Exception as e:
         print(f"[coins] tournament reward error: {e}")
 

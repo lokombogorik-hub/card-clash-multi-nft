@@ -3,10 +3,10 @@ import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
 
 var CASES = [
-    { id: "starter", name: "Starter Case", price: 0.01, displayPrice: "1 Card", image: "/ui/case-starter.png", video: "/ui/case-starter.mp4", rarity: "common", description: "1 random card", type: "single" },
-    { id: "premium", name: "Premium Case", price: 0.01, displayPrice: "1 Card", image: "/ui/case-premium.png", video: "/ui/case-premium.mp4", rarity: "rare", description: "1 rare card", type: "single" },
-    { id: "legendary", name: "Legendary Case", price: 0.01, displayPrice: "1 Epic Card", image: "/ui/case-legendary.png", video: "/ui/case-legendary.mp4", rarity: "epic", description: "1 Epic card guaranteed", type: "single" },
-    { id: "ultimate", name: "Ultimate Case", price: 0.01, displayPrice: "1 Legendary", image: "/ui/case-ultimate.png", video: "/ui/case-ultimate.mp4", rarity: "legendary", description: "1 Legendary card guaranteed", type: "single" },
+    { id: "starter", name: "Starter Case", price: 0.01, coin_price: 50, displayPrice: "1 Card", image: "/ui/case-starter.png", video: "/ui/case-starter.mp4", rarity: "common", description: "1 random card", type: "single" },
+    { id: "premium", name: "Premium Case", price: 0.01, coin_price: 150, displayPrice: "1 Card", image: "/ui/case-premium.png", video: "/ui/case-premium.mp4", rarity: "rare", description: "1 rare card", type: "single" },
+    { id: "legendary", name: "Legendary Case", price: 0.01, coin_price: 300, displayPrice: "1 Epic Card", image: "/ui/case-legendary.png", video: "/ui/case-legendary.mp4", rarity: "epic", description: "1 Epic card guaranteed", type: "single" },
+    { id: "ultimate", name: "Ultimate Case", price: 0.01, coin_price: 600, displayPrice: "1 Legendary", image: "/ui/case-ultimate.png", video: "/ui/case-ultimate.mp4", rarity: "legendary", description: "1 Legendary card guaranteed", type: "single" },
 ];
 
 var RARITY_COLORS = {
@@ -321,6 +321,8 @@ export default function Market() {
     var [loadingInventory, setLoadingInventory] = useState(true);
     var [caseList, setCaseList] = useState(CASES);
     var [coins, setCoins] = useState(0);
+    var [boostUntil, setBoostUntil] = useState(null);
+    var [boosting, setBoosting] = useState(false);
 
     var token = "";
     try {
@@ -333,8 +335,12 @@ export default function Market() {
         apiFetch("/api/cases/catalog").then(function (d) {
             if (!alive || !d || !d.cases) return;
             var pm = {};
-            d.cases.forEach(function (c) { pm[c.id] = c.price; });
-            setCaseList(CASES.map(function (c) { return pm[c.id] != null ? { ...c, price: pm[c.id] } : c; }));
+            d.cases.forEach(function (c) { pm[c.id] = c; });
+            setCaseList(CASES.map(function (c) {
+                var srv = pm[c.id];
+                if (!srv) return c;
+                return { ...c, price: srv.price != null ? srv.price : c.price, coin_price: srv.coin_price != null ? srv.coin_price : c.coin_price };
+            }));
         }).catch(function () { });
         return function () { alive = false; };
     }, []);
@@ -435,6 +441,11 @@ export default function Market() {
             setBuyingStatus("");
             setOpenModal({ caseItem: c, cards: cards });
 
+            if (open.coins_awarded) {
+                window.dispatchEvent(new CustomEvent("clashcoin", { detail: { amount: open.coins_awarded, reason: "case" } }));
+                setCoins(function (p) { return p + open.coins_awarded; });
+            }
+
             try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("success"); } catch (e) { }
 
         } catch (e) {
@@ -446,9 +457,35 @@ export default function Market() {
     };
 
     var refreshCoins = function () {
-        apiFetch("/api/coins/me", { token: token }).then(function (d) { if (d) setCoins(d.balance || 0); }).catch(function () { });
+        apiFetch("/api/coins/me", { token: token }).then(function (d) {
+            if (d) { setCoins(d.balance || 0); setBoostUntil(d.boost_active ? d.boost_until : null); }
+        }).catch(function () { });
     };
     useEffect(function () { refreshCoins(); }, [token]);
+
+    // покупка буста ×2 на 24ч за 1 NEAR (оплата on-chain, потом бэк ставит boost_until)
+    var handleBoost = async function () {
+        if (!connected || !accountId) { alert("Подключи HOT Wallet!"); return; }
+        if (balance < 1) { alert("Нужен 1 Ⓝ для буста, у тебя " + Number(balance).toFixed(2)); return; }
+        if (!confirm("Буст ×2 монет на 24 часа за 1 Ⓝ. Оплатить?")) return;
+        setBoosting(true); setError("");
+        try {
+            var pay = await sendNear({ receiverId: TREASURY, amount: "1" });
+            var txHash = pay.txHash || "";
+            if (!txHash) throw new Error("Оплата не прошла");
+            var r = await apiFetch("/api/coins/boost", {
+                method: "POST", token: token,
+                body: JSON.stringify({ tx_hash: txHash, near_account: accountId }),
+            });
+            if (r && r.boost_until) {
+                setBoostUntil(r.boost_until);
+                window.dispatchEvent(new CustomEvent("clashcoin", { detail: { amount: 0, reason: "boost" } }));
+                try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("success"); } catch (e) { }
+            }
+        } catch (e) {
+            setError("Ошибка буста: " + (e.message || e));
+        } finally { setBoosting(false); }
+    };
 
     // покупка кейса за ClashCoin (без блокчейна — бэк списывает баланс)
     var handleBuyCoins = async function (c) {
@@ -522,6 +559,37 @@ export default function Market() {
                     <div style={{ fontSize: 11, opacity: 0.6, marginTop: 4 }}>
                         Treasury: {TREASURY}
                     </div>
+                </div>
+            )}
+
+            {connected && (
+                <div style={{
+                    marginBottom: 16, padding: 12, borderRadius: 12,
+                    background: boostUntil ? "rgba(255,140,0,0.14)" : "rgba(255,215,106,0.08)",
+                    border: "1px solid rgba(255,180,60,0.35)",
+                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+                }}>
+                    <div style={{ textAlign: "left" }}>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: "#ffd76a" }}>⚡ Буст ×2 монет</div>
+                        <div style={{ fontSize: 11, opacity: 0.75, marginTop: 2 }}>
+                            {boostUntil
+                                ? ("Активен до " + new Date(boostUntil).toLocaleString())
+                                : "Все монеты ×2 на 24 часа за 1 Ⓝ"}
+                        </div>
+                    </div>
+                    <button
+                        onClick={handleBoost}
+                        disabled={boosting || !!boostUntil}
+                        style={{
+                            padding: "10px 14px", fontSize: 13, fontWeight: 900, whiteSpace: "nowrap",
+                            borderRadius: 12, border: "none", color: "#000",
+                            background: boostUntil ? "#6b7280" : "linear-gradient(135deg,#ffd76a,#ff8c00)",
+                            cursor: (boosting || boostUntil) ? "not-allowed" : "pointer",
+                            opacity: (boosting || boostUntil) ? 0.6 : 1,
+                        }}
+                    >
+                        {boosting ? "⏳..." : boostUntil ? "✅ Активен" : "1 Ⓝ ⚡"}
+                    </button>
                 </div>
             )}
 

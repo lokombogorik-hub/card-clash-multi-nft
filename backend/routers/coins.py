@@ -1,18 +1,35 @@
-"""ClashCoin — внутриигровая монета. Начисления/списания + баланс.
-Суммы меняю прямо тут, в одном месте."""
-from datetime import datetime
-from fastapi import APIRouter, Header
+"""ClashCoin — внутриигровая монета. Начисления/списания, баланс, буст ×2.
+Суммы меняю тут, сверху."""
+import os
+from datetime import datetime, timedelta
+from fastapi import APIRouter, Header, HTTPException
+from pydantic import BaseModel
 from database.session import get_session
 from database.models.user import User
 
 router = APIRouter(prefix="/api/coins", tags=["coins"])
 
 # --- сколько начисляем (меняю здесь) ---
-WIN_REWARD = 2            # за победу в матче
-WIN_DAILY_CAP = 20        # потолок монет за победы в день (от фарма)
-CASE_OPEN_REWARD = 5      # за открытие кейса
-TOURNAMENT_WIN_REWARD = 200  # за победу в турнире
-FRIEND_REWARD = 50        # друг сыграл 3 матча (этап позже)
+WIN_REWARD = 2
+WIN_DAILY_CAP = 20
+CASE_OPEN_REWARD = 5
+TOURNAMENT_WIN_REWARD = 200
+FRIEND_REWARD = 50
+BOOST_PRICE_NEAR = 1.0
+BOOST_HOURS = 24
+
+TREASURY = os.getenv("TREASURY_WALLET", "retardo-s.near")
+
+# Очередь всплывашек для наград, начисленных в фоне (турнир, неделя):
+# копим по user_id, отдаём и чистим при следующем опросе /api/coins/me.
+# Хватает на один процесс (Railway hobby) — этого достаточно на текущем масштабе.
+_pending = {}
+
+
+def queue_notify(user_id, amount, reason):
+    if not user_id or amount <= 0:
+        return
+    _pending.setdefault(str(user_id), []).append({"amount": int(amount), "reason": reason})
 
 
 def _uid(authorization):
@@ -29,34 +46,50 @@ def _uid(authorization):
     return None
 
 
-async def add_coins(user_id, amount, capped=False):
-    """Начислить монеты. capped=True -> с дневным потолком (для побед)."""
+def boost_active(u):
+    return bool(u and u.boost_until and u.boost_until > datetime.utcnow())
+
+
+def boost_mult(u):
+    return 2 if boost_active(u) else 1
+
+
+async def add_coins(user_id, amount, capped=False, notify_reason=None):
+    """Начислить монеты (с учётом ×2 буста). capped=True -> дневной потолок (победы).
+    notify_reason -> положить всплывашку в очередь (для фоновых наград).
+    Возвращает реально начисленную сумму."""
     if not user_id or amount <= 0:
-        return
+        return 0
+    awarded = 0
     try:
         async for session in get_session():
             u = await session.get(User, int(user_id))
             if not u:
                 break
+            mult = boost_mult(u)
+            amt = amount * mult
             if capped:
                 today = datetime.utcnow().strftime("%Y-%m-%d")
                 if u.coins_day != today:
                     u.coins_day = today
                     u.coins_today = 0
-                room = WIN_DAILY_CAP - (u.coins_today or 0)
+                room = (WIN_DAILY_CAP * mult) - (u.coins_today or 0)
                 if room <= 0:
                     break
-                amount = min(amount, room)
-                u.coins_today = (u.coins_today or 0) + amount
-            u.clash_balance = (u.clash_balance or 0) + int(amount)
+                amt = min(amt, room)
+                u.coins_today = (u.coins_today or 0) + amt
+            u.clash_balance = (u.clash_balance or 0) + amt
+            awarded = amt
             await session.commit()
             break
     except Exception as e:
         print(f"[coins] add error: {e}")
+    if awarded > 0 and notify_reason:
+        queue_notify(user_id, awarded, notify_reason)
+    return awarded
 
 
 async def spend_coins(user_id, amount) -> bool:
-    """Списать монеты. True если хватило и списали."""
     if amount <= 0:
         return True
     try:
@@ -72,19 +105,59 @@ async def spend_coins(user_id, amount) -> bool:
     return False
 
 
-async def get_balance(user_id) -> int:
+async def _me(user_id):
     if not user_id:
-        return 0
+        return None
     try:
         async for session in get_session():
-            u = await session.get(User, int(user_id))
-            return int(u.clash_balance or 0) if u else 0
+            return await session.get(User, int(user_id))
     except Exception:
-        return 0
-    return 0
+        return None
+    return None
 
 
 @router.get("/me")
 async def my_coins(authorization: str = Header(None)):
     uid = _uid(authorization)
-    return {"balance": await get_balance(uid)}
+    u = await _me(uid)
+    notify = _pending.pop(str(uid), []) if uid else []
+    return {
+        "balance": int(u.clash_balance or 0) if u else 0,
+        "boost_active": boost_active(u) if u else False,
+        "boost_until": (u.boost_until.isoformat() + "Z") if (u and u.boost_until) else None,
+        "notify": notify,
+    }
+
+
+class BoostReq(BaseModel):
+    tx_hash: str
+    near_account: str
+
+
+@router.post("/boost")
+async def buy_boost(body: BoostReq, authorization: str = Header(None)):
+    """Купить буст ×2 на 24ч за 1 NEAR (проверяем оплату on-chain)."""
+    uid = _uid(authorization)
+    if not uid:
+        raise HTTPException(status_code=401, detail="Auth required")
+
+    if os.getenv("CASE_PAYMENT_VERIFY", "1") == "1":
+        from routers.cases import verify_case_payment
+        min_yocto = int(BOOST_PRICE_NEAR * (10 ** 24) * 0.99)
+        ok, reason = await verify_case_payment(body.tx_hash, body.near_account.strip(), TREASURY, min_yocto)
+        if not ok:
+            raise HTTPException(status_code=402, detail=f"Оплата не подтверждена: {reason}")
+
+    try:
+        async for session in get_session():
+            u = await session.get(User, int(uid))
+            if not u:
+                raise HTTPException(status_code=404, detail="User not found")
+            base = u.boost_until if (u.boost_until and u.boost_until > datetime.utcnow()) else datetime.utcnow()
+            u.boost_until = base + timedelta(hours=BOOST_HOURS)
+            await session.commit()
+            return {"ok": True, "boost_until": u.boost_until.isoformat() + "Z"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

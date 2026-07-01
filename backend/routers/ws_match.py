@@ -316,12 +316,15 @@ class WSManager:
             state.winner = winner
             # Авторитетно фиксируем результат и НАЧИСЛЯЕМ РЕЙТИНГ на сервере
             # (идемпотентно). Клиентский /finish больше не нужен для очков.
+            winner_coins = 0
             try:
                 from routers.matchmaking import get_match
                 from routers.matches import _finalize_match_result
                 match_data = await get_match(match_id)
                 if match_data:
-                    await _finalize_match_result(match_data, winner, reason="normal")
+                    ru = await _finalize_match_result(match_data, winner, reason="normal")
+                    if ru and ru.get("winner"):
+                        winner_coins = ru["winner"].get("coins_awarded", 0) or 0
             except Exception as e:
                 logger.warning("[WS] Could not persist match result: %s", e)
 
@@ -354,6 +357,7 @@ class WSManager:
                 "board": state.board,
                 "player1_score": p1_score,
                 "player2_score": p2_score,
+                "winner_coins": winner_coins,
             })
             logger.info("[WS] game_over match=%s winner=%s %d:%d",
                         match_id, state.winner, p1_score, p2_score)
@@ -492,12 +496,15 @@ class WSManager:
         p1_score = sum(1 for c in state.board if c and c.get("owner") == state.player1_id)
         p2_score = sum(1 for c in state.board if c and c.get("owner") == state.player2_id)
 
+        winner_coins = 0
         try:
             from routers.matchmaking import get_match
             from routers.matches import _finalize_match_result, auto_settle_forfeit
             match_data = await get_match(match_id)
             if match_data:
-                await _finalize_match_result(match_data, winner, reason="forfeit_disconnect")
+                ru = await _finalize_match_result(match_data, winner, reason="forfeit_disconnect")
+                if ru and ru.get("winner"):
+                    winner_coins = ru["winner"].get("coins_awarded", 0) or 0
             # Авто-расчёт эскроу: победитель забирает 1 NFT проигравшего,
             # остальное возвращается — иначе NFT застрянут в эскроу.
             await auto_settle_forfeit(match_id, winner)
@@ -511,6 +518,7 @@ class WSManager:
             "player1_score": p1_score,
             "player2_score": p2_score,
             "reason": "opponent_disconnected",
+            "winner_coins": winner_coins,
         })
         logger.info("[WS] forfeit: match=%s winner=%s (dropped=%s)",
                     match_id, winner, disconnected_id)

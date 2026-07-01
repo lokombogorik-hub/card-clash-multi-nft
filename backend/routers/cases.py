@@ -524,10 +524,11 @@ async def open_case(
     print(f"[CASES] Done: {data.case_id} → {[c['token_id'] for c in cards]}")
 
     # ClashCoin за открытие (только при оплате NEAR, не за монеты — без петли)
+    coins_awarded = 0
     if not paid_with_coins:
         try:
             from routers.coins import add_coins, CASE_OPEN_REWARD
-            await add_coins(str(user.id), CASE_OPEN_REWARD)
+            coins_awarded = await add_coins(str(user.id), CASE_OPEN_REWARD)
         except Exception as e:
             print(f"[coins] case reward error: {e}")
 
@@ -539,6 +540,7 @@ async def open_case(
         "tx_hash": data.tx_hash,
         "transfers": transfers if transfers else None,
         "config_ready": is_configured(),
+        "coins_awarded": coins_awarded,
     }
 
 

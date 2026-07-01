@@ -15,6 +15,7 @@ async def ensure_users_columns(engine):
         ("clash_balance", "BIGINT", "0"),
         ("coins_day", "VARCHAR(20)", "NULL"),
         ("coins_today", "INTEGER", "0"),
+        ("boost_until", "TIMESTAMP", "NULL"),
         ("total_matches", "INTEGER", "0"),
         ("wins", "INTEGER", "0"),
         ("losses", "INTEGER", "0"),

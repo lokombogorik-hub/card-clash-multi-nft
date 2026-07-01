@@ -502,6 +502,10 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
             if (iWon) {
                 confetti({ zIndex: 99999, particleCount: 50, spread: 80, origin: { y: 0.4 } });
                 prepareClaimCards();
+                var wc = data.winner_coins || 0;
+                if (wc > 0) {
+                    window.dispatchEvent(new CustomEvent("clashcoin", { detail: { amount: wc, reason: "win" } }));
+                }
             }
         } catch (e) {
             console.error("[handleGameOver]", e);
