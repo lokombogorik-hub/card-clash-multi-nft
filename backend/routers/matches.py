@@ -1150,6 +1150,11 @@ async def _finalize_match_result(
 
     rating_update = match_data.get("rating_update")
     if winner_id and p1 and p2 and not match_data.get("rating_applied"):
+        # Ставим флаг СИНХРОННО, до await: match_data — общий объект в
+        # active_matches, поэтому второй параллельный вызов (WS game_over +
+        # клиентский /finish почти одновременно) сразу увидит True и не
+        # начислит рейтинг/монеты повторно. Начисляем ровно один раз.
+        match_data["rating_applied"] = True
         loser_id = p2 if str(winner_id) == str(p1) else p1
         rating_update = await update_player_ratings(
             winner_id=str(winner_id),
@@ -1157,7 +1162,9 @@ async def _finalize_match_result(
         )
         if rating_update:
             match_data["rating_update"] = rating_update
-            match_data["rating_applied"] = True
+        else:
+            # Не удалось начислить — снимаем флаг, чтобы можно было повторить.
+            match_data["rating_applied"] = False
 
     await _save_match(match_data)
     return rating_update

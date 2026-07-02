@@ -358,6 +358,10 @@ def _is_third_place_round(matches: List[TournamentMatch]) -> bool:
 
 
 async def _finish_tournament(t: Tournament, final_matches: List[TournamentMatch], session) -> None:
+    # Завершаем ровно один раз: если статус уже finished, награда чемпиону
+    # уже выдана — второй параллельный проход просто выходит.
+    if t.status == "finished":
+        return
     final_matches = sorted(final_matches, key=lambda m: m.slot)
     final = next((m for m in final_matches if m.slot == 0), None)
     third = next((m for m in final_matches if m.slot == 1), None)

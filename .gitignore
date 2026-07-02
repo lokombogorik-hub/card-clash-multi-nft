@@ -21,3 +21,4 @@ frontend/dist/
 contracts/near/escrow/target/
 contracts/near/escrow/Cargo.lock
 out.car
+tools/node_modules/ 

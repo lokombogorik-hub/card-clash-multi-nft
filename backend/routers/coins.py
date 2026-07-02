@@ -141,12 +141,19 @@ async def buy_boost(body: BoostReq, authorization: str = Header(None)):
     if not uid:
         raise HTTPException(status_code=401, detail="Auth required")
 
+    if not body.tx_hash or len(body.tx_hash) < 10:
+        raise HTTPException(status_code=400, detail="Invalid tx_hash")
+
     if os.getenv("CASE_PAYMENT_VERIFY", "1") == "1":
-        from routers.cases import verify_case_payment
+        from routers.cases import verify_case_payment, used_tx_hashes
+        # Одна оплата = один буст: защита от повторного использования tx.
+        if body.tx_hash in used_tx_hashes:
+            raise HTTPException(status_code=400, detail="Transaction already used")
         min_yocto = int(BOOST_PRICE_NEAR * (10 ** 24) * 0.99)
         ok, reason = await verify_case_payment(body.tx_hash, body.near_account.strip(), TREASURY, min_yocto)
         if not ok:
             raise HTTPException(status_code=402, detail=f"Оплата не подтверждена: {reason}")
+        used_tx_hashes.add(body.tx_hash)
 
     try:
         async for session in get_session():
