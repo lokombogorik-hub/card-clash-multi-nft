@@ -907,7 +907,11 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const placeCard = (cellIdx) => {
         if (roundOver || matchOver || turn !== "player" || !selected) return;
         if (board[cellIdx] || frozen[cellIdx] > 0) return;
-        if (isPvP && !opponentConnected) return;
+        // Раньше блокировали ход при отключённом сопернике — из-за этого
+        // последний (победный) ход не проходил, если у соперника на мобиле
+        // моргал WS, и игра «зависала» до форфейт-таймера. Сервер авторитетный:
+        // если сейчас наш ход — принимаем; если соперник реально ушёл,
+        // форфейт-логика и так отдаст победу. Поэтому гейт убран.
 
         if (isPvP) {
             const cardIndex = hands.player.findIndex(c =>

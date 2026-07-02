@@ -399,9 +399,13 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                 style={{
                     background: "linear-gradient(145deg, #1a1a2e, #0f0f1a)",
                     border: "2px solid rgba(255,215,0,0.4)",
-                    borderRadius: 24, padding: "32px 28px",
+                    borderRadius: 24, padding: "clamp(16px, 4vh, 32px) 24px",
                     maxWidth: 480, width: "100%", textAlign: "center",
                     boxShadow: "0 0 60px rgba(255,215,0,0.2)",
+                    // Ограничиваем по реальной высоте окна и даём скролл, иначе
+                    // в компактном окне Telegram нижняя кнопка уезжает за экран.
+                    maxHeight: "calc(var(--app-h, 100vh) - 24px)",
+                    overflowY: "auto",
                 }}
                 onClick={function (e) { e.stopPropagation(); }}
             >
