@@ -191,17 +191,25 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched, resumeM
             try {
                 var matchData = await apiFetch("/api/matches/" + matchId, { token: token });
 
-                // Check if both players locked
+                // Оба залочили — идём в игру
                 if (matchData.escrow_locked) {
                     clearInterval(lockPollRef.current);
                     lockPollRef.current = null;
                     setWaitingForOpponentLock(false);
                     setPhase("ready");
-
-                    // Go to game!
                     setTimeout(function () {
                         onMatched({ mode: "pvp", matchId: matchId });
                     }, 500);
+                    return;
+                }
+
+                // Сервер вернул карты по предельному ожиданию (или отмене) —
+                // выходим в меню и сообщаем игроку.
+                if (matchData.status === "cancelled") {
+                    clearInterval(lockPollRef.current);
+                    lockPollRef.current = null;
+                    alert("Соперник так и не нашёлся — NFT возвращены на кошелёк.");
+                    stopSearch();
                 }
             } catch (e) {
                 // keep polling
@@ -307,34 +315,28 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched, resumeM
         );
     }
 
-    // Waiting for opponent to lock
+    // NFT залочены, ждём соперника. Если текущий не залочил — сервер держит
+    // карты в эскроу и ищет НОВОГО соперника (тот же матч). Игрок может в
+    // любой момент забрать NFT назад.
     if (phase === "locking" && waitingForOpponentLock) {
         return (
             <div className="matchmaking-page">
                 <div className="matchmaking-searching">
                     <div className="matchmaking-spinner" />
                     <div style={{ fontSize: 13, color: "#4ade80", marginBottom: 8 }}>
-                        ✅ Your NFTs are locked!
+                        ✅ Твои NFT залочены!
                     </div>
                     <div className="matchmaking-searching-text">
-                        Waiting for opponent to lock...
+                        Ищем соперника...
                     </div>
-                    <div style={{ fontSize: 12, opacity: 0.6, marginTop: 8 }}>
-                        Game will start when both players are ready
+                    <div style={{ fontSize: 12, opacity: 0.6, marginTop: 8, maxWidth: 300 }}>
+                        Если соперник не подтвердит — найдём другого. Карты
+                        остаются в эскроу, пока идёт поиск.
                     </div>
-
-                    <LockWaitTimer
-                        timeoutMs={180000}
-                        onTimeout={function () {
-                            // Автоматически отменяем и возвращаем NFT через 3 минуты
-                            console.warn("[Matchmaking] opponent lock timeout — auto cancel");
-                            onCancel();
-                        }}
-                    />
 
                     <button className="matchmaking-cancel-btn" onClick={onCancel}
-                        style={{ marginTop: 16 }}>
-                        Cancel & Refund NFTs
+                        style={{ marginTop: 20 }}>
+                        Забрать NFT
                     </button>
                 </div>
             </div>

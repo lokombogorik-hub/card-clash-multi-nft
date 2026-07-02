@@ -962,6 +962,16 @@ async def cancel_match(match_id: str, authorization: Optional[str] = Header(None
     match_data["cancelled_by"] = player_id
     await _save_match(match_data)
 
+    # Если это было «лобби с готовыми картами» (reopen) — убираем его владельца
+    # из очереди, чтобы новых соперников в отменённый матч не подсаживали.
+    try:
+        from routers.matchmaking import matchmaking_queue
+        for _uid, _e in list(matchmaking_queue.items()):
+            if _e.get("open_match_id") == match_id:
+                del matchmaking_queue[_uid]
+    except Exception:
+        pass
+
     refunds = []
     try:
         async for session in get_session():

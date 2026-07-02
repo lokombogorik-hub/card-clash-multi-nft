@@ -24,6 +24,9 @@ GAME_RECONNECT_TIMEOUT_SECONDS = 180
 # Матч залочен (status=active), но игра так и не пошла (никто не сделал ход).
 # Через столько секунд отменяем матч и возвращаем NFT обоим игрокам.
 STUCK_ACTIVE_TIMEOUT_SECONDS = 180
+# Один игрок залочил, а нового соперника всё нет: сколько всего держим его
+# карты в эскроу с автопоиском, прежде чем на всякий случай вернуть их.
+REOPEN_MAX_WAIT_SECONDS = 900
 
 
 class JoinQueueRequest(BaseModel):
@@ -241,6 +244,62 @@ async def save_match(match_data: Dict):
     await _save_match_to_db(match_data)
 
 
+def _requeue_locker(match_id: str, locker_id: str, elo: int) -> None:
+    """Возвращаем залочившего в очередь как «лобби с готовыми картами».
+    open_match_id говорит матчмейкингу: не создавай новый матч, а подсади
+    следующего соперника в этот существующий (карты уже в эскроу)."""
+    matchmaking_queue[str(locker_id)] = {
+        "user_id": str(locker_id),
+        "elo": elo,
+        "deck": [],
+        "joined_at": datetime.utcnow(),
+        "last_poll": datetime.utcnow(),
+        "match_id": None,
+        "open_match_id": match_id,
+    }
+
+
+async def _reopen_match_keep_locker(match_data: Dict, locker_key: str) -> None:
+    """Один залочил, второй нет: оставляем ТОТ ЖЕ match_id и карты в эскроу,
+    освобождаем слот соперника, обновляем таймер и снова ищем соперника.
+    Депозиты залочившего привязаны к match_id — их не трогаем."""
+    mid = match_data.get("match_id")
+    # Нормализуем залочившего в player1 (в БД player1_id NOT NULL).
+    if locker_key == "player2":
+        match_data["player1_id"] = match_data.get("player2_id")
+        match_data["player1_deck"] = match_data.get("player2_deck") or []
+        match_data["player1_escrow_confirmed"] = True
+        match_data["player1_escrow_tx"] = match_data.get("player2_escrow_tx")
+        match_data["player1_near_wallet"] = match_data.get("player2_near_wallet")
+    locker_id = match_data.get("player1_id")
+    # Освобождаем слот соперника.
+    match_data["player2_id"] = None
+    match_data["player2_deck"] = []
+    match_data["player2_escrow_confirmed"] = False
+    match_data["player2_escrow_tx"] = None
+    match_data["player2_near_wallet"] = None
+    # Сбрасываем игровое состояние под нового соперника.
+    match_data["escrow_locked"] = False
+    match_data["status"] = "waiting"
+    match_data["board"] = [None] * 9
+    match_data["board_elements"] = []
+    match_data["player1_hand"] = []
+    match_data["player2_hand"] = []
+    match_data["moves_count"] = 0
+    match_data["current_turn"] = None
+    now = datetime.utcnow()
+    if not match_data.get("first_locked_at"):
+        match_data["first_locked_at"] = now.isoformat()
+    match_data["created_at"] = now.isoformat()           # новый отсчёт ожидания
+    match_data["escrow_timeout_at"] = (now + timedelta(seconds=ESCROW_LOCK_TIMEOUT_SECONDS)).isoformat()
+    match_data["reopened"] = True
+    match_data["reopened_at"] = now.isoformat()
+    await save_match(match_data)
+    elo = await get_user_elo(locker_id)
+    _requeue_locker(mid, locker_id, elo)
+    print(f"[Matchmaking] Match {mid} reopened: keep {locker_id} locked, searching new opponent")
+
+
 async def check_and_refund_stale_match(match_id: str) -> bool:
     from routers.matches import transfer_nft_from_escrow, is_escrow_configured
 
@@ -278,6 +337,20 @@ async def check_and_refund_stale_match(match_id: str) -> bool:
         match_data["cancelled_at"] = datetime.utcnow().isoformat()
         await save_match(match_data)
         return True
+
+    # Ровно один залочил, второй нет: держим карты в эскроу и ищем нового
+    # соперника (тот же match_id, новый таймер) — вместо возврата. Возврат
+    # только как предохранитель, если новый соперник так и не нашёлся за
+    # REOPEN_MAX_WAIT_SECONDS (или игрок сам нажмёт «Забрать NFT»).
+    if p1_confirmed != p2_confirmed:
+        first_locked = _parse_dt(match_data.get("first_locked_at"))
+        over_cap = first_locked is not None and \
+            (datetime.utcnow() - first_locked).total_seconds() > REOPEN_MAX_WAIT_SECONDS
+        if not over_cap:
+            locker_key = "player1" if p1_confirmed else "player2"
+            await _reopen_match_keep_locker(match_data, locker_key)
+            return True
+        # предел ожидания превышен — падаем в возврат ниже
 
     # Рефандим из БД
     refunded_count = 0
@@ -534,6 +607,38 @@ async def join_queue(
         matchmaking_queue[user_id]["last_poll"] = datetime.utcnow()
 
     opponent_id = find_opponent(user_id, user_elo, max_elo_diff)
+
+    # Соперник — залочивший игрок, ждущий нового оппонента (open_match_id):
+    # подсаживаем искателя в ЕГО существующий матч (карты уже в эскроу),
+    # новый матч не создаём.
+    if opponent_id and opponent_id in matchmaking_queue:
+        open_mid = matchmaking_queue[opponent_id].get("open_match_id")
+        if open_mid:
+            md = await get_match(open_mid)
+            if md and md.get("status") == "waiting" and not md.get("player2_id") \
+                    and str(md.get("player1_id")) != str(user_id):
+                now = datetime.utcnow()
+                md["player2_id"] = user_id
+                md["player2_deck"] = user_deck
+                md["player2_escrow_confirmed"] = False
+                md["status"] = "waiting_escrow"
+                md["created_at"] = now.isoformat()
+                md["escrow_timeout_at"] = (now + timedelta(seconds=ESCROW_LOCK_TIMEOUT_SECONDS)).isoformat()
+                await save_match(md)
+                del matchmaking_queue[opponent_id]
+                if user_id in matchmaking_queue:
+                    del matchmaking_queue[user_id]
+                print(f"[Matchmaking] {user_id} joined reopened match {open_mid} (locker {opponent_id})")
+                return {
+                    "status": "matched",
+                    "match_id": open_mid,
+                    "opponent_id": opponent_id,
+                    "escrow_timeout_seconds": ESCROW_LOCK_TIMEOUT_SECONDS,
+                    "message": "Match found!",
+                }
+            # Лобби устарело/занято — убираем и ищем как обычно.
+            del matchmaking_queue[opponent_id]
+            opponent_id = None
 
     if opponent_id and opponent_id in matchmaking_queue:
         match_id = str(uuid.uuid4())
