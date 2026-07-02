@@ -385,6 +385,7 @@ function AppContent() {
     var [playerDeck, setPlayerDeck] = useState(null);
     var [gameMode, setGameMode] = useState("ai");
     var [stage2MatchId, setStage2MatchId] = useState("");
+    var [resumeLockMatchId, setResumeLockMatchId] = useState("");
     var [tournamentOpenId, setTournamentOpenId] = useState("");
     var logoRef = useRef(null);
     var [logoOk, setLogoOk] = useState(true);
@@ -463,6 +464,14 @@ function AppContent() {
             try {
                 var top = (tg.contentSafeAreaInset && tg.contentSafeAreaInset.top) || 0;
                 document.documentElement.style.setProperty("--tg-top", top + "px");
+                // Реальная высота видимой области Telegram. В компактном (не
+                // развёрнутом) окне 100vh больше видимого → поле масштабируется
+                // по завышенной высоте и карты обрезаются. Берём настоящую
+                // высоту вьюпорта, тогда карты ужимаются под окно без обрезки.
+                var vh = tg.viewportStableHeight || tg.viewportHeight || 0;
+                if (vh && vh > 200) {
+                    document.documentElement.style.setProperty("--app-h", Math.round(vh) + "px");
+                }
             } catch (_) { }
         };
         applyTgInsets();
@@ -570,6 +579,7 @@ function AppContent() {
 
     var onDeckReady = function (selectedNfts) {
         if (Array.isArray(selectedNfts) && selectedNfts.length === 5) setPlayerDeck(selectedNfts);
+        setResumeLockMatchId("");
         setScreen("matchmaking");
     };
 
@@ -718,21 +728,53 @@ function AppContent() {
                                     )}
                                     {!activeMatch.escrow_locked && !activeMatch.my_escrow_confirmed && (
                                         <button
-                                            onClick={function () {
-                                                // Возвращаем в matchmaking для повторного лока
-                                                setStage2MatchId(activeMatch.match_id);
-                                                setGameMode("pvp");
-                                                setScreen("matchmaking");
+                                            onClick={async function () {
+                                                // Возобновляем ЛОК конкретного матча: грузим колоду и
+                                                // открываем окно лока напрямую (без выбора режима и
+                                                // без нового поиска соперника).
+                                                setActiveMatchLoading(true);
+                                                try {
+                                                    var t = token || getStoredToken();
+                                                    var deck = null;
+                                                    try {
+                                                        var mf = await apiFetch("/api/matches/" + activeMatch.match_id, { token: t });
+                                                        if (mf) {
+                                                            var myId = String(me?.id || "");
+                                                            var isP1 = String(mf.player1_id) === myId;
+                                                            var df = isP1 ? mf.player1_deck : mf.player2_deck;
+                                                            if (Array.isArray(df) && df.length === 5) deck = df;
+                                                        }
+                                                    } catch (_) { }
+                                                    if (!deck || deck.length !== 5) {
+                                                        try {
+                                                            var dr = await apiFetch("/api/decks/active/full", { token: t });
+                                                            if (dr?.cards?.length === 5) deck = dr.cards;
+                                                        } catch (_) { }
+                                                    }
+                                                    if (!deck || deck.length !== 5) {
+                                                        alert("Сначала собери колоду из 5 карт в разделе «Колода».");
+                                                        return;
+                                                    }
+                                                    setPlayerDeck(deck);
+                                                    setGameMode("pvp");
+                                                    setStage2MatchId(activeMatch.match_id);
+                                                    setResumeLockMatchId(activeMatch.match_id);
+                                                    setScreen("matchmaking");
+                                                } finally {
+                                                    setActiveMatchLoading(false);
+                                                }
                                             }}
+                                            disabled={activeMatchLoading}
                                             style={{
                                                 flex: 1, padding: "10px 16px",
                                                 borderRadius: 10, border: "none",
                                                 background: "linear-gradient(135deg, #4facfe, #00f2fe)",
                                                 color: "#000", fontWeight: 900, fontSize: 14,
                                                 cursor: "pointer",
+                                                opacity: activeMatchLoading ? 0.6 : 1,
                                             }}
                                         >
-                                            🔒 Залочить NFT
+                                            {activeMatchLoading ? "⏳..." : "🔒 Залочить NFT"}
                                         </button>
                                     )}
                                     <button
@@ -788,8 +830,10 @@ function AppContent() {
                     <Matchmaking
                         me={me}
                         playerDeck={playerDeck}
-                        onBack={function () { setScreen("inventory"); }}
+                        resumeMatchId={resumeLockMatchId}
+                        onBack={function () { setResumeLockMatchId(""); setScreen("inventory"); }}
                         onMatched={async function (data) {
+                            setResumeLockMatchId("");
                             setGameMode(data.mode || "ai");
                             setStage2MatchId(data.matchId || "");
                             if (!playerDeck || playerDeck.length !== 5) {

@@ -45,7 +45,7 @@ function LockWaitTimer({ timeoutMs, onTimeout }) {
         </div>
     );
 }
-export default function Matchmaking({ me, playerDeck, onBack, onMatched }) {
+export default function Matchmaking({ me, playerDeck, onBack, onMatched, resumeMatchId }) {
     var [phase, setPhase] = useState("idle"); // idle | searching | found | locking | ready
     var [searchMode, setSearchMode] = useState(null);
     var [matchId, setMatchId] = useState("");
@@ -58,6 +58,19 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched }) {
 
     var escrowContractId = (import.meta.env.VITE_NEAR_ESCROW_CONTRACT_ID || "").trim();
     var stage2Enabled = Boolean(escrowContractId);
+
+    // Возобновление лока существующего матча (после вылета/возврата с главной):
+    // сразу открываем окно лока для этого матча, БЕЗ выбора режима и без
+    // нового поиска соперника. Это чинит «кидает в выбор режима» и
+    // «повторный поиск оппонента» при нажатии «Залочить NFT».
+    useEffect(function () {
+        if (resumeMatchId) {
+            setMatchId(resumeMatchId);
+            setOpponentInfo({ id: null });
+            setPhase("found");
+            setShowLockModal(true);
+        }
+    }, [resumeMatchId]);
 
     var stopSearch = function () {
         if (pollRef.current) {
