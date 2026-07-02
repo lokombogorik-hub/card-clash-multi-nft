@@ -977,6 +977,10 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     // AI ход
     useEffect(() => {
         if (isPvP || turn !== "enemy" || roundOver || matchOver) return;
+        // Колода бота ещё грузится — НЕ отдаём ход игроку (иначе при рандомном
+        // «бот ходит первым» игрок всегда фактически начинал бы). Дождёмся
+        // загрузки: эффект перезапустится по loadingEnemyDeck и бот сходит.
+        if (loadingEnemyDeck) return;
 
         const t = setTimeout(() => {
             const curBoard = boardRef.current;
@@ -1036,7 +1040,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
         const safety = setTimeout(() => setTurn(cur => cur === "enemy" ? "player" : cur), 3000);
         return () => { clearTimeout(t); clearTimeout(safety); };
-    }, [turn, roundOver, matchOver, isPvP]);
+    }, [turn, roundOver, matchOver, isPvP, loadingEnemyDeck]);
 
     useEffect(() => {
         if (isPvP || roundOver || matchOver) return;
