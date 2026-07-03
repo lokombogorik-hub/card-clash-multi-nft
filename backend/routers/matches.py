@@ -64,6 +64,39 @@ def _player_locked(match_data: Dict, player_key: str, deposit_count: int) -> boo
     return deposit_count >= ESCROW_CARDS_REQUIRED
 
 
+async def _account_wallet(session, user_id):
+    """Кошелёк, ПРИВЯЗАННЫЙ к аккаунту (near_account_id). Это надёжнее, чем
+    near_wallet из запроса лока: фронт линкует его при подключении кошелька."""
+    try:
+        u = await session.get(User, int(user_id))
+        return (getattr(u, "near_account_id", None) or "").strip().lower() if u else ""
+    except Exception:
+        return ""
+
+
+async def _wallets_conflict(match_data: Dict) -> bool:
+    """True, если обе стороны матча — один и тот же NEAR-кошелёк (игра сам с
+    собой). Сверяем по привязанному к аккаунту near_account_id, а если его нет —
+    по кошелькам, которыми реально лочили."""
+    p1 = match_data.get("player1_id")
+    p2 = match_data.get("player2_id")
+    if not p1 or not p2:
+        return False
+    a1 = a2 = ""
+    try:
+        async for session in get_session():
+            a1 = await _account_wallet(session, p1)
+            a2 = await _account_wallet(session, p2)
+            break
+    except Exception as e:
+        print(f"[MATCHES] _wallets_conflict db error: {e}")
+    if not a1:
+        a1 = (match_data.get("player1_near_wallet") or "").strip().lower()
+    if not a2:
+        a2 = (match_data.get("player2_near_wallet") or "").strip().lower()
+    return bool(a1 and a2 and a1 == a2)
+
+
 async def recompute_escrow_lock(match_data: Dict) -> bool:
     """ЕДИНЫЙ источник правды по локу. Матч залочен, когда ОБА игрока
     подтвердили эскроу (по флагу или по депозитам). Возвращает True,
@@ -80,9 +113,7 @@ async def recompute_escrow_lock(match_data: Dict) -> bool:
     if p1_locked and p2_locked:
         # Нельзя начинать матч, если обе стороны — один и тот же NEAR-кошелёк
         # (игра сам с собой ломает ставки: победитель заберёт свои же карты).
-        w1 = (match_data.get("player1_near_wallet") or "").strip().lower()
-        w2 = (match_data.get("player2_near_wallet") or "").strip().lower()
-        if w1 and w2 and w1 == w2:
+        if await _wallets_conflict(match_data):
             match_data["same_wallet_block"] = True
             print(f"[MATCHES] refuse lock (same wallet both sides) match={match_data.get('match_id')}")
             return False
@@ -130,6 +161,15 @@ async def _cancel_and_refund(match_data: Dict, reason: str) -> int:
             break
     except Exception as e:
         print(f"[MATCHES] _cancel_and_refund error: {e}")
+    # Сообщаем подключённым клиентам, чтобы вышли в меню.
+    try:
+        from routers.ws_match import ws_manager
+        await ws_manager.broadcast_all(match_id, {
+            "type": "match_cancelled",
+            "message": "Матч отменён — NFT возвращены на кошелёк.",
+        })
+    except Exception as e:
+        print(f"[MATCHES] _cancel_and_refund broadcast error: {e}")
     return refunded
 
 
