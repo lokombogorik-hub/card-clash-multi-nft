@@ -126,8 +126,8 @@ async def _wallets_conflict(match_data: Dict) -> bool:
     w1 = d1 or a1 or lw1
     w2 = d2 or a2 or lw2
     conflict = bool(w1 and w2 and w1 == w2)
-    print(f"[MATCHES] wallets_conflict match={mid} p1={p1} p2={p2} "
-          f"w1={w1} w2={w2} acc=({a1},{a2}) dep=({d1},{d2}) lock=({lw1},{lw2}) -> {conflict}")
+    match_data["_dbg_wallets"] = f"w1={w1} w2={w2} | acc=({a1},{a2}) dep=({d1},{d2}) lock=({lw1},{lw2})"
+    print(f"[MATCHES] wallets_conflict match={mid} p1={p1} p2={p2} {match_data['_dbg_wallets']} -> {conflict}")
     return conflict
 
 
@@ -700,6 +700,7 @@ async def register_deposits(
         "deposits_count": len(request.token_ids),
         "escrow_locked": match_data.get("escrow_locked", False),
         "status": match_data.get("status"),
+        "debug_wallets": match_data.get("_dbg_wallets"),
     }
 
 
@@ -789,6 +790,7 @@ async def confirm_escrow(match_id: str, body: dict):
         "escrow_locked": both_locked,
         "status": match_data.get("status"),
         "both_locked": both_locked,
+        "debug_wallets": match_data.get("_dbg_wallets"),
     }
 
 
