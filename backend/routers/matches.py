@@ -64,6 +64,24 @@ def _player_locked(match_data: Dict, player_key: str, deposit_count: int) -> boo
     return deposit_count >= ESCROW_CARDS_REQUIRED
 
 
+async def _bind_wallet(user_id, wallet) -> None:
+    """Привязываем кошелёк к аккаунту по факту лока (near_account_id).
+    Само-исцеление: даже если фронтовый /api/near/link не прошёл, после лока
+    у аккаунта точно проставлен кошелёк — по нему потом ловим игру сам с собой."""
+    w = (wallet or "").strip().lower()
+    if not user_id or not w:
+        return
+    try:
+        async for session in get_session():
+            u = await session.get(User, int(user_id))
+            if u and (u.near_account_id or "").strip().lower() != w:
+                u.near_account_id = w
+                await session.commit()
+            break
+    except Exception as e:
+        print(f"[MATCHES] _bind_wallet error: {e}")
+
+
 async def _account_wallet(session, user_id):
     """Кошелёк, ПРИВЯЗАННЫЙ к аккаунту (near_account_id). Это надёжнее, чем
     near_wallet из запроса лока: фронт линкует его при подключении кошелька."""
@@ -76,25 +94,41 @@ async def _account_wallet(session, user_id):
 
 async def _wallets_conflict(match_data: Dict) -> bool:
     """True, если обе стороны матча — один и тот же NEAR-кошелёк (игра сам с
-    собой). Сверяем по привязанному к аккаунту near_account_id, а если его нет —
-    по кошелькам, которыми реально лочили."""
-    p1 = match_data.get("player1_id")
-    p2 = match_data.get("player2_id")
+    собой). Сверяем по нескольким источникам: кошелёк из депозитов (чем реально
+    отправляли NFT), near_account_id аккаунта и кошелёк лока в match_data."""
+    p1 = str(match_data.get("player1_id") or "")
+    p2 = str(match_data.get("player2_id") or "")
     if not p1 or not p2:
         return False
-    a1 = a2 = ""
+    mid = match_data.get("match_id")
+    a1 = a2 = ""       # near_account_id
+    d1 = d2 = ""       # кошелёк из депозитов (ground truth)
     try:
         async for session in get_session():
             a1 = await _account_wallet(session, p1)
             a2 = await _account_wallet(session, p2)
+            res = await session.execute(
+                select(MatchDeposit).where(MatchDeposit.match_id == mid)
+            )
+            for d in res.scalars().all():
+                w = (d.near_wallet or "").strip().lower()
+                if not w:
+                    continue
+                if str(d.player_id) == p1 and not d1:
+                    d1 = w
+                elif str(d.player_id) == p2 and not d2:
+                    d2 = w
             break
     except Exception as e:
         print(f"[MATCHES] _wallets_conflict db error: {e}")
-    if not a1:
-        a1 = (match_data.get("player1_near_wallet") or "").strip().lower()
-    if not a2:
-        a2 = (match_data.get("player2_near_wallet") or "").strip().lower()
-    return bool(a1 and a2 and a1 == a2)
+    lw1 = (match_data.get("player1_near_wallet") or "").strip().lower()
+    lw2 = (match_data.get("player2_near_wallet") or "").strip().lower()
+    w1 = d1 or a1 or lw1
+    w2 = d2 or a2 or lw2
+    conflict = bool(w1 and w2 and w1 == w2)
+    print(f"[MATCHES] wallets_conflict match={mid} p1={p1} p2={p2} "
+          f"w1={w1} w2={w2} acc=({a1},{a2}) dep=({d1},{d2}) lock=({lw1},{lw2}) -> {conflict}")
+    return conflict
 
 
 async def recompute_escrow_lock(match_data: Dict) -> bool:
@@ -588,6 +622,7 @@ async def register_deposits(
     if request.near_wallet:
         key = "player1_near_wallet" if player_id == match_data.get("player1_id") else "player2_near_wallet"
         match_data[key] = request.near_wallet
+        await _bind_wallet(player_id, request.near_wallet)
 
     nft_contract = request.nft_contract_id or NFT_CONTRACT_ID
 
@@ -653,7 +688,7 @@ async def register_deposits(
         await _save_match(match_data)
 
     # Обе стороны — один кошелёк: отменяем и возвращаем NFT.
-    if match_data.get("same_wallet_block"):
+    if match_data.get("same_wallet_block") or await _wallets_conflict(match_data):
         await _cancel_and_refund(match_data, "same_wallet_both_sides")
         raise HTTPException(status_code=409, detail="Нельзя лочить тем же NEAR-кошельком, что и соперник. NFT возвращены на кошелёк.")
 
@@ -702,6 +737,10 @@ async def confirm_escrow(match_id: str, body: dict):
             if near_wallet:
                 match_data["player2_near_wallet"] = near_wallet
 
+    # Привязываем кошелёк к аккаунту по факту лока (для проверки «сам с собой»).
+    if near_wallet:
+        await _bind_wallet(player_id, near_wallet)
+
     # Сохраняем депозиты если есть (идемпотентно — без дублей по token_id игрока)
     if token_ids:
         try:
@@ -737,7 +776,7 @@ async def confirm_escrow(match_id: str, body: dict):
         just_locked = await recompute_escrow_lock(match_data)
         await _save_match(match_data)
 
-    if match_data.get("same_wallet_block"):
+    if match_data.get("same_wallet_block") or await _wallets_conflict(match_data):
         await _cancel_and_refund(match_data, "same_wallet_both_sides")
         raise HTTPException(status_code=409, detail="Нельзя лочить тем же NEAR-кошельком, что и соперник. NFT возвращены на кошелёк.")
 
