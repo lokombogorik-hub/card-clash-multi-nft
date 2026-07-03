@@ -631,7 +631,9 @@ function AppContent() {
                     <div className="home-center">
                         <div className="home-wallet-row"><OnlineBadge /><WalletConnector /></div>
 
-                        {/* Баннер активного матча */}
+                        {/* Баннер активного матча. position+zIndex — чтобы кнопки
+                            гарантированно ловили тап и их не перекрывал соседний
+                            слой (была жалоба «ничего не жмётся»). */}
                         {activeMatch && (
                             <div style={{
                                 margin: "8px 16px 0",
@@ -642,6 +644,10 @@ function AppContent() {
                                 display: "flex",
                                 flexDirection: "column",
                                 gap: 8,
+                                position: "relative",
+                                zIndex: 100,
+                                pointerEvents: "auto",
+                                touchAction: "manipulation",
                             }}>
                                 <div style={{
                                     fontSize: 14, fontWeight: 700, color: "#ffd700",
@@ -900,6 +906,28 @@ function AppContent() {
             </div>
 
             <div className="bottom-stack" ref={bottomStackRef}>
+                {/* Аварийный выход из зависшего лока — в НИЖНЕЙ зоне (она точно
+                    тапается, в отличие от верха, где жест Telegram может съедать
+                    тапы). Виден, когда игрок залочил и ждёт соперника. */}
+                {screen === "home" && activeMatch && !activeMatch.escrow_locked && activeMatch.my_escrow_confirmed && (
+                    <button
+                        onClick={async function () {
+                            try {
+                                var t = token || getStoredToken();
+                                await apiFetch("/api/matches/" + activeMatch.match_id + "/cancel", { method: "POST", token: t });
+                            } catch (e) { /* всё равно скрываем баннер */ }
+                            setActiveMatch(null);
+                            try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("success"); } catch (e) { }
+                        }}
+                        style={{
+                            width: "100%", padding: "12px 16px", borderRadius: 12, border: "none",
+                            background: "linear-gradient(135deg,#ff8c42,#ff5252)", color: "#fff",
+                            fontWeight: 900, fontSize: 14, cursor: "pointer", touchAction: "manipulation",
+                        }}
+                    >
+                        ↩︎ Забрать NFT из зависшего матча
+                    </button>
+                )}
                 {screen === "home" && <SeasonBar token={token || getStoredToken()} onOpen={function (id) { setTournamentOpenId(id); setScreen("tournament"); }} />}
                 <BottomNav active={screen} onChange={function (k) { setTournamentOpenId(""); setScreen(k); }} />
             </div>
