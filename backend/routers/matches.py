@@ -78,12 +78,59 @@ async def recompute_escrow_lock(match_data: Dict) -> bool:
     p1_locked = _player_locked(match_data, "player1", counts.get(p1, 0))
     p2_locked = _player_locked(match_data, "player2", counts.get(p2, 0))
     if p1_locked and p2_locked:
+        # Нельзя начинать матч, если обе стороны — один и тот же NEAR-кошелёк
+        # (игра сам с собой ломает ставки: победитель заберёт свои же карты).
+        w1 = (match_data.get("player1_near_wallet") or "").strip().lower()
+        w2 = (match_data.get("player2_near_wallet") or "").strip().lower()
+        if w1 and w2 and w1 == w2:
+            match_data["same_wallet_block"] = True
+            print(f"[MATCHES] refuse lock (same wallet both sides) match={match_data.get('match_id')}")
+            return False
         match_data["escrow_locked"] = True
         match_data["status"] = "active"
         match_data["game_started_at"] = datetime.utcnow().isoformat()
         print(f"[MATCHES] escrow LOCKED for match {match_data.get('match_id')}")
         return True
     return False
+
+
+async def _cancel_and_refund(match_data: Dict, reason: str) -> int:
+    """Отменяем матч и возвращаем ВСЕ депозиты владельцам из эскроу.
+    Используется, например, когда обе стороны залочили одним кошельком."""
+    match_id = match_data.get("match_id")
+    match_data["status"] = "cancelled"
+    match_data["cancelled_reason"] = reason
+    match_data["cancelled_at"] = datetime.utcnow().isoformat()
+    await _save_match(match_data)
+    refunded = 0
+    try:
+        async for session in get_session():
+            result = await session.execute(
+                select(MatchDeposit).where(
+                    MatchDeposit.match_id == match_id,
+                    MatchDeposit.refunded == False,
+                )
+            )
+            for dep in result.scalars().all():
+                near_wallet = dep.near_wallet
+                if not near_wallet:
+                    near_wallet = (match_data.get("player1_near_wallet")
+                                   if dep.player_id == match_data.get("player1_id")
+                                   else match_data.get("player2_near_wallet"))
+                if near_wallet and is_escrow_configured():
+                    r = await transfer_nft_from_escrow(
+                        to_wallet=near_wallet,
+                        token_id=dep.token_id,
+                        nft_contract_id=dep.nft_contract_id or NFT_CONTRACT_ID,
+                    )
+                    if r.get("success"):
+                        dep.refunded = True
+                        refunded += 1
+            await session.commit()
+            break
+    except Exception as e:
+        print(f"[MATCHES] _cancel_and_refund error: {e}")
+    return refunded
 
 
 async def _notify_escrow_locked(match_id: str):
@@ -565,6 +612,11 @@ async def register_deposits(
         just_locked = await recompute_escrow_lock(match_data)
         await _save_match(match_data)
 
+    # Обе стороны — один кошелёк: отменяем и возвращаем NFT.
+    if match_data.get("same_wallet_block"):
+        await _cancel_and_refund(match_data, "same_wallet_both_sides")
+        raise HTTPException(status_code=409, detail="Нельзя лочить тем же NEAR-кошельком, что и соперник. NFT возвращены на кошелёк.")
+
     if just_locked:
         await _notify_escrow_locked(match_id)
 
@@ -644,6 +696,10 @@ async def confirm_escrow(match_id: str, body: dict):
     async with _get_match_lock(match_id):
         just_locked = await recompute_escrow_lock(match_data)
         await _save_match(match_data)
+
+    if match_data.get("same_wallet_block"):
+        await _cancel_and_refund(match_data, "same_wallet_both_sides")
+        raise HTTPException(status_code=409, detail="Нельзя лочить тем же NEAR-кошельком, что и соперник. NFT возвращены на кошелёк.")
 
     if just_locked:
         await _notify_escrow_locked(match_id)

@@ -1834,8 +1834,11 @@ img {
 
 @media (min-width: 640px) {
     .inv-grid-game-style {
-        grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+        /* На широких экранах не растягиваем карты через 1fr — ограничиваем
+           ширину колонки и центрируем сетку, иначе на ПК карты огромные. */
+        grid-template-columns: repeat(auto-fill, minmax(140px, 170px));
         gap: 16px;
+        justify-content: center;
     }
 }
 
@@ -3390,6 +3393,13 @@ img {
 
     .game-ui.tt-layout {
         max-width: 1100px;
+        margin: 0 auto
+    }
+
+    .inv-grid-game-style {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 140px));
+        justify-content: center;
+        max-width: 1000px;
         margin: 0 auto
     }
 }

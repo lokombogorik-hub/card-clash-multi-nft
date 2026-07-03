@@ -117,6 +117,25 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
         setError("");
 
         try {
+            // Нельзя лочить тем же кошельком, что и соперник (иначе матч сам с
+            // собой и победитель забирает свои же карты). Проверяем ДО перевода
+            // в эскроу, чтобы не гонять NFT зря. Сетевую ошибку игнорируем —
+            // серверный гард подстрахует.
+            try {
+                var _md = await apiFetch("/api/matches/" + existingMatchId, { token: getStoredToken() });
+                if (_md) {
+                    var _myId = String((me && me.id) || "");
+                    var _isP1 = String(_md.player1_id) === _myId;
+                    var _oppW = ((_isP1 ? _md.player2_near_wallet : _md.player1_near_wallet) || "").trim().toLowerCase();
+                    var _myW = (walletAddress || "").trim().toLowerCase();
+                    if (_oppW && _myW && _oppW === _myW) throw new Error("SAME_WALLET");
+                }
+            } catch (_e) {
+                if (String(_e && _e.message) === "SAME_WALLET") {
+                    throw new Error("Соперник уже залочил ЭТИМ ЖЕ NEAR-кошельком. Для матча нужны РАЗНЫЕ кошельки — переключись на другой аккаунт в HOT.");
+                }
+            }
+
             // Всегда берём СВЕЖИЙ список владения. Иначе после первого лока
             // 30-сек кэш показывает уже отправленные в эскроу NFT как «свои»,
             // и мы шлём заведомо провальную транзакцию -> HOT отдаёт RequestFailed.
@@ -502,6 +521,18 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                         }}>
                             Please confirm in your wallet
                         </div>
+                        {/* Гарантированный выход, чтобы не застрять на «loading» */}
+                        <button
+                            onClick={onClose}
+                            style={{
+                                marginTop: 16, padding: "10px 16px", borderRadius: 10,
+                                border: "1px solid rgba(255,255,255,0.2)",
+                                background: "transparent", color: "rgba(255,255,255,0.6)",
+                                cursor: "pointer", fontSize: 13, width: "100%",
+                            }}
+                        >
+                            Прервать и выйти
+                        </button>
                     </div>
                 )}
 
