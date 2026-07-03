@@ -810,15 +810,16 @@ function AppContent() {
                                         </button>
                                     )}
                                     <button
-                                        onClick={async function () {
-                                            try {
-                                                var t = token || getStoredToken();
-                                                await apiFetch(
-                                                    "/api/matches/" + activeMatch.match_id + "/cancel",
-                                                    { method: "POST", token: t }
-                                                );
-                                            } catch (e) { /* ignore */ }
+                                        type="button"
+                                        onClick={function () {
+                                            // Скрываем баннер МГНОВЕННО. Возврат из эскроу на бэке
+                                            // может идти секунды (ончейн переводы) — не ждём его в UI,
+                                            // иначе кажется, что кнопка «не жмётся».
+                                            var mid = activeMatch.match_id;
                                             setActiveMatch(null);
+                                            try { window.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.("medium"); } catch (e) { }
+                                            var t = token || getStoredToken();
+                                            apiFetch("/api/matches/" + mid + "/cancel", { method: "POST", token: t }).catch(function () { });
                                         }}
                                         style={{
                                             padding: "10px 14px", borderRadius: 10,
@@ -826,6 +827,7 @@ function AppContent() {
                                             background: "rgba(255,100,100,0.1)",
                                             color: "#ff6b6b", fontSize: 13,
                                             cursor: "pointer",
+                                            touchAction: "manipulation",
                                         }}
                                     >
                                         Отменить
@@ -906,28 +908,6 @@ function AppContent() {
             </div>
 
             <div className="bottom-stack" ref={bottomStackRef}>
-                {/* Аварийный выход из зависшего лока — в НИЖНЕЙ зоне (она точно
-                    тапается, в отличие от верха, где жест Telegram может съедать
-                    тапы). Виден, когда игрок залочил и ждёт соперника. */}
-                {screen === "home" && activeMatch && !activeMatch.escrow_locked && activeMatch.my_escrow_confirmed && (
-                    <button
-                        onClick={async function () {
-                            try {
-                                var t = token || getStoredToken();
-                                await apiFetch("/api/matches/" + activeMatch.match_id + "/cancel", { method: "POST", token: t });
-                            } catch (e) { /* всё равно скрываем баннер */ }
-                            setActiveMatch(null);
-                            try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("success"); } catch (e) { }
-                        }}
-                        style={{
-                            width: "100%", padding: "12px 16px", borderRadius: 12, border: "none",
-                            background: "linear-gradient(135deg,#ff8c42,#ff5252)", color: "#fff",
-                            fontWeight: 900, fontSize: 14, cursor: "pointer", touchAction: "manipulation",
-                        }}
-                    >
-                        ↩︎ Забрать NFT из зависшего матча
-                    </button>
-                )}
                 {screen === "home" && <SeasonBar token={token || getStoredToken()} onOpen={function (id) { setTournamentOpenId(id); setScreen("tournament"); }} />}
                 <BottomNav active={screen} onChange={function (k) { setTournamentOpenId(""); setScreen(k); }} />
             </div>
