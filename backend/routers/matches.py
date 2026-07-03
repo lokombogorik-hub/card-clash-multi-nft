@@ -346,43 +346,73 @@ async def _verify_tokens_in_escrow(token_ids, nft_contract: str):
     return False, missing
 
 
+# Один кэшированный аккаунт эскроу + сериализация переводов. Раньше на КАЖДУЮ
+# карту создавался новый Account с startup() (перечитывал nonce с чейна, не видя
+# ещё не финализированные tx) -> при возврате 5 карт подряд часть падала на
+# конфликте nonce. Теперь: единый аккаунт, глобальный лок (строго по очереди),
+# ретраи со сбросом аккаунта (пере-чтение nonce) при ошибке.
+_escrow_account = None
+_escrow_tx_lock: Optional[asyncio.Lock] = None
+
+
+def _escrow_lock() -> asyncio.Lock:
+    global _escrow_tx_lock
+    if _escrow_tx_lock is None:
+        _escrow_tx_lock = asyncio.Lock()
+    return _escrow_tx_lock
+
+
+async def _get_escrow_account():
+    """Ленивая инициализация и кэш аккаунта эскроу (py_near сам инкрементит nonce
+    при переиспользовании объекта)."""
+    global _escrow_account
+    if _escrow_account is not None:
+        return _escrow_account
+    from py_near.account import Account
+    pk = ESCROW_PRIVATE_KEY
+    if not pk.startswith("ed25519:"):
+        pk = "ed25519:" + pk
+    _tx_rpc = os.getenv("NEAR_RPC_URL", "").strip()
+    acc = Account(ESCROW_WALLET, pk, _tx_rpc) if _tx_rpc else Account(ESCROW_WALLET, pk)
+    await acc.startup()
+    _escrow_account = acc
+    return _escrow_account
+
+
 async def transfer_nft_from_escrow(to_wallet: str, token_id: str, nft_contract_id: str) -> Dict:
     if not ESCROW_PRIVATE_KEY:
         return {"success": False, "error": "Escrow private key not configured", "mock": True}
-    try:
-        from py_near.account import Account
-        private_key = ESCROW_PRIVATE_KEY
-        if not private_key.startswith("ed25519:"):
-            private_key = "ed25519:" + private_key
-        # RPC для отправки tx: если NEAR_RPC_URL задан явно — используем его
-        # (важно при большом онлайне), иначе оставляем дефолт py_near (рабочий).
-        _tx_rpc = os.getenv("NEAR_RPC_URL", "").strip()
-        if _tx_rpc:
-            account = Account(ESCROW_WALLET, private_key, _tx_rpc)
-        else:
-            account = Account(ESCROW_WALLET, private_key)
-        await account.startup()
-        result = await account.function_call(
-            nft_contract_id or NFT_CONTRACT_ID,
-            "nft_transfer",
-            {"receiver_id": to_wallet, "token_id": str(token_id)},
-            gas=30_000_000_000_000,
-            amount=1,
-        )
-        tx_hash = ""
-        if result:
-            if hasattr(result, "transaction") and hasattr(result.transaction, "hash"):
-                tx_hash = result.transaction.hash
-            elif hasattr(result, "transaction_outcome"):
-                tx_hash = result.transaction_outcome.id
-            else:
-                tx_hash = str(result)[:32]
-        print(f"[ESCROW] Transferred {token_id} to {to_wallet}, tx: {tx_hash}")
-        return {"success": True, "tx_hash": tx_hash, "token_id": token_id, "to": to_wallet}
-    except Exception as e:
-        print(f"[ESCROW] Transfer error: {e}")
-        traceback.print_exc()
-        return {"success": False, "error": str(e)}
+    global _escrow_account
+    last_err = ""
+    async with _escrow_lock():
+        for attempt in range(3):
+            try:
+                account = await _get_escrow_account()
+                result = await account.function_call(
+                    nft_contract_id or NFT_CONTRACT_ID,
+                    "nft_transfer",
+                    {"receiver_id": to_wallet, "token_id": str(token_id)},
+                    gas=30_000_000_000_000,
+                    amount=1,
+                )
+                tx_hash = ""
+                if result:
+                    if hasattr(result, "transaction") and hasattr(result.transaction, "hash"):
+                        tx_hash = result.transaction.hash
+                    elif hasattr(result, "transaction_outcome"):
+                        tx_hash = result.transaction_outcome.id
+                    else:
+                        tx_hash = str(result)[:32]
+                print(f"[ESCROW] Transferred {token_id} to {to_wallet}, tx: {tx_hash}")
+                return {"success": True, "tx_hash": tx_hash, "token_id": token_id, "to": to_wallet}
+            except Exception as e:
+                last_err = str(e)
+                print(f"[ESCROW] Transfer {token_id} attempt {attempt + 1} failed: {last_err}")
+                # Сбрасываем аккаунт — на следующей попытке перечитаем nonce.
+                _escrow_account = None
+                if attempt < 2:
+                    await asyncio.sleep(1.5)
+    return {"success": False, "error": last_err, "token_id": token_id}
 
 
 async def _get_match(match_id: str) -> Optional[Dict]:

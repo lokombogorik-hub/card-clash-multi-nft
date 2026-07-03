@@ -45,7 +45,7 @@ function LockWaitTimer({ timeoutMs, onTimeout }) {
         </div>
     );
 }
-export default function Matchmaking({ me, playerDeck, onBack, onMatched, resumeMatchId }) {
+export default function Matchmaking({ me, playerDeck, onBack, onMatched, resumeMatchId, resumeWaitingMatchId }) {
     var [phase, setPhase] = useState("idle"); // idle | searching | found | locking | ready
     var [searchMode, setSearchMode] = useState(null);
     var [matchId, setMatchId] = useState("");
@@ -178,44 +178,50 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched, resumeM
         }
     };
 
-    // Шаг3
-    var onLockReady = function (data) {
-        setShowLockModal(false);
+    // Экран ожидания соперника: опрашиваем матч (mid передаём явно, чтобы не
+    // ловить устаревший matchId из замыкания). Как только оба залочили — в игру;
+    // если сервер отменил и вернул карты — выходим.
+    var beginLockWait = function (mid) {
+        setMatchId(mid);
         setMyLockDone(true);
         setPhase("locking");
         setWaitingForOpponentLock(true);
-
-        // Poll for opponent lock
         var token = getStoredToken();
+        if (lockPollRef.current) clearInterval(lockPollRef.current);
         lockPollRef.current = setInterval(async function () {
             try {
-                var matchData = await apiFetch("/api/matches/" + matchId, { token: token });
-
-                // Оба залочили — идём в игру
+                var matchData = await apiFetch("/api/matches/" + mid, { token: token });
                 if (matchData.escrow_locked) {
                     clearInterval(lockPollRef.current);
                     lockPollRef.current = null;
                     setWaitingForOpponentLock(false);
                     setPhase("ready");
-                    setTimeout(function () {
-                        onMatched({ mode: "pvp", matchId: matchId });
-                    }, 500);
+                    setTimeout(function () { onMatched({ mode: "pvp", matchId: mid }); }, 500);
                     return;
                 }
-
-                // Сервер вернул карты по предельному ожиданию (или отмене) —
-                // выходим в меню и сообщаем игроку.
                 if (matchData.status === "cancelled") {
                     clearInterval(lockPollRef.current);
                     lockPollRef.current = null;
                     alert("Соперник так и не нашёлся — NFT возвращены на кошелёк.");
                     stopSearch();
                 }
-            } catch (e) {
-                // keep polling
-            }
+            } catch (e) { /* keep polling */ }
         }, 2000);
     };
+
+    // Шаг3 — после успешного лока
+    var onLockReady = function (data) {
+        setShowLockModal(false);
+        beginLockWait((data && data.matchId) || matchId);
+    };
+
+    // Возврат залочившего игрока в экран ожидания (с главной), БЕЗ повторного
+    // лока — просто ждём соперника и авто-входим в игру, когда оба готовы.
+    useEffect(function () {
+        if (resumeWaitingMatchId) {
+            beginLockWait(resumeWaitingMatchId);
+        }
+    }, [resumeWaitingMatchId]);
 
     // Cancel during any phase
     var onCancel = function () {

@@ -481,7 +481,8 @@ async def resolve_stuck_active_match(match_id: str) -> bool:
     match_data["status"] = "cancelled"
     match_data["cancelled_reason"] = "stuck_active_no_start"
     match_data["cancelled_at"] = datetime.utcnow().isoformat()
-    match_data["refunded"] = True
+    # НЕ ставим refunded=True вслепую — если что-то не ушло, фоновый реконсайлер
+    # (reconcile_pending_refunds) дожмёт по флагам самих депозитов.
     match_data["refund_count"] = refunded
     await save_match(match_data)
 
@@ -495,6 +496,49 @@ async def resolve_stuck_active_match(match_id: str) -> bool:
     except Exception as e:
         print(f"[Matchmaking] stuck-active broadcast error: {e}")
     return True
+
+
+async def reconcile_pending_refunds():
+    """Дожимаем возвраты: находим депозиты с refunded=False по ОТМЕНЁННЫМ матчам
+    и повторяем перевод из эскроу владельцу. Спасает, если разовый возврат не
+    прошёл (RPC/nonce) — карты не застревают навсегда."""
+    from routers.matches import transfer_nft_from_escrow, is_escrow_configured
+    if not is_escrow_configured():
+        return
+    try:
+        async for session in get_session():
+            pending = (await session.execute(
+                select(MatchDeposit).where(MatchDeposit.refunded == False)  # noqa: E712
+            )).scalars().all()
+            if not pending:
+                break
+            by_match: Dict[str, list] = {}
+            for d in pending:
+                by_match.setdefault(d.match_id, []).append(d)
+            for mid, deps in by_match.items():
+                m = await session.get(PvPMatch, mid)
+                # Возвращаем только для отменённых матчей (там всё уходит владельцам).
+                if not m or m.status != "cancelled":
+                    continue
+                for d in deps:
+                    wallet = d.near_wallet
+                    if not wallet:
+                        wallet = (m.player1_near_wallet if str(d.player_id) == str(m.player1_id)
+                                  else m.player2_near_wallet)
+                    if not wallet:
+                        continue
+                    r = await transfer_nft_from_escrow(
+                        to_wallet=wallet,
+                        token_id=d.token_id,
+                        nft_contract_id=d.nft_contract_id or "",
+                    )
+                    if r.get("success"):
+                        d.refunded = True
+                        print(f"[Matchmaking] reconcile: refunded {d.token_id} -> {wallet}")
+            await session.commit()
+            break
+    except Exception as e:
+        print(f"[Matchmaking] reconcile_pending_refunds error: {e}")
 
 
 async def cleanup_stale_matches():
@@ -547,6 +591,12 @@ async def cleanup_stale_matches():
                 if user_id in matchmaking_queue:
                     del matchmaking_queue[user_id]
                     print(f"[Matchmaking] Removed stale user {user_id} from queue")
+
+            # Дожимаем зависшие возвраты NFT по отменённым матчам.
+            try:
+                await reconcile_pending_refunds()
+            except Exception as e:
+                print(f"[Matchmaking] reconcile error: {e}")
 
         except Exception as e:
             print(f"[Matchmaking] Cleanup error: {e}")

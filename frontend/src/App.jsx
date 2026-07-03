@@ -386,6 +386,7 @@ function AppContent() {
     var [gameMode, setGameMode] = useState("ai");
     var [stage2MatchId, setStage2MatchId] = useState("");
     var [resumeLockMatchId, setResumeLockMatchId] = useState("");
+    var [resumeWaitingMatchId, setResumeWaitingMatchId] = useState("");
     var [tournamentOpenId, setTournamentOpenId] = useState("");
     var logoRef = useRef(null);
     var [logoOk, setLogoOk] = useState(true);
@@ -580,6 +581,7 @@ function AppContent() {
     var onDeckReady = function (selectedNfts) {
         if (Array.isArray(selectedNfts) && selectedNfts.length === 5) setPlayerDeck(selectedNfts);
         setResumeLockMatchId("");
+        setResumeWaitingMatchId("");
         setScreen("matchmaking");
     };
 
@@ -717,14 +719,38 @@ function AppContent() {
                                     )}
                                     {/* Если escrow не залочен — кнопка "Залочить NFT" вместо "Вернуться" */}
                                     {!activeMatch.escrow_locked && activeMatch.my_escrow_confirmed && (
-                                        <div style={{
-                                            flex: 1, padding: "10px 16px", borderRadius: 10,
-                                            background: "rgba(255,255,0,0.1)",
-                                            border: "1px solid rgba(255,255,0,0.3)",
-                                            color: "#ffd700", fontSize: 13, textAlign: "center",
-                                        }}>
-                                            ⏳ Ждём оппонента...
-                                        </div>
+                                        <button
+                                            onClick={async function () {
+                                                // Возврат в экран ожидания соперника (без повторного
+                                                // лока): там снова идёт поиск и авто-вход в игру, когда
+                                                // соперник залочит.
+                                                setActiveMatchLoading(true);
+                                                try {
+                                                    var t = token || getStoredToken();
+                                                    var deck = null;
+                                                    try {
+                                                        var dr = await apiFetch("/api/decks/active/full", { token: t });
+                                                        if (dr && dr.cards && dr.cards.length === 5) deck = dr.cards;
+                                                    } catch (_) { }
+                                                    if (deck) setPlayerDeck(deck);
+                                                    setGameMode("pvp");
+                                                    setStage2MatchId(activeMatch.match_id);
+                                                    setResumeWaitingMatchId(activeMatch.match_id);
+                                                    setScreen("matchmaking");
+                                                } finally {
+                                                    setActiveMatchLoading(false);
+                                                }
+                                            }}
+                                            disabled={activeMatchLoading}
+                                            style={{
+                                                flex: 1, padding: "10px 16px", borderRadius: 10, border: "none",
+                                                background: "linear-gradient(135deg, #4facfe, #00f2fe)",
+                                                color: "#000", fontWeight: 900, fontSize: 14, cursor: "pointer",
+                                                opacity: activeMatchLoading ? 0.6 : 1,
+                                            }}
+                                        >
+                                            {activeMatchLoading ? "⏳..." : "🔎 Вернуться к поиску"}
+                                        </button>
                                     )}
                                     {!activeMatch.escrow_locked && !activeMatch.my_escrow_confirmed && (
                                         <button
@@ -831,9 +857,11 @@ function AppContent() {
                         me={me}
                         playerDeck={playerDeck}
                         resumeMatchId={resumeLockMatchId}
-                        onBack={function () { setResumeLockMatchId(""); setScreen("inventory"); }}
+                        resumeWaitingMatchId={resumeWaitingMatchId}
+                        onBack={function () { setResumeLockMatchId(""); setResumeWaitingMatchId(""); setScreen("inventory"); }}
                         onMatched={async function (data) {
                             setResumeLockMatchId("");
+                            setResumeWaitingMatchId("");
                             setGameMode(data.mode || "ai");
                             setStage2MatchId(data.matchId || "");
                             if (!playerDeck || playerDeck.length !== 5) {
