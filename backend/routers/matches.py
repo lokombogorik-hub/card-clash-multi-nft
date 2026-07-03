@@ -28,6 +28,11 @@ NEAR_RPC_URL = os.getenv("NEAR_RPC_URL", "https://free.rpc.fastnear.com")
 # Сколько NFT каждый игрок лочит в эскроу для старта матча
 ESCROW_CARDS_REQUIRED = 5
 
+# Ончейн-проверка лока: карты игрока должны РЕАЛЬНО лежать в эскроу. Иначе
+# можно "залочить" подписав левым кошельком (перевод падает), а бэк засчитает.
+# Отключается env ESCROW_LOCK_VERIFY=0 (например, если нет индексера).
+ESCROW_LOCK_VERIFY = os.getenv("ESCROW_LOCK_VERIFY", "1") == "1"
+
 # Пер-матчевые блокировки против гонок при параллельных register/confirm/lock.
 _match_locks: Dict[str, asyncio.Lock] = {}
 
@@ -126,8 +131,8 @@ async def _wallets_conflict(match_data: Dict) -> bool:
     w1 = d1 or a1 or lw1
     w2 = d2 or a2 or lw2
     conflict = bool(w1 and w2 and w1 == w2)
-    match_data["_dbg_wallets"] = f"w1={w1} w2={w2} | acc=({a1},{a2}) dep=({d1},{d2}) lock=({lw1},{lw2})"
-    print(f"[MATCHES] wallets_conflict match={mid} p1={p1} p2={p2} {match_data['_dbg_wallets']} -> {conflict}")
+    print(f"[MATCHES] wallets_conflict match={mid} p1={p1} p2={p2} "
+          f"w1={w1} w2={w2} -> {conflict}")
     return conflict
 
 
@@ -288,6 +293,57 @@ async def fetch_nft_image(token_id: str, nft_contract: str) -> str:
     except Exception as e:
         print(f"[MATCHES] fetch_nft_image error for {token_id}: {e}")
     return ""
+
+
+async def _nft_owner(token_id: str, nft_contract: str):
+    """Кто сейчас владелец токена (owner_id) по данным контракта, или None."""
+    if not nft_contract or not token_id:
+        return None
+    try:
+        args = json.dumps({"token_id": str(token_id)})
+        args_b64 = base64.b64encode(args.encode()).decode()
+        async with httpx.AsyncClient(timeout=8) as client:
+            resp = await client.post(NEAR_RPC_URL, json={
+                "jsonrpc": "2.0", "id": "1", "method": "query",
+                "params": {
+                    "request_type": "call_function",
+                    "finality": "final",
+                    "account_id": nft_contract,
+                    "method_name": "nft_token",
+                    "args_base64": args_b64,
+                },
+            })
+            data = resp.json()
+            if "result" in data and "result" in data["result"]:
+                token = json.loads(bytes(data["result"]["result"]).decode())
+                return token.get("owner_id")
+    except Exception as e:
+        print(f"[MATCHES] _nft_owner error for {token_id}: {e}")
+    return None
+
+
+async def _verify_tokens_in_escrow(token_ids, nft_contract: str):
+    """Проверяем, что ВСЕ карты игрока реально лежат в эскроу-кошельке.
+    С ретраями — индексатор/RPC могут отставать сразу после перевода.
+    Возвращает (ok, missing)."""
+    ids = [str(t) for t in (token_ids or []) if t]
+    if not ids:
+        return False, ids
+    contract = nft_contract or NFT_CONTRACT_ID
+    escrow = (ESCROW_WALLET or "").strip().lower()
+    missing = list(ids)
+    for attempt in range(3):
+        still = []
+        for tid in missing:
+            owner = (await _nft_owner(tid, contract) or "").strip().lower()
+            if owner != escrow:
+                still.append(tid)
+        missing = still
+        if not missing:
+            return True, []
+        if attempt < 2:
+            await asyncio.sleep(2.5)
+    return False, missing
 
 
 async def transfer_nft_from_escrow(to_wallet: str, token_id: str, nft_contract_id: str) -> Dict:
@@ -626,6 +682,17 @@ async def register_deposits(
 
     nft_contract = request.nft_contract_id or NFT_CONTRACT_ID
 
+    # Ончейн-проверка: карты игрока должны реально лежать в эскроу (иначе можно
+    # "залочить", подписав левым/пустым кошельком — перевод падает, а бэк верит).
+    if ESCROW_LOCK_VERIFY and is_escrow_configured() and request.token_ids:
+        ok, missing = await _verify_tokens_in_escrow(request.token_ids, nft_contract)
+        if not ok:
+            raise HTTPException(
+                status_code=400,
+                detail=("Карты не найдены в эскроу — лочить нужно кошельком, которым "
+                        "владеешь этими NFT. Не подтверждены: " + ", ".join(missing)),
+            )
+
     # Сохраняем депозиты в БД
     try:
         async for session in get_session():
@@ -700,7 +767,6 @@ async def register_deposits(
         "deposits_count": len(request.token_ids),
         "escrow_locked": match_data.get("escrow_locked", False),
         "status": match_data.get("status"),
-        "debug_wallets": match_data.get("_dbg_wallets"),
     }
 
 
@@ -719,6 +785,16 @@ async def confirm_escrow(match_id: str, body: dict):
 
     if not player_id:
         raise HTTPException(status_code=400, detail="player_id required")
+
+    # Ончейн-проверка: карты реально в эскроу (не даём подтвердить лок «на словах»).
+    if ESCROW_LOCK_VERIFY and is_escrow_configured() and token_ids:
+        ok, missing = await _verify_tokens_in_escrow(token_ids, NFT_CONTRACT_ID)
+        if not ok:
+            raise HTTPException(
+                status_code=400,
+                detail=("Карты не найдены в эскроу — подтверди лок кошельком, которым "
+                        "владеешь этими NFT. Не подтверждены: " + ", ".join(missing)),
+            )
 
     if player_id == match_data.get("player1_id"):
         match_data["player1_escrow_tx"] = tx_hash
@@ -790,7 +866,6 @@ async def confirm_escrow(match_id: str, body: dict):
         "escrow_locked": both_locked,
         "status": match_data.get("status"),
         "both_locked": both_locked,
-        "debug_wallets": match_data.get("_dbg_wallets"),
     }
 
 
