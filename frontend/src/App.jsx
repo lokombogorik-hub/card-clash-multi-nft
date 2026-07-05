@@ -930,6 +930,7 @@ function CoinToaster() {
             var reason = d.reason || "";
             var text;
             if (reason === "boost") text = "⚡ Буст ×2 активирован!";
+            else if (reason === "spent" && amount > 0) text = "🪙 −" + amount + " ClashCoin списано";
             else if (amount > 0) {
                 var label = reason === "win" ? "за победу"
                     : reason === "case" ? "за кейс"

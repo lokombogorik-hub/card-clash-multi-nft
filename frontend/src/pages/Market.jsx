@@ -494,6 +494,8 @@ export default function Market() {
         if (coins < cp) { alert("Не хватает ClashCoin: нужно " + cp + ", у тебя " + coins); return; }
         var available = caseInventory[c.id] || 0;
         if (available <= 0) { alert("NFT закончились в этом кейсе!"); return; }
+        // Подтверждение перед списанием монет
+        if (!confirm("Открыть «" + c.name + "» за " + cp + " ClashCoin?\nУ тебя: " + coins + " → останется: " + (coins - cp))) return;
         setBuying(c.id); setError(""); setBuyingStatus("Открываю...");
         try {
             var open = await apiFetch("/api/cases/open", {
@@ -505,6 +507,8 @@ export default function Market() {
             setCaseInventory(function (prev) { var u = { ...prev }; if (u[c.id] > 0) u[c.id] = u[c.id] - 1; return u; });
             setBuyingStatus("");
             setOpenModal({ caseItem: c, cards: cards });
+            setCoins(function (p) { return Math.max(0, p - cp); });
+            window.dispatchEvent(new CustomEvent("clashcoin", { detail: { amount: cp, reason: "spent" } }));
             refreshCoins();
             try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("success"); } catch (e) { }
         } catch (e) {
