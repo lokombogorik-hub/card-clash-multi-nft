@@ -395,6 +395,12 @@ async def open_case(
     if not case:
         raise HTTPException(400, f"Unknown case_id: {data.case_id}")
 
+    # Наличие NFT проверяем ДО любой оплаты — иначе за распроданный кейс
+    # спишутся монеты (или уйдёт NEAR), а карты не будет.
+    inventory = await get_pool_inventory_cached()
+    if inventory.get(case["rarity_mode"], 0) <= 0:
+        raise HTTPException(400, "Кейс распродан — NFT закончились")
+
     paid_with_coins = (data.pay_with == "coins")
 
     if paid_with_coins:
@@ -423,14 +429,6 @@ async def open_case(
                 print(f"[CASES] payment verify FAILED tx={data.tx_hash} payer={payer}: {reason}")
                 raise HTTPException(400, f"Оплата не подтверждена: {reason}")
             print(f"[CASES] payment verified tx={data.tx_hash} payer={payer}")
-
-    # Проверяем доступность NFT перед открытием
-    inventory = await get_pool_inventory_cached()
-    rarity = case["rarity_mode"]
-    available_count = inventory.get(rarity, 0)
-
-    if available_count <= 0:
-        raise HTTPException(400, f"No NFTs available for {data.case_id} case (rarity: {rarity})")
 
     if not paid_with_coins and data.tx_hash:
         used_tx_hashes.add(data.tx_hash)

@@ -643,19 +643,21 @@ export default function Market() {
                             {isOutOfStock && !loadingInventory && (
                                 <div style={{
                                     position: "absolute",
-                                    top: "50%",
+                                    top: "42%",
                                     left: "50%",
-                                    transform: "translate(-50%, -50%)",
+                                    transform: "translate(-50%, -50%) rotate(-8deg)",
                                     background: "rgba(0,0,0,0.85)",
                                     color: "#ff5050",
-                                    padding: "12px 20px",
-                                    borderRadius: 12,
-                                    fontSize: 14,
+                                    padding: "8px 18px",
+                                    borderRadius: 10,
+                                    fontSize: 15,
                                     fontWeight: 900,
                                     zIndex: 20,
                                     border: "2px solid #ff5050",
                                     textTransform: "uppercase",
                                     letterSpacing: 1,
+                                    whiteSpace: "nowrap",
+                                    pointerEvents: "none",
                                 }}>
                                     Sold Out
                                 </div>
