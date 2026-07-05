@@ -487,7 +487,10 @@ async def open_case(
             "name": title,
         })
 
-    reservation_id = f"{user_id}_{data.tx_hash[:8]}"
+    # При оплате монетами tx_hash отсутствует — иначе data.tx_hash[:8] падал
+    # с TypeError уже ПОСЛЕ списания монет (монеты списаны, карты нет).
+    _tx_tag = data.tx_hash if data.tx_hash else f"coin{random.randint(100000, 999999)}"
+    reservation_id = f"{user_id}_{_tx_tag[:8]}"
 
     if any(c.get("from_pool") for c in cards):
         reserved_tokens[reservation_id] = cards
