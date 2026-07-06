@@ -7,7 +7,13 @@ function svgProps(size, glow) {
     return {
         width: size, height: size, viewBox: "0 0 24 24",
         fill: "none", xmlns: "http://www.w3.org/2000/svg",
-        style: { display: "inline-block", verticalAlign: "middle", flex: "0 0 auto", filter: g },
+        style: {
+            display: "inline-block", verticalAlign: "middle", flex: "0 0 auto",
+            filter: g,
+            transform: "translateZ(0)",      // отдельный GPU-слой — не мерцает над анимацией
+            willChange: "filter",
+            backfaceVisibility: "hidden",
+        },
     };
 }
 
@@ -54,9 +60,16 @@ export function LockIcon({ size = 16, glow }) {
 export function SwordsIcon({ size = 16, glow }) {
     return (
         <svg {...svgProps(size, glow)}>
-            <path d="M14.5 3.5 21 3l-.5 6.5-8 8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M9.5 3.5 3 3l.5 6.5 8 8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M4 20l3-3M20 20l-3-3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+            <g stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" fill="none">
+                <path d="M20.5 3.5 10 14" />
+                <path d="M17.8 3.3 20.7 3.3 20.7 6.2" />
+                <path d="m6.5 16.5-3 3 1.5 1.5 3-3" />
+                <path d="M8 12.5 11.5 16" />
+                <path d="M3.5 3.5 14 14" />
+                <path d="M6.2 3.3 3.3 3.3 3.3 6.2" />
+                <path d="m17.5 16.5 3 3-1.5 1.5-3-3" />
+                <path d="M12.5 12.5 16 16" />
+            </g>
         </svg>
     );
 }
@@ -253,6 +266,27 @@ export function BellIcon({ size = 16, glow }) {
         <svg {...svgProps(size, glow)}>
             <path d="M6 10a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
             <path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        </svg>
+    );
+}
+
+// Колода — стопка карт.
+export function CardsIcon({ size = 16, glow }) {
+    return (
+        <svg {...svgProps(size, glow)}>
+            <rect x="8" y="4.5" width="10.5" height="15" rx="2" stroke="currentColor" strokeWidth="1.7" fill="currentColor" fillOpacity="0.12" transform="rotate(9 13.25 12)" />
+            <rect x="6.5" y="5.5" width="10.5" height="15" rx="2" stroke="currentColor" strokeWidth="1.7" fill="currentColor" fillOpacity="0.16" />
+            <path d="M9.5 9h4.5M9.5 12h4.5M9.5 15h2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" opacity="0.7" />
+        </svg>
+    );
+}
+
+// Значок NEAR (скруглённый квадрат + N).
+export function NearIcon({ size = 16, glow }) {
+    return (
+        <svg {...svgProps(size, glow)}>
+            <rect x="3.5" y="3.5" width="17" height="17" rx="4.6" stroke="currentColor" strokeWidth="1.7" />
+            <path d="M8 16.3V8l8 8V7.7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
     );
 }

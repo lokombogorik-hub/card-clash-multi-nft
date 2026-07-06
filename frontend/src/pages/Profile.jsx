@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CoinIcon, SwordsIcon, TrophyIcon, XIcon, GemIcon, BoltIcon } from "../components/Icons";
+import { CoinIcon, SwordsIcon, TrophyIcon, XIcon, GemIcon, BoltIcon, NearIcon } from "../components/Icons";
 import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
 
@@ -123,7 +123,7 @@ export default function Profile({ token, me }) {
                         <div style={{ fontSize: 10, color: "rgba(255,255,255,.5)", textTransform: "uppercase", letterSpacing: ".5px", marginBottom: 3 }}>Кошелёк</div>
                         <div className="acc">{connected ? accountId : "Не подключён"}</div>
                     </div>
-                    {connected && <div className="bal">{Number(balance).toFixed(2)} Ⓝ</div>}
+                    {connected && <div className="bal" style={{display:"inline-flex",alignItems:"center",gap:4}}>{Number(balance).toFixed(2)} <NearIcon size={12} /></div>}
                 </div>
             </div>
 

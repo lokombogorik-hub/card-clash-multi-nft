@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
-import { CoinIcon, BoltIcon, CheckIcon, GemIcon, CaseIcon, XIcon } from "../components/Icons";
+import { CoinIcon, BoltIcon, CheckIcon, GemIcon, CaseIcon, XIcon, NearIcon } from "../components/Icons";
 
 var CASES = [
     { id: "starter", name: "Starter Case", price: 0.01, coin_price: 20, displayPrice: "1 Card", image: "/ui/case-starter.png", video: "/ui/case-starter.mp4", rarity: "common", description: "1 random card", type: "single" },
@@ -556,7 +556,7 @@ export default function Market() {
                     border: "1px solid rgba(120,200,255,0.2)",
                 }}>
                     <div style={{ fontSize: 13, color: "#78c8ff" }}>
-                        Баланс: {Number(balance).toFixed(4)} Ⓝ
+                        Баланс: {Number(balance).toFixed(4)} <NearIcon size={12} />
                     </div>
                     <div style={{ fontSize: 13, color: "#ffd76a", marginTop: 4, display: "inline-flex", alignItems: "center", gap: 5 }}>
                         <CoinIcon size={14} /> {coins} ClashCoin

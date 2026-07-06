@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { FireIcon, XIcon } from "../Icons";
+import { FireIcon, XIcon, NearIcon } from "../Icons";
 import { useWalletConnect } from "../../context/WalletConnectContext";
 import WalletPicker from "./WalletPicker";
 
@@ -34,7 +34,7 @@ export default function WalletConnector() {
                         {ctx.accountId.length > 14 ? ctx.accountId.slice(0, 6) + "…" + ctx.accountId.slice(-4) : ctx.accountId}
                     </div>
                     <div style={{ fontSize: 10, color: "rgba(255,255,255,0.65)", fontWeight: 600 }}>
-                        {Number(ctx.balance).toFixed(2)}Ⓝ
+                        {Number(ctx.balance).toFixed(2)} <NearIcon size={11} />
                     </div>
                     <button onClick={ctx.disconnect} style={{
                         padding: "3px 7px", borderRadius: 6,

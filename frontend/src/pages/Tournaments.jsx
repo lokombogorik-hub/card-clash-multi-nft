@@ -381,7 +381,7 @@ export default function Tournaments({ token, me, onEnterMatch, initialOpenId }) 
     return (
         <div className="tournament-page-v2">
             <div className="tournament-header">
-                <h2 className="tournament-title"><span className="tournament-title-icon" style={{display:"inline-flex",verticalAlign:"middle"}}><TrophyIcon size={22} /></span>Турниры</h2>
+                <h2 className="tournament-title"><span className="tournament-title-icon" style={{display:"inline-flex",verticalAlign:"middle"}}><TrophyIcon size={28} /></span>Турниры</h2>
                 <div className="tournament-subtitle">Сражайся за призовой фонд NEAR</div>
             </div>
 

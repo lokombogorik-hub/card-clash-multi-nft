@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
-import { SwordsIcon, PlayPadIcon, SearchIcon, LockIcon, CoinIcon, BoltIcon, TrophyIcon as TIcon, UsersIcon, MedalIcon, GemIcon as GmIcon, InfoIcon, BellIcon } from "./components/Icons";
+import { SwordsIcon, PlayPadIcon, SearchIcon, LockIcon, CoinIcon, BoltIcon, TrophyIcon as TIcon, UsersIcon, MedalIcon, GemIcon as GmIcon, InfoIcon, BellIcon, CardsIcon } from "./components/Icons";
 import Game from "./Game";
 import StormBg from "./components/StormBg";
 import { apiFetch } from "./api.js";
@@ -264,7 +264,7 @@ function TournamentPage() {
         <div className="tournament-page-v2">
             <div className="tournament-header">
                 <h2 className="tournament-title">
-                    <span className="tournament-title-icon" style={{display:"inline-flex",verticalAlign:"middle"}}><TIcon size={22} /></span> Турниры
+                    <span className="tournament-title-icon" style={{display:"inline-flex",verticalAlign:"middle"}}><TIcon size={28} /></span> Турниры
                 </h2>
                 <div className="tournament-subtitle">Участвуй в турнирах и выигрывай призы</div>
             </div>
@@ -987,7 +987,7 @@ function BottomNav({ active, onChange }) {
         { key: "home", label: "Главная", icon: <HomeIcon /> },
         { key: "tournament", label: "Турнир", icon: <TrophyIcon /> },
         { key: "market", label: "Маркет", icon: <GemIcon /> },
-        { key: "inventory", label: "Колода", icon: <BagIcon /> },
+        { key: "inventory", label: "Колода", icon: <CardsIcon size={20} glow={false} /> },
         { key: "profile", label: "Профиль", icon: <UserIcon /> },
     ];
     return (
