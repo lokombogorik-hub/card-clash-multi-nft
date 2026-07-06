@@ -471,8 +471,16 @@ function AppContent() {
                 // по завышенной высоте и карты обрезаются. Берём настоящую
                 // высоту вьюпорта, тогда карты ужимаются под окно без обрезки.
                 var vh = tg.viewportStableHeight || tg.viewportHeight || 0;
-                if (vh && vh > 200) {
-                    document.documentElement.style.setProperty("--app-h", Math.round(vh) + "px");
+                var wh = window.innerHeight || 0;
+                // После поворота telegram-высота обновляется с лагом. В ландшафте
+                // (широкое и низкое окно) берём минимально-достоверную высоту,
+                // чтобы поле не считалось по устаревшему портретному значению.
+                var isLandscapeNow = window.innerWidth > window.innerHeight;
+                var use = vh;
+                if (isLandscapeNow && wh > 200) use = Math.min(vh || wh, wh);
+                if (!use && wh > 200) use = wh;
+                if (use && use > 200) {
+                    document.documentElement.style.setProperty("--app-h", Math.round(use) + "px");
                 }
             } catch (_) { }
         };
@@ -481,6 +489,15 @@ function AppContent() {
         try { tg.onEvent && tg.onEvent("safeAreaChanged", applyTgInsets); } catch (_) { }
         try { tg.onEvent && tg.onEvent("fullscreenChanged", applyTgInsets); } catch (_) { }
         try { tg.onEvent && tg.onEvent("viewportChanged", applyTgInsets); } catch (_) { }
+        // Пересчёт при повороте/ресайзе (несколько раз — пока вьюпорт устаканится).
+        var reapplySettle = function () {
+            applyTgInsets();
+            setTimeout(applyTgInsets, 200);
+            setTimeout(applyTgInsets, 500);
+            setTimeout(applyTgInsets, 900);
+        };
+        window.addEventListener("resize", applyTgInsets);
+        window.addEventListener("orientationchange", reapplySettle);
         try { tg.setHeaderColor?.("#000000"); } catch (_) { }
         try { tg.setBackgroundColor?.("#000000"); } catch (_) { }
         try { tg.setBottomBarColor?.("#000000"); } catch (_) { }
@@ -518,7 +535,11 @@ function AppContent() {
         })();
 
         try { tg.disableVerticalSwipes?.(); } catch (_) { }
-        return function () { try { window.Telegram?.WebApp?.enableVerticalSwipes?.(); } catch (_) { } };
+        return function () {
+            try { window.removeEventListener("resize", applyTgInsets); } catch (_) { }
+            try { window.removeEventListener("orientationchange", reapplySettle); } catch (_) { }
+            try { window.Telegram?.WebApp?.enableVerticalSwipes?.(); } catch (_) { }
+        };
     }, []);
 
     useLayoutEffect(function () {

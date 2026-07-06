@@ -270,13 +270,15 @@ export function BellIcon({ size = 16, glow }) {
     );
 }
 
-// Колода — стопка карт.
+// Колода — карта спереди + карта позади, ромб-пип.
 export function CardsIcon({ size = 16, glow }) {
     return (
         <svg {...svgProps(size, glow)}>
-            <rect x="8" y="4.5" width="10.5" height="15" rx="2" stroke="currentColor" strokeWidth="1.7" fill="currentColor" fillOpacity="0.12" transform="rotate(9 13.25 12)" />
-            <rect x="6.5" y="5.5" width="10.5" height="15" rx="2" stroke="currentColor" strokeWidth="1.7" fill="currentColor" fillOpacity="0.16" />
-            <path d="M9.5 9h4.5M9.5 12h4.5M9.5 15h2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" opacity="0.7" />
+            <g stroke="currentColor" fill="none" strokeLinejoin="round">
+                <rect x="3.6" y="7.2" width="9" height="12.4" rx="1.8" strokeWidth="1.6" transform="rotate(-14 8.1 13.4)" fill="currentColor" fillOpacity="0.10" />
+                <rect x="9" y="4.6" width="10.4" height="14.8" rx="2" strokeWidth="1.7" fill="currentColor" fillOpacity="0.16" />
+                <path d="M14.2 8.7l2 3.3-2 3.3-2-3.3z" fill="currentColor" />
+            </g>
         </svg>
     );
 }
