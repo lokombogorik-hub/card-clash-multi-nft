@@ -3,7 +3,7 @@ import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
 import { CoinIcon, BoltIcon, CheckIcon, GemIcon, CaseIcon, XIcon, NearIcon } from "../components/Icons";
 
-var _mktCache = { coins: 0, boostUntil: null };
+var _mktCache = { coins: 0, boostUntil: null, catalog: null, inv: null, invTs: 0 };
 
 var CASES = [
     { id: "starter", name: "Starter Case", price: 0.01, coin_price: 20, displayPrice: "1 Card", image: "/ui/case-starter.png", video: "/ui/case-starter.mp4", rarity: "common", description: "1 random card", type: "single" },
@@ -320,10 +320,11 @@ export default function Market() {
     var [buyingStatus, setBuyingStatus] = useState("");
     var [error, setError] = useState("");
     var [openModal, setOpenModal] = useState(null);
-    var [caseInventory, setCaseInventory] = useState({});
-    var [loadingInventory, setLoadingInventory] = useState(true);
+    var [caseInventory, setCaseInventory] = useState(_mktCache.inv || {});
+    var [loadingInventory, setLoadingInventory] = useState(!_mktCache.inv);
     var [caseList, setCaseList] = useState(CASES);
     var [coins, setCoins] = useState(_mktCache.coins);
+    var [coinConfirm, setCoinConfirm] = useState(null);
     var [boostUntil, setBoostUntil] = useState(_mktCache.boostUntil);
     var [boosting, setBoosting] = useState(false);
 
@@ -332,11 +333,12 @@ export default function Market() {
         token = localStorage.getItem("token") || localStorage.getItem("accessToken") || "";
     } catch (e) { }
 
-    // цены кейсов берём с бэка (catalog) — меняю в одном месте, в cases.py
+    // Каталог кейсов почти не меняется — грузим один раз за сессию, дальше из кеша.
     useEffect(function () {
         var alive = true;
-        apiFetch("/api/cases/catalog").then(function (d) {
-            if (!alive || !d || !d.cases) return;
+        var apply = function (d) {
+            if (!d || !d.cases) return;
+            _mktCache.catalog = d;
             var pm = {};
             d.cases.forEach(function (c) { pm[c.id] = c; });
             setCaseList(CASES.map(function (c) {
@@ -344,7 +346,9 @@ export default function Market() {
                 if (!srv) return c;
                 return { ...c, price: srv.price != null ? srv.price : c.price, coin_price: srv.coin_price != null ? srv.coin_price : c.coin_price };
             }));
-        }).catch(function () { });
+        };
+        if (_mktCache.catalog) { apply(_mktCache.catalog); return; }
+        apiFetch("/api/cases/catalog").then(function (d) { if (alive) apply(d); }).catch(function () { });
         return function () { alive = false; };
     }, []);
 
@@ -353,28 +357,23 @@ export default function Market() {
         var alive = true;
 
         async function fetchInventory() {
+            // Свежий кеш (<25с) — не дёргаем сеть, показываем из памяти.
+            if (_mktCache.inv && (Date.now() - _mktCache.invTs) < 25000) {
+                setCaseInventory(_mktCache.inv);
+                setLoadingInventory(false);
+                return;
+            }
             try {
-                setLoadingInventory(true);
-                var resp = await apiFetch("/api/cases/inventory", {
-                    method: "GET",
-                    token: token,
-                });
-
-                console.log("[MARKET] Inventory response:", resp);
-
+                if (!_mktCache.inv) setLoadingInventory(true);
+                var resp = await apiFetch("/api/cases/inventory", { method: "GET", token: token });
                 if (alive && resp && typeof resp === "object") {
-
                     setCaseInventory(resp);
+                    _mktCache.inv = resp; _mktCache.invTs = Date.now();
                 }
             } catch (e) {
-                console.error("[MARKET] Failed to load inventory:", e);
-                if (alive) {
-                    setCaseInventory({});
-                }
+                if (alive && !_mktCache.inv) setCaseInventory({});
             } finally {
-                if (alive) {
-                    setLoadingInventory(false);
-                }
+                if (alive) setLoadingInventory(false);
             }
         }
 
@@ -439,6 +438,7 @@ export default function Market() {
                 }
                 return updated;
             });
+            _mktCache.invTs = 0;
 
             // 4.модалкв
             setBuyingStatus("");
@@ -494,15 +494,20 @@ export default function Market() {
         } finally { setBoosting(false); }
     };
 
-    // покупка кейса за ClashCoin (без блокчейна — бэк списывает баланс)
-    var handleBuyCoins = async function (c) {
+    // покупка кейса за ClashCoin: сперва открываем красивое окно подтверждения
+    var handleBuyCoins = function (c) {
         var cp = c.coin_price || 0;
         if (cp <= 0) return;
         if (coins < cp) { alert("Не хватает ClashCoin: нужно " + cp + ", у тебя " + coins); return; }
         var available = caseInventory[c.id] || 0;
         if (available <= 0) { alert("NFT закончились в этом кейсе!"); return; }
-        // Подтверждение перед списанием монет
-        if (!confirm("Открыть «" + c.name + "» за " + cp + " ClashCoin?\nУ тебя: " + coins + " → останется: " + (coins - cp))) return;
+        setCoinConfirm(c);
+    };
+
+    // фактическое списание/открытие после подтверждения
+    var doBuyCoins = async function (c) {
+        setCoinConfirm(null);
+        var cp = c.coin_price || 0;
         setBuying(c.id); setError(""); setBuyingStatus("Открываю...");
         try {
             var open = await apiFetch("/api/cases/open", {
@@ -511,7 +516,7 @@ export default function Market() {
             });
             var cards = open.cards || [];
             if (cards.length === 0) throw new Error("Нет карт в ответе");
-            setCaseInventory(function (prev) { var u = { ...prev }; if (u[c.id] > 0) u[c.id] = u[c.id] - 1; return u; });
+            setCaseInventory(function (prev) { var u = { ...prev }; if (u[c.id] > 0) u[c.id] = u[c.id] - 1; return u; }); _mktCache.invTs = 0;
             setBuyingStatus("");
             setOpenModal({ caseItem: c, cards: cards });
             setCoins(function (p) { return Math.max(0, p - cp); });
@@ -525,6 +530,48 @@ export default function Market() {
 
     return (
         <div className="market-page">
+            {coinConfirm && (function () {
+                var c = coinConfirm; var cp = c.coin_price || 0; var rc = RARITY_COLORS[c.rarity] || "#78c8ff";
+                return (
+                    <div style={{ position: "fixed", inset: 0, zIndex: 99998, background: "rgba(0,0,0,0.82)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }}
+                        onClick={function () { setCoinConfirm(null); }}>
+                        <div onClick={function (e) { e.stopPropagation(); }}
+                            style={{
+                                width: "100%", maxWidth: 360, borderRadius: 22, overflow: "hidden",
+                                background: "linear-gradient(160deg,#151a28,#0d1018)",
+                                border: "1px solid " + rc + "55",
+                                boxShadow: "0 20px 60px rgba(0,0,0,0.6), 0 0 40px " + rc + "22",
+                            }}>
+                            <div style={{ position: "relative", height: 150, background: "radial-gradient(circle at 50% 30%," + rc + "33, transparent 70%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <img src={c.image} alt="" style={{ height: 130, filter: "drop-shadow(0 8px 24px " + rc + "66)" }} onError={function (e) { e.currentTarget.src = "/cards/card.jpg"; }} />
+                                <div style={{ position: "absolute", top: 12, left: 14, fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", color: rc }}>{c.rarity}</div>
+                            </div>
+                            <div style={{ padding: "8px 22px 22px", textAlign: "center" }}>
+                                <div style={{ fontSize: 19, fontWeight: 900, color: "#fff", marginBottom: 4 }}>{c.name}</div>
+                                <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 18 }}>{c.description}</div>
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 6 }}>
+                                    <CoinIcon size={22} /><span style={{ fontSize: 26, fontWeight: 900, color: "#ffd76a" }}>{cp}</span>
+                                    <span style={{ fontSize: 14, opacity: 0.75, color: "#ffd76a" }}>ClashCoin</span>
+                                </div>
+                                <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 20, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                    <CoinIcon size={12} /> {coins} → {Math.max(0, coins - cp)} после покупки
+                                </div>
+                                <div style={{ display: "flex", gap: 10 }}>
+                                    <button onClick={function () { setCoinConfirm(null); }}
+                                        style={{ flex: 1, padding: "13px 0", borderRadius: 13, border: "1px solid rgba(255,255,255,0.16)", background: "transparent", color: "rgba(255,255,255,0.7)", fontSize: 14, fontWeight: 700, cursor: "pointer", touchAction: "manipulation" }}>
+                                        Отмена
+                                    </button>
+                                    <button onClick={function () { doBuyCoins(c); }}
+                                        style={{ flex: 1.4, padding: "13px 0", borderRadius: 13, border: "none", background: "linear-gradient(135deg,#ffd76a,#ff8c00)", color: "#1a1400", fontSize: 15, fontWeight: 900, cursor: "pointer", touchAction: "manipulation", boxShadow: "0 6px 20px rgba(255,160,20,0.35)" }}>
+                                        Открыть
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+
             {openModal && (
                 <CaseOpenModal
                     caseItem={openModal.caseItem}
@@ -537,6 +584,7 @@ export default function Market() {
                             .then(function (resp) {
                                 if (resp && typeof resp === "object") {
                                     setCaseInventory(resp);
+                                    _mktCache.inv = resp; _mktCache.invTs = Date.now();
                                 }
                             })
                             .catch(function (e) { console.error("[MARKET] Reload inventory error:", e); });
