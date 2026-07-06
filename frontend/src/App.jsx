@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
+import { SwordsIcon, PlayPadIcon, SearchIcon, LockIcon, CoinIcon, BoltIcon } from "./components/Icons";
 import Game from "./Game";
 import StormBg from "./components/StormBg";
 import { apiFetch } from "./api.js";
@@ -103,7 +104,7 @@ function Leaderboard({ token }) {
     return (
         <div className="leaderboard">
             <div className="leaderboard-title">
-                <span className="leaderboard-title-icon">🏆</span> Лидеры
+                <span className="leaderboard-title-icon" style={{display:"inline-flex",verticalAlign:"middle"}}><TrophyIcon size={18} /></span> Лидеры
             </div>
             <div className="leaderboard-content">
                 {loading ? (
@@ -214,7 +215,7 @@ function SeasonBar({ token, onOpen }) {
         return (
             <div className="season-bar" style={{ cursor: "pointer" }} onClick={function () { onOpen(""); }}>
                 <div className="season-bar-avatar" style={{ background: "linear-gradient(135deg,#667eea,#764ba2)" }}><div className="t-ava-emoji">🏆</div></div>
-                <div style={{ flex: 1, minWidth: 0 }}><div className="season-title">Турниры</div><div className="season-sub">Скоро ⚔️</div></div>
+                <div style={{ flex: 1, minWidth: 0 }}><div className="season-title">Турниры</div><div className="season-sub" style={{display:"inline-flex",alignItems:"center",gap:5}}>Скоро <SwordsIcon size={13} /></div></div>
             </div>
         );
     }
@@ -653,7 +654,7 @@ function AppContent() {
                                     fontSize: 14, fontWeight: 700, color: "#ffd700",
                                     display: "flex", alignItems: "center", gap: 8
                                 }}>
-                                    ⚔️ У тебя есть активный матч!
+                                    <SwordsIcon size={16} /> У тебя есть активный матч!
                                 </div>
                                 <div style={{ fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
                                     {activeMatch.escrow_locked
@@ -720,7 +721,7 @@ function AppContent() {
                                                 opacity: activeMatchLoading ? 0.6 : 1,
                                             }}
                                         >
-                                            {activeMatchLoading ? "⏳..." : "🎮 Вернуться в игру"}
+                                            {activeMatchLoading ? "…" : (<span style={{display:"inline-flex",alignItems:"center",gap:6}}><PlayPadIcon size={16} /> Вернуться в игру</span>)}
                                         </button>
                                     )}
                                     {/* Если escrow не залочен — кнопка "Залочить NFT" вместо "Вернуться" */}
@@ -755,7 +756,7 @@ function AppContent() {
                                                 opacity: activeMatchLoading ? 0.6 : 1,
                                             }}
                                         >
-                                            {activeMatchLoading ? "⏳..." : "🔎 Вернуться к поиску"}
+                                            {activeMatchLoading ? "…" : (<span style={{display:"inline-flex",alignItems:"center",gap:6}}><SearchIcon size={15} /> Вернуться к поиску</span>)}
                                         </button>
                                     )}
                                     {!activeMatch.escrow_locked && !activeMatch.my_escrow_confirmed && (
@@ -806,7 +807,7 @@ function AppContent() {
                                                 opacity: activeMatchLoading ? 0.6 : 1,
                                             }}
                                         >
-                                            {activeMatchLoading ? "⏳..." : "🔒 Залочить NFT"}
+                                            {activeMatchLoading ? "…" : (<span style={{display:"inline-flex",alignItems:"center",gap:6}}><LockIcon size={15} /> Залочить NFT</span>)}
                                         </button>
                                     )}
                                     <button
@@ -929,17 +930,17 @@ function CoinToaster() {
             var amount = d.amount || 0;
             var reason = d.reason || "";
             var text;
-            if (reason === "boost") text = "⚡ Буст ×2 активирован!";
-            else if (reason === "spent" && amount > 0) text = "🪙 −" + amount + " ClashCoin списано";
+            if (reason === "boost") text = "Буст ×2 активирован!";
+            else if (reason === "spent" && amount > 0) text = "−" + amount + " ClashCoin списано";
             else if (amount > 0) {
                 var label = reason === "win" ? "за победу"
                     : reason === "case" ? "за кейс"
                     : reason === "tournament" ? "за турнир"
                     : reason === "weekly" ? "за неделю" : "";
-                text = "🪙 +" + amount + " ClashCoin" + (label ? " " + label : "");
+                text = "+" + amount + " ClashCoin" + (label ? " " + label : "");
             } else return;
             var id = Date.now() + Math.random();
-            setToasts(function (p) { return [...p, { id: id, text: text }]; });
+            setToasts(function (p) { return [...p, { id: id, text: text, reason: reason }]; });
             try { window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred?.("success"); } catch (er) { }
             setTimeout(function () {
                 setToasts(function (p) { return p.filter(function (t) { return t.id !== id; }); });
@@ -970,7 +971,12 @@ function CoinToaster() {
     return (
         <div className="coin-toaster">
             {toasts.map(function (t) {
-                return <div key={t.id} className="coin-toast">{t.text}</div>;
+                return (
+                    <div key={t.id} className="coin-toast" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        {t.reason === "boost" ? <BoltIcon size={15} /> : <CoinIcon size={15} />}
+                        <span>{t.text}</span>
+                    </div>
+                );
             })}
         </div>
     );

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
+import { CoinIcon, BoltIcon, CheckIcon, GemIcon, CaseIcon, XIcon } from "../components/Icons";
 
 var CASES = [
     { id: "starter", name: "Starter Case", price: 0.01, coin_price: 20, displayPrice: "1 Card", image: "/ui/case-starter.png", video: "/ui/case-starter.mp4", rarity: "common", description: "1 random card", type: "single" },
@@ -126,7 +127,7 @@ function CardImage({ imageUrl, name }) {
                 alignItems: "center", justifyContent: "center",
                 fontSize: 50, gap: 8,
             }}>
-                <span>🎴</span>
+                <CaseIcon size={40} />
                 <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", textAlign: "center", padding: "0 8px" }}>
                     {name}
                 </span>
@@ -222,7 +223,7 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                 overflowY: "auto",
             }}>
                 <h3 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: "#fff" }}>
-                    🎁 {caseItem.name}
+                    <CaseIcon size={20} /> {caseItem.name}
                 </h3>
 
                 {!revealed && (
@@ -270,7 +271,7 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                                 color: "#000", cursor: "pointer", width: "100%",
                             }}
                         >
-                            {videoError ? "✨ Открыть!" : "⏭ Пропустить"}
+                            {videoError ? "Открыть" : "Пропустить"}
                         </button>
                     </>
                 )}
@@ -296,7 +297,7 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                                 </div>
                             </div>
                             {revealedCards.length > 0 && (
-                                <button className="reward-take-btn" onClick={onClose} style={{ marginTop: 16 }}>Забрать 🎁</button>
+                                <button className="reward-take-btn" onClick={onClose} style={{ marginTop: 16 }}>Забрать</button>
                             )}
                         </div>
                     );
@@ -388,7 +389,7 @@ export default function Market() {
 
         var available = caseInventory[c.id] || 0;
         if (available <= 0) {
-            alert("❌ NFT закончились в этом кейсе!");
+            alert("NFT закончились в этом кейсе!");
             return;
         }
 
@@ -398,7 +399,7 @@ export default function Market() {
         }
 
         setBuying(c.id);
-        setBuyingStatus("⏳ Оплата...");
+        setBuyingStatus("Оплата…");
         setError("");
 
         try {
@@ -539,7 +540,7 @@ export default function Market() {
 
             <div className="market-header">
                 <h2 className="market-title">
-                    <span className="market-title-icon">🛒</span>NFT Market
+                    <span className="market-title-icon" style={{display:"inline-flex",verticalAlign:"middle"}}><GemIcon size={22} /></span> NFT Market
                 </h2>
                 <div className="market-subtitle">Buy cases to get NFT cards</div>
             </div>
@@ -555,10 +556,10 @@ export default function Market() {
                     border: "1px solid rgba(120,200,255,0.2)",
                 }}>
                     <div style={{ fontSize: 13, color: "#78c8ff" }}>
-                        💰 Баланс: {Number(balance).toFixed(4)} Ⓝ
+                        Баланс: {Number(balance).toFixed(4)} Ⓝ
                     </div>
-                    <div style={{ fontSize: 13, color: "#ffd76a", marginTop: 4 }}>
-                        🪙 {coins} ClashCoin
+                    <div style={{ fontSize: 13, color: "#ffd76a", marginTop: 4, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                        <CoinIcon size={14} /> {coins} ClashCoin
                     </div>
                     <div style={{ fontSize: 11, opacity: 0.6, marginTop: 4 }}>
                         Treasury: {TREASURY}
@@ -574,7 +575,7 @@ export default function Market() {
                     display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
                 }}>
                     <div style={{ textAlign: "left" }}>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: "#ffd76a" }}>⚡ Буст ×2 монет</div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: "#ffd76a", display: "flex", alignItems: "center", gap: 5 }}><BoltIcon size={14} /> Буст ×2 монет</div>
                         <div style={{ fontSize: 11, opacity: 0.75, marginTop: 2 }}>
                             {boostUntil
                                 ? ("Активен до " + new Date(boostUntil).toLocaleString())
@@ -592,7 +593,7 @@ export default function Market() {
                             opacity: (boosting || boostUntil) ? 0.6 : 1,
                         }}
                     >
-                        {boosting ? "⏳..." : boostUntil ? "✅ Активен" : "1 Ⓝ ⚡"}
+                        {boosting ? "…" : boostUntil ? (<span style={{display:"inline-flex",alignItems:"center",gap:4}}><CheckIcon size={14} /> Активен</span>) : (<span style={{display:"inline-flex",alignItems:"center",gap:4}}>1 Ⓝ <BoltIcon size={13} /></span>)}
                     </button>
                 </div>
             )}
@@ -604,7 +605,7 @@ export default function Market() {
                     border: "1px solid rgba(255,80,80,0.35)",
                     borderRadius: 12, color: "#ff6b6b", fontSize: 13,
                 }}>
-                    ❌ {error}
+                    <span style={{display:"inline-flex",alignItems:"center",gap:5}}><XIcon size={13} /> {error}</span>
                 </div>
             )}
 
@@ -640,7 +641,7 @@ export default function Market() {
                                 zIndex: 10,
                                 boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
                             }}>
-                                {loadingInventory ? "⏳" : (isOutOfStock ? "0 NFT" : available + " NFT")}
+                                {loadingInventory ? "…" : (isOutOfStock ? "0 NFT" : available + " NFT")}
                             </div>
 
                             {/*  Sold Out только если НЕ загружается */}
@@ -699,13 +700,13 @@ export default function Market() {
                                 }}
                             >
                                 {loadingInventory
-                                    ? "⏳ Загрузка..."
+                                    ? "Загрузка…"
                                     : isBuying
-                                        ? (buyingStatus || "⏳ Оплата...")
+                                        ? (buyingStatus || "Оплата…")
                                         : isOutOfStock
-                                            ? "❌ Нет NFT"
+                                            ? "Нет NFT"
                                             : canBuy
-                                                ? "🛒 Купить"
+                                                ? "Купить"
                                                 : "Нужно " + c.price + " Ⓝ"}
                             </button>
 
@@ -721,7 +722,7 @@ export default function Market() {
                                     cursor: (!isOutOfStock && c.coin_price && coins >= c.coin_price && !isBuying && !loadingInventory) ? "pointer" : "not-allowed",
                                 }}
                             >
-                                {c.coin_price ? ("🪙 " + c.coin_price + " ClashCoin") : "—"}
+                                {c.coin_price ? (<span style={{display:"inline-flex",alignItems:"center",gap:5}}><CoinIcon size={13} /> {c.coin_price} ClashCoin</span>) : "—"}
                             </button>
                         </div>
                     );
@@ -729,7 +730,7 @@ export default function Market() {
             </div>
 
             <div className="market-footer">
-                <div className="market-footer-icon">💎</div>
+                <div className="market-footer-icon"><GemIcon size={20} /></div>
                 <div className="market-footer-text">
                     Карты появятся в Инвентаре после покупки
                 </div>

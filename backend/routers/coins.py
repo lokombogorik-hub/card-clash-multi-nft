@@ -129,6 +129,44 @@ async def my_coins(authorization: str = Header(None)):
     }
 
 
+class AdminGrantReq(BaseModel):
+    secret: str
+    amount: int
+    near_account: str | None = None
+    user_id: str | None = None
+
+
+@router.post("/admin_grant")
+async def admin_grant(body: AdminGrantReq):
+    """Разовое начисление монет вручную (например, возврат за баг). Защищено
+    секретом из env ADMIN_GRANT_SECRET. После использования секрет убрать."""
+    secret = os.getenv("ADMIN_GRANT_SECRET", "")
+    if not secret or body.secret != secret:
+        raise HTTPException(status_code=403, detail="forbidden")
+    if body.amount == 0:
+        raise HTTPException(status_code=400, detail="amount required")
+    try:
+        async for session in get_session():
+            u = None
+            if body.user_id:
+                u = await session.get(User, int(body.user_id))
+            elif body.near_account:
+                from sqlalchemy import select
+                acc = body.near_account.strip().lower()
+                u = (await session.execute(
+                    select(User).where(User.near_account_id == acc)
+                )).scalar_one_or_none()
+            if not u:
+                raise HTTPException(status_code=404, detail="user not found")
+            u.clash_balance = (u.clash_balance or 0) + int(body.amount)
+            await session.commit()
+            return {"ok": True, "user_id": str(u.id), "balance": int(u.clash_balance or 0)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class BoostReq(BaseModel):
     tx_hash: str
     near_account: str
