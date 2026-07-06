@@ -128,7 +128,35 @@ def calculate_elo_range(wait_time_seconds: float, max_diff: int = 300) -> int:
     return 500
 
 
-def find_opponent(user_id: str, user_elo: int, max_elo_diff: int) -> Optional[str]:
+def deck_power(deck) -> int:
+    """Сила колоды = сумма всех сторон всех карт (ACE=10). Чем больше — тем
+    сильнее NFT. Нужна для честного подбора (сильные колоды встречают сильные)."""
+    total = 0
+    for c in (deck or []):
+        vals = (c.get("values") or c.get("stats") or {}) if isinstance(c, dict) else {}
+        for k in ("top", "right", "bottom", "left"):
+            try:
+                total += int(vals.get(k) or 0)
+            except Exception:
+                pass
+    return total
+
+
+def calculate_power_range(wait_time_seconds: float) -> int:
+    """Коридор по силе колоды, расширяется со временем ожидания — чтобы при
+    малом онлайне очередь не зависала (после ~70с ограничение снимается)."""
+    if wait_time_seconds < 8:
+        return 30
+    elif wait_time_seconds < 20:
+        return 55
+    elif wait_time_seconds < 40:
+        return 95
+    elif wait_time_seconds < 70:
+        return 170
+    return 100000
+
+
+def find_opponent(user_id: str, user_elo: int, max_elo_diff: int, user_power: int = 0) -> Optional[str]:
     now = datetime.utcnow()
     for queue_user_id, queue_data in list(matchmaking_queue.items()):
         if queue_user_id == user_id:
@@ -137,8 +165,12 @@ def find_opponent(user_id: str, user_elo: int, max_elo_diff: int) -> Optional[st
             continue
         wait_time = (now - queue_data.get("joined_at", now)).total_seconds()
         opponent_elo = queue_data.get("elo", 1000)
+        opponent_power = queue_data.get("power", 0)
         elo_range = calculate_elo_range(wait_time, max_elo_diff)
-        if abs(user_elo - opponent_elo) <= elo_range:
+        # коридор по силе берём по БОЛЬШЕМУ времени ожидания из двоих
+        power_range = calculate_power_range(wait_time)
+        if abs(user_elo - opponent_elo) <= elo_range and \
+           abs(user_power - opponent_power) <= power_range:
             return queue_user_id
     return None
 
@@ -244,13 +276,14 @@ async def save_match(match_data: Dict):
     await _save_match_to_db(match_data)
 
 
-def _requeue_locker(match_id: str, locker_id: str, elo: int) -> None:
+def _requeue_locker(match_id: str, locker_id: str, elo: int, power: int = 0) -> None:
     """Возвращаем залочившего в очередь как «лобби с готовыми картами».
     open_match_id говорит матчмейкингу: не создавай новый матч, а подсади
     следующего соперника в этот существующий (карты уже в эскроу)."""
     matchmaking_queue[str(locker_id)] = {
         "user_id": str(locker_id),
         "elo": elo,
+        "power": power,
         "deck": [],
         "joined_at": datetime.utcnow(),
         "last_poll": datetime.utcnow(),
@@ -296,7 +329,7 @@ async def _reopen_match_keep_locker(match_data: Dict, locker_key: str) -> None:
     match_data["reopened_at"] = now.isoformat()
     await save_match(match_data)
     elo = await get_user_elo(locker_id)
-    _requeue_locker(mid, locker_id, elo)
+    _requeue_locker(mid, locker_id, elo, deck_power(match_data.get("player1_deck")))
     print(f"[Matchmaking] Match {mid} reopened: keep {locker_id} locked, searching new opponent")
 
 
@@ -618,6 +651,7 @@ async def join_queue(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No deck saved. Select 5 cards first.")
 
     user_elo = await get_user_elo(user_id)
+    user_power = deck_power(user_deck)
     max_elo_diff = request.max_elo_diff or 300
 
     # Защита от дублей комнат: если у игрока уже есть незавершённый матч —
@@ -656,7 +690,7 @@ async def join_queue(
                 }
         matchmaking_queue[user_id]["last_poll"] = datetime.utcnow()
 
-    opponent_id = find_opponent(user_id, user_elo, max_elo_diff)
+    opponent_id = find_opponent(user_id, user_elo, max_elo_diff, user_power)
 
     # Соперник — залочивший игрок, ждущий нового оппонента (open_match_id):
     # подсаживаем искателя в ЕГО существующий матч (карты уже в эскроу),
@@ -739,6 +773,7 @@ async def join_queue(
         matchmaking_queue[user_id] = {
             "user_id": user_id,
             "elo": user_elo,
+            "power": user_power,
             "deck": user_deck,
             "joined_at": datetime.utcnow(),
             "last_poll": datetime.utcnow(),

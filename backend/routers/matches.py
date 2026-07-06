@@ -33,6 +33,11 @@ ESCROW_CARDS_REQUIRED = 5
 # Отключается env ESCROW_LOCK_VERIFY=0 (например, если нет индексера).
 ESCROW_LOCK_VERIFY = os.getenv("ESCROW_LOCK_VERIFY", "1") == "1"
 
+# Анти-сибил: сколько матчей между ОДНОЙ парой аккаунтов в сутки приносят
+# награду/рейтинг. Сверх лимита играть можно, но без монет/рейтинга — это
+# убивает самофарм двумя своими аккаунтами (накрутку лидерборда/монет).
+HEAD_TO_HEAD_DAILY_CAP = int(os.getenv("HEAD_TO_HEAD_DAILY_CAP", "3"))
+
 # Пер-матчевые блокировки против гонок при параллельных register/confirm/lock.
 _match_locks: Dict[str, asyncio.Lock] = {}
 
@@ -1309,7 +1314,30 @@ async def update_player_ratings(winner_id: str, loser_id: str) -> Optional[Dict]
             winner_rating = winner.elo_rating if winner.elo_rating is not None else 0
             loser_rating = loser.elo_rating if loser.elo_rating is not None else 0
 
-            winner_change, loser_change = calculate_rating_change(winner_rating, loser_rating)
+            # Анти-сибил: сколько раз эта пара уже играла сегодня (без текущего).
+            pair_count = 0
+            try:
+                from sqlalchemy import and_, or_, func
+                today0 = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+                pair_count = (await session.execute(
+                    select(func.count()).select_from(PvPMatch).where(
+                        PvPMatch.status == "finished",
+                        PvPMatch.finished_at >= today0,
+                        or_(
+                            and_(PvPMatch.player1_id == str(winner_id), PvPMatch.player2_id == str(loser_id)),
+                            and_(PvPMatch.player1_id == str(loser_id), PvPMatch.player2_id == str(winner_id)),
+                        ),
+                    )
+                )).scalar() or 0
+            except Exception as _e:
+                print(f"[SYBIL] pair count error: {_e}")
+            rewarded = pair_count < HEAD_TO_HEAD_DAILY_CAP
+
+            if rewarded:
+                winner_change, loser_change = calculate_rating_change(winner_rating, loser_rating)
+            else:
+                winner_change, loser_change = 0, 0
+                print(f"[SYBIL] pair {winner_id}/{loser_id} over daily cap ({pair_count}) — без наград/рейтинга")
 
             new_winner_rating = max(0, winner_rating + winner_change)
             new_loser_rating = max(0, loser_rating + loser_change)
@@ -1317,35 +1345,36 @@ async def update_player_ratings(winner_id: str, loser_id: str) -> Optional[Dict]
             new_winner_rank = get_rank_by_rating(new_winner_rating)
             new_loser_rank = get_rank_by_rating(new_loser_rating)
 
-            winner.elo_rating = new_winner_rating
-            winner.rank = new_winner_rank["name"]
-            winner.pvp_wins = (winner.pvp_wins or 0) + 1
-            winner.wins = (winner.wins or 0) + 1
-            winner.total_matches = (winner.total_matches or 0) + 1
-
-            loser.elo_rating = new_loser_rating
-            loser.rank = new_loser_rank["name"]
-            loser.pvp_losses = (loser.pvp_losses or 0) + 1
-            loser.losses = (loser.losses or 0) + 1
-            loser.total_matches = (loser.total_matches or 0) + 1
-
-            # ClashCoin за победу (с дневным потолком от фарма, ×2 при бусте)
             coins_awarded = 0
-            try:
-                from routers.coins import WIN_REWARD, WIN_DAILY_CAP, boost_mult
-                mult = boost_mult(winner)
-                today = datetime.utcnow().strftime("%Y-%m-%d")
-                if winner.coins_day != today:
-                    winner.coins_day = today
-                    winner.coins_today = 0
-                room = (WIN_DAILY_CAP * mult) - (winner.coins_today or 0)
-                if room > 0:
-                    inc = min(WIN_REWARD * mult, room)
-                    winner.coins_today = (winner.coins_today or 0) + inc
-                    winner.clash_balance = (winner.clash_balance or 0) + inc
-                    coins_awarded = inc
-            except Exception as _e:
-                print(f"[coins] win reward error: {_e}")
+            if rewarded:
+                winner.elo_rating = new_winner_rating
+                winner.rank = new_winner_rank["name"]
+                winner.pvp_wins = (winner.pvp_wins or 0) + 1
+                winner.wins = (winner.wins or 0) + 1
+                winner.total_matches = (winner.total_matches or 0) + 1
+
+                loser.elo_rating = new_loser_rating
+                loser.rank = new_loser_rank["name"]
+                loser.pvp_losses = (loser.pvp_losses or 0) + 1
+                loser.losses = (loser.losses or 0) + 1
+                loser.total_matches = (loser.total_matches or 0) + 1
+
+                # ClashCoin за победу (дневной потолок от фарма, ×2 при бусте)
+                try:
+                    from routers.coins import WIN_REWARD, WIN_DAILY_CAP, boost_mult
+                    mult = boost_mult(winner)
+                    today = datetime.utcnow().strftime("%Y-%m-%d")
+                    if winner.coins_day != today:
+                        winner.coins_day = today
+                        winner.coins_today = 0
+                    room = (WIN_DAILY_CAP * mult) - (winner.coins_today or 0)
+                    if room > 0:
+                        inc = min(WIN_REWARD * mult, room)
+                        winner.coins_today = (winner.coins_today or 0) + inc
+                        winner.clash_balance = (winner.clash_balance or 0) + inc
+                        coins_awarded = inc
+                except Exception as _e:
+                    print(f"[coins] win reward error: {_e}")
 
             await session.commit()
 
