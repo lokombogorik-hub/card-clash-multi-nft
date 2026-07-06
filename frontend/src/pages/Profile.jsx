@@ -98,7 +98,7 @@ export default function Profile({ token, me }) {
                     <div className="pf-name">{name}</div>
                     {profile && (
                         <div className="pf-rankchip" style={{ borderColor: rankColor, color: rankColor }}>
-                            <span>{profile.rank_icon || "🎖️"}</span><span>{profile.rank}</span>
+                            <span>{profile.rank_icon || ""}</span><span>{profile.rank}</span>
                         </div>
                     )}
                     {me && me.id && <div className="pf-id">ID: {me.id}</div>}

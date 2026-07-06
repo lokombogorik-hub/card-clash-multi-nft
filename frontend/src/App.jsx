@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
-import { SwordsIcon, PlayPadIcon, SearchIcon, LockIcon, CoinIcon, BoltIcon, TrophyIcon as TIcon, UsersIcon } from "./components/Icons";
+import { SwordsIcon, PlayPadIcon, SearchIcon, LockIcon, CoinIcon, BoltIcon, TrophyIcon as TIcon, UsersIcon, MedalIcon, GemIcon as GmIcon, InfoIcon, BellIcon } from "./components/Icons";
 import Game from "./Game";
 import StormBg from "./components/StormBg";
 import { apiFetch } from "./api.js";
@@ -86,7 +86,7 @@ function Leaderboard({ token }) {
         var photoUrl = p.photo_url || p.photoUrl || p.avatar || p.avatar_url || null;
         return (
             <div key={p.user_id || p.id || i} className={cls}>
-                <div className="leaderboard-rank">{i < 3 ? medals[i] : i + 1}</div>
+                <div className="leaderboard-rank">{i < 3 ? <MedalIcon place={i + 1} size={18} /> : i + 1}</div>
                 {photoUrl ? (
                     <img className="leaderboard-avatar" src={photoUrl} alt={name}
                         onError={function (e) { e.target.style.display = "none"; if (e.target.nextSibling) e.target.nextSibling.style.display = "flex"; }} />
@@ -270,7 +270,7 @@ function TournamentPage() {
             </div>
             <div className="tournament-stats-row">
                 <div className="tournament-stat-chip"><span className="stat-chip-icon"><SwordsIcon size={15} /></span><span>{TOURNAMENTS.length} турнира</span></div>
-                <div className="tournament-stat-chip"><span className="stat-chip-icon">💎</span><span>Много призов</span></div>
+                <div className="tournament-stat-chip"><span className="stat-chip-icon"><GmIcon size={15} /></span><span>Много призов</span></div>
             </div>
             <div className="tournament-list-v2">
                 {TOURNAMENTS.map(function (t, i) {
@@ -294,8 +294,8 @@ function TournamentPage() {
                                     <p className="tournament-card-subtitle">{t.subtitle}</p>
                                     <div className="tournament-quick-stats">
                                         <div className="quick-stat"><span className="quick-stat-icon"><UsersIcon size={15} /></span><span>{t.players}/{t.maxPlayers}</span></div>
-                                        <div className="quick-stat"><span className="quick-stat-icon">🎯</span><span>{t.format.split(" ")[0]}</span></div>
-                                        <div className="quick-stat prize"><span className="quick-stat-icon">💰</span><span>{t.prize}</span></div>
+                                        <div className="quick-stat"><span className="quick-stat-icon"><SwordsIcon size={15} /></span><span>{t.format.split(" ")[0]}</span></div>
+                                        <div className="quick-stat prize"><span className="quick-stat-icon"><CoinIcon size={15} /></span><span>{t.prize}</span></div>
                                     </div>
                                 </div>
                                 <div className={"tournament-expand-arrow" + (isExpanded ? " rotated" : "")}>
@@ -313,7 +313,7 @@ function TournamentPage() {
                                             {t.prizePool.map(function (prize, pi) {
                                                 return (
                                                     <div key={pi} className={"prize-place place-" + (pi + 1)}>
-                                                        <span className="place-icon">{["🥇", "🥈", "🥉"][pi]}</span>
+                                                        <span className="place-icon"><MedalIcon place={pi + 1} size={16} /></span>
                                                         <span className="place-prize">{prize}</span>
                                                     </div>
                                                 );
@@ -322,7 +322,7 @@ function TournamentPage() {
                                     </div>
                                     <div className="tournament-format-section">
                                         <div className="format-item">
-                                            <span className="format-icon">📋</span>
+                                            <span className="format-icon"><SwordsIcon size={14} /></span>
                                             <span className="format-label">Формат:</span>
                                             <span className="format-value">{t.format}</span>
                                         </div>
@@ -335,7 +335,7 @@ function TournamentPage() {
                                     <button className="tournament-action-btn"
                                         style={{ background: "linear-gradient(135deg, " + t.gradient[0] + ", " + t.gradient[1] + ")" }}
                                         onClick={function (e) { e.stopPropagation(); alert("Регистрация скоро откроется!"); }}>
-                                        <span className="btn-icon">🔔</span>
+                                        <span className="btn-icon"><BellIcon size={15} /></span>
                                         <span>Уведомить о старте</span>
                                     </button>
                                 </div>
@@ -345,7 +345,7 @@ function TournamentPage() {
                 })}
             </div>
             <div className="tournament-bottom-info">
-                <div className="bottom-info-icon">💡</div>
+                <div className="bottom-info-icon"><InfoIcon size={18} /></div>
                 <div className="bottom-info-text">Нажми на турнир, чтобы узнать подробности</div>
             </div>
         </div>

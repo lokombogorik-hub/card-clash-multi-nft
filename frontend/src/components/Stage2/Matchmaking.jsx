@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../../api";
 import LockEscrowModal from "./LockEscrowModal";
-import { SwordsIcon, PlayPadIcon, LockIcon, CheckIcon, BotIcon } from "../Icons";
+import { SwordsIcon, PlayPadIcon, LockIcon, CheckIcon, BotIcon, InfoIcon } from "../Icons";
 
 function getStoredToken() {
     try {
@@ -401,7 +401,7 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched, resumeM
             </div>
 
             <div className="matchmaking-info">
-                <div className="matchmaking-info-icon">💡</div>
+                <div className="matchmaking-info-icon"><InfoIcon size={18} /></div>
                 <div className="matchmaking-info-text">
                     {stage2Enabled
                         ? "PvP Flow: Find opponent → Lock 5 NFTs → Play → Winner claims 1 NFT!"

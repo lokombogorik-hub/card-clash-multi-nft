@@ -154,3 +154,105 @@ export function BotIcon({ size = 16, glow }) {
         </svg>
     );
 }
+
+// ── СТИХИИ КАРТ ─────────────────────────────────────────────────
+export const ELEMENT_COLOR = {
+    Earth: "#7ad07a", Fire: "#ff7a3c", Water: "#4aa8ff", Poison: "#b06bff",
+    Holy: "#ffe08a", Thunder: "#ffd23c", Wind: "#7fe3d0", Ice: "#9fd8ff",
+};
+
+function ElementGlyph({ element }) {
+    switch (element) {
+        case "Fire":
+            return <path d="M12 2.5c2.5 3 5.5 4.8 5.5 9a5.5 5.5 0 0 1-11 0c0-1.9.7-3.1 1.7-4.1.2 1.1.8 1.8 1.6 2.1C9.5 6.9 10.8 4.7 12 2.5Z" fill="currentColor" />;
+        case "Water":
+            return <path d="M12 3s6 6.6 6 11a6 6 0 0 1-12 0c0-4.4 6-11 6-11Z" fill="currentColor" />;
+        case "Earth":
+            return <path d="M5 19.5C5 11 11 5.5 19.5 4.5 19.5 13 13.5 18.5 5 19.5Zm4-4c2.2-2 4.4-3.2 6.5-3.7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" fill="none" />;
+        case "Poison":
+            return (
+                <g>
+                    <path d="M12 3a7 7 0 0 0-7 7c0 2.6 1.4 4.1 2.6 4.9V17a1.4 1.4 0 0 0 1.4 1.4h6A1.4 1.4 0 0 0 16.4 17v-2.1C17.6 14.1 19 12.6 19 10a7 7 0 0 0-7-7Z" stroke="currentColor" strokeWidth="1.6" fill="none" />
+                    <circle cx="9.4" cy="10.4" r="1.5" fill="currentColor" />
+                    <circle cx="14.6" cy="10.4" r="1.5" fill="currentColor" />
+                </g>
+            );
+        case "Holy":
+            return <path d="M12 2l1.9 6.1L20 10l-6.1 1.9L12 18l-1.9-6.1L4 10l6.1-1.9L12 2Z" fill="currentColor" />;
+        case "Thunder":
+            return <path d="M13 2 4.5 13.2c-.3.4 0 1 .5 1H10l-1 7.2c-.1.6.7.9 1 .4l8.5-11.2c.3-.4 0-1-.5-1H14l1-7.2c.1-.6-.7-.9-1-.4z" fill="currentColor" />;
+        case "Wind":
+            return <path d="M3 8.5h10.5A2.75 2.75 0 1 0 10.7 5.5M3 12.5h13A3 3 0 1 1 13 15.5M3 16.5h8A2.4 2.4 0 1 1 8.6 19" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" fill="none" />;
+        case "Ice":
+            return (
+                <g stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+                    <path d="M12 2.5v19M3.8 7.25l16.4 9.5M20.2 7.25 3.8 16.75" />
+                    <path d="M12 6.2 9.7 4M12 6.2 14.3 4M12 17.8l-2.3 2.2M12 17.8l2.3 2.2M5.6 9.4 4 8.5M18.4 14.6l1.6.9M18.4 9.4 20 8.5M5.6 14.6 4 15.5" strokeWidth="1.4" />
+                </g>
+            );
+        default:
+            return <circle cx="12" cy="12" r="6.5" stroke="currentColor" strokeWidth="1.7" />;
+    }
+}
+
+export function ElementIcon({ element, size = 16, glow }) {
+    var color = ELEMENT_COLOR[element] || "#9fb2d0";
+    return (
+        <span style={{ color: color, display: "inline-flex", verticalAlign: "middle" }}>
+            <svg {...svgProps(size, glow)}><ElementGlyph element={element} /></svg>
+        </span>
+    );
+}
+
+// ── МЕДАЛИ (место 1/2/3) ────────────────────────────────────────
+var MEDAL_COLOR = { 1: "#ffd23c", 2: "#cfd8e3", 3: "#e0925a" };
+export function MedalIcon({ place = 1, size = 18, glow }) {
+    var color = MEDAL_COLOR[place] || "#9fb2d0";
+    return (
+        <span style={{ color: color, display: "inline-flex", verticalAlign: "middle" }}>
+            <svg {...svgProps(size, glow)}>
+                <path d="M8.5 3 12 8.5 15.5 3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                <circle cx="12" cy="15" r="6" stroke="currentColor" strokeWidth="1.8" />
+                <text x="12" y="17.6" textAnchor="middle" fontSize="7" fontWeight="900" fill="currentColor">{place}</text>
+            </svg>
+        </span>
+    );
+}
+
+// ── ЗАКЛИНАНИЯ ──────────────────────────────────────────────────
+export function FreezeIcon({ size = 16, glow }) {
+    return (
+        <svg {...svgProps(size, glow)} stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+            <path d="M12 2.5v19M3.8 7.25l16.4 9.5M20.2 7.25 3.8 16.75" />
+            <path d="M12 6.2 9.7 4M12 6.2 14.3 4M12 17.8l-2.3 2.2M12 17.8l2.3 2.2" strokeWidth="1.4" />
+        </svg>
+    );
+}
+
+export function EyeIcon({ size = 16, glow }) {
+    return (
+        <svg {...svgProps(size, glow)}>
+            <path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+            <circle cx="12" cy="12" r="2.6" fill="currentColor" />
+        </svg>
+    );
+}
+
+export function InfoIcon({ size = 16, glow }) {
+    return (
+        <svg {...svgProps(size, glow)}>
+            <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" />
+            <path d="M12 11v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            <circle cx="12" cy="8" r="1.1" fill="currentColor" />
+        </svg>
+    );
+}
+
+export function BellIcon({ size = 16, glow }) {
+    return (
+        <svg {...svgProps(size, glow)}>
+            <path d="M6 10a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+            <path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+        </svg>
+    );
+}

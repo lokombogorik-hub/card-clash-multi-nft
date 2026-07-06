@@ -415,7 +415,7 @@ export default function Market() {
             }
 
             // 2. Открытие кейса
-            setBuyingStatus("⛓ Трансфер NFT...");
+            setBuyingStatus("Трансфер NFT…");
             var open = await apiFetch("/api/cases/open", {
                 method: "POST",
                 token: token,
@@ -546,7 +546,7 @@ export default function Market() {
             </div>
 
             {!connected && (
-                <div className="market-warning">⚠️ Подключи HOT Wallet чтобы покупать</div>
+                <div className="market-warning">Подключи HOT Wallet чтобы покупать</div>
             )}
 
             {connected && (

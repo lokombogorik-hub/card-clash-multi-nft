@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CaseIcon } from "./components/Icons";
+import { CaseIcon, ElementIcon, FreezeIcon, EyeIcon } from "./components/Icons";
 import confetti from "canvas-confetti";
 import { apiFetch } from "./api.js";
 import { useWalletConnect } from "./context/WalletConnectContext";
@@ -1157,7 +1157,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
                 {!deckOk && (
                     <div style={{ color: "#fff", padding: 20, textAlign: "center", gridColumn: "1/-1", fontSize: 14 }}>
-                        ⚠️ Ошибка: активная колода не содержит 5 карт.
+                        Ошибка: активная колода не содержит 5 карт.
                     </div>
                 )}
 
@@ -1182,8 +1182,8 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                         </div>
                         {!isPvP && (
                             <div className="hand-magic-row">
-                                <button className="magic-btn freeze" disabled><span className="magic-ic">❄</span></button>
-                                <button className="magic-btn reveal" disabled><span className="magic-ic">👁</span></button>
+                                <button className="magic-btn freeze" disabled><span className="magic-ic"><FreezeIcon size={18} /></span></button>
+                                <button className="magic-btn reveal" disabled><span className="magic-ic"><EyeIcon size={18} /></span></button>
                             </div>
                         )}
                     </div>
@@ -1202,7 +1202,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                         onClick={() => onCellClick(i)}
                                         title={isFrozen ? `Frozen (${frozen[i]})` : elem ? `Element: ${elem}` : undefined}
                                     >
-                                        {elem && <div className="elem-bg" aria-hidden>{ELEM_ICON[elem]}</div>}
+                                        {elem && <div className="elem-bg" aria-hidden><ElementIcon element={elem} size={46} /></div>}
                                         {cell && <Card card={cell} cellElement={elem} />}
                                     </div>
                                 );
@@ -1233,7 +1233,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                     onClick={onMagicFreeze}
                                     disabled={!canUseMagic || playerSpells.freeze <= 0}
                                 >
-                                    <span className="magic-ic">❄</span>
+                                    <span className="magic-ic"><FreezeIcon size={18} /></span>
                                     <span className="magic-count">{playerSpells.freeze}</span>
                                 </button>
                                 <button
@@ -1241,7 +1241,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                     onClick={onMagicReveal}
                                     disabled={!canUseMagic || playerSpells.reveal <= 0}
                                 >
-                                    <span className="magic-ic">👁</span>
+                                    <span className="magic-ic"><EyeIcon size={18} /></span>
                                     <span className="magic-count">{playerSpells.reveal}</span>
                                 </button>
                             </div>
@@ -1481,7 +1481,7 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
 
                 {card.element && (
                     <div className="card-elem-pill" title={card.element}>
-                        <span className="card-elem-ic">{ELEM_ICON[card.element] || "?"}</span>
+                        <span className="card-elem-ic"><ElementIcon element={card.element} size={13} /></span>
                     </div>
                 )}
 

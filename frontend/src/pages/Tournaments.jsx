@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { TrophyIcon, SwordsIcon, UsersIcon, CoinIcon, CheckIcon } from "../components/Icons";
+import { TrophyIcon, SwordsIcon, UsersIcon, CoinIcon, CheckIcon, MedalIcon, GemIcon, InfoIcon } from "../components/Icons";
 import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
 
@@ -83,8 +83,8 @@ function Bracket({ bracket, me }) {
                             return (
                                 <div key={m.id} className={"tbracket-match" + (m.is_third_place ? " third" : "")}>
                                     {m.is_third_place && <div className="tbracket-tag third">За 3-е место</div>}
-                                    <div className={"tbracket-row" + (w1 ? " win" : "")}><span>{nameOf(m.player1_id)}</span>{w1 && <span>✓</span>}</div>
-                                    <div className={"tbracket-row" + (w2 ? " win" : "")}><span>{nameOf(m.player2_id)}</span>{w2 && <span>✓</span>}</div>
+                                    <div className={"tbracket-row" + (w1 ? " win" : "")}><span>{nameOf(m.player1_id)}</span>{w1 && <span><CheckIcon size={12} /></span>}</div>
+                                    <div className={"tbracket-row" + (w2 ? " win" : "")}><span>{nameOf(m.player2_id)}</span>{w2 && <span><CheckIcon size={12} /></span>}</div>
                                     {m.status === "active" && <div className="tbracket-tag live">идёт</div>}
                                     {m.status === "bye" && <div className="tbracket-tag bye">авто-проход</div>}
                                 </div>
@@ -109,7 +109,7 @@ function Podium({ winners, me }) {
                 var prize = Number(w.prize_yocto || "0") / 1e24;
                 return (
                     <div key={pl} className={"t-pod p" + pl}>
-                        <div className="m">{medal[pl]}</div>
+                        <div className="m"><MedalIcon place={pl} size={18} /></div>
                         <div className="n">{label(w)}</div>
                         <div className="p">{fmtNear(prize)} Ⓝ</div>
                     </div>
@@ -163,7 +163,7 @@ function TournamentCard({ summary, token, me, amAdmin, onEnterMatch, onChanged, 
                 txHash = (pay && pay.txHash) || "";
                 if (!txHash) throw new Error("Транзакция не прошла");
             }
-            setMsg("📝 Регистрирую...");
+            setMsg("Регистрирую…");
             await apiFetch("/api/tournaments/" + summary.id + "/register", {
                 method: "POST", token: token,
                 body: JSON.stringify({ tx_hash: txHash, near_account: ctx.accountId }),
@@ -177,7 +177,7 @@ function TournamentCard({ summary, token, me, amAdmin, onEnterMatch, onChanged, 
     var changeBg = function (e) {
         e.stopPropagation();
         pickImage(async function (dataUrl) {
-            setBusy(true); setMsg("🖼 Сохраняю фон...");
+            setBusy(true); setMsg("Сохраняю фон…");
             try {
                 await apiFetch("/api/tournaments/" + summary.id + "/image", {
                     method: "POST", token: token,
@@ -265,7 +265,7 @@ function TournamentCard({ summary, token, me, amAdmin, onEnterMatch, onChanged, 
                             {dist.slice(0, 3).map(function (pct, i) {
                                 return (
                                     <div key={i} className={"prize-place place-" + (i + 1)}>
-                                        <span className="place-icon">{medals[i]}</span>
+                                        <span className="place-icon"><MedalIcon place={i + 1} size={16} /></span>
                                         <span className="place-amount">{fmtNear(pool * pct / 100)} Ⓝ</span>
                                         <span className="place-pct">{pct}%</span>
                                     </div>
@@ -286,7 +286,7 @@ function TournamentCard({ summary, token, me, amAdmin, onEnterMatch, onChanged, 
 
                     {amAdmin && (
                         <button className="t-photo-btn" style={{ marginTop: 10 }} disabled={busy} onClick={changeBg}>
-                            🖼 {bg ? "Сменить фон" : "Поставить фон с телефона"}
+                            {bg ? "Сменить фон" : "Поставить фон с телефона"}
                         </button>
                     )}
 
@@ -352,7 +352,7 @@ function CreateForm({ token, onCreated }) {
             <input className="t-input" value={minutes} onChange={function (e) { setMinutes(e.target.value); }} placeholder="30" inputMode="numeric" />
             <div className="t-create-label">Фон турнира (необязательно)</div>
             {image && <img className="t-photo-preview" src={image} alt="" />}
-            <button className="t-photo-btn" onClick={function () { pickImage(setImage); }}>🖼 {image ? "Сменить фото" : "Выбрать фото с телефона"}</button>
+            <button className="t-photo-btn" onClick={function () { pickImage(setImage); }}>{image ? "Сменить фото" : "Выбрать фото с телефона"}</button>
             {err && <div className="t-err">{err}</div>}
             <div className="t-row">
                 <button className="tournament-action-btn t-act-reg" disabled={busy} onClick={submit}>{busy ? "..." : "Создать"}</button>
@@ -387,7 +387,7 @@ export default function Tournaments({ token, me, onEnterMatch, initialOpenId }) 
 
             <div className="tournament-stats-row">
                 <div className="tournament-stat-chip"><span className="stat-chip-icon"><SwordsIcon size={15} /></span><span>{(list || []).length} турниров</span></div>
-                <div className="tournament-stat-chip"><span className="stat-chip-icon">💎</span><span>{fmtNear(totalPool)} Ⓝ фонд</span></div>
+                <div className="tournament-stat-chip"><span className="stat-chip-icon"><GemIcon size={15} /></span><span>{fmtNear(totalPool)} Ⓝ фонд</span></div>
             </div>
 
             {amAdmin && <CreateForm token={token} onCreated={load} />}
@@ -404,7 +404,7 @@ export default function Tournaments({ token, me, onEnterMatch, initialOpenId }) 
             </div>
 
             <div className="tournament-bottom-info">
-                <div className="bottom-info-icon">💡</div>
+                <div className="bottom-info-icon"><InfoIcon size={18} /></div>
                 <div className="bottom-info-text">Нажми на турнир, чтобы открыть детали, сетку и регистрацию</div>
             </div>
         </div>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef, memo } from "react";
-import { CaseIcon, BoltIcon } from "../components/Icons";
+import { CaseIcon, BoltIcon, ElementIcon } from "../components/Icons";
 import { apiFetch } from "../api";
 import { useWalletConnect } from "../context/WalletConnectContext";
 import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from "../libs/nearNft";
@@ -311,7 +311,7 @@ var InventoryCard = memo(function InventoryCard({ nft, isSelected, pickNo, onTog
             </div>
 
             <div className="inv-card-elem-pill">
-                <span className="inv-card-elem-ic">{ELEM_ICON[element] || "🔮"}</span>
+                <span className="inv-card-elem-ic"><ElementIcon element={element} size={13} /></span>
             </div>
 
             <div className="inv-tt-badge">
@@ -405,7 +405,7 @@ export default function Inventory({ token, onDeckReady }) {
 
         if (nftCache.accountId === accountId && nftCache.items.length > 0 && (now - nftCache.timestamp) < 300000) {
             setNfts(nftCache.items);
-            setSource("✅ " + nftCache.items.length + " NFTs (cached)");
+            setSource(nftCache.items.length + " NFTs (cached)");
             return;
         }
 
@@ -418,7 +418,7 @@ export default function Inventory({ token, onDeckReady }) {
                 nftCache.items = lsCache.items;
                 nftCache.timestamp = lsCache.timestamp;
                 setNfts(lsCache.items);
-                setSource("✅ " + lsCache.items.length + " NFTs (cached)");
+                setSource(lsCache.items.length + " NFTs (cached)");
                 return;
             }
         } catch (e) { }
@@ -451,7 +451,7 @@ export default function Inventory({ token, onDeckReady }) {
                             var quickItems = buildItems(tokens, attributesMap, nftContractId);
                             setNfts(quickItems);
                             setLoading(false);
-                            setSource("✅ " + tokens.length + " NFTs (загрузка атрибутов...)");
+                            setSource(tokens.length + " NFTs (загрузка атрибутов…)");
                         }
 
                         var missing = tokens.filter(function (t) { return !attributesMap[t.token_id]; });
@@ -498,9 +498,9 @@ export default function Inventory({ token, onDeckReady }) {
 
                         if (!alive) return;
                         setNfts(items);
-                        setSource("✅ " + items.length + " NFTs");
+                        setSource(items.length + " NFTs");
                     } catch (e) {
-                        if (alive) setSource("❌ " + (e.message || e));
+                        if (alive) setSource("Ошибка: " + (e.message || e));
                     }
                 }
 
@@ -594,7 +594,7 @@ export default function Inventory({ token, onDeckReady }) {
                     {Object.keys(deckElems).length === 0
                         ? <span className="inv-dp-hint">Выбери 5 карт для боя</span>
                         : Object.keys(deckElems).map(function (e) {
-                            return <span key={e} className="inv-dp-chip">{ELEM_ICON[e] || "🔮"}{deckElems[e] > 1 ? " ×" + deckElems[e] : ""}</span>;
+                            return <span key={e} className="inv-dp-chip" style={{display:"inline-flex",alignItems:"center",gap:3}}><ElementIcon element={e} size={12} />{deckElems[e] > 1 ? " ×" + deckElems[e] : ""}</span>;
                         })}
                 </div>
             </div>
@@ -602,7 +602,7 @@ export default function Inventory({ token, onDeckReady }) {
             {connected && accountId ? (
                 <div className="inv-info-box">
                     <div className="inv-info-label" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <span>🔗 {accountId.length > 20 ? accountId.slice(0, 10) + "…" + accountId.slice(-6) : accountId}</span>
+                        <span>{accountId.length > 20 ? accountId.slice(0, 10) + "…" + accountId.slice(-6) : accountId}</span>
                         <button onClick={forceRefresh} disabled={loading} style={{
                             padding: "4px 10px", fontSize: 11, borderRadius: 8,
                             border: "1px solid rgba(120,200,255,0.3)",
@@ -613,17 +613,17 @@ export default function Inventory({ token, onDeckReady }) {
                     {source && (
                         <div className="inv-info-value" style={{
                             marginTop: 4,
-                            color: source.startsWith("✅") ? "#22c55e" : source.startsWith("❌") ? "#ff6b6b" : "#f59e0b"
+                            color: source.startsWith("Ошибка") ? "#ff6b6b" : source ? "#22c55e" : "#f59e0b"
                         }}>{source}</div>
                     )}
                 </div>
             ) : (
                 <div className="inv-info-box">
-                    <div className="inv-info-label" style={{ color: "#f59e0b" }}>⚠️ Подключи кошелёк на главной</div>
+                    <div className="inv-info-label" style={{ color: "#f59e0b" }}>Подключи кошелёк на главной</div>
                 </div>
             )}
 
-            {error && <div className="inv-error">⚠️ {error}</div>}
+            {error && <div className="inv-error">{error}</div>}
 
             {!token && (
                 <div className="inv-loading">
@@ -641,7 +641,7 @@ export default function Inventory({ token, onDeckReady }) {
 
             {!loading && nfts.length === 0 && token && (
                 <div className="inv-empty">
-                    <div className="inv-empty-icon">📭</div>
+                    <div className="inv-empty-icon"><CaseIcon size={40} /></div>
                     <div className="inv-empty-title">Нет NFT карт</div>
                     <div className="inv-empty-text">
                         {connected ? "NFT не найдены для " + accountId : "Подключи кошелёк на главной странице"}
