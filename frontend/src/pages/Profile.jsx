@@ -23,6 +23,10 @@ function timeAgo(iso) {
     if (s < 86400) return Math.floor(s / 3600) + " ч назад";
     return Math.floor(s / 86400) + " дн назад";
 }
+// Кеш последних данных профиля — чтобы при повторном открытии страницы
+// показывать их СРАЗУ (без «Загрузки» и прыжка), а сеть дёргать в фоне.
+var _pfCache = { profile: null, matches: null, coins: 0 };
+
 var MODE = { tournament: "Турнир", pvp: "PvP", ai: "AI" };
 var RES = { win: "W", loss: "L", draw: "=", cancelled: "×" };
 var RES_TXT = { win: "Победа", loss: "Поражение", draw: "Ничья", cancelled: "Отменён" };
@@ -57,24 +61,24 @@ function MatchRow({ m }) {
 
 export default function Profile({ token, me }) {
     var { accountId, balance, connected } = useWalletConnect();
-    var [profile, setProfile] = useState(null);
-    var [matches, setMatches] = useState(null);
-    var [loading, setLoading] = useState(true);
+    var [profile, setProfile] = useState(_pfCache.profile);
+    var [matches, setMatches] = useState(_pfCache.matches);
+    var [loading, setLoading] = useState(_pfCache.profile == null);
     var [avatarOk, setAvatarOk] = useState(true);
-    var [coins, setCoins] = useState(0);
+    var [coins, setCoins] = useState(_pfCache.coins);
 
     useEffect(function () {
         if (!token) { setLoading(false); return; }
         var alive = true;
         apiFetch("/api/users/me", { token: token })
-            .then(function (d) { if (alive) setProfile(d); })
+            .then(function (d) { if (alive) { setProfile(d); _pfCache.profile = d; } })
             .catch(function (e) { console.error("Profile load error:", e); })
             .finally(function () { if (alive) setLoading(false); });
         apiFetch("/api/matches/history?limit=20", { token: token })
-            .then(function (d) { if (alive) setMatches((d && d.matches) || []); })
+            .then(function (d) { if (alive) { var mm = (d && d.matches) || []; setMatches(mm); _pfCache.matches = mm; } })
             .catch(function () { if (alive) setMatches([]); });
         apiFetch("/api/coins/me", { token: token })
-            .then(function (d) { if (alive && d) setCoins(d.balance || 0); })
+            .then(function (d) { if (alive && d) { setCoins(d.balance || 0); _pfCache.coins = d.balance || 0; } })
             .catch(function () { });
         return function () { alive = false; };
     }, [token]);

@@ -3,6 +3,8 @@ import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
 import { CoinIcon, BoltIcon, CheckIcon, GemIcon, CaseIcon, XIcon, NearIcon } from "../components/Icons";
 
+var _mktCache = { coins: 0, boostUntil: null };
+
 var CASES = [
     { id: "starter", name: "Starter Case", price: 0.01, coin_price: 20, displayPrice: "1 Card", image: "/ui/case-starter.png", video: "/ui/case-starter.mp4", rarity: "common", description: "1 random card", type: "single" },
     { id: "premium", name: "Premium Case", price: 0.01, coin_price: 60, displayPrice: "1 Card", image: "/ui/case-premium.png", video: "/ui/case-premium.mp4", rarity: "rare", description: "1 rare card", type: "single" },
@@ -321,8 +323,8 @@ export default function Market() {
     var [caseInventory, setCaseInventory] = useState({});
     var [loadingInventory, setLoadingInventory] = useState(true);
     var [caseList, setCaseList] = useState(CASES);
-    var [coins, setCoins] = useState(0);
-    var [boostUntil, setBoostUntil] = useState(null);
+    var [coins, setCoins] = useState(_mktCache.coins);
+    var [boostUntil, setBoostUntil] = useState(_mktCache.boostUntil);
     var [boosting, setBoosting] = useState(false);
 
     var token = "";
@@ -459,7 +461,11 @@ export default function Market() {
 
     var refreshCoins = function () {
         apiFetch("/api/coins/me", { token: token }).then(function (d) {
-            if (d) { setCoins(d.balance || 0); setBoostUntil(d.boost_active ? d.boost_until : null); }
+            if (d) {
+                setCoins(d.balance || 0); _mktCache.coins = d.balance || 0;
+                var bu = d.boost_active ? d.boost_until : null;
+                setBoostUntil(bu); _mktCache.boostUntil = bu;
+            }
         }).catch(function () { });
     };
     useEffect(function () { refreshCoins(); }, [token]);
