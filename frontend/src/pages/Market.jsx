@@ -3,7 +3,8 @@ import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
 import { CoinIcon, BoltIcon, CheckIcon, GemIcon, CaseIcon, XIcon, NearIcon } from "../components/Icons";
 
-var _mktCache = { coins: 0, boostUntil: null, catalog: null, inv: null, invTs: 0 };
+var _mktCache = { coins: 0, boostUntil: null, catalog: null };
+try { var _cc = parseInt(localStorage.getItem("cc_coins") || "0", 10); if (!isNaN(_cc)) _mktCache.coins = _cc; } catch (e) { }
 
 var CASES = [
     { id: "starter", name: "Starter Case", price: 0.01, coin_price: 20, displayPrice: "1 Card", image: "/ui/case-starter.png", video: "/ui/case-starter.mp4", rarity: "common", description: "1 random card", type: "single" },
@@ -320,8 +321,8 @@ export default function Market() {
     var [buyingStatus, setBuyingStatus] = useState("");
     var [error, setError] = useState("");
     var [openModal, setOpenModal] = useState(null);
-    var [caseInventory, setCaseInventory] = useState(_mktCache.inv || {});
-    var [loadingInventory, setLoadingInventory] = useState(!_mktCache.inv);
+    var [caseInventory, setCaseInventory] = useState({});
+    var [loadingInventory, setLoadingInventory] = useState(true);
     var [caseList, setCaseList] = useState(CASES);
     var [coins, setCoins] = useState(_mktCache.coins);
     var [coinConfirm, setCoinConfirm] = useState(null);
@@ -357,21 +358,12 @@ export default function Market() {
         var alive = true;
 
         async function fetchInventory() {
-            // Свежий кеш (<25с) — не дёргаем сеть, показываем из памяти.
-            if (_mktCache.inv && (Date.now() - _mktCache.invTs) < 25000) {
-                setCaseInventory(_mktCache.inv);
-                setLoadingInventory(false);
-                return;
-            }
             try {
-                if (!_mktCache.inv) setLoadingInventory(true);
+                setLoadingInventory(true);
                 var resp = await apiFetch("/api/cases/inventory", { method: "GET", token: token });
-                if (alive && resp && typeof resp === "object") {
-                    setCaseInventory(resp);
-                    _mktCache.inv = resp; _mktCache.invTs = Date.now();
-                }
+                if (alive && resp && typeof resp === "object") setCaseInventory(resp);
             } catch (e) {
-                if (alive && !_mktCache.inv) setCaseInventory({});
+                if (alive) setCaseInventory({});
             } finally {
                 if (alive) setLoadingInventory(false);
             }
@@ -438,7 +430,6 @@ export default function Market() {
                 }
                 return updated;
             });
-            _mktCache.invTs = 0;
 
             // 4.модалкв
             setBuyingStatus("");
@@ -463,6 +454,7 @@ export default function Market() {
         apiFetch("/api/coins/me", { token: token }).then(function (d) {
             if (d) {
                 setCoins(d.balance || 0); _mktCache.coins = d.balance || 0;
+                try { localStorage.setItem("cc_coins", String(d.balance || 0)); } catch (e) { }
                 var bu = d.boost_active ? d.boost_until : null;
                 setBoostUntil(bu); _mktCache.boostUntil = bu;
             }
@@ -516,7 +508,7 @@ export default function Market() {
             });
             var cards = open.cards || [];
             if (cards.length === 0) throw new Error("Нет карт в ответе");
-            setCaseInventory(function (prev) { var u = { ...prev }; if (u[c.id] > 0) u[c.id] = u[c.id] - 1; return u; }); _mktCache.invTs = 0;
+            setCaseInventory(function (prev) { var u = { ...prev }; if (u[c.id] > 0) u[c.id] = u[c.id] - 1; return u; });
             setBuyingStatus("");
             setOpenModal({ caseItem: c, cards: cards });
             setCoins(function (p) { return Math.max(0, p - cp); });
@@ -584,7 +576,6 @@ export default function Market() {
                             .then(function (resp) {
                                 if (resp && typeof resp === "object") {
                                     setCaseInventory(resp);
-                                    _mktCache.inv = resp; _mktCache.invTs = Date.now();
                                 }
                             })
                             .catch(function (e) { console.error("[MARKET] Reload inventory error:", e); });

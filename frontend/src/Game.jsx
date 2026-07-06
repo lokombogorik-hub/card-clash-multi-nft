@@ -307,6 +307,26 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
     const [boardElems, setBoardElems] = useState(() => makeBoardElements());
     const [board, setBoard] = useState(() => Array(9).fill(null));
+
+    // Префетч картинок карт (руки + поле): грузим в кэш заранее, чтобы при
+    // выкладке на стол не было рывка/подгрузки.
+    const preloadedImgRef = useRef(new Set());
+    useEffect(() => {
+        const pick = (c) => c && (c.imageUrl || c.image || (c.nftData && (c.nftData.imageUrl || c.nftData.image)));
+        const urls = [];
+        (hands.player || []).forEach(c => { const u = pick(c); if (u) urls.push(u); });
+        (hands.enemy || []).forEach(c => { const u = pick(c); if (u) urls.push(u); });
+        (board || []).forEach(c => { const u = pick(c); if (u) urls.push(u); });
+        urls.forEach(u => {
+            let src;
+            try { src = proxyImageUrl(u); } catch (e) { src = u; }
+            if (!src || preloadedImgRef.current.has(src)) return;
+            preloadedImgRef.current.add(src);
+            const img = new Image();
+            img.decoding = "async";
+            img.src = src;
+        });
+    }, [hands, board]);
     const [selected, setSelected] = useState(null);
 
     const [turn, setTurn] = useState(() => randomFirstTurn());

@@ -8,5 +8,25 @@
             "source": "/health",
             "destination": "https://card-clash-multi-nft.onrender.com/health"
         }
+    ],
+    "headers": [
+        {
+            "source": "/ui/(.*)",
+            "headers": [
+                { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+            ]
+        },
+        {
+            "source": "/cards/(.*)",
+            "headers": [
+                { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+            ]
+        },
+        {
+            "source": "/assets/(.*)",
+            "headers": [
+                { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+            ]
+        }
     ]
 }

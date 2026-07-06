@@ -23,9 +23,13 @@ function timeAgo(iso) {
     if (s < 86400) return Math.floor(s / 3600) + " ч назад";
     return Math.floor(s / 86400) + " дн назад";
 }
-// Кеш последних данных профиля — чтобы при повторном открытии страницы
-// показывать их СРАЗУ (без «Загрузки» и прыжка), а сеть дёргать в фоне.
-var _pfCache = { profile: null, matches: null, coins: 0 };
+// Кеш последних данных профиля в localStorage — показываем СРАЗУ (без «Загрузки»
+// и прыжка) даже после переоткрытия Telegram, а сеть дёргаем в фоне (revalidate).
+var _pfCache = (function () {
+    try { return JSON.parse(localStorage.getItem("cc_pf_cache")) || { profile: null, matches: null, coins: 0 }; }
+    catch (e) { return { profile: null, matches: null, coins: 0 }; }
+})();
+function _savePf() { try { localStorage.setItem("cc_pf_cache", JSON.stringify(_pfCache)); } catch (e) { } }
 
 var MODE = { tournament: "Турнир", pvp: "PvP", ai: "AI" };
 var RES = { win: "W", loss: "L", draw: "=", cancelled: "×" };
@@ -71,14 +75,14 @@ export default function Profile({ token, me }) {
         if (!token) { setLoading(false); return; }
         var alive = true;
         apiFetch("/api/users/me", { token: token })
-            .then(function (d) { if (alive) { setProfile(d); _pfCache.profile = d; } })
+            .then(function (d) { if (alive) { setProfile(d); _pfCache.profile = d; _savePf(); } })
             .catch(function (e) { console.error("Profile load error:", e); })
             .finally(function () { if (alive) setLoading(false); });
         apiFetch("/api/matches/history?limit=20", { token: token })
-            .then(function (d) { if (alive) { var mm = (d && d.matches) || []; setMatches(mm); _pfCache.matches = mm; } })
+            .then(function (d) { if (alive) { var mm = (d && d.matches) || []; setMatches(mm); _pfCache.matches = mm; _savePf(); } })
             .catch(function () { if (alive) setMatches([]); });
         apiFetch("/api/coins/me", { token: token })
-            .then(function (d) { if (alive && d) { setCoins(d.balance || 0); _pfCache.coins = d.balance || 0; } })
+            .then(function (d) { if (alive && d) { setCoins(d.balance || 0); _pfCache.coins = d.balance || 0; _savePf(); } })
             .catch(function () { });
         return function () { alive = false; };
     }, [token]);
