@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
-import { SwordsIcon, PlayPadIcon, SearchIcon, LockIcon, CoinIcon, BoltIcon } from "./components/Icons";
+import { SwordsIcon, PlayPadIcon, SearchIcon, LockIcon, CoinIcon, BoltIcon, TrophyIcon as TIcon, UsersIcon } from "./components/Icons";
 import Game from "./Game";
 import StormBg from "./components/StormBg";
 import { apiFetch } from "./api.js";
@@ -206,7 +206,7 @@ function SeasonBar({ token, onOpen }) {
     if (!items) {
         return (
             <div className="season-bar" style={{ opacity: 0.55 }}>
-                <div className="season-bar-avatar" style={{ background: "linear-gradient(135deg,#3a4256,#2a3040)" }}><div className="t-ava-emoji">🏆</div></div>
+                <div className="season-bar-avatar" style={{ background: "linear-gradient(135deg,#3a4256,#2a3040)" }}><div className="t-ava-emoji"><TIcon size={22} /></div></div>
                 <div style={{ flex: 1, minWidth: 0 }}><div className="season-title">Турниры</div><div className="season-sub">Загрузка…</div></div>
             </div>
         );
@@ -214,7 +214,7 @@ function SeasonBar({ token, onOpen }) {
     if (!items.length) {
         return (
             <div className="season-bar" style={{ cursor: "pointer" }} onClick={function () { onOpen(""); }}>
-                <div className="season-bar-avatar" style={{ background: "linear-gradient(135deg,#667eea,#764ba2)" }}><div className="t-ava-emoji">🏆</div></div>
+                <div className="season-bar-avatar" style={{ background: "linear-gradient(135deg,#667eea,#764ba2)" }}><div className="t-ava-emoji"><TIcon size={22} /></div></div>
                 <div style={{ flex: 1, minWidth: 0 }}><div className="season-title">Турниры</div><div className="season-sub" style={{display:"inline-flex",alignItems:"center",gap:5}}>Скоро <SwordsIcon size={13} /></div></div>
             </div>
         );
@@ -227,14 +227,14 @@ function SeasonBar({ token, onOpen }) {
     var cls = live ? "is-live" : fin ? "is-fin" : "is-reg";
     var champ = fin ? (t.winners || []).filter(function (w) { return w.place === 1; })[0] : null;
     var sub = live ? "Идёт · " + t.participants_count + " игроков"
-        : fin ? (champ ? "🏆 Победитель #" + String(champ.user_id).slice(-4) : "Завершён · фонд " + (Math.round(Number(t.prize_pool_near || 0) * 100) / 100) + " Ⓝ")
+        : fin ? (champ ? "Победитель #" + String(champ.user_id).slice(-4) : "Завершён · фонд " + (Math.round(Number(t.prize_pool_near || 0) * 100) / 100) + " Ⓝ")
             : "Регистрация · фонд " + (Math.round(Number(t.prize_pool_near || 0) * 100) / 100) + " Ⓝ";
     return (
         <div className={"season-bar " + cls} style={{ cursor: "pointer" }}
             onClick={function () { if (swiped.current) { swiped.current = false; return; } onOpen(t.id); }}
             onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
             <div className={"season-bar-avatar" + (t.image_url ? " img" : "")} style={{ background: "linear-gradient(135deg, " + grad[0] + ", " + grad[1] + ")" }}>
-                {t.image_url ? <img src={t.image_url} alt="" /> : <div className="t-ava-emoji">🏆</div>}
+                {t.image_url ? <img src={t.image_url} alt="" /> : <div className="t-ava-emoji"><TIcon size={26} /></div>}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="season-title">{t.name}</div>
@@ -264,12 +264,12 @@ function TournamentPage() {
         <div className="tournament-page-v2">
             <div className="tournament-header">
                 <h2 className="tournament-title">
-                    <span className="tournament-title-icon">🏆</span>Турниры
+                    <span className="tournament-title-icon" style={{display:"inline-flex",verticalAlign:"middle"}}><TIcon size={22} /></span> Турниры
                 </h2>
                 <div className="tournament-subtitle">Участвуй в турнирах и выигрывай призы</div>
             </div>
             <div className="tournament-stats-row">
-                <div className="tournament-stat-chip"><span className="stat-chip-icon">🎮</span><span>{TOURNAMENTS.length} турнира</span></div>
+                <div className="tournament-stat-chip"><span className="stat-chip-icon"><SwordsIcon size={15} /></span><span>{TOURNAMENTS.length} турнира</span></div>
                 <div className="tournament-stat-chip"><span className="stat-chip-icon">💎</span><span>Много призов</span></div>
             </div>
             <div className="tournament-list-v2">
@@ -293,7 +293,7 @@ function TournamentPage() {
                                     <div className="tournament-card-title-row"><h3>{t.title}</h3></div>
                                     <p className="tournament-card-subtitle">{t.subtitle}</p>
                                     <div className="tournament-quick-stats">
-                                        <div className="quick-stat"><span className="quick-stat-icon">👥</span><span>{t.players}/{t.maxPlayers}</span></div>
+                                        <div className="quick-stat"><span className="quick-stat-icon"><UsersIcon size={15} /></span><span>{t.players}/{t.maxPlayers}</span></div>
                                         <div className="quick-stat"><span className="quick-stat-icon">🎯</span><span>{t.format.split(" ")[0]}</span></div>
                                         <div className="quick-stat prize"><span className="quick-stat-icon">💰</span><span>{t.prize}</span></div>
                                     </div>
@@ -327,7 +327,7 @@ function TournamentPage() {
                                             <span className="format-value">{t.format}</span>
                                         </div>
                                         <div className="format-item">
-                                            <span className="format-icon">👥</span>
+                                            <span className="format-icon"><UsersIcon size={14} /></span>
                                             <span className="format-label">Участники:</span>
                                             <span className="format-value">до {t.maxPlayers} игроков</span>
                                         </div>

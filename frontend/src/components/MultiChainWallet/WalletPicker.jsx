@@ -1,4 +1,5 @@
 import React from "react";
+import { FireIcon } from "../Icons";
 
 export default function WalletPicker({ open, onClose, onHot }) {
     if (!open) return null;
@@ -31,7 +32,7 @@ export default function WalletPicker({ open, onClose, onHot }) {
                 }}
                 onClick={function (e) { e.stopPropagation(); }}
             >
-                <div style={{ fontSize: 36, marginBottom: 12 }}>🔥</div>
+                <div style={{ marginBottom: 12 }}><FireIcon size={34} /></div>
                 <h3
                     style={{
                         margin: "0 0 8px",

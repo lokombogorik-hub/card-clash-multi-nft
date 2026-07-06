@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { TrophyIcon, SwordsIcon, UsersIcon, CoinIcon, CheckIcon } from "../components/Icons";
 import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
 
@@ -157,7 +158,7 @@ function TournamentCard({ summary, token, me, amAdmin, onEnterMatch, onChanged, 
         try {
             var txHash = null;
             if (Number(data.entry_fee_near) > 0) {
-                setMsg("⏳ Оплата взноса...");
+                setMsg("Оплата взноса…");
                 var pay = await ctx.sendNear({ receiverId: data.treasury, amount: String(data.entry_fee_near) });
                 txHash = (pay && pay.txHash) || "";
                 if (!txHash) throw new Error("Транзакция не прошла");
@@ -167,9 +168,9 @@ function TournamentCard({ summary, token, me, amAdmin, onEnterMatch, onChanged, 
                 method: "POST", token: token,
                 body: JSON.stringify({ tx_hash: txHash, near_account: ctx.accountId }),
             });
-            setMsg("✅ Вы в турнире!");
+            setMsg("Вы в турнире!");
             await loadDetail(); onChanged && onChanged();
-        } catch (err) { setMsg("❌ " + (err && err.message || err)); }
+        } catch (err) { setMsg(String(err && err.message || err)); }
         finally { setBusy(false); }
     };
 
@@ -182,9 +183,9 @@ function TournamentCard({ summary, token, me, amAdmin, onEnterMatch, onChanged, 
                     method: "POST", token: token,
                     body: JSON.stringify({ image_url: dataUrl }),
                 });
-                setMsg("✅ Фон обновлён");
+                setMsg("Фон обновлён");
                 await loadDetail(); onChanged && onChanged();
-            } catch (err) { setMsg("❌ " + (err && err.message || err)); }
+            } catch (err) { setMsg(String(err && err.message || err)); }
             finally { setBusy(false); }
         });
     };
@@ -192,10 +193,10 @@ function TournamentCard({ summary, token, me, amAdmin, onEnterMatch, onChanged, 
     var deleteTournament = function (e) {
         e.stopPropagation();
         if (typeof window !== "undefined" && !window.confirm("Удалить турнир «" + data.name + "»? Действие необратимо.")) return;
-        setBusy(true); setMsg("🗑 Удаляю...");
+        setBusy(true); setMsg("Удаляю…");
         apiFetch("/api/tournaments/" + summary.id, { method: "DELETE", token: token })
             .then(function () { onChanged && onChanged(); })
-            .catch(function (err) { setMsg("❌ " + (err && err.message || err)); setBusy(false); });
+            .catch(function (err) { setMsg(String(err && err.message || err)); setBusy(false); });
     };
 
     var myMatch = t && t.bracket && t.bracket.my_match;
@@ -203,10 +204,10 @@ function TournamentCard({ summary, token, me, amAdmin, onEnterMatch, onChanged, 
 
     var renderAction = function () {
         if (data.status === "registration") {
-            if (t && t.am_registered) return <button className="tournament-action-btn t-act-done" disabled>✅ Вы в турнире — ждём старта</button>;
+            if (t && t.am_registered) return <button className="tournament-action-btn t-act-done" disabled><span style={{display:"inline-flex",alignItems:"center",gap:6}}><CheckIcon size={15} /> Вы в турнире — ждём старта</span></button>;
             return (
                 <button className="tournament-action-btn t-act-reg" disabled={busy} onClick={register}>
-                    <span className="btn-icon">🎟</span>
+                    <span className="btn-icon"><CoinIcon size={16} /></span>
                     <span>{busy ? "..." : (Number(data.entry_fee_near) > 0 ? "Участвовать за " + fmtNear(data.entry_fee_near) + " Ⓝ" : "Участвовать (бесплатно)")}</span>
                 </button>
             );
@@ -214,7 +215,7 @@ function TournamentCard({ summary, token, me, amAdmin, onEnterMatch, onChanged, 
         if (data.status === "running" && myMatch) {
             return (
                 <button className="tournament-action-btn t-act-play" onClick={function (e) { e.stopPropagation(); onEnterMatch(myMatch.match_id); }}>
-                    <span className="btn-icon">⚔️</span><span>Играть свой матч</span>
+                    <span className="btn-icon"><SwordsIcon size={16} /></span><span>Играть свой матч</span>
                 </button>
             );
         }
@@ -232,7 +233,7 @@ function TournamentCard({ summary, token, me, amAdmin, onEnterMatch, onChanged, 
                 <div className="tournament-avatar-wrap">
                     <div className="tournament-avatar-ring" style={{ background: "linear-gradient(135deg, " + s.grad[0] + ", " + s.grad[1] + ")" }}>
                         <div className="tournament-avatar">
-                            {bg ? <img src={bg} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div className="t-ava-emoji">🏆</div>}
+                            {bg ? <img src={bg} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div className="t-ava-emoji"><TrophyIcon size={26} /></div>}
                         </div>
                     </div>
                     <div className={"tournament-avatar-badge " + s.badge}>{s.label}</div>
@@ -243,9 +244,9 @@ function TournamentCard({ summary, token, me, amAdmin, onEnterMatch, onChanged, 
                         {data.status === "registration" && regLeft ? "до старта " + regLeft : "Single Elimination"}
                     </p>
                     <div className="tournament-quick-stats">
-                        <div className="quick-stat"><span className="quick-stat-icon">👥</span><span>{data.participants_count}{data.max_participants ? "/" + data.max_participants : ""}</span></div>
-                        <div className="quick-stat"><span className="quick-stat-icon">🎟</span><span>{fmtNear(data.entry_fee_near)} Ⓝ</span></div>
-                        <div className="quick-stat prize"><span className="quick-stat-icon">💰</span><span>{fmtNear(pool)} Ⓝ</span></div>
+                        <div className="quick-stat"><span className="quick-stat-icon"><UsersIcon size={15} /></span><span>{data.participants_count}{data.max_participants ? "/" + data.max_participants : ""}</span></div>
+                        <div className="quick-stat"><span className="quick-stat-icon"><CoinIcon size={15} /></span><span>{fmtNear(data.entry_fee_near)} Ⓝ</span></div>
+                        <div className="quick-stat prize"><span className="quick-stat-icon"><CoinIcon size={15} /></span><span>{fmtNear(pool)} Ⓝ</span></div>
                     </div>
                 </div>
                 <div className={"tournament-expand-arrow" + (open ? " rotated" : "")}>
@@ -274,11 +275,11 @@ function TournamentCard({ summary, token, me, amAdmin, onEnterMatch, onChanged, 
                     </div>
 
                     <div className="tournament-format-section">
-                        <div className="format-item"><span className="format-icon">📋</span><span className="format-label">Формат:</span><span className="format-value">Single Elimination</span></div>
-                        <div className="format-item"><span className="format-icon">👥</span><span className="format-label">Участники:</span><span className="format-value">{data.participants_count}{data.max_participants ? " / " + data.max_participants : " (без лимита)"}</span></div>
-                        <div className="format-item"><span className="format-icon">🎟</span><span className="format-label">Взнос:</span><span className="format-value">{fmtNear(data.entry_fee_near)} Ⓝ</span></div>
+                        <div className="format-item"><span className="format-icon"><SwordsIcon size={14} /></span><span className="format-label">Формат:</span><span className="format-value">Single Elimination</span></div>
+                        <div className="format-item"><span className="format-icon"><UsersIcon size={14} /></span><span className="format-label">Участники:</span><span className="format-value">{data.participants_count}{data.max_participants ? " / " + data.max_participants : " (без лимита)"}</span></div>
+                        <div className="format-item"><span className="format-icon"><CoinIcon size={14} /></span><span className="format-label">Взнос:</span><span className="format-value">{fmtNear(data.entry_fee_near)} Ⓝ</span></div>
                         {data.status === "registration" && regLeft &&
-                            <div className="format-item"><span className="format-icon">⏳</span><span className="format-label">До старта:</span><span className="format-value">{regLeft}</span></div>}
+                            <div className="format-item"><span className="format-icon"><CoinIcon size={14} /></span><span className="format-label">До старта:</span><span className="format-value">{regLeft}</span></div>}
                     </div>
 
                     {renderAction()}
@@ -291,7 +292,7 @@ function TournamentCard({ summary, token, me, amAdmin, onEnterMatch, onChanged, 
 
                     {amAdmin && (
                         <button className="t-del-btn" disabled={busy} onClick={deleteTournament}>
-                            🗑 Удалить турнир
+                            Удалить турнир
                         </button>
                     )}
 
@@ -380,19 +381,19 @@ export default function Tournaments({ token, me, onEnterMatch, initialOpenId }) 
     return (
         <div className="tournament-page-v2">
             <div className="tournament-header">
-                <h2 className="tournament-title"><span className="tournament-title-icon">🏆</span>Турниры</h2>
+                <h2 className="tournament-title"><span className="tournament-title-icon" style={{display:"inline-flex",verticalAlign:"middle"}}><TrophyIcon size={22} /></span>Турниры</h2>
                 <div className="tournament-subtitle">Сражайся за призовой фонд NEAR</div>
             </div>
 
             <div className="tournament-stats-row">
-                <div className="tournament-stat-chip"><span className="stat-chip-icon">🎮</span><span>{(list || []).length} турниров</span></div>
+                <div className="tournament-stat-chip"><span className="stat-chip-icon"><SwordsIcon size={15} /></span><span>{(list || []).length} турниров</span></div>
                 <div className="tournament-stat-chip"><span className="stat-chip-icon">💎</span><span>{fmtNear(totalPool)} Ⓝ фонд</span></div>
             </div>
 
             {amAdmin && <CreateForm token={token} onCreated={load} />}
 
             {list === null && <div className="t-empty">Загрузка...</div>}
-            {list && list.length === 0 && <div className="t-empty">Пока нет активных турниров.<br />Загляни позже ⚔️</div>}
+            {list && list.length === 0 && <div className="t-empty">Пока нет активных турниров.<br />Загляни позже</div>}
 
             <div className="tournament-list-v2">
                 {list && list.map(function (t, i) {

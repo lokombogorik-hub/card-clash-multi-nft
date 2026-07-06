@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { CoinIcon, SwordsIcon, TrophyIcon, XIcon, GemIcon, BoltIcon } from "../components/Icons";
 import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
 
@@ -107,7 +108,7 @@ export default function Profile({ token, me }) {
                     <div className="pf-rating">
                         <div className="pf-rating-num">{profile.elo_rating}</div>
                         <div className="pf-rating-lbl">Рейтинг</div>
-                        <div className="pf-coins">🪙 {coins} ClashCoin</div>
+                        <div className="pf-coins" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><CoinIcon size={14} /> {coins} ClashCoin</div>
                         {profile.next_rank && (
                             <div className="pf-prog">
                                 <div className="pf-prog-bar"><div className="pf-prog-fill" style={{ width: prog + "%" }} /></div>
@@ -132,47 +133,47 @@ export default function Profile({ token, me }) {
                 <>
                     <div className="pf-tiles">
                         <div className="pf-tile" style={{ "--c": "#78c8ff" }}>
-                            <div className="pf-tile-ic">⚔️</div>
+                            <div className="pf-tile-ic"><SwordsIcon size={22} /></div>
                             <div className="pf-tile-val">{(profile.pvp_wins || 0) + (profile.pvp_losses || 0)}</div>
                             <div className="pf-tile-lbl">Игр</div>
                         </div>
                         <div className="pf-tile" style={{ "--c": "#4ade80" }}>
-                            <div className="pf-tile-ic">🏆</div>
+                            <div className="pf-tile-ic"><TrophyIcon size={22} /></div>
                             <div className="pf-tile-val">{profile.pvp_wins || 0}</div>
                             <div className="pf-tile-lbl">Побед</div>
                         </div>
                         <div className="pf-tile" style={{ "--c": "#f87171" }}>
-                            <div className="pf-tile-ic">💔</div>
+                            <div className="pf-tile-ic"><XIcon size={22} /></div>
                             <div className="pf-tile-val">{profile.pvp_losses || 0}</div>
                             <div className="pf-tile-lbl">Поражений</div>
                         </div>
                         <div className="pf-tile" style={{ "--c": "#ffd76a" }}>
-                            <div className="pf-tile-ic">📊</div>
+                            <div className="pf-tile-ic"><GemIcon size={22} /></div>
                             <div className="pf-tile-val">{profile.win_rate || 0}%</div>
                             <div className="pf-tile-lbl">Винрейт</div>
                         </div>
                     </div>
 
-                    <div className="pf-sec">📜 История матчей</div>
+                    <div className="pf-sec">История матчей</div>
                     {matches === null ? (
                         <div className="pf-empty">Загрузка…</div>
                     ) : matches.length === 0 ? (
-                        <div className="pf-empty">Пока нет сыгранных матчей. Сыграй первый бой! ⚔️</div>
+                        <div className="pf-empty">Пока нет сыгранных матчей. Сыграй первый бой!</div>
                     ) : (
                         <div className="pf-matches">
                             {matches.map(function (m) { return <MatchRow key={m.match_id} m={m} />; })}
                         </div>
                     )}
 
-                    <div className="pf-sec">🏅 Достижения</div>
+                    <div className="pf-sec">Достижения</div>
                     <div className="pf-ach">
                         {[
-                            { ok: (profile.pvp_wins || 0) >= 1, ic: "🥇", nm: "Первая победа" },
-                            { ok: (profile.pvp_wins || 0) >= 10, ic: "⚡", nm: "10 побед" },
-                            { ok: (profile.total_matches || 0) >= 50, ic: "🎯", nm: "50 матчей" },
-                            { ok: connected, ic: "🔗", nm: "Кошелёк" },
-                            { ok: (profile.elo_rating || 0) >= 1200, ic: "⚔️", nm: "Мастер" },
-                            { ok: (profile.elo_rating || 0) >= 1500, ic: "👑", nm: "Профи" },
+                            { ok: (profile.pvp_wins || 0) >= 1, ic: <TrophyIcon size={22} />, nm: "Первая победа" },
+                            { ok: (profile.pvp_wins || 0) >= 10, ic: <BoltIcon size={22} />, nm: "10 побед" },
+                            { ok: (profile.total_matches || 0) >= 50, ic: <SwordsIcon size={22} />, nm: "50 матчей" },
+                            { ok: connected, ic: <CoinIcon size={22} />, nm: "Кошелёк" },
+                            { ok: (profile.elo_rating || 0) >= 1200, ic: <SwordsIcon size={22} />, nm: "Мастер" },
+                            { ok: (profile.elo_rating || 0) >= 1500, ic: <TrophyIcon size={22} />, nm: "Профи" },
                         ].map(function (a, i) {
                             return (
                                 <div key={i} className={"pf-ach-item" + (a.ok ? "" : " locked")}>

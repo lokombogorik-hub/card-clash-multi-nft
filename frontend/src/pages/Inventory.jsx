@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef, memo } from "react";
+import { CaseIcon, BoltIcon } from "../components/Icons";
 import { apiFetch } from "../api";
 import { useWalletConnect } from "../context/WalletConnectContext";
 import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from "../libs/nearNft";
@@ -227,7 +228,7 @@ var NftImage = memo(function NftImage({ src, originalSrc, alt, cacheKey }) {
     }, [cacheKey, imgSrc]);
 
     if (failed || !imgSrc) {
-        return <div className="inv-card-placeholder"><span>🎴</span></div>;
+        return <div className="inv-card-placeholder"><CaseIcon size={40} /></div>;
     }
 
     return (
@@ -575,7 +576,7 @@ export default function Inventory({ token, onDeckReady }) {
         <div className="page inventory-page">
             <div className="inv-header">
                 <h2 className="inv-title">
-                    <span className="inv-title-icon">🎴</span>
+                    <span className="inv-title-icon" style={{display:"inline-flex",verticalAlign:"middle"}}><CaseIcon size={22} /></span>
                     Выбери колоду
                 </h2>
                 <div className="inv-subtitle">Выбери 5 карт для игры • {selected.size}/5</div>
@@ -583,7 +584,7 @@ export default function Inventory({ token, onDeckReady }) {
 
             <div className="inv-deck-power">
                 <div className="inv-dp-main">
-                    <span className="inv-dp-ic">⚡</span>
+                    <span className="inv-dp-ic"><BoltIcon size={16} /></span>
                     <div>
                         <div className="inv-dp-val">{deckPower}</div>
                         <div className="inv-dp-lbl">Сила колоды · {selected.size}/5</div>
@@ -607,7 +608,7 @@ export default function Inventory({ token, onDeckReady }) {
                             border: "1px solid rgba(120,200,255,0.3)",
                             background: "rgba(120,200,255,0.1)", color: "#78c8ff",
                             cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1,
-                        }}>🔄 Обновить</button>
+                        }}>Обновить</button>
                     </div>
                     {source && (
                         <div className="inv-info-value" style={{
@@ -650,7 +651,7 @@ export default function Inventory({ token, onDeckReady }) {
                             marginTop: 16, padding: "10px 20px", fontSize: 14,
                             borderRadius: 10, border: "1px solid rgba(120,200,255,0.4)",
                             background: "rgba(120,200,255,0.15)", color: "#78c8ff", cursor: "pointer",
-                        }}>🔄 Обновить</button>
+                        }}>Обновить</button>
                     )}
                 </div>
             )}

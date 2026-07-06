@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../../api";
 import LockEscrowModal from "./LockEscrowModal";
+import { SwordsIcon, PlayPadIcon, LockIcon, CheckIcon, BotIcon } from "../Icons";
 
 function getStoredToken() {
     try {
@@ -278,7 +279,7 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched, resumeM
                 />
 
                 <div className="matchmaking-searching">
-                    <div style={{ fontSize: 48, marginBottom: 16 }}>⚔️</div>
+                    <div style={{ marginBottom: 16 }}><SwordsIcon size={48} /></div>
                     <div className="matchmaking-searching-text" style={{ color: "#4ade80" }}>
                         Opponent Found!
                     </div>
@@ -299,7 +300,7 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched, resumeM
                                 cursor: "pointer",
                             }}
                         >
-                            🔒 Lock NFTs
+                            <LockIcon size={16} /> Lock NFTs
                         </button>
                     )}
                     <button
@@ -330,7 +331,7 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched, resumeM
                 <div className="matchmaking-searching">
                     <div className="matchmaking-spinner" />
                     <div style={{ fontSize: 13, color: "#4ade80", marginBottom: 8 }}>
-                        ✅ Твои NFT залочены!
+                        <span style={{display:"inline-flex",alignItems:"center",gap:6}}><CheckIcon size={16} /> Твои NFT залочены!</span>
                     </div>
                     <div className="matchmaking-searching-text">
                         Ищем соперника...
@@ -354,7 +355,7 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched, resumeM
         return (
             <div className="matchmaking-page">
                 <div className="matchmaking-searching">
-                    <div style={{ fontSize: 48, marginBottom: 16 }}>🎮</div>
+                    <div style={{ marginBottom: 16 }}><PlayPadIcon size={48} /></div>
                     <div className="matchmaking-searching-text" style={{ color: "#4ade80" }}>
                         Both players ready!
                     </div>
@@ -372,21 +373,21 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched, resumeM
             <div className="matchmaking-header">
                 <button className="matchmaking-back-btn" onClick={onBack}>← Back</button>
                 <h2 className="matchmaking-title">
-                    <span className="matchmaking-title-icon">⚔️</span>
+                    <span className="matchmaking-title-icon" style={{display:"inline-flex",verticalAlign:"middle"}}><SwordsIcon size={22} /></span>
                     Choose Mode
                 </h2>
             </div>
 
             <div className="matchmaking-modes">
                 <div className="matchmaking-mode-card ai" onClick={startAI}>
-                    <div className="matchmaking-mode-icon">🤖</div>
+                    <div className="matchmaking-mode-icon"><BotIcon size={34} /></div>
                     <div className="matchmaking-mode-name">vs AI</div>
                     <div className="matchmaking-mode-desc">Play against BunnyBot AI opponent. Perfect for practice!</div>
                     <div className="matchmaking-mode-badge">Available</div>
                 </div>
 
                 <div className={"matchmaking-mode-card pvp" + (!stage2Enabled ? " pvp-no-escrow" : "")} onClick={onPvPClick}>
-                    <div className="matchmaking-mode-icon">⚔️</div>
+                    <div className="matchmaking-mode-icon"><SwordsIcon size={34} /></div>
                     <div className="matchmaking-mode-name">PvP</div>
                     <div className="matchmaking-mode-desc">
                         {stage2Enabled
@@ -394,7 +395,7 @@ export default function Matchmaking({ me, playerDeck, onBack, onMatched, resumeM
                             : "Battle real players! (Beta — no NFT stakes)"}
                     </div>
                     <div className="matchmaking-mode-badge">
-                        {stage2Enabled ? "🔒 Live" : "Beta"}
+                        {stage2Enabled ? "Live" : "Beta"}
                     </div>
                 </div>
             </div>

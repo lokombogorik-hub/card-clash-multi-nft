@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from "react";
+import { LockIcon, CheckIcon, XIcon } from "../Icons";
 import { apiFetch } from "../../api.js";
 import { useWalletConnect } from "../../context/WalletConnectContext";
 import { nearNftTokensForOwner, invalidateOwnerCache } from "../../libs/nearNft.js";
@@ -381,11 +382,11 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                 userMessage.toLowerCase().includes("cancelled") ||
                 userMessage.toLowerCase().includes("canceled")
             ) {
-                userMessage = "❌ Transaction rejected in wallet. Please try again.";
+                userMessage = "Transaction rejected in wallet. Please try again.";
             } else if (userMessage.indexOf("TX_TIMEOUT") === 0) {
-                userMessage = "⏱ Wallet did not respond. If you signed in wallet app — tap Try Again to check status.";
+                userMessage = "Wallet did not respond. If you signed in wallet app — tap Try Again to check status.";
             } else if (userMessage.includes("Кошелёк не определён") || userMessage.includes("Cannot get wallet")) {
-                userMessage = "🔌 Wallet disconnected. Please reload the page and reconnect.";
+                userMessage = "Wallet disconnected. Please reload the page and reconnect.";
             }
 
             setError(userMessage);
@@ -429,7 +430,7 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                 onClick={function (e) { e.stopPropagation(); }}
             >
                 <h3 style={{ margin: "0 0 16px", fontSize: 24, fontWeight: 900, color: "#fff" }}>
-                    🔒 Lock NFTs
+                    <LockIcon size={20} /> Lock NFTs
                 </h3>
 
                 {status === "idle" && (
@@ -505,14 +506,14 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                                 pointerEvents: (status === "loading" || status === "success") ? "none" : "auto",
                             }}
                         >
-                            🔒 Lock & Battle!
+                            <LockIcon size={17} /> Lock & Battle!
                         </button>
                     </>
                 )}
 
                 {status === "loading" && (
                     <div style={{ padding: 30, color: "#fff" }}>
-                        <div style={{ fontSize: 40, marginBottom: 16 }}>⏳</div>
+                        <div style={{ fontSize: 40, marginBottom: 16 }}>…</div>
                         <div style={{ fontSize: 16, marginBottom: 10, fontWeight: 600 }}>{statusText}</div>
                         <div style={{
                             fontSize: 12, opacity: 0.6,
@@ -538,7 +539,7 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
 
                 {status === "success" && (
                     <div style={{ padding: 30, color: "#4ade80" }}>
-                        <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
+                        <div style={{ marginBottom: 16 }}><CheckIcon size={44} /></div>
                         <div style={{ fontSize: 18, fontWeight: 700 }}>NFTs Locked!</div>
                         <div style={{ fontSize: 13, opacity: 0.8, marginTop: 8 }}>
                             Waiting for opponent...
@@ -562,7 +563,7 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                 </div>
                 {status === "error" && (
                     <div style={{ padding: 24 }}>
-                        <div style={{ fontSize: 40, marginBottom: 16 }}>❌</div>
+                        <div style={{ marginBottom: 16 }}><XIcon size={40} /></div>
                         <div style={{
                             color: "#ff6b6b", marginBottom: 24,
                             wordBreak: "break-word", fontSize: 13,

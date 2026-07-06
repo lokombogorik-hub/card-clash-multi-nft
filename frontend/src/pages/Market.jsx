@@ -730,7 +730,7 @@ export default function Market() {
             </div>
 
             <div className="market-footer">
-                <div className="market-footer-icon"><GemIcon size={20} /></div>
+                <div className="market-footer-icon"><GemIcon size={34} glow={6} /></div>
                 <div className="market-footer-text">
                     Карты появятся в Инвентаре после покупки
                 </div>

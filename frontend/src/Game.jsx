@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CaseIcon } from "./components/Icons";
 import confetti from "canvas-confetti";
 import { apiFetch } from "./api.js";
 import { useWalletConnect } from "./context/WalletConnectContext";
@@ -1161,8 +1162,8 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                 )}
 
                 {deckOk && (<>
-                    <div className="hud-corner hud-score red hud-near-left">🟥 {boardScore.red}</div>
-                    <div className="hud-corner hud-score blue hud-near-right">{boardScore.blue} 🟦</div>
+                    <div className="hud-corner hud-score red hud-near-left">{boardScore.red}</div>
+                    <div className="hud-corner hud-score blue hud-near-right">{boardScore.blue}</div>
 
                     <PlayerBadge side="enemy" name={isPvP ? "Opponent" : "BunnyBot"} avatarUrl="/ui/avatar-enemy.png?v=1" active={turn === "enemy"} />
                     <PlayerBadge side="player" name={myName} avatarUrl={myAvatar} active={turn === "player"} />
@@ -1260,8 +1261,8 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                             <div className="game-over-box" style={{ minWidth: 340, maxWidth: 420 }}>
                                 <h2 style={{ marginBottom: 12, fontSize: 22 }}>
                                     {matchOver
-                                        ? (isPvP ? roundWinner : matchWinner) === "player" ? "🎉 Победа!" : "😔 Поражение"
-                                        : roundWinner === "player" ? "🏆 Раунд выигран!" : "💀 Раунд проигран"
+                                        ? (isPvP ? roundWinner : matchWinner) === "player" ? "Победа!" : "Поражение"
+                                        : roundWinner === "player" ? "Раунд выигран!" : "Раунд проигран"
                                     }
                                 </h2>
 
@@ -1274,7 +1275,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                 {matchOver && (isPvP ? roundWinner : matchWinner) === "player" && (
                                     claimRevealed ? (
                                         <div className="reward-wrap">
-                                            <div className="reward-win-title">🎉 Карта твоя!</div>
+                                            <div className="reward-win-title">Карта твоя!</div>
                                             <div className="reward-stage">
                                                 <div className="reward-card">
                                                     <img
@@ -1287,19 +1288,19 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                                 </div>
                                             </div>
                                             <div className="reward-status">
-                                                {claimBusy && !claimDone ? "⏳ Получаем NFT в инвентарь..." : claimDone ? "✅ NFT в твоём инвентаре" : ""}
+                                                {claimBusy && !claimDone ? "Получаем NFT в инвентарь…" : claimDone ? "NFT в твоём инвентаре" : ""}
                                             </div>
                                             {claimError && (
-                                                <div style={{ fontSize: 12, color: "#ff6b6b", marginBottom: 10, padding: "8px 12px", background: "rgba(255,100,100,0.15)", borderRadius: 8, wordBreak: "break-word" }}>❌ {claimError}</div>
+                                                <div style={{ fontSize: 12, color: "#ff6b6b", marginBottom: 10, padding: "8px 12px", background: "rgba(255,100,100,0.15)", borderRadius: 8, wordBreak: "break-word" }}>{claimError}</div>
                                             )}
                                             <button className="reward-take-btn" disabled={claimBusy && !claimDone} onClick={onExit}>
-                                                {claimBusy && !claimDone ? "⏳ Перевод..." : "Забрать 🎁"}
+                                                {claimBusy && !claimDone ? "Перевод…" : "Забрать"}
                                             </button>
                                         </div>
                                     ) : (
                                         <>
                                             <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8, color: "#ffd700" }}>
-                                                🎁 Выбери 1 карту противника
+                                                Выбери 1 карту противника
                                             </div>
                                             <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 14 }}>
                                                 Карты скрыты — выбирай наугад!
@@ -1331,10 +1332,10 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                                 disabled={claimPickIndex === null || claimBusy}
                                                 style={{ padding: "12px 28px", fontSize: 15, fontWeight: 900, borderRadius: 14, border: "none", background: claimPickIndex !== null ? "linear-gradient(135deg,#ffd700,#ff8c00)" : "rgba(255,255,255,0.1)", color: claimPickIndex !== null ? "#000" : "#666", cursor: claimPickIndex !== null ? "pointer" : "not-allowed", marginBottom: 12 }}
                                             >
-                                                {claimBusy ? "⏳ Загрузка..." : "🎁 Забрать карту"}
+                                                {claimBusy ? "Загрузка…" : "Забрать карту"}
                                             </button>
                                             {claimError && (
-                                                <div style={{ fontSize: 12, color: "#ff6b6b", marginBottom: 12, padding: "8px 12px", background: "rgba(255,100,100,0.15)", borderRadius: 8, wordBreak: "break-word" }}>❌ {claimError}</div>
+                                                <div style={{ fontSize: 12, color: "#ff6b6b", marginBottom: 12, padding: "8px 12px", background: "rgba(255,100,100,0.15)", borderRadius: 8, wordBreak: "break-word" }}>{claimError}</div>
                                             )}
                                         </>
                                     )
@@ -1474,7 +1475,7 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
                     />
                 ) : (
                     <div className="card-art-img" style={{ background: "linear-gradient(135deg,#1a2a4a,#2a1a4a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32 }}>
-                        🎴
+                        <CaseIcon size={40} />
                     </div>
                 )}
 

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { FireIcon, XIcon } from "../Icons";
 import { useWalletConnect } from "../../context/WalletConnectContext";
 import WalletPicker from "./WalletPicker";
 
@@ -39,7 +40,7 @@ export default function WalletConnector() {
                         padding: "3px 7px", borderRadius: 6,
                         border: "1px solid rgba(255,80,80,0.3)", background: "rgba(255,80,80,0.18)",
                         color: "#ff6b6b", fontSize: 10, cursor: "pointer",
-                    }}>✕</button>
+                    }}><XIcon size={11} /></button>
                 </div>
             </div>
         );
@@ -54,7 +55,7 @@ export default function WalletConnector() {
                 color: "#fff", fontSize: 12, fontWeight: 900, cursor: "pointer",
                 backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
                 boxShadow: "0 0 14px rgba(255,140,0,0.2)",
-            }}>🔥 Connect</button>
+            }}><span style={{display:"inline-flex",alignItems:"center",gap:5}}><FireIcon size={13} /> Connect</span></button>
             <WalletPicker
                 open={pickerOpen}
                 onClose={function () { setPickerOpen(false); }}
