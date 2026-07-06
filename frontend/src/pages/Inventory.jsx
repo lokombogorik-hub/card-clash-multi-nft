@@ -311,7 +311,7 @@ var InventoryCard = memo(function InventoryCard({ nft, isSelected, pickNo, onTog
             </div>
 
             <div className="inv-card-elem-pill">
-                <span className="inv-card-elem-ic"><ElementIcon element={element} size={17} /></span>
+                <span className="inv-card-elem-ic"><ElementIcon element={element} size={15} /></span>
             </div>
 
             <div className="inv-tt-badge">
@@ -594,7 +594,7 @@ export default function Inventory({ token, onDeckReady }) {
                     {Object.keys(deckElems).length === 0
                         ? <span className="inv-dp-hint">Выбери 5 карт для боя</span>
                         : Object.keys(deckElems).map(function (e) {
-                            return <span key={e} className="inv-dp-chip" style={{display:"inline-flex",alignItems:"center",gap:3}}><ElementIcon element={e} size={14} />{deckElems[e] > 1 ? " ×" + deckElems[e] : ""}</span>;
+                            return <span key={e} className="inv-dp-chip" style={{display:"inline-flex",alignItems:"center",gap:3}}><ElementIcon element={e} size={13} />{deckElems[e] > 1 ? " ×" + deckElems[e] : ""}</span>;
                         })}
                 </div>
             </div>

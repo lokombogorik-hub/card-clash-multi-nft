@@ -470,17 +470,20 @@ function AppContent() {
                 // развёрнутом) окне 100vh больше видимого → поле масштабируется
                 // по завышенной высоте и карты обрезаются. Берём настоящую
                 // высоту вьюпорта, тогда карты ужимаются под окно без обрезки.
-                var vh = tg.viewportStableHeight || tg.viewportHeight || 0;
-                var wh = window.innerHeight || 0;
-                // После поворота telegram-высота обновляется с лагом. В ландшафте
-                // (широкое и низкое окно) берём минимально-достоверную высоту,
-                // чтобы поле не считалось по устаревшему портретному значению.
-                var isLandscapeNow = window.innerWidth > window.innerHeight;
-                var use = vh;
-                if (isLandscapeNow && wh > 200) use = Math.min(vh || wh, wh);
-                if (!use && wh > 200) use = wh;
-                if (use && use > 200) {
-                    document.documentElement.style.setProperty("--app-h", Math.round(use) + "px");
+                // Если браузер умеет dvh — высоту отслеживает CSS (--app-h: 100dvh),
+                // и трогать её из JS НЕ надо (иначе px-значение застревает при
+                // повороте). Считаем руками только на старых девайсах без dvh.
+                var supportsDvh = !!(window.CSS && window.CSS.supports && window.CSS.supports("height", "100dvh"));
+                if (!supportsDvh) {
+                    var vh = tg.viewportStableHeight || tg.viewportHeight || 0;
+                    var wh = window.innerHeight || 0;
+                    var isLandscapeNow = window.innerWidth > window.innerHeight;
+                    var use = vh;
+                    if (isLandscapeNow && wh > 200) use = Math.min(vh || wh, wh);
+                    if (!use && wh > 200) use = wh;
+                    if (use && use > 200) {
+                        document.documentElement.style.setProperty("--app-h", Math.round(use) + "px");
+                    }
                 }
             } catch (_) { }
         };

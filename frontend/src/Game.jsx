@@ -1481,7 +1481,7 @@ function Card({ card, onClick, selected, disabled, hidden, cellElement }) {
 
                 {card.element && (
                     <div className="card-elem-pill" title={card.element}>
-                        <span className="card-elem-ic"><ElementIcon element={card.element} size={18} /></span>
+                        <span className="card-elem-ic"><ElementIcon element={card.element} size={15} /></span>
                     </div>
                 )}
 

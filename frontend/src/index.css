@@ -373,6 +373,9 @@ img {
 /* === CSS VARIABLES === */
 :root {
     --app-h: 100vh;
+    /* dvh сам отслеживает видимую высоту (поворот, компактное окно Telegram).
+       Ставится после vh — применится только если браузер поддерживает. */
+    --app-h: 100dvh;
     --safe-t: env(safe-area-inset-top, 0px);
     --safe-b: env(safe-area-inset-bottom, 0px);
     --bottom-stack-h: 160px;
@@ -1139,18 +1142,19 @@ img {
 /* Game card element pill */
 .card-elem-pill {
     position: absolute;
-    top: 0;
-    right: 0;
+    top: 3px;
+    right: 3px;
     z-index: 7;
     display: flex;
     align-items: center;
     justify-content: center;
     width: auto;
     height: auto;
-    padding: 0;
-    border-radius: 0;
-    background: none;
-    border: none;
+    padding: 3px;
+    border-radius: 999px;
+    background: rgba(8, 12, 20, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
     pointer-events: none
 }
 
@@ -1236,18 +1240,19 @@ img {
 /* Inventory card element pill */
 .inv-card-elem-pill {
     position: absolute;
-    top: 0;
-    right: 0;
+    top: 4px;
+    right: 4px;
     z-index: 7;
     display: flex;
     align-items: center;
     justify-content: center;
     width: auto;
     height: auto;
-    padding: 2px;
-    border-radius: 0;
-    background: none;
-    border: none;
+    padding: 3px;
+    border-radius: 999px;
+    background: rgba(8, 12, 20, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
     pointer-events: none;
     overflow: visible
 }
