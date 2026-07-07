@@ -101,10 +101,10 @@ export default function StormBg() {
             // Туман: меньше пятен + градиент считаем ОДИН раз (в центре 0,0),
             // а в кадре просто translate — без createRadialGradient каждый кадр.
             fog.length = 0;
-            const fogCount = Math.min(5, Math.max(3, (w * h) / 220000 | 0));
+            const fogCount = Math.min(8, Math.max(5, (w * h) / 90000 | 0));
             for (let i = 0; i < fogCount; i++) {
-                const fr = rand(170, 340);
-                const fa = rand(0.028, 0.048);
+                const fr = rand(210, 430);
+                const fa = rand(0.034, 0.060);
                 const g = ctx.createRadialGradient(0, 0, 0, 0, 0, fr);
                 g.addColorStop(0, `rgba(85,95,115,${fa})`);
                 g.addColorStop(1, "rgba(85,95,115,0)");

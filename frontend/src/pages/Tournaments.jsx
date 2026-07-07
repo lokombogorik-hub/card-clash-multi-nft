@@ -225,7 +225,7 @@ function TournamentCard({ summary, token, me, amAdmin, onEnterMatch, onChanged, 
     return (
         <div className={"tournament-card-v2" + (open ? " expanded" : "")} style={{ animationDelay: delay + "s" }}
             onClick={function () { setOpen(!open); }}>
-            {bg && <div className="t-card-bg" style={{ backgroundImage: "url(" + bg + ")" }} />}
+            {bg && <img className="t-card-bg" src={bg} alt="" decoding="async" loading="lazy" />}
             {bg && <div className="t-card-bg-overlay" />}
             {!bg && <div className="tournament-card-glow" style={{ background: "linear-gradient(135deg, " + s.grad[0] + "40, " + s.grad[1] + "40)" }} />}
             <div className="t-card-shine" />
@@ -233,7 +233,7 @@ function TournamentCard({ summary, token, me, amAdmin, onEnterMatch, onChanged, 
                 <div className="tournament-avatar-wrap">
                     <div className="tournament-avatar-ring" style={{ background: "linear-gradient(135deg, " + s.grad[0] + ", " + s.grad[1] + ")" }}>
                         <div className="tournament-avatar">
-                            {bg ? <img src={bg} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div className="t-ava-emoji"><TrophyIcon size={26} /></div>}
+                            {bg ? <img src={bg} alt="" decoding="async" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <div className="t-ava-emoji"><TrophyIcon size={26} /></div>}
                         </div>
                     </div>
                     <div className={"tournament-avatar-badge " + s.badge}>{s.label}</div>

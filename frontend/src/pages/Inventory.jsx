@@ -348,6 +348,15 @@ export default function Inventory({ token, onDeckReady }) {
     var [saving, setSaving] = useState(false);
     var [source, setSource] = useState("");
     var [refreshKey, setRefreshKey] = useState(0);
+
+    // При входе в колоду скроллим контейнер в начало — иначе остаётся позиция
+    // прошлого экрана и страница «прыгает» при появлении данных.
+    useEffect(function () {
+        try {
+            var el = document.querySelector(".shell-content");
+            if (el) el.scrollTop = 0;
+        } catch (e) { }
+    }, []);
     var [inspectCard, setInspectCard] = useState(null);
 
     var nftContractId = (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim();
