@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef, memo } from "react";
-import { CaseIcon, BoltIcon, ElementIcon, CardsIcon, NearIcon } from "../components/Icons";
+import { CaseIcon, BoltIcon, ElementIcon, CardsIcon, NearIcon, RefreshIcon } from "../components/Icons";
 import { apiFetch } from "../api";
 import { useWalletConnect } from "../context/WalletConnectContext";
 import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT, proxyImageUrl } from "../libs/nearNft";
@@ -604,11 +604,15 @@ export default function Inventory({ token, onDeckReady }) {
                     <div className="inv-info-label" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span>{accountId.length > 20 ? accountId.slice(0, 10) + "…" + accountId.slice(-6) : accountId}</span>
                         <button onClick={forceRefresh} disabled={loading} style={{
-                            padding: "4px 10px", fontSize: 11, borderRadius: 8,
-                            border: "1px solid rgba(120,200,255,0.3)",
-                            background: "rgba(120,200,255,0.1)", color: "#78c8ff",
-                            cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1,
-                        }}>Обновить</button>
+                            display: "inline-flex", alignItems: "center", gap: 5,
+                            padding: "5px 12px", fontSize: 12, fontWeight: 700, borderRadius: 9,
+                            border: "1px solid rgba(120,200,255,0.35)",
+                            background: "rgba(120,200,255,0.14)", color: "#78c8ff",
+                            cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.55 : 1,
+                        }}>
+                            <span className={loading ? "inv-refresh-spin" : ""} style={{ display: "inline-flex" }}><RefreshIcon size={14} glow={false} /></span>
+                            {loading ? "Обновляю…" : "Обновить"}
+                        </button>
                     </div>
                     {source && (
                         <div className="inv-info-value" style={{
@@ -648,10 +652,11 @@ export default function Inventory({ token, onDeckReady }) {
                     </div>
                     {connected && (
                         <button onClick={forceRefresh} style={{
-                            marginTop: 16, padding: "10px 20px", fontSize: 14,
+                            display: "inline-flex", alignItems: "center", gap: 6,
+                            marginTop: 16, padding: "10px 20px", fontSize: 14, fontWeight: 700,
                             borderRadius: 10, border: "1px solid rgba(120,200,255,0.4)",
                             background: "rgba(120,200,255,0.15)", color: "#78c8ff", cursor: "pointer",
-                        }}>Обновить</button>
+                        }}><RefreshIcon size={16} glow={false} />Обновить</button>
                     )}
                 </div>
             )}

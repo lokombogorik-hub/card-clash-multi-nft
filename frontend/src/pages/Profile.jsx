@@ -34,6 +34,7 @@ function _savePf() { try { localStorage.setItem("cc_pf_cache", JSON.stringify(_p
 var MODE = { tournament: "Турнир", pvp: "PvP", ai: "AI" };
 var RES = { win: "W", loss: "L", draw: "=", cancelled: "×" };
 var RES_TXT = { win: "Победа", loss: "Поражение", draw: "Ничья", cancelled: "Отменён" };
+function matchesWord(n) { var a = n % 10, b = n % 100; if (a === 1 && b !== 11) return "матч"; if (a >= 2 && a <= 4 && (b < 10 || b >= 20)) return "матча"; return "матчей"; }
 
 function MatchRow({ m }) {
     var [open, setOpen] = useState(false);
@@ -70,6 +71,7 @@ export default function Profile({ token, me }) {
     var [loading, setLoading] = useState(_pfCache.profile == null);
     var [avatarOk, setAvatarOk] = useState(true);
     var [coins, setCoins] = useState(_pfCache.coins);
+    var [histOpen, setHistOpen] = useState(false);
 
     useEffect(function () {
         if (!token) { setLoading(false); return; }
@@ -168,9 +170,17 @@ export default function Profile({ token, me }) {
                     ) : matches.length === 0 ? (
                         <div className="pf-empty">Пока нет сыгранных матчей. Сыграй первый бой!</div>
                     ) : (
-                        <div className="pf-matches">
-                            {matches.map(function (m) { return <MatchRow key={m.match_id} m={m} />; })}
-                        </div>
+                        <button className="pf-history-open" onClick={function () { setHistOpen(true); }}>
+                            <span className="pf-ho-ic"><SwordsIcon size={20} /></span>
+                            <span className="pf-ho-txt">
+                                <span className="pf-ho-title">Показать историю</span>
+                                <span className="pf-ho-sub">{matches.length} {matchesWord(matches.length)}</span>
+                            </span>
+                            <span className="pf-ho-dots">
+                                {matches.slice(0, 6).map(function (m, i) { return <i key={i} className={"pf-ho-dot " + m.result} />; })}
+                            </span>
+                            <span className="pf-ho-chev">›</span>
+                        </button>
                     )}
 
                     <div className="pf-sec">Достижения</div>
@@ -194,6 +204,20 @@ export default function Profile({ token, me }) {
                 </>
             ) : (
                 <div className="pf-empty">Не удалось загрузить профиль</div>
+            )}
+
+            {histOpen && (
+                <div className="pf-modal-overlay" onClick={function () { setHistOpen(false); }}>
+                    <div className="pf-modal" onClick={function (e) { e.stopPropagation(); }}>
+                        <div className="pf-modal-head">
+                            <span className="pf-modal-title">История матчей</span>
+                            <button className="pf-modal-close" onClick={function () { setHistOpen(false); }}><XIcon size={18} /></button>
+                        </div>
+                        <div className="pf-modal-body">
+                            {(matches || []).map(function (m) { return <MatchRow key={m.match_id} m={m} />; })}
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

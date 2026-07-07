@@ -1096,10 +1096,10 @@ img {
     position: absolute;
     top: 0;
     left: 0;
-    width: 6px;
-    height: 6px;
+    width: clamp(22px, calc(var(--card-w) * 0.32), 40px);
+    height: clamp(22px, calc(var(--card-w) * 0.32), 40px);
     background: rgba(0, 0, 0, .20);
-    border-radius: 0 0 2px 0;
+    border-radius: 0 0 5px 0;
     border: none;
     z-index: 4;
     pointer-events: none;
@@ -1114,10 +1114,10 @@ img {
 }
 
 .card .tt-num {
-    font-size: 1.5px;
+    font-size: clamp(9.5px, calc(var(--card-w) * 0.135), 15px);
     font-weight: 900;
     color: #fff;
-    text-shadow: 0 0 1px rgba(0, 0, 0, 1);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 1);
     line-height: 1;
     z-index: 5;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif
@@ -1173,11 +1173,6 @@ img {
         width: 32px;
         height: 32px;
         border-radius: 0 0 6px 0
-    }
-
-    .card .tt-num {
-        font-size: 9px;
-        text-shadow: 0 1px 2px rgba(0, 0, 0, 1)
     }
 
     .card-elem-pill {
@@ -4271,4 +4266,77 @@ img {
 
 @keyframes coinToastOut {
     to { opacity: 0; transform: translateY(-10px) scale(0.96); }
+}
+
+/* Вращение иконки обновления в колоде во время загрузки */
+@keyframes inv-refresh-rot { to { transform: rotate(360deg); } }
+.inv-refresh-spin { animation: inv-refresh-rot 0.8s linear infinite; transform-origin: 50% 50%; }
+
+/* ── История матчей: кнопка открытия ── */
+.pf-history-open {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    background: linear-gradient(135deg, rgba(120, 200, 255, 0.10), rgba(168, 85, 247, 0.08));
+    color: #fff;
+    cursor: pointer;
+    transition: transform .12s ease, background .2s ease;
+}
+.pf-history-open:active { transform: scale(0.98); }
+.pf-ho-ic { display: inline-flex; color: #78c8ff; }
+.pf-ho-txt { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; flex: 1; }
+.pf-ho-title { font-size: 14px; font-weight: 700; }
+.pf-ho-sub { font-size: 11px; color: rgba(255, 255, 255, 0.5); }
+.pf-ho-dots { display: flex; gap: 4px; }
+.pf-ho-dot { width: 8px; height: 8px; border-radius: 50%; background: #555; }
+.pf-ho-dot.win { background: #22c55e; }
+.pf-ho-dot.loss { background: #ef4444; }
+.pf-ho-dot.draw { background: #f59e0b; }
+.pf-ho-dot.cancelled { background: #6b7280; }
+.pf-ho-chev { font-size: 22px; color: rgba(255, 255, 255, 0.35); line-height: 1; }
+
+/* ── История матчей: модалка (bottom-sheet) ── */
+.pf-modal-overlay {
+    position: fixed; inset: 0; z-index: 3000;
+    background: rgba(4, 6, 12, 0.72);
+    backdrop-filter: blur(6px);
+    display: flex; align-items: flex-end; justify-content: center;
+    animation: pf-modal-fade .18s ease;
+}
+@keyframes pf-modal-fade { from { opacity: 0; } to { opacity: 1; } }
+.pf-modal {
+    width: 100%; max-width: 480px; max-height: 82vh;
+    background: #0e1420;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 20px 20px 0 0;
+    display: flex; flex-direction: column;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.6);
+    animation: pf-modal-up .24s cubic-bezier(.2, .8, .2, 1);
+}
+@keyframes pf-modal-up { from { transform: translateY(40px); opacity: .4; } to { transform: translateY(0); opacity: 1; } }
+.pf-modal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 18px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    flex: 0 0 auto;
+}
+.pf-modal-title { font-size: 16px; font-weight: 800; color: #fff; }
+.pf-modal-close {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(255, 255, 255, 0.05);
+    color: #fff; cursor: pointer;
+}
+.pf-modal-close:active { transform: scale(0.92); }
+.pf-modal-body {
+    padding: 12px 14px calc(18px + env(safe-area-inset-bottom));
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    display: flex; flex-direction: column; gap: 8px;
+}
+@media (min-width: 768px) {
+    .pf-modal-overlay { align-items: center; }
+    .pf-modal { border-radius: 20px; max-height: 78vh; }
 }

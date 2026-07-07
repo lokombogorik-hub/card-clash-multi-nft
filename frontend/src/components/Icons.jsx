@@ -100,6 +100,15 @@ export function TrophyIcon({ size = 16, glow }) {
     );
 }
 
+export function RefreshIcon({ size = 16, glow }) {
+    return (
+        <svg {...svgProps(size, glow)}>
+            <path d="M20.5 11.5a8 8 0 1 0-1 4.7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" fill="none" />
+            <path d="M20.8 4.7v5h-5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </svg>
+    );
+}
+
 export function XIcon({ size = 16, glow }) {
     return (
         <svg {...svgProps(size, glow)}>
