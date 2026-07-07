@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 
 const rand = (a, b) => a + Math.random() * (b - a);
+const TAU = 6.2831853;
 
 function makeBolt(w, h, isBig) {
     const x0 = rand(w * 0.15, w * 0.85);
@@ -65,11 +66,11 @@ export default function StormBg() {
 
         let w = 0, h = 0;
         let raf = 0;
-        let tick = 0;
 
-        // 20 секунд = 20000ms / (1000/60) ≈ 1200 тиков при 60fps
-        let lastBoltTime = 0;
-        // Интервал молнии: 20 секунд 
+        // Троттлинг до ~30 к/с — фон ambient, 60 не нужно, а нагрузка вдвое меньше.
+        const FRAME_MS = 33;
+        let lastDraw = 0;
+
         const BOLT_INTERVAL_MS = 20000;
         const BOLT_JITTER_MS = 3000;
         let nextBoltIn = 0;
@@ -83,8 +84,11 @@ export default function StormBg() {
         let bandTop = 0;
 
         let startTime = null;
+
         const resize = () => {
-            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            // Фон размытый — рендерим в 1x (не retina). Пикселей в разы меньше,
+            // GPU почти не грузится, на глаз неотличимо.
+            const dpr = 1;
             w = Math.max(1, window.innerWidth);
             h = Math.max(1, window.innerHeight);
 
@@ -94,16 +98,23 @@ export default function StormBg() {
             canvas.style.height = `${h}px`;
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+            // Туман: меньше пятен + градиент считаем ОДИН раз (в центре 0,0),
+            // а в кадре просто translate — без createRadialGradient каждый кадр.
             fog.length = 0;
-            const fogCount = Math.min(10, Math.max(6, (w * h) / 140000 | 0));
+            const fogCount = Math.min(5, Math.max(3, (w * h) / 220000 | 0));
             for (let i = 0; i < fogCount; i++) {
+                const fr = rand(170, 340);
+                const fa = rand(0.028, 0.048);
+                const g = ctx.createRadialGradient(0, 0, 0, 0, 0, fr);
+                g.addColorStop(0, `rgba(85,95,115,${fa})`);
+                g.addColorStop(1, "rgba(85,95,115,0)");
                 fog.push({
                     x: Math.random() * w,
                     y: rand(h * 0.80, h * 1.06),
-                    r: rand(180, 380),
+                    r: fr,
                     vx: rand(-0.09, 0.09),
                     vy: rand(-0.05, 0.05),
-                    a: rand(0.028, 0.050),
+                    grad: g,
                 });
             }
 
@@ -112,7 +123,8 @@ export default function StormBg() {
             bandGrad.addColorStop(0, "rgba(0,0,0,0)");
             bandGrad.addColorStop(1, "rgba(80,90,110,0.10)");
 
-            rainCount = Math.min(220, Math.max(130, (w * h) / 9000 | 0));
+            // Дождь: заметно меньше капель.
+            rainCount = Math.min(110, Math.max(60, (w * h) / 16000 | 0));
             rainX = new Float32Array(rainCount);
             rainY = new Float32Array(rainCount);
             rainV = new Float32Array(rainCount);
@@ -125,7 +137,6 @@ export default function StormBg() {
             }
 
             boltsCount = 0;
-            tick = 0;
 
             ctx.fillStyle = "#000";
             ctx.fillRect(0, 0, w, h);
@@ -193,15 +204,17 @@ export default function StormBg() {
         const hHigh = () => h * 1.12;
 
         const frame = (timestamp) => {
-            // стартовое время
+            raf = requestAnimationFrame(frame);
+
+            // Троттлинг до ~30 к/с.
+            if (timestamp - lastDraw < FRAME_MS) return;
+            lastDraw = timestamp;
+
             if (startTime === null) {
                 startTime = timestamp;
-                // Первая молния через 3-5 сек после старта
                 nextBoltIn = 3000 + Math.random() * 2000;
             }
-
             const elapsed = timestamp - startTime;
-            tick++;
 
             ctx.globalAlpha = 0.30;
             ctx.fillStyle = "#000";
@@ -230,7 +243,7 @@ export default function StormBg() {
             ctx.fillStyle = bandGrad;
             ctx.fillRect(0, bandTop, w, h - bandTop);
 
-            // Туман
+            // Туман — кешированные градиенты + translate (без пересоздания)
             const hL = hLow();
             const hH = hHigh();
             for (let i = 0; i < fog.length; i++) {
@@ -243,29 +256,20 @@ export default function StormBg() {
                 if (f.y < hL) f.y = h * 1.06;
                 else if (f.y > hH) f.y = h * 0.80;
 
-                const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r);
-                g.addColorStop(0, `rgba(85,95,115,${f.a})`);
-                g.addColorStop(1, "rgba(85,95,115,0)");
-                ctx.fillStyle = g;
+                ctx.save();
+                ctx.translate(f.x, f.y);
+                ctx.fillStyle = f.grad;
                 ctx.beginPath();
-                ctx.arc(f.x, f.y, f.r, 0, 6.2831853);
+                ctx.arc(0, 0, f.r, 0, TAU);
                 ctx.fill();
+                ctx.restore();
             }
 
             // Молния — раз в ~20 секунд по реальному времени
             if (!reduceMotion && elapsed >= nextBoltIn) {
-                // Спавним
                 spawn(true);
-
-                // Иногда добавляем маленькую рядом
-                if (Math.random() < 0.4) {
-                    spawn(false);
-                }
-
-                // Следующая через 20 сек ± jitter
+                if (Math.random() < 0.4) spawn(false);
                 nextBoltIn = elapsed + BOLT_INTERVAL_MS + rand(-BOLT_JITTER_MS, BOLT_JITTER_MS);
-
-                console.log(`[STORM] Bolt fired at ${(elapsed / 1000).toFixed(1)}s, next in ${((nextBoltIn - elapsed) / 1000).toFixed(1)}s`);
             }
 
             // Отрисовка молний
@@ -278,8 +282,8 @@ export default function StormBg() {
                 const p = b.life / b.max;
                 const a = (p < 0.18 ? 1 : 1 - (p - 0.18) / 0.82) * 0.95;
 
-                const f = b.flash * (1 - p);
-                if (f > flash) flash = f;
+                const fl = b.flash * (1 - p);
+                if (fl > flash) flash = fl;
 
                 drawBolt(b, a);
 
@@ -294,17 +298,27 @@ export default function StormBg() {
                 ctx.fillStyle = `rgba(220,240,255,${flash * 0.32})`;
                 ctx.fillRect(0, 0, w, h);
             }
+        };
 
-            raf = requestAnimationFrame(frame);
+        // Пауза, когда приложение свёрнуто — не жжём GPU в фоне.
+        const onVis = () => {
+            if (document.hidden) {
+                if (raf) { cancelAnimationFrame(raf); raf = 0; }
+            } else if (!raf) {
+                lastDraw = 0;
+                raf = requestAnimationFrame(frame);
+            }
         };
 
         resize();
         raf = requestAnimationFrame(frame);
         window.addEventListener("resize", resize);
+        document.addEventListener("visibilitychange", onVis);
 
         return () => {
-            cancelAnimationFrame(raf);
+            if (raf) cancelAnimationFrame(raf);
             window.removeEventListener("resize", resize);
+            document.removeEventListener("visibilitychange", onVis);
         };
     }, []);
 
