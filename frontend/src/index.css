@@ -1096,8 +1096,8 @@ img {
     position: absolute;
     top: 0;
     left: 0;
-    width: clamp(22px, calc(var(--card-w) * 0.32), 40px);
-    height: clamp(22px, calc(var(--card-w) * 0.32), 40px);
+    width: clamp(26px, calc(var(--card-w) * 0.40), 46px);
+    height: clamp(26px, calc(var(--card-w) * 0.40), 46px);
     background: rgba(0, 0, 0, .20);
     border-radius: 0 0 5px 0;
     border: none;
@@ -1189,10 +1189,10 @@ img {
     position: absolute;
     top: 0;
     left: 0;
-    width: 26px;
-    height: 26px;
+    width: 32px;
+    height: 32px;
     background: rgba(0, 0, 0, .20);
-    border-radius: 0 0 5px 0;
+    border-radius: 0 0 6px 0;
     border: none;
     z-index: 4;
     pointer-events: none;
@@ -1269,9 +1269,9 @@ img {
 
 @media (min-width:768px) {
     .inv-tt-badge {
-        width: 36px;
-        height: 36px;
-        border-radius: 0 0 6px 0
+        width: 42px;
+        height: 42px;
+        border-radius: 0 0 7px 0
     }
 
     .inv-card-game .inv-tt-num {
@@ -1858,6 +1858,7 @@ img {
     text-align: left;
     outline: none;
     -webkit-tap-highlight-color: transparent;
+    contain: layout paint style;
 
     /* Плавные переходы */
     transition:
@@ -1953,6 +1954,8 @@ img {
     object-fit: cover;
     opacity: 0;
     transition: opacity 0.5s ease;
+    transform: translateZ(0);
+    backface-visibility: hidden;
 }
 
 .inv-card-img.loaded {
@@ -1971,9 +1974,8 @@ img {
 
 /* Element pill  */
 .inv-card-elem-pill {
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(8, 12, 20, 0.72);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(6px);
     transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s;
 }
 
@@ -2928,7 +2930,7 @@ img {
     border-radius: 20px;
     overflow: hidden;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s ease;
     border: 1px solid rgba(255, 255, 255, 0.08);
     animation: cardSlideIn 0.5s ease backwards;
 }
@@ -3657,12 +3659,12 @@ img {
 
 /* блик, бегущий по карточке */
 .t-card-shine {
-    position: absolute; top: 0; left: -70%; width: 55%; height: 100%;
+    position: absolute; top: 0; left: 0; width: 55%; height: 100%;
     background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.10), transparent);
-    transform: skewX(-18deg); animation: tCardShine 5.5s ease-in-out infinite;
-    pointer-events: none; z-index: 1;
+    transform: translateX(-170%) skewX(-18deg); animation: tCardShine 5.5s ease-in-out infinite;
+    pointer-events: none; z-index: 1; will-change: transform;
 }
-@keyframes tCardShine { 0%, 62% { left: -70%; } 100% { left: 175%; } }
+@keyframes tCardShine { 0%, 62% { transform: translateX(-170%) skewX(-18deg); } 100% { transform: translateX(320%) skewX(-18deg); } }
 
 /* аватар-кубок по центру кольца */
 .t-ava-emoji { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; font-size: 30px; }
@@ -3699,7 +3701,7 @@ img {
 .t-act-done { opacity: 0.7; cursor: default !important; }
 
 /* фон-картинка карточки турнира */
-.t-card-bg { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: 0.5; z-index: 0; }
+.t-card-bg { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: 0.5; z-index: 0; transform: translateZ(0); will-change: transform; }
 .t-card-bg-overlay { position: absolute; inset: 0; z-index: 0;
     background: linear-gradient(180deg, rgba(12,14,24,0.45) 0%, rgba(12,14,24,0.82) 70%, rgba(12,14,24,0.94) 100%); }
 .tournament-card-v2 .tournament-card-main, .tournament-card-v2 .tournament-expanded { position: relative; z-index: 1; }

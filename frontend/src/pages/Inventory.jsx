@@ -311,7 +311,7 @@ var InventoryCard = memo(function InventoryCard({ nft, isSelected, pickNo, onTog
             </div>
 
             <div className="inv-card-elem-pill">
-                <span className="inv-card-elem-ic"><ElementIcon element={element} size={15} /></span>
+                <span className="inv-card-elem-ic"><ElementIcon element={element} size={15} glow={false} /></span>
             </div>
 
             <div className="inv-tt-badge">
