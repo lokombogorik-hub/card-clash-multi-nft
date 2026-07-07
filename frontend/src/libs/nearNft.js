@@ -175,15 +175,33 @@ function _fileNameFromUrl(url) {
     return m ? m[1] : null;
 }
 
+// Встроенная оптимизированная коллекция: frontend/public/cards/collection/{N}.webp
+// (те же арты, что в NFT, только лёгкие). Номер N берём прямо из ссылки на media
+// токена (она вида .../{N}.png) — не зависим от битого IPFS/CID и от смещения id.
+var LOCAL_COLLECTION = "/cards/collection";
+var LOCAL_MAX = 2129;
+function _numFromAnyUrl(url) {
+    var s = String(url || "");
+    try { if (s.indexOf("url=") >= 0) s = decodeURIComponent(s.split("url=").pop() || s); } catch (e) {}
+    var m = s.match(/\/(\d+)\.(png|jpe?g|webp|gif)(?:[?#].*)?$/i);
+    return m ? parseInt(m[1], 10) : null;
+}
+
 export function proxyImageUrl(url) {
     if (!url) return "";
+    // 1) Встроенная лёгкая коллекция по номеру — самый надёжный путь (без сети/IPFS).
+    //    Если задан внешний CDN (VITE_IMAGE_BASE) — им не пользуемся, отдаём приоритет CDN ниже.
+    if (!IMAGE_BASE) {
+        var n = _numFromAnyUrl(url);
+        if (n && n >= 1 && n <= LOCAL_MAX) return LOCAL_COLLECTION + "/" + n + ".webp";
+    }
     if (url.indexOf("wsrv.nl") >= 0 || url.indexOf("/api/proxy/image") >= 0) return url;
-    // 1) Свой CDN по имени файла — самый надёжный путь (без IPFS).
+    // 2) Внешний CDN по имени файла (если настроен).
     if (IMAGE_BASE) {
         var fn = _fileNameFromUrl(url);
         if (fn) return IMAGE_BASE + "/" + fn;
     }
-    // 2) Иначе — через наш бэкенд-прокси (перебор IPFS-шлюзов + кэш).
+    // 3) Иначе — через наш бэкенд-прокси (перебор IPFS-шлюзов + кэш).
     if (!API_BASE) return url;
     if (!/^https?:\/\//.test(url) && url.indexOf("ipfs://") !== 0) return url;
     return API_BASE + "/api/proxy/image?url=" + encodeURIComponent(url);

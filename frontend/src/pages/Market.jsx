@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
 import { CoinIcon, BoltIcon, CheckIcon, GemIcon, CaseIcon, XIcon, NearIcon } from "../components/Icons";
+import { proxyImageUrl } from "../libs/nearNft";
 
 var _mktCache = { coins: 0, boostUntil: null, catalog: null };
 try { var _cc = parseInt(localStorage.getItem("cc_coins") || "0", 10); if (!isNaN(_cc)) _mktCache.coins = _cc; } catch (e) { }
@@ -98,11 +99,11 @@ async function loadTokenMetadata(tokenId) {
 
 function CardImage({ imageUrl, name }) {
     var [currentGateway, setCurrentGateway] = useState(0);
-    var [src, setSrc] = useState(imageUrl);
+    var [src, setSrc] = useState(proxyImageUrl(imageUrl));
     var [failed, setFailed] = useState(false);
 
     useEffect(function () {
-        setSrc(imageUrl);
+        setSrc(proxyImageUrl(imageUrl));
         setCurrentGateway(0);
         setFailed(false);
     }, [imageUrl]);

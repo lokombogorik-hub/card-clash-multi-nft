@@ -1299,7 +1299,7 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                                             <div className="reward-stage">
                                                 <div className="reward-card">
                                                     <img
-                                                        src={(claimedCard?.image || claimedCard?.imageUrl || (claimCards[claimPickIndex] || {}).image || (claimCards[claimPickIndex] || {}).imageUrl) || "/cards/card.jpg"}
+                                                        src={proxyImageUrl(claimedCard?.image || claimedCard?.imageUrl || (claimCards[claimPickIndex] || {}).image || (claimCards[claimPickIndex] || {}).imageUrl || "") || "/cards/card.jpg"}
                                                         alt=""
                                                         onError={e => { e.currentTarget.src = "/cards/card.jpg"; }}
                                                     />

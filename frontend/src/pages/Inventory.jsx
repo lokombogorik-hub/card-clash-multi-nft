@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, useCallback, useRef, memo } from "react";
 import { CaseIcon, BoltIcon, ElementIcon, CardsIcon, NearIcon } from "../components/Icons";
 import { apiFetch } from "../api";
 import { useWalletConnect } from "../context/WalletConnectContext";
-import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT } from "../libs/nearNft";
+import { nearNftTokensForOwner, isIpfsUrl, ipfsGatewayUrl, GATEWAY_COUNT, proxyImageUrl } from "../libs/nearNft";
 import nftRanks from '../data/nft-ranks.json';
 
 (function migrateRarity() {
@@ -209,7 +209,7 @@ var imageCache = new Map();
 var NftImage = memo(function NftImage({ src, originalSrc, alt, cacheKey }) {
     var cached = imageCache.get(cacheKey);
     var [loaded, setLoaded] = useState(cached ? true : false);
-    var [imgSrc, setImgSrc] = useState(cached ? cached.finalSrc : (src || ""));
+    var [imgSrc, setImgSrc] = useState(cached ? cached.finalSrc : (proxyImageUrl(src || "") || src || ""));
     var [failed, setFailed] = useState(false);
     var attemptRef = useRef(0);
 
