@@ -1406,10 +1406,9 @@ img {
     margin: 0 auto;
     margin-bottom: 2px;
     /* отступ от плашки турниров */
-    background: rgba(0, 0, 0, 0.55);
+    background: rgba(8, 12, 20, 0.92);
     border-radius: 14px;
     padding: 10px;
-    backdrop-filter: blur(10px);
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -1455,6 +1454,8 @@ img {
     flex-direction: column;
     gap: 5px;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    transform: translateZ(0);
     padding-right: 3px;
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, .2) transparent
@@ -2312,7 +2313,6 @@ img {
     max-width: min(1200px, 96vw);
     margin: 0 auto;
     overflow-x: hidden;
-    overflow-y: auto
 }
 
 .market-header {
@@ -3680,8 +3680,8 @@ img {
 /* живой пульс на бейдже регистрации/идёт */
 .tournament-avatar-badge.reg, .tournament-avatar-badge.run { animation: tBadgePulse 1.8s ease-in-out infinite; }
 @keyframes tBadgePulse {
-    0%, 100% { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); }
-    50% { box-shadow: 0 2px 16px rgba(255, 215, 0, 0.55); }
+    0%, 100% { opacity: 0.85; }
+    50% { opacity: 1; }
 }
 
 /* призовые места «подъезжают» при раскрытии */
@@ -4369,6 +4369,13 @@ img {
    чтобы текст/цифры не перерисовывались при прокрутке (как у карт). */
 .pf-hero, .pf-tile, .pf-match, .pf-ach-item, .pf-invite, .pf-history-open,
 .tournament-card-v2, .t-card {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+}
+
+
+/* Плавный скролл в маркете/турнирах/лидерборде — тяжёлые контейнеры на GPU-слой. */
+.t-hero, .market-case-card, .market-header, .leaderboard-item {
     transform: translateZ(0);
     backface-visibility: hidden;
 }
