@@ -69,3 +69,14 @@ def extract_user(init_data: str) -> Dict[str, Any]:
         pass
 
     return {}
+
+
+def extract_start_param(init_data: str) -> str:
+    """start_param приходит внутри подписанного initData (Telegram проверяет hash),
+    поэтому источнику можно доверять. Пусто, если приложение открыто не по ссылке."""
+    try:
+        data = _parse_init_data(init_data)
+        return data.get("start_param", "") or ""
+    except Exception:
+        return ""
+

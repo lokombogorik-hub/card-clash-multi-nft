@@ -14,7 +14,7 @@ WIN_REWARD = 2
 WIN_DAILY_CAP = 20
 CASE_OPEN_REWARD = 5
 TOURNAMENT_WIN_REWARD = 200
-FRIEND_REWARD = 50
+FRIEND_REWARD = 20  # рефереру за друга, сыгравшего первый матч
 BOOST_PRICE_NEAR = 1.0
 BOOST_HOURS = 24
 
@@ -89,6 +89,34 @@ async def add_coins(user_id, amount, capped=False, notify_reason=None):
     return awarded
 
 
+async def reward_referrer_if_needed(user_id):
+    """Вызывается, когда приглашённый игрок сыграл матч. Один раз за игрока
+    начисляем рефереру FRIEND_REWARD. Помечаем ref_reward_done СРАЗУ (до
+    начисления), чтобы параллельные вызовы не задвоили награду."""
+    if not user_id:
+        return
+    ref_id = None
+    try:
+        async for session in get_session():
+            u = await session.get(User, int(user_id))
+            if not u or not u.referred_by or (u.ref_reward_done or 0) != 0:
+                return
+            ref_id = int(u.referred_by)
+            u.ref_reward_done = 1
+            await session.commit()
+            break
+    except Exception as e:
+        print(f"[ref] mark error: {e}")
+        return
+    if not ref_id or ref_id == int(user_id):
+        return
+    try:
+        awarded = await add_coins(ref_id, FRIEND_REWARD, notify_reason="friend")
+        print(f"[ref] user {user_id} сыграл матч -> рефереру {ref_id} +{awarded}")
+    except Exception as e:
+        print(f"[ref] add error: {e}")
+
+
 async def spend_coins(user_id, amount) -> bool:
     if amount <= 0:
         return True
@@ -126,6 +154,42 @@ async def my_coins(authorization: str = Header(None)):
         "boost_active": boost_active(u) if u else False,
         "boost_until": (u.boost_until.isoformat() + "Z") if (u and u.boost_until) else None,
         "notify": notify,
+    }
+
+
+@router.get("/referral")
+async def referral_info(authorization: str = Header(None)):
+    """Ссылка-приглашение игрока и его реф-статистика."""
+    uid = _uid(authorization)
+    if not uid:
+        raise HTTPException(status_code=401, detail="Auth required")
+    invited = 0
+    rewarded = 0
+    try:
+        from sqlalchemy import select, func
+        async for session in get_session():
+            invited = (await session.execute(
+                select(func.count()).select_from(User).where(User.referred_by == int(uid))
+            )).scalar() or 0
+            rewarded = (await session.execute(
+                select(func.count()).select_from(User).where(
+                    User.referred_by == int(uid), User.ref_reward_done == 1)
+            )).scalar() or 0
+            break
+    except Exception as e:
+        print(f"[ref] info error: {e}")
+    from utils.config import settings
+    bot = settings.bot_username
+    code = f"ref_{uid}"
+    link = f"https://t.me/{bot}?startapp={code}" if bot else ""
+    return {
+        "code": code,
+        "link": link,
+        "bot_username": bot,
+        "invited": int(invited),
+        "rewarded": int(rewarded),
+        "earned": int(rewarded) * FRIEND_REWARD,
+        "reward": FRIEND_REWARD,
     }
 
 

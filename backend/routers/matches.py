@@ -1447,6 +1447,15 @@ async def _finalize_match_result(
             # Не удалось начислить — снимаем флаг, чтобы можно было повторить.
             match_data["rating_applied"] = False
 
+        # Реферальная награда: если кто-то из игроков был приглашён и это его
+        # первый сыгранный матч — начисляем рефереру (один раз на игрока).
+        try:
+            from routers.coins import reward_referrer_if_needed
+            await reward_referrer_if_needed(str(winner_id))
+            await reward_referrer_if_needed(str(loser_id))
+        except Exception as _e:
+            print(f"[ref] finalize error: {_e}")
+
     await _save_match(match_data)
     return rating_update
 

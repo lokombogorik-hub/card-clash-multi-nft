@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CoinIcon, SwordsIcon, TrophyIcon, XIcon, GemIcon, BoltIcon, NearIcon } from "../components/Icons";
+import { CoinIcon, SwordsIcon, TrophyIcon, XIcon, GemIcon, BoltIcon, NearIcon, UsersIcon } from "../components/Icons";
 import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
 
@@ -72,6 +72,8 @@ export default function Profile({ token, me }) {
     var [avatarOk, setAvatarOk] = useState(true);
     var [coins, setCoins] = useState(_pfCache.coins);
     var [histOpen, setHistOpen] = useState(false);
+    var [ref, setRef] = useState(null);
+    var [refCopied, setRefCopied] = useState(false);
 
     useEffect(function () {
         if (!token) { setLoading(false); return; }
@@ -86,8 +88,28 @@ export default function Profile({ token, me }) {
         apiFetch("/api/coins/me", { token: token })
             .then(function (d) { if (alive && d) { setCoins(d.balance || 0); _pfCache.coins = d.balance || 0; _savePf(); } })
             .catch(function () { });
+        apiFetch("/api/coins/referral", { token: token })
+            .then(function (d) { if (alive && d) setRef(d); })
+            .catch(function () { });
         return function () { alive = false; };
     }, [token]);
+
+    function inviteFriend() {
+        if (!ref || !ref.link) return;
+        var text = "Играй со мной в Card Clash — забирай NFT-карты и монеты! ⚔️";
+        try {
+            var tg = window.Telegram && window.Telegram.WebApp;
+            if (tg && tg.openTelegramLink) {
+                tg.openTelegramLink("https://t.me/share/url?url=" + encodeURIComponent(ref.link) + "&text=" + encodeURIComponent(text));
+                return;
+            }
+        } catch (e) { }
+        try {
+            navigator.clipboard.writeText(ref.link);
+            setRefCopied(true);
+            setTimeout(function () { setRefCopied(false); }, 1800);
+        } catch (e) { }
+    }
 
     var name = displayName(me);
     var av = avatarUrl(me);
@@ -163,6 +185,21 @@ export default function Profile({ token, me }) {
                             <div className="pf-tile-lbl">Винрейт</div>
                         </div>
                     </div>
+
+                    <div className="pf-sec">Пригласить друга</div>
+                    <button className="pf-invite" onClick={inviteFriend} disabled={!ref || !ref.link}>
+                        <span className="pf-invite-ic"><UsersIcon size={22} /></span>
+                        <span className="pf-invite-txt">
+                            <span className="pf-invite-title">{refCopied ? "Ссылка скопирована!" : "Пригласить друга"}</span>
+                            <span className="pf-invite-sub">+{(ref && ref.reward) || 20} монет за друга, сыгравшего матч</span>
+                        </span>
+                        {ref && (ref.invited > 0 || ref.earned > 0) && (
+                            <span className="pf-invite-stat">
+                                <span className="pf-invite-stat-n">{ref.invited}</span>
+                                <span className="pf-invite-stat-l">друзей</span>
+                            </span>
+                        )}
+                    </button>
 
                     <div className="pf-sec">История матчей</div>
                     {matches === null ? (

@@ -3581,11 +3581,13 @@ img {
 }
 @keyframes tHeroGlow { from { transform: translate(0, 0) scale(1); } to { transform: translate(4%, 3%) scale(1.12); } }
 .t-hero-shine {
-    position: absolute; top: 0; left: -60%; width: 45%; height: 100%;
+    position: absolute; top: 0; left: 0; width: 45%; height: 100%;
+    transform: translateX(-140%); will-change: transform;
     background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.12), transparent);
-    animation: tShine 6s ease-in-out infinite; pointer-events: none;
+    animation: tShineX 6s ease-in-out infinite; pointer-events: none;
 }
 @keyframes tShine { 0%, 55% { left: -60%; } 100% { left: 170%; } }
+@keyframes tShineX { 0%, 55% { transform: translateX(-160%); } 100% { transform: translateX(360%); } }
 .t-hero-content { position: relative; z-index: 1; text-align: center; }
 .t-hero-icon { font-size: 46px; filter: drop-shadow(0 6px 18px rgba(255, 215, 0, 0.5)); animation: tFloat 3.5s ease-in-out infinite; }
 @keyframes tFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
@@ -3772,7 +3774,7 @@ img {
 .profile-rank-progress-fill::after {
     content: ""; position: absolute; inset: 0;
     background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.5), transparent);
-    transform: translateX(-100%); animation: tShine 2.4s ease-in-out infinite;
+    transform: translateX(-100%); animation: tShineX 2.4s ease-in-out infinite;
 }
 
 /* стат-карточки: верхний акцент, ховер, цвет значения по типу */
@@ -3830,8 +3832,9 @@ img {
     background: radial-gradient(circle at 28% 12%, rgba(120, 170, 255, 0.4), transparent 45%),
                 radial-gradient(circle at 82% 96%, rgba(200, 90, 230, 0.32), transparent 42%);
     animation: tHeroGlow 9s ease-in-out infinite alternate; }
-.pf-shine { position: absolute; top: 0; left: -60%; width: 45%; height: 100%; pointer-events: none; z-index: 1;
-    background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.12), transparent); animation: tShine 6s ease-in-out infinite; }
+.pf-shine { position: absolute; top: 0; left: 0; width: 45%; height: 100%; pointer-events: none; z-index: 1;
+    transform: translateX(-140%); will-change: transform;
+    background: linear-gradient(105deg, transparent, rgba(255, 255, 255, 0.12), transparent); animation: tShineX 6s ease-in-out infinite; }
 .pf-hero-in { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; }
 
 /* аватар с кольцом прогресса (conic) */
@@ -3842,7 +3845,7 @@ img {
     display: grid; place-items: center; font-size: 40px; font-weight: 900; color: #fff; border: 3px solid #11162a; }
 .pf-name { font-size: 22px; font-weight: 900; color: #fff; margin: 12px 0 6px; }
 .pf-rankchip { display: inline-flex; align-items: center; gap: 7px; padding: 5px 14px; border-radius: 999px;
-    font-size: 13px; font-weight: 800; border: 1.5px solid; background: rgba(255, 255, 255, 0.06); backdrop-filter: blur(6px); }
+    font-size: 13px; font-weight: 800; border: 1.5px solid; background: rgba(255, 255, 255, 0.10); }
 .pf-id { font-size: 11px; color: rgba(255, 255, 255, 0.45); margin-top: 8px; }
 
 /* рейтинг */
@@ -3854,7 +3857,7 @@ img {
 .pf-prog { margin-top: 14px; }
 .pf-prog-bar { height: 8px; border-radius: 6px; background: rgba(0, 0, 0, 0.35); overflow: hidden; position: relative; }
 .pf-prog-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, #667eea, #b450dc); box-shadow: 0 0 12px rgba(140, 120, 255, 0.6); position: relative; transition: width .6s; }
-.pf-prog-fill::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.5), transparent); transform: translateX(-100%); animation: tShine 2.4s ease-in-out infinite; }
+.pf-prog-fill::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.5), transparent); transform: translateX(-100%); animation: tShineX 2.4s ease-in-out infinite; }
 .pf-prog-txt { font-size: 11px; color: rgba(255, 255, 255, 0.55); margin-top: 6px; text-align: center; }
 
 /* кошелёк */
@@ -4341,4 +4344,31 @@ img {
 @media (min-width: 768px) {
     .pf-modal-overlay { align-items: center; }
     .pf-modal { border-radius: 20px; max-height: 78vh; }
+}
+
+/* ── Пригласить друга ── */
+.pf-invite {
+    width: 100%; display: flex; align-items: center; gap: 12px;
+    padding: 14px 16px; border-radius: 14px;
+    border: 1px solid rgba(34, 197, 94, 0.25);
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.14), rgba(16, 185, 129, 0.07));
+    color: #fff; cursor: pointer; transition: transform .12s ease;
+}
+.pf-invite:disabled { opacity: .5; cursor: default; }
+.pf-invite:active { transform: scale(0.98); }
+.pf-invite-ic { display: inline-flex; color: #34d399; }
+.pf-invite-txt { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; flex: 1; }
+.pf-invite-title { font-size: 14px; font-weight: 700; }
+.pf-invite-sub { font-size: 11px; color: rgba(255, 255, 255, 0.55); }
+.pf-invite-stat { display: flex; flex-direction: column; align-items: center; min-width: 46px; }
+.pf-invite-stat-n { font-size: 18px; font-weight: 800; color: #34d399; line-height: 1; }
+.pf-invite-stat-l { font-size: 10px; color: rgba(255, 255, 255, 0.5); }
+
+
+/* Плавный скролл: карточки профиля и турниров — на отдельном GPU-слое,
+   чтобы текст/цифры не перерисовывались при прокрутке (как у карт). */
+.pf-hero, .pf-tile, .pf-match, .pf-ach-item, .pf-invite, .pf-history-open,
+.tournament-card-v2, .t-card {
+    transform: translateZ(0);
+    backface-visibility: hidden;
 }

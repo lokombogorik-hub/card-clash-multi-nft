@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Body
 from database.session import get_session
 from database.models.user import User
 
-from tg.webapp import verify_init_data, extract_user
+from tg.webapp import verify_init_data, extract_user, extract_start_param
 from utils.security import create_access_token
 from utils.config import settings
 
@@ -29,6 +29,7 @@ async def auth_telegram(payload: dict = Body(...)):
         tg_user = extract_user(init_data)
         if not isinstance(tg_user, dict):
             raise ValueError("extract_user returned non-dict")
+        start_param = extract_start_param(init_data)
     except Exception as e:
         logger.warning("auth_telegram: verify/extract failed: %s", str(e))
         raise HTTPException(status_code=401, detail=f"Invalid Telegram initData: {e}")
@@ -42,6 +43,21 @@ async def auth_telegram(payload: dict = Body(...)):
     last_name = tg_user.get("last_name")
     photo_url = tg_user.get("photo_url")
 
+    def _parse_ref_id(sp, my_id):
+        # start_param вида "ref_12345" или просто "12345"; себя пригласить нельзя
+        if not sp:
+            return None
+        sp = str(sp)
+        if sp.startswith("ref_"):
+            sp = sp[4:]
+        if sp.isdigit():
+            rid = int(sp)
+            if rid != int(my_id):
+                return rid
+        return None
+
+    ref_id = _parse_ref_id(start_param, tg_id)
+
     try:
         async for session in get_session():
             db_user = await session.get(User, int(tg_id))
@@ -52,6 +68,7 @@ async def auth_telegram(payload: dict = Body(...)):
                     first_name=first_name,
                     last_name=last_name,
                     photo_url=photo_url,
+                    referred_by=ref_id,
                 )
                 session.add(db_user)
             else:

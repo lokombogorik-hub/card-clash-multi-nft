@@ -34,5 +34,9 @@ class User(Base):
     coins_today = Column(Integer, default=0, nullable=False, server_default="0")  # сколько накапало за победы сегодня
     boost_until = Column(DateTime, nullable=True)  # до какого времени активен ×2 буст
 
+    # Реферальная система
+    referred_by = Column(BigInteger, nullable=True)  # кто пригласил (tg id), ставится один раз при регистрации
+    ref_reward_done = Column(Integer, default=0, nullable=False, server_default="0")  # награда рефереру начислена (после 1-го матча)
+
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

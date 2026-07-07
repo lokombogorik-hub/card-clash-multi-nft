@@ -16,6 +16,8 @@ async def ensure_users_columns(engine):
         ("coins_day", "VARCHAR(20)", "NULL"),
         ("coins_today", "INTEGER", "0"),
         ("boost_until", "TIMESTAMP", "NULL"),
+        ("referred_by", "BIGINT", "NULL"),
+        ("ref_reward_done", "INTEGER", "0"),
         ("total_matches", "INTEGER", "0"),
         ("wins", "INTEGER", "0"),
         ("losses", "INTEGER", "0"),

@@ -12,6 +12,7 @@ class Settings:
     TELEGRAM_BOT_TOKEN: str = _get("TELEGRAM_BOT_TOKEN")
     BOT_TOKEN: str = _get("BOT_TOKEN")
     TG_INITDATA_MAX_AGE_SEC: int = int(_get("TG_INITDATA_MAX_AGE_SEC", "86400"))  # 24h default
+    TELEGRAM_BOT_USERNAME: str = _get("TELEGRAM_BOT_USERNAME")  # без @, для реф-ссылок
 
     # JWT
     JWT_SECRET: str = _get("JWT_SECRET")
@@ -24,6 +25,10 @@ class Settings:
     @property
     def effective_bot_token(self) -> str:
         return self.TELEGRAM_BOT_TOKEN or self.BOT_TOKEN
+
+    @property
+    def bot_username(self) -> str:
+        return (self.TELEGRAM_BOT_USERNAME or "").lstrip("@").strip()
 
 
 settings = Settings()
