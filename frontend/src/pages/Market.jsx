@@ -288,6 +288,8 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                     var rcGlow = rarityColor + "80";
                     var sparks = [];
                     for (var i = 0; i < sparkN; i++) sparks.push(i);
+                    var isMystery = tier === "mystery";
+                    var qs = isMystery ? [0, 1, 2, 3, 4, 5, 6, 7] : [];
                     return (
                         <div className={"case-reveal tier-" + tier}>
                             <div className="case-reveal-stage">
@@ -300,6 +302,10 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                                     <div className="case-card-rarity" style={{ color: rarityColor }}>✦ {card.rarity} ✦</div>
                                     {sparks.map(function (i) { return <span key={i} className={"case-spark cs" + i} />; })}
                                 </div>
+                                {qs.map(function (i) {
+                                    var ang = (i / 8) * 6.2831853, r = 130;
+                                    return <span key={"q" + i} className="case-q" style={{ "--qx": Math.round(Math.cos(ang) * r) + "px", "--qy": Math.round(Math.sin(ang) * r) + "px", animationDelay: (i * 0.14).toFixed(2) + "s" }}>?</span>;
+                                })}
                             </div>
                             {revealedCards.length > 0 && (
                                 <button className="reward-take-btn" onClick={onClose} style={{ marginTop: 16 }}>Забрать</button>

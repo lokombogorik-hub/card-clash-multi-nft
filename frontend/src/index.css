@@ -4373,24 +4373,17 @@ img {
     backface-visibility: hidden;
 }
 
-/* ═══ Маркет: оформление кейсов по редкости (статично, без анимаций) ═══ */
-.market-case-card { transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease; }
-
-.market-case-card[data-rarity="common"]    { border-color: rgba(148, 158, 173, .40); }
-.market-case-card[data-rarity="rare"]      { border-color: rgba(59, 130, 246, .55);  box-shadow: 0 8px 24px rgba(0, 0, 0, .45), 0 0 22px -12px rgba(59, 130, 246, .9); }
-.market-case-card[data-rarity="epic"]      { border-color: rgba(168, 85, 247, .6);   box-shadow: 0 8px 24px rgba(0, 0, 0, .45), 0 0 24px -12px rgba(168, 85, 247, .9); }
-.market-case-card[data-rarity="legendary"] { border-color: rgba(255, 196, 44, .6);   box-shadow: 0 8px 24px rgba(0, 0, 0, .45), 0 0 26px -12px rgba(255, 196, 44, .95); }
-.market-case-card[data-rarity="mystery"]   { border-color: rgba(150, 120, 255, .6);  box-shadow: 0 8px 24px rgba(0, 0, 0, .45), 0 0 26px -12px rgba(150, 120, 255, .9); }
-
-.market-case-card:hover { transform: translateY(-5px); }
-.market-case-card[data-rarity="rare"]:hover      { box-shadow: 0 14px 30px rgba(0, 0, 0, .5), 0 0 26px -6px rgba(59, 130, 246, .85); }
-.market-case-card[data-rarity="epic"]:hover      { box-shadow: 0 14px 30px rgba(0, 0, 0, .5), 0 0 28px -5px rgba(168, 85, 247, .9); }
-.market-case-card[data-rarity="legendary"]:hover { box-shadow: 0 14px 30px rgba(0, 0, 0, .5), 0 0 30px -4px rgba(255, 196, 44, .95); }
-.market-case-card[data-rarity="mystery"]:hover   { box-shadow: 0 14px 30px rgba(0, 0, 0, .5), 0 0 30px -4px rgba(180, 120, 255, .95); }
-
-/* бейдж редкости — чистая заливка */
-.market-case-rarity-badge[data-rarity="common"]    { background: #5b626e; border-color: rgba(200, 205, 215, .4); }
-.market-case-rarity-badge[data-rarity="rare"]      { background: #2563eb; border-color: rgba(140, 190, 255, .5); }
-.market-case-rarity-badge[data-rarity="epic"]      { background: #7c3aed; border-color: rgba(200, 150, 255, .5); }
-.market-case-rarity-badge[data-rarity="legendary"] { background: #ff9500; border-color: rgba(255, 225, 120, .7); color: #2a1c00; }
-.market-case-rarity-badge[data-rarity="mystery"]   { background: linear-gradient(135deg, #4aa8ff, #b06bff); border-color: rgba(255, 255, 255, .5); font-size: 14px; }
+/* Random Case — вопросики, разлетающиеся вокруг карты при раскрытии (только в модалке) */
+.case-q {
+    position: absolute; top: 50%; left: 50%; z-index: 4; pointer-events: none;
+    font-size: 24px; font-weight: 900; color: #c6a3ff;
+    text-shadow: 0 0 10px rgba(150, 110, 255, .85);
+    transform: translate(-50%, -50%);
+    animation: caseQfloat 2.4s ease-in-out infinite;
+}
+@keyframes caseQfloat {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(.4); }
+    30%  { opacity: 1; }
+    100% { opacity: 0; transform: translate(calc(-50% + var(--qx)), calc(-50% + var(--qy))) scale(1.15); }
+}
+.tier-mystery .case-reveal-card { animation: caseFlip 0.82s cubic-bezier(0.2, 0.9, 0.3, 1.38) both, caseGlow 1.9s ease-in-out infinite 0.82s; }
