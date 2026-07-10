@@ -8,14 +8,15 @@ var _mktCache = { coins: 0, boostUntil: null, catalog: null };
 try { var _cc = parseInt(localStorage.getItem("cc_coins") || "0", 10); if (!isNaN(_cc)) _mktCache.coins = _cc; } catch (e) { }
 
 var CASES = [
-    { id: "starter", name: "Starter Case", price: 0.01, coin_price: 20, displayPrice: "1 Card", image: "/ui/case-starter.png", video: "/ui/case-starter.mp4", rarity: "common", description: "1 random card", type: "single" },
-    { id: "premium", name: "Premium Case", price: 0.01, coin_price: 60, displayPrice: "1 Card", image: "/ui/case-premium.png", video: "/ui/case-premium.mp4", rarity: "rare", description: "1 rare card", type: "single" },
-    { id: "legendary", name: "Legendary Case", price: 0.01, coin_price: 120, displayPrice: "1 Epic Card", image: "/ui/case-legendary.png", video: "/ui/case-legendary.mp4", rarity: "epic", description: "1 Epic card guaranteed", type: "single" },
-    { id: "ultimate", name: "Ultimate Case", price: 0.01, coin_price: 240, displayPrice: "1 Legendary", image: "/ui/case-ultimate.png", video: "/ui/case-ultimate.mp4", rarity: "legendary", description: "1 Legendary card guaranteed", type: "single" },
+    { id: "starter", name: "Random Case", price: 2, coin_price: 20, displayPrice: "1 Card", image: "/ui/case-starter.png", video: "/ui/case-starter.mp4", rarity: "mystery", mystery: true, description: "Случайная карта — выпасть может любая редкость", type: "single" },
+    { id: "premium", name: "Premium Case", price: 4, coin_price: 60, displayPrice: "1 Card", image: "/ui/case-premium.png", video: "/ui/case-premium.mp4", rarity: "rare", description: "Редкая карта", type: "single" },
+    { id: "legendary", name: "Legendary Case", price: 7, coin_price: 120, displayPrice: "1 Epic Card", image: "/ui/case-legendary.png", video: "/ui/case-legendary.mp4", rarity: "epic", description: "Эпическая карта гарантирована", type: "single" },
+    { id: "ultimate", name: "Ultimate Case", price: 10, coin_price: 240, displayPrice: "1 Legendary", image: "/ui/case-ultimate.png", video: "/ui/case-ultimate.mp4", rarity: "legendary", description: "Легендарная карта гарантирована", type: "single" },
 ];
 
 var RARITY_COLORS = {
     common: "#6b7280",
+    mystery: "#b06bff",
     rare: "#3b82f6",
     epic: "#a855f7",
     legendary: "#ffd700",
@@ -663,7 +664,7 @@ export default function Market() {
                     var isBuying = buying === c.id;
 
                     return (
-                        <div key={c.id} className="market-case-card" style={{
+                        <div key={c.id} className="market-case-card" data-rarity={c.rarity} style={{
                             opacity: isOutOfStock ? 0.5 : 1,
                             position: "relative",
                         }}>
@@ -724,7 +725,7 @@ export default function Market() {
                                 />
                             </div>
                             <div className="market-case-rarity-badge" data-rarity={c.rarity}>
-                                {c.rarity}
+                                {c.mystery ? "?" : c.rarity}
                             </div>
                             <div className="market-case-name">{c.name}</div>
                             <div className="market-case-desc">{c.description}</div>

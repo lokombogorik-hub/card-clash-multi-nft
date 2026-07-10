@@ -4372,3 +4372,49 @@ img {
     transform: translateZ(0);
     backface-visibility: hidden;
 }
+
+/* ═══ Маркет: премиальное оформление кейсов по редкости ═══ */
+.market-case-card { transition: border-color .3s, transform .3s, box-shadow .3s; }
+
+/* верхняя цветная кромка по редкости */
+.market-case-card::after {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; z-index: 6;
+    pointer-events: none; background: var(--rc, transparent);
+}
+.market-case-card[data-rarity="common"]    { --rc: linear-gradient(90deg, #8b93a0, #6b7280); }
+.market-case-card[data-rarity="rare"]      { --rc: linear-gradient(90deg, #60a5fa, #2563eb); }
+.market-case-card[data-rarity="epic"]      { --rc: linear-gradient(90deg, #c084fc, #7c3aed); }
+.market-case-card[data-rarity="legendary"] { --rc: linear-gradient(90deg, #ffe08a, #ff9500); }
+.market-case-card[data-rarity="mystery"]   { --rc: linear-gradient(90deg, #4aa8ff, #b06bff, #ffd23c); }
+
+/* рамка + свечение по редкости */
+.market-case-card[data-rarity="common"]    { border-color: rgba(150, 160, 175, .45); box-shadow: 0 6px 22px rgba(0, 0, 0, .45); }
+.market-case-card[data-rarity="rare"]      { border-color: rgba(59, 130, 246, .55); box-shadow: 0 6px 22px rgba(0, 0, 0, .45), 0 0 26px -10px rgba(59, 130, 246, .8); }
+.market-case-card[data-rarity="epic"]      { border-color: rgba(168, 85, 247, .6); box-shadow: 0 6px 22px rgba(0, 0, 0, .45), 0 0 28px -9px rgba(168, 85, 247, .85); }
+.market-case-card[data-rarity="legendary"] { border-color: rgba(255, 200, 50, .6); box-shadow: 0 6px 22px rgba(0, 0, 0, .45), 0 0 30px -8px rgba(255, 200, 50, .9); }
+
+.market-case-card[data-rarity="rare"]:hover      { border-color: rgba(90, 170, 255, 1); box-shadow: 0 12px 32px rgba(0, 0, 0, .5), 0 0 30px -3px rgba(59, 130, 246, .9); }
+.market-case-card[data-rarity="epic"]:hover      { border-color: rgba(190, 120, 255, 1); box-shadow: 0 12px 32px rgba(0, 0, 0, .5), 0 0 32px -2px rgba(168, 85, 247, 1); }
+.market-case-card[data-rarity="legendary"]:hover { border-color: rgba(255, 220, 80, 1); box-shadow: 0 12px 34px rgba(0, 0, 0, .5), 0 0 36px -2px rgba(255, 210, 60, 1); }
+
+/* Random case — «загадочный»: переливающееся свечение */
+.market-case-card[data-rarity="mystery"] {
+    border-color: rgba(160, 130, 255, .6);
+    animation: cardFadeIn .7s cubic-bezier(.4, 0, .2, 1) backwards, mkMysteryGlow 3.6s ease-in-out infinite;
+}
+@keyframes mkMysteryGlow {
+    0%, 100% { box-shadow: 0 6px 22px rgba(0, 0, 0, .45), 0 0 26px -10px rgba(120, 180, 255, .8); border-color: rgba(140, 170, 255, .6); }
+    50%      { box-shadow: 0 6px 22px rgba(0, 0, 0, .45), 0 0 34px -4px rgba(200, 120, 255, .95); border-color: rgba(200, 130, 255, .85); }
+}
+
+/* бейджи редкости — залитые градиентом */
+.market-case-rarity-badge[data-rarity="common"]    { background: linear-gradient(135deg, #7a828f, #565d69); border-color: rgba(200, 205, 215, .5); }
+.market-case-rarity-badge[data-rarity="rare"]      { background: linear-gradient(135deg, #3b82f6, #1d4ed8); border-color: rgba(140, 190, 255, .6); }
+.market-case-rarity-badge[data-rarity="epic"]      { background: linear-gradient(135deg, #a855f7, #7c3aed); border-color: rgba(200, 150, 255, .6); }
+.market-case-rarity-badge[data-rarity="legendary"] { background: linear-gradient(135deg, #ffd34d, #ff9500); border-color: rgba(255, 225, 120, .8); color: #3a2600; }
+.market-case-rarity-badge[data-rarity="mystery"] {
+    background: linear-gradient(135deg, #4aa8ff, #b06bff, #ffd23c); background-size: 220% 220%;
+    border-color: rgba(255, 255, 255, .55); color: #fff; font-size: 14px; letter-spacing: 0;
+    animation: mkBadgeShift 3s ease infinite;
+}
+@keyframes mkBadgeShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }

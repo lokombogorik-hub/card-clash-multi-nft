@@ -57,10 +57,10 @@ RARITY_WEIGHTS = {
 }
 
 CASES = {
-    "starter": {"price": 0.01, "coin_price": 20, "card_count": 1, "rarity_mode": "common"},
-    "premium": {"price": 0.01, "coin_price": 60, "card_count": 1, "rarity_mode": "rare"},
-    "legendary": {"price": 0.01, "coin_price": 120, "card_count": 1, "rarity_mode": "epic"},
-    "ultimate": {"price": 0.01, "coin_price": 240, "card_count": 1, "rarity_mode": "legendary"},
+    "starter": {"price": 2, "coin_price": 20, "card_count": 1, "rarity_mode": "common"},
+    "premium": {"price": 4, "coin_price": 60, "card_count": 1, "rarity_mode": "rare"},
+    "legendary": {"price": 7, "coin_price": 120, "card_count": 1, "rarity_mode": "epic"},
+    "ultimate": {"price": 10, "coin_price": 240, "card_count": 1, "rarity_mode": "legendary"},
 }
 
 reserved_tokens: Dict[str, List[dict]] = {}
@@ -402,10 +402,10 @@ async def open_case(
         raise HTTPException(400, "Кейс распродан — NFT закончились")
 
     paid_with_coins = (data.pay_with == "coins")
+    coin_price = int(case.get("coin_price") or 0)
 
     if paid_with_coins:
         # оплата ClashCoin — списываем баланс, блокчейн не трогаем
-        coin_price = int(case.get("coin_price") or 0)
         if coin_price <= 0:
             raise HTTPException(400, "Этот кейс нельзя купить за монеты")
         from routers.coins import spend_coins
@@ -438,6 +438,7 @@ async def open_case(
     card_count = case["card_count"]
     rarity_mode = case["rarity_mode"]
     cards = []
+    pool_ran_dry = False  # гейт прошли по кэшу, а реальный пул оказался пуст
 
     near_account = getattr(user, "near_account_id", None)
     print(f"[CASES] Opening {data.case_id} for user={user_id}, near_account={near_account}")
@@ -467,6 +468,9 @@ async def open_case(
                 from_pool = True
                 print(f"[CASES] Selected token {token_id} from pool")
 
+        if is_configured() and pool_key and not token_id:
+            pool_ran_dry = True
+
         if not token_id:
             token_id = generate_mock_token_id(rarity)
             from_pool = False
@@ -486,6 +490,19 @@ async def open_case(
             "title": title,
             "name": title,
         })
+
+    # Гонка на последней карте: гейт «распродан» читает кэш (30с), а пул мог
+    # опустеть за это окно. Тогда НЕ выдаём mock за деньги: монеты возвращаем и
+    # просим повторить. NEAR тут не приходит — кнопка оплаты блокируется при 0.
+    if pool_ran_dry:
+        from routers.coins import add_coins
+        if paid_with_coins and coin_price > 0:
+            try:
+                await add_coins(str(user.id), coin_price)
+                print(f"[CASES] pool ran dry — refunded {coin_price} coins to {user.id}")
+            except Exception as e:
+                print(f"[CASES] refund error: {e}")
+        raise HTTPException(409, "Кейс разобрали в этот момент — средства возвращены, попробуй ещё раз")
 
     # При оплате монетами tx_hash отсутствует — иначе data.tx_hash[:8] падал
     # с TypeError уже ПОСЛЕ списания монет (монеты списаны, карты нет).
