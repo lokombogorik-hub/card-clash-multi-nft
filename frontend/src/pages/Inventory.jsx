@@ -427,6 +427,17 @@ export default function Inventory({ token, onDeckReady }) {
         setRefreshKey(function (k) { return k + 1; });
     }, []);
 
+    // Карта после победы/кейса доезжает в блокчейн через пару секунд (перевод в
+    // фоне). Один раз через ~4с тихо перечитываем, чтобы она появилась сама.
+    useEffect(function () {
+        if (!connected || !accountId) return;
+        var t = setTimeout(function () {
+            invalidateNftCache();
+            setRefreshKey(function (k) { return k + 1; });
+        }, 4000);
+        return function () { clearTimeout(t); };
+    }, [connected, accountId]);
+
     useEffect(function () {
         if (!token) return;
 
@@ -476,11 +487,15 @@ export default function Inventory({ token, onDeckReady }) {
                             }
                         });
 
-                        if (loadedCount > 0 && alive) {
+                        if (alive) {
                             var quickItems = buildItems(tokens, attributesMap, nftContractId);
                             setNfts(quickItems);
                             setLoading(false);
-                            setSource(tokens.length + " NFTs (загрузка атрибутов…)");
+                            setSource(tokens.length + " NFTs");
+                            nftCache.accountId = accountId;
+                            nftCache.items = quickItems;
+                            nftCache.timestamp = Date.now();
+                            try { localStorage.setItem("cc_nft_cache", JSON.stringify({ accountId: accountId, timestamp: nftCache.timestamp, items: quickItems })); } catch (e) { }
                         }
 
                         var missing = tokens.filter(function (t) { return !attributesMap[t.token_id]; });
@@ -492,7 +507,7 @@ export default function Inventory({ token, onDeckReady }) {
                                         var nftNumber = parseInt(tid, 10) + 1;
                                         var url = IPFS_GATEWAY + "/" + nftNumber + ".json";
                                         var controller = new AbortController();
-                                        var timeoutId = setTimeout(function () { controller.abort(); }, 8000);
+                                        var timeoutId = setTimeout(function () { controller.abort(); }, 2500);
                                         var resp = await fetch(url, { signal: controller.signal });
                                         clearTimeout(timeoutId);
                                         if (resp.ok) {
