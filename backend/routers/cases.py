@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from database.session import get_db
 from api.users import get_current_user
@@ -385,9 +385,34 @@ async def check_balances():
     return balances
 
 
+async def _bg_transfer_and_release(cards, near_account, reservation_id):
+    """Перевод NFT из пула игроку — в фоне (после ответа). Резервация держит
+    токен; при сбое остаётся зарезервирован и добивается через /claim."""
+    try:
+        for card in cards:
+            if card.get("from_pool"):
+                rarity = card.get("rarity")
+                result = await transfer_nft(
+                    from_wallet=card["pool_wallet"],
+                    to_wallet=near_account,
+                    token_id=card["token_id"],
+                    private_key=POOL_KEYS.get(rarity, ""),
+                )
+                card["transferred"] = result.get("success", False)
+                print(f"[CASES] bg transfer {card['token_id']}: {result}")
+        pool_cards = [c for c in cards if c.get("from_pool")]
+        all_ok = all(c.get("transferred", False) for c in pool_cards) if pool_cards else True
+        if all_ok:
+            reserved_tokens.pop(reservation_id, None)
+            print(f"[CASES] reservation {reservation_id} released after bg transfer")
+    except Exception as e:
+        print(f"[CASES] bg transfer error: {e}")
+
+
 @router.post("/open")
 async def open_case(
         data: OpenCaseRequest,
+        background: BackgroundTasks,
         user: User = Depends(get_current_user),
         session: AsyncSession = Depends(get_db),
 ):
@@ -516,30 +541,14 @@ async def open_case(
         global _pool_inventory_cache_time
         _pool_inventory_cache_time = 0
 
-    transfers = []
+    # Перевод NFT — в ФОНЕ: ответ и раскрытие отдаём сразу, NFT долетает через
+    # пару секунд. Резервация держит токен, /claim добьёт при сбое.
+    transfers = None
+    if near_account and is_configured() and any(c.get("from_pool") for c in cards):
+        background.add_task(_bg_transfer_and_release, list(cards), near_account, reservation_id)
+        print(f"[CASES] transfer scheduled in background for {reservation_id}")
 
-    if near_account and is_configured():
-        for card in cards:
-            if card["from_pool"]:
-                rarity = card["rarity"]
-                result = await transfer_nft(
-                    from_wallet=card["pool_wallet"],
-                    to_wallet=near_account,
-                    token_id=card["token_id"],
-                    private_key=POOL_KEYS.get(rarity, ""),
-                )
-                transfers.append(result)
-                card["transferred"] = result.get("success", False)
-                print(f"[CASES] Transfer result: {result}")
-
-    pool_cards = [c for c in cards if c.get("from_pool")]
-    all_transferred = all(c.get("transferred", False) for c in pool_cards) if pool_cards else True
-
-    if all_transferred and reservation_id in reserved_tokens:
-        del reserved_tokens[reservation_id]
-        print(f"[CASES] Reservation {reservation_id} cleared after successful transfer")
-
-    print(f"[CASES] Done: {data.case_id} → {[c['token_id'] for c in cards]}")
+    print(f"[CASES] Done (bg transfer): {data.case_id} → {[c['token_id'] for c in cards]}")
 
     # ClashCoin за открытие (только при оплате NEAR, не за монеты — без петли)
     coins_awarded = 0

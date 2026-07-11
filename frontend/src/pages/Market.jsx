@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
 import { CoinIcon, BoltIcon, CheckIcon, GemIcon, CaseIcon, XIcon, NearIcon } from "../components/Icons";
@@ -158,6 +158,7 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
     var [revealedCards, setRevealedCards] = useState([]);
     var [videoError, setVideoError] = useState(false);
     var [resolvedCards, setResolvedCards] = useState(cards);
+    var revealedRef = useRef(false);
 
     // Грузжу метадату 
     useEffect(function () {
@@ -194,6 +195,8 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
     }, [cards]);
 
     var handleReveal = function () {
+        if (revealedRef.current) return;
+        revealedRef.current = true;
         setRevealed(true);
         resolvedCards.forEach(function (card, i) {
             setTimeout(function () {
@@ -202,6 +205,11 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
             }, i * 300);
         });
     };
+
+    useEffect(function () {
+        var t = setTimeout(handleReveal, 1500);
+        return function () { clearTimeout(t); };
+    }, []);
 
     var card = resolvedCards[0];
     var rarityColor = RARITY_COLORS[(card && card.rarity)] || "#6b7280";
