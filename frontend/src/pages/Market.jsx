@@ -23,6 +23,19 @@ var RARITY_COLORS = {
 };
 
 var TREASURY = "retardo-s.near";
+
+// Отмечаем реально полученные карты как «новые» (по token_id) — колода их
+// подсветит и снимет подсветку по первому тапу.
+function markNewCards(cards) {
+    try {
+        var cur = JSON.parse(localStorage.getItem("cc_new_cards") || "[]");
+        (cards || []).forEach(function (c) {
+            var id = c && (c.token_id != null ? c.token_id : c.tokenId);
+            if (id != null) cur.push(String(id));
+        });
+        localStorage.setItem("cc_new_cards", JSON.stringify(Array.from(new Set(cur))));
+    } catch (e) { }
+}
 var IPFS_BASE = "https://bafybeibqzbodfn3xczppxh2k2ek3bgvojhivqy4ntbkprcxesulth3yy5e.ipfs.w3s.link";
 var NFT_CONTRACT_ID = (import.meta.env.VITE_NEAR_NFT_CONTRACT_ID || "").trim();
 
@@ -444,6 +457,7 @@ export default function Market() {
 
             // 4.модалкв
             setBuyingStatus("");
+            markNewCards(cards);
             setOpenModal({ caseItem: c, cards: cards });
 
             if (open.coins_awarded) {
@@ -521,6 +535,7 @@ export default function Market() {
             if (cards.length === 0) throw new Error("Нет карт в ответе");
             setCaseInventory(function (prev) { var u = { ...prev }; if (u[c.id] > 0) u[c.id] = u[c.id] - 1; return u; });
             setBuyingStatus("");
+            markNewCards(cards);
             setOpenModal({ caseItem: c, cards: cards });
             setCoins(function (p) { return Math.max(0, p - cp); });
             window.dispatchEvent(new CustomEvent("clashcoin", { detail: { amount: cp, reason: "spent" } }));

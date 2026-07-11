@@ -769,6 +769,15 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
                     image: res?.claimed_card?.image || realImage,
                     imageUrl: res?.claimed_card?.imageUrl || realImage,
                 });
+
+                try {
+                    const _cid = (res && res.claimed_card && res.claimed_card.token_id != null) ? res.claimed_card.token_id : (pickedCard && pickedCard.token_id);
+                    if (_cid != null) {
+                        const _cur = JSON.parse(localStorage.getItem("cc_new_cards") || "[]");
+                        _cur.push(String(_cid));
+                        localStorage.setItem("cc_new_cards", JSON.stringify(Array.from(new Set(_cur))));
+                    }
+                } catch (e) { }
             } else {
                 const aiCard = enemyDeck[claimPickIndex];
                 setClaimedCard({ ...aiCard, image: aiCard?.imageUrl, imageUrl: aiCard?.imageUrl });

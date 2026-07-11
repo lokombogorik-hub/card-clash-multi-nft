@@ -347,22 +347,23 @@ export default function Inventory({ token, onDeckReady }) {
     var [loading, setLoading] = useState(false);
     var [nfts, setNfts] = useState([]);
     var [selected, setSelected] = useState(function () { return new Set(); });
-    var seenRef = useRef(null);
-    var initedRef = useRef(false);
-    var [seenTick, setSeenTick] = useState(0);
-    if (seenRef.current === null) {
+    // «Новыми» помечаем только реально полученные карты (выигрыш/кейс) — их
+    // token_id кладут Market/Game в cc_new_cards. Возвращённые из эскроу свои
+    // карты сюда не попадают, поэтому не подсвечиваются.
+    var [newTick, setNewTick] = useState(0);
+    var newRef = useRef(null);
+    if (newRef.current === null) {
         try {
-            var _sraw = localStorage.getItem("cc_seen_cards");
-            seenRef.current = _sraw ? new Set(JSON.parse(_sraw)) : new Set();
-            initedRef.current = !!localStorage.getItem("cc_seen_init");
-        } catch (e) { seenRef.current = new Set(); }
+            var _nraw = localStorage.getItem("cc_new_cards");
+            newRef.current = new Set((_nraw ? JSON.parse(_nraw) : []).map(String));
+        } catch (e) { newRef.current = new Set(); }
     }
-    var markSeen = useCallback(function (k) {
-        var seen = seenRef.current || new Set();
-        if (seen.has(k)) return;
-        seen.add(k); seenRef.current = seen;
-        try { localStorage.setItem("cc_seen_cards", JSON.stringify(Array.from(seen))); } catch (e) { }
-        setSeenTick(function (t) { return t + 1; });
+    var clearNew = useCallback(function (tid) {
+        var set = newRef.current || new Set();
+        if (!set.has(tid)) return;
+        set.delete(tid); newRef.current = set;
+        try { localStorage.setItem("cc_new_cards", JSON.stringify(Array.from(set))); } catch (e) { }
+        setNewTick(function (t) { return t + 1; });
     }, []);
     var [error, setError] = useState("");
     var [saving, setSaving] = useState(false);
@@ -562,29 +563,16 @@ export default function Inventory({ token, onDeckReady }) {
         return function () { alive = false; };
     }, [token, accountId, connected, nftContractId, refreshKey]);
 
-    // Первая загрузка колоды: помечаем все текущие карты виденными, чтобы они не
-    // светились как новые. Дальше новыми будут только реально появившиеся.
-    useEffect(function () {
-        if (!nfts || nfts.length === 0 || initedRef.current) return;
-        var all = nfts.map(nftKey);
-        seenRef.current = new Set(all);
-        initedRef.current = true;
-        try {
-            localStorage.setItem("cc_seen_cards", JSON.stringify(all));
-            localStorage.setItem("cc_seen_init", "1");
-        } catch (e) { }
-        setSeenTick(function (t) { return t + 1; });
-    }, [nfts]);
-
     var toggle = useCallback(function (k) {
-        markSeen(k);
+        var _n = nfts.find(function (x) { return nftKey(x) === k; });
+        if (_n) clearNew(String(_n.token_id != null ? _n.token_id : _n.tokenId));
         setSelected(function (prev) {
             var next = new Set(prev);
             if (next.has(k)) { next.delete(k); }
             else { if (next.size >= 5) return prev; next.add(k); }
             return next;
         });
-    }, [markSeen]);
+    }, [clearNew, nfts]);
 
     var saveDeck = useCallback(async function () {
         if (selected.size !== 5 || selectedNfts.length !== 5) return;
@@ -726,8 +714,9 @@ export default function Inventory({ token, onDeckReady }) {
                         var k = nftKey(n);
                         var isSelected = selected.has(k);
                         var pickNo = orderMap.get(k) || 0;
-                        var isNew = initedRef.current && !(seenRef.current && seenRef.current.has(k));
-                        void seenTick;
+                        var _tid = String(n.token_id != null ? n.token_id : n.tokenId);
+                        var isNew = !!(newRef.current && newRef.current.has(_tid));
+                        void newTick;
                         return (
                             <InventoryCard key={k} nft={n} isSelected={isSelected} isNew={isNew} pickNo={pickNo} onToggle={toggle} onInspect={setInspectCard} />
                         );
