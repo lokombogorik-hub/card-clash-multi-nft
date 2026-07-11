@@ -423,7 +423,12 @@ export default function Inventory({ token, onDeckReady }) {
         return function () { document.removeEventListener('visibilitychange', handleVisibilityChange); };
     }, [connected, accountId]);
 
+    var lastRefreshRef = useRef(0);
     var forceRefresh = useCallback(function () {
+        try { window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.HapticFeedback && window.Telegram.WebApp.HapticFeedback.impactOccurred("light"); } catch (e) { }
+        var now = Date.now();
+        if (now - lastRefreshRef.current < 1200) return; // антиспам: не чаще раза в ~1.2с
+        lastRefreshRef.current = now;
         invalidateNftCache();
         setRefreshKey(function (k) { return k + 1; });
     }, []);
@@ -650,12 +655,12 @@ export default function Inventory({ token, onDeckReady }) {
                 <div className="inv-info-box">
                     <div className="inv-info-label" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <span>{accountId.length > 20 ? accountId.slice(0, 10) + "…" + accountId.slice(-6) : accountId}</span>
-                        <button onClick={forceRefresh} disabled={loading} style={{
+                        <button onClick={forceRefresh} style={{
                             display: "inline-flex", alignItems: "center", gap: 5,
                             padding: "5px 12px", fontSize: 12, fontWeight: 700, borderRadius: 9,
                             border: "1px solid rgba(120,200,255,0.35)",
                             background: "rgba(120,200,255,0.14)", color: "#78c8ff",
-                            cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.55 : 1,
+                            cursor: "pointer", opacity: 1,
                         }}>
                             <span className={loading ? "inv-refresh-spin" : ""} style={{ display: "inline-flex" }}><RefreshIcon size={14} glow={false} /></span>
                             {loading ? "Обновляю…" : "Обновить"}
