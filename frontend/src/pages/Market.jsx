@@ -206,11 +206,6 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
         });
     };
 
-    useEffect(function () {
-        var t = setTimeout(handleReveal, 1500);
-        return function () { clearTimeout(t); };
-    }, []);
-
     var card = resolvedCards[0];
     var rarityColor = RARITY_COLORS[(card && card.rarity)] || "#6b7280";
 
