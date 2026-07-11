@@ -246,7 +246,7 @@ var NftImage = memo(function NftImage({ src, originalSrc, alt, cacheKey }) {
     return prev.cacheKey === next.cacheKey;
 });
 
-var InventoryCard = memo(function InventoryCard({ nft, isSelected, pickNo, onToggle, onInspect }) {
+var InventoryCard = memo(function InventoryCard({ nft, isSelected, isNew, pickNo, onToggle, onInspect }) {
     var k = useMemo(function () { return nftKey(nft); }, [nft]);
 
     var stats = useMemo(function () {
@@ -298,7 +298,7 @@ var InventoryCard = memo(function InventoryCard({ nft, isSelected, pickNo, onTog
             onMouseUp={endPress}
             onMouseLeave={endPress}
             onContextMenu={function (e) { e.preventDefault(); }}
-            className={"inv-card-game" + (isSelected ? " is-selected" : "")}
+            className={"inv-card-game" + (isSelected ? " is-selected" : "") + (isNew ? " is-new" : "")}
             style={{ "--rank": rarity.border, "--rankGlow": rarity.glow }}
         >
             <div className="inv-card-art-full">
@@ -326,11 +326,14 @@ var InventoryCard = memo(function InventoryCard({ nft, isSelected, pickNo, onTog
                     <span className="inv-pick-no">{pickNo}</span>
                 </div>
             )}
+
+            {isNew && <div className="inv-new-badge">NEW</div>}
         </button>
     );
 }, function (prev, next) {
     return (
         prev.isSelected === next.isSelected &&
+        prev.isNew === next.isNew &&
         prev.pickNo === next.pickNo &&
         nftKey(prev.nft) === nftKey(next.nft)
     );
@@ -344,6 +347,23 @@ export default function Inventory({ token, onDeckReady }) {
     var [loading, setLoading] = useState(false);
     var [nfts, setNfts] = useState([]);
     var [selected, setSelected] = useState(function () { return new Set(); });
+    var seenRef = useRef(null);
+    var initedRef = useRef(false);
+    var [seenTick, setSeenTick] = useState(0);
+    if (seenRef.current === null) {
+        try {
+            var _sraw = localStorage.getItem("cc_seen_cards");
+            seenRef.current = _sraw ? new Set(JSON.parse(_sraw)) : new Set();
+            initedRef.current = !!localStorage.getItem("cc_seen_init");
+        } catch (e) { seenRef.current = new Set(); }
+    }
+    var markSeen = useCallback(function (k) {
+        var seen = seenRef.current || new Set();
+        if (seen.has(k)) return;
+        seen.add(k); seenRef.current = seen;
+        try { localStorage.setItem("cc_seen_cards", JSON.stringify(Array.from(seen))); } catch (e) { }
+        setSeenTick(function (t) { return t + 1; });
+    }, []);
     var [error, setError] = useState("");
     var [saving, setSaving] = useState(false);
     var [source, setSource] = useState("");
@@ -527,14 +547,29 @@ export default function Inventory({ token, onDeckReady }) {
         return function () { alive = false; };
     }, [token, accountId, connected, nftContractId, refreshKey]);
 
+    // Первая загрузка колоды: помечаем все текущие карты виденными, чтобы они не
+    // светились как новые. Дальше новыми будут только реально появившиеся.
+    useEffect(function () {
+        if (!nfts || nfts.length === 0 || initedRef.current) return;
+        var all = nfts.map(nftKey);
+        seenRef.current = new Set(all);
+        initedRef.current = true;
+        try {
+            localStorage.setItem("cc_seen_cards", JSON.stringify(all));
+            localStorage.setItem("cc_seen_init", "1");
+        } catch (e) { }
+        setSeenTick(function (t) { return t + 1; });
+    }, [nfts]);
+
     var toggle = useCallback(function (k) {
+        markSeen(k);
         setSelected(function (prev) {
             var next = new Set(prev);
             if (next.has(k)) { next.delete(k); }
             else { if (next.size >= 5) return prev; next.add(k); }
             return next;
         });
-    }, []);
+    }, [markSeen]);
 
     var saveDeck = useCallback(async function () {
         if (selected.size !== 5 || selectedNfts.length !== 5) return;
@@ -676,8 +711,10 @@ export default function Inventory({ token, onDeckReady }) {
                         var k = nftKey(n);
                         var isSelected = selected.has(k);
                         var pickNo = orderMap.get(k) || 0;
+                        var isNew = initedRef.current && !(seenRef.current && seenRef.current.has(k));
+                        void seenTick;
                         return (
-                            <InventoryCard key={k} nft={n} isSelected={isSelected} pickNo={pickNo} onToggle={toggle} onInspect={setInspectCard} />
+                            <InventoryCard key={k} nft={n} isSelected={isSelected} isNew={isNew} pickNo={pickNo} onToggle={toggle} onInspect={setInspectCard} />
                         );
                     })}
                 </div>

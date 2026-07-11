@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status, Header
+from fastapi import APIRouter, HTTPException, status, Header, BackgroundTasks
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -960,10 +960,27 @@ async def get_opponent_deposits(
     }
 
 
+async def _bg_claim_settle(match_id, winner_near_wallet, token_id, nft_contract_id):
+    """Перевод выигранной карты победителю + возврат остальных NFT — в фоне,
+    после ответа. Матч уже помечен claimed, повторно не выполнится."""
+    try:
+        if is_escrow_configured() and winner_near_wallet:
+            r = await transfer_nft_from_escrow(
+                to_wallet=winner_near_wallet,
+                token_id=token_id,
+                nft_contract_id=nft_contract_id,
+            )
+            print(f"[MATCHES] bg claim transfer {token_id}: {r}")
+        await refund_remaining_nfts(match_id)
+    except Exception as e:
+        print(f"[MATCHES] bg claim settle error: {e}")
+
+
 @router.post("/{match_id}/claim")
 async def claim_card(
         match_id: str,
         request: ClaimRequest,
+        background: BackgroundTasks,
         authorization: Optional[str] = Header(None),
 ):
     match_data = await _get_match(match_id)
@@ -1029,20 +1046,15 @@ async def claim_card(
         "player1_near_wallet" if winner_id == p1_id else "player2_near_wallet"
     )
 
-    transfer_result = None
-    if is_escrow_configured() and winner_near_wallet:
-        transfer_result = await transfer_nft_from_escrow(
-            to_wallet=winner_near_wallet,
-            token_id=token_id,
-            nft_contract_id=nft_contract_id,
-        )
-
+    # Помечаем claimed СРАЗУ (защита от повторного клейма), сохраняем.
     match_data["claimed"] = True
     match_data["claimed_token_id"] = token_id
     match_data["claimed_at"] = datetime.utcnow().isoformat()
     await _save_match(match_data)
 
-    await refund_remaining_nfts(match_id)
+    # Перевод выигранной карты и возврат остальных NFT — в ФОНЕ: карту показываем
+    # мгновенно, NFT долетают через пару секунд.
+    background.add_task(_bg_claim_settle, match_id, winner_near_wallet, token_id, nft_contract_id)
 
     return {
         "success": True,
@@ -1053,7 +1065,7 @@ async def claim_card(
             "imageUrl": image,
             "index": request.pick_index,
         },
-        "transfer": transfer_result,
+        "transfer": None,
         "message": "Card claimed successfully!",
     }
 
