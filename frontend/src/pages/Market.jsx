@@ -299,7 +299,7 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                                 <div className="case-reveal-card" style={{ "--rcGlow": rcGlow, borderColor: rarityColor }}>
                                     <CardImage imageUrl={card.image_url || card.imageUrl} name={card.name || card.title} />
                                     <div className="case-card-top">{card.name || card.title}</div>
-                                    <div className="case-card-rarity" style={{ color: rarityColor }}>✦ {card.rarity} ✦</div>
+                                    {!isMystery && <div className="case-card-rarity" style={{ color: rarityColor }}>✦ {card.rarity} ✦</div>}
                                     {sparks.map(function (i) { return <span key={i} className={"case-spark cs" + i} />; })}
                                 </div>
                                 {qs.map(function (i) {
@@ -542,11 +542,7 @@ export default function Market() {
                                 border: "1px solid " + rc + "55",
                                 boxShadow: "0 20px 60px rgba(0,0,0,0.6), 0 0 40px " + rc + "22",
                             }}>
-                            <div style={{ position: "relative", height: 150, background: "radial-gradient(circle at 50% 30%," + rc + "33, transparent 70%)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                <img src={c.image} alt="" style={{ height: 130, filter: "drop-shadow(0 8px 24px " + rc + "66)" }} onError={function (e) { e.currentTarget.src = "/cards/card.jpg"; }} />
-                                <div style={{ position: "absolute", top: 12, left: 14, fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", color: rc }}>{c.rarity}</div>
-                            </div>
-                            <div style={{ padding: "8px 22px 22px", textAlign: "center" }}>
+                            <div style={{ padding: "24px 22px 22px", textAlign: "center" }}>
                                 <div style={{ fontSize: 19, fontWeight: 900, color: "#fff", marginBottom: 4 }}>{c.name}</div>
                                 <div style={{ fontSize: 13, opacity: 0.7, marginBottom: 18 }}>{c.description}</div>
                                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 6 }}>
