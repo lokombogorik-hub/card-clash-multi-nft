@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { CoinIcon, SwordsIcon, TrophyIcon, XIcon, GemIcon, BoltIcon, NearIcon, UsersIcon } from "../components/Icons";
 import { useWalletConnect } from "../context/WalletConnectContext";
 import { apiFetch } from "../api";
@@ -243,7 +244,7 @@ export default function Profile({ token, me }) {
                 <div className="pf-empty">Не удалось загрузить профиль</div>
             )}
 
-            {histOpen && (
+            {histOpen && createPortal(
                 <div className="pf-modal-overlay" onClick={function () { setHistOpen(false); }}>
                     <div className="pf-modal" onClick={function (e) { e.stopPropagation(); }}>
                         <div className="pf-modal-head">
@@ -255,7 +256,7 @@ export default function Profile({ token, me }) {
                         </div>
                     </div>
                 </div>
-            )}
+            , document.body)}
         </div>
     );
 }
