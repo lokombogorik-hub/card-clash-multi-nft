@@ -124,7 +124,6 @@ async function rpc(contractId, method, args, cacheMaxAgeMs) {
                 }
             }
         } catch (e) {
-            console.warn("[nearNft] proxy RPC failed:", method, e?.message);
         }
     }
 
@@ -243,7 +242,6 @@ export async function nearNftTokensForOwner(contractId, accountId) {
         return cached.tokens;
     }
 
-    console.warn("[nearNft] fetching tokens for:", accountId, "contract:", contractId);
     var debugLog = [];
 
     // nft_metadata — кэш 5 минут
@@ -324,7 +322,6 @@ export async function nearNftTokensForOwner(contractId, accountId) {
     } catch (e) { debugLog.push("supply_err=" + e.message); }
 
     debugLog.push("total=" + all.length);
-    console.warn("[nearNft] tokens fetched:", accountId, debugLog.join(", "));
 
     // Обрабатываем параллельно
     var out = await Promise.all(all.map(async function (t) {
@@ -379,5 +376,4 @@ export function invalidateOwnerCache(contractId, accountId) {
     for (var key of Array.from(_rpcCache.keys())) {
         if (key.includes(accountId)) _rpcCache.delete(key);
     }
-    console.warn("[nearNft] invalidateOwnerCache:", k);
 }

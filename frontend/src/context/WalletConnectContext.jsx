@@ -94,7 +94,6 @@ export function WalletConnectProvider({ children }) {
             });
             return unsub;
         } catch (e) {
-            console.warn("[wallet] subscribeToSelector error:", e);
             return function () { };
         }
     }, [applyAccountId]);
@@ -175,12 +174,10 @@ export function WalletConnectProvider({ children }) {
             try {
                 var w1 = await sel.wallet(selectedWalletId);
                 if (w1) {
-                    console.warn("[wallet] getWallet OK: using", selectedWalletId);
                     return w1;
                 }
             } catch (e) {
                 errors.push(selectedWalletId + ": " + (e?.message || e));
-                console.warn("[wallet] getWallet", selectedWalletId, "failed:", e?.message);
             }
         }
 
@@ -189,12 +186,10 @@ export function WalletConnectProvider({ children }) {
             try {
                 var w2 = await sel.wallet("hot-wallet");
                 if (w2) {
-                    console.warn("[wallet] getWallet OK: fallback to hot-wallet");
                     return w2;
                 }
             } catch (e) {
                 errors.push("hot-wallet: " + (e?.message || e));
-                console.warn("[wallet] getWallet hot-wallet failed:", e?.message);
             }
         }
 
@@ -206,7 +201,6 @@ export function WalletConnectProvider({ children }) {
             try {
                 var w3 = await sel.wallet(mid);
                 if (w3) {
-                    console.warn("[wallet] getWallet OK: fallback to module", mid);
                     return w3;
                 }
             } catch (e) {

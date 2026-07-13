@@ -570,8 +570,6 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
 
     # DEBUG
     print(f"\n{'=' * 80}", file=sys.stderr)
-    print(f"[WS DEBUG] NEW WS connection to match {match_id}", file=sys.stderr)
-    print(f"[WS DEBUG] Time: {datetime.utcnow()}", file=sys.stderr)
     print(f"{'=' * 80}\n", file=sys.stderr)
 
     player_id: Optional[str] = None
@@ -612,7 +610,6 @@ async def ws_match_endpoint(websocket: WebSocket, match_id: str):
             await websocket.close(1008)
             return
 
-        print(f"[WS DEBUG] Player {player_id} authenticated", file=sys.stderr)
 
         # GET MATCH
         try:

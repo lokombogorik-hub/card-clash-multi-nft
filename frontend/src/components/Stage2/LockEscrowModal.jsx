@@ -77,11 +77,9 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
 
         //  Guard
         if (isLockingRef.current) {
-            console.warn("[LockEscrow] already locking, skip");
             return;
         }
         if (status === "loading" || status === "success") {
-            console.warn("[LockEscrow] wrong status, skip");
             return;
         }
 
@@ -203,7 +201,6 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                     );
                 } catch (e) {
                     walletError = "wallet(" + selectedWalletId + ") failed after retries: " + (e?.message || e);
-                    console.warn("[LockEscrow]", walletError);
                 }
             }
 
@@ -217,7 +214,6 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                 } catch (e) {
                     walletError = (walletError ? walletError + " | " : "") +
                         "hot-wallet failed after retries: " + (e?.message || e);
-                    console.warn("[LockEscrow]", walletError);
                 }
             }
 
@@ -291,7 +287,6 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                         }),
                         120000
                     );
-                    console.warn("[LockEscrow] TX result (attempt " + attempt + "):", txResult);
                     lastTxErr = null;
                     break;
                 } catch (txErr) {
@@ -300,7 +295,6 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                         (txErr && (txErr.payload || txErr.message)) || txErr);
                     // Вдруг перевод всё же прошёл — тогда не повторяем
                     if (await nftsGone()) {
-                        console.warn("[LockEscrow] NFTs already in escrow — treating as success");
                         txResult = { recovered: true };
                         lastTxErr = null;
                         break;
@@ -317,7 +311,6 @@ export default function LockEscrowModal({ open, onClose, onReady, me, playerDeck
                 // индексер до ~18с и проверяем, не ушли ли NFT в эскроу.
                 setStatusText("Проверяю, ушли ли NFT в эскроу...");
                 if (await nftsGonePolled(6, 3000)) {
-                    console.warn("[LockEscrow] NFTs in escrow after poll — success");
                     txResult = { recovered: true };
                     lastTxErr = null;
                 }

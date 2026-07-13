@@ -68,13 +68,11 @@ function getRarityFromTokenId(tokenId) {
         return getRarityFromRank(rank);
     }
 
-    console.warn("⚠️ Rank not found for token", tokenId, "using fallback");
     return getRarityFallback(tokenId);
 }
 
 function getRarityFallback(tokenId) {
     // Если токена нет в базе nft-ranks.json, возвращаем common
-    console.warn("⚠️ Rank not found for token", tokenId, "- using common rarity as fallback");
     return { key: "common", border: "#6b7280", glow: "rgba(107,114,128,0.50)", min: 1, max: 3 };
 }
 
@@ -526,7 +524,6 @@ export default function Inventory({ token, onDeckReady }) {
                                             }
                                         }
                                     } catch (e) {
-                                        console.warn("IPFS fetch error for", tid, e.name);
                                     }
                                 })
                             );
@@ -612,7 +609,6 @@ export default function Inventory({ token, onDeckReady }) {
                 method: "POST",
                 body: JSON.stringify({ cards: selectedArr, full_cards: cardsPayload })
             });
-            console.log("Deck saved:", result);
             setSaving(false);
             onDeckReady?.(selectedNfts);
         } catch (e) {

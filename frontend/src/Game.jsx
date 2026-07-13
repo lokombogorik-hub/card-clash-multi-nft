@@ -645,7 +645,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
 
                         case "pong": break;
                         default:
-                            console.log("[WS] unknown:", data.type);
                     }
                 } catch (e) {
                     console.error("[WS] handler error:", data?.type, e);
@@ -694,7 +693,6 @@ export default function Game({ onExit, me, playerDeck, matchId, mode = "ai" }) {
     const prepareClaimCalledRef = useRef(false);
     const prepareClaimCards = async () => {
         if (prepareClaimCalledRef.current) {
-            console.warn("[prepareClaimCards] already called — skipped");
             return;
         }
         prepareClaimCalledRef.current = true;

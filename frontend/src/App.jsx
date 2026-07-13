@@ -440,7 +440,6 @@ function AppContent() {
     useEffect(function () {
         var onVisible = function () {
             if (document.visibilityState === "visible" && screen === "home") {
-                console.warn("[App] visibilitychange → visible, checking active match");
                 checkActiveMatch();
             }
         };

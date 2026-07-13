@@ -99,15 +99,12 @@ async function loadTokenMetadata(tokenId) {
                 }
             }
 
-            console.log("[CASE] token_id=" + tokenId + " nft#" + nftNumber + " media=" + media + " → " + imageUrl);
             return { imageUrl, title };
         }
     } catch (e) {
-        console.warn("[CASE] RPC failed for token_id=" + tokenId + ":", e.message);
     }
 
     // Fallback — URL по номеру токена
-    console.log("[CASE] Fallback for token_id=" + tokenId + " → " + fallbackUrl);
     return { imageUrl: fallbackUrl, title: fallbackTitle };
 }
 
@@ -128,11 +125,9 @@ function CardImage({ imageUrl, name }) {
             // Пробую следующий gateway
             var filename = imageUrl.split("/").pop();
             var newSrc = IPFS_GATEWAYS[nextGateway] + "/" + filename;
-            console.log("[CASE] Trying gateway " + nextGateway + ": " + newSrc);
             setCurrentGateway(nextGateway);
             setSrc(newSrc);
         } else {
-            console.log("[CASE] All gateways failed for:", imageUrl);
             setFailed(true);
         }
     };
@@ -186,7 +181,6 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                     var meta = await loadTokenMetadata(tokenId);
                     if (!meta || !alive) return card;
 
-                    console.log("[CASE] Card resolved:", tokenId, "→", meta.imageUrl);
 
                     return {
                         ...card,
@@ -200,7 +194,6 @@ function CaseOpenModal({ caseItem, cards, onClose }) {
                     setResolvedCards(updated);
                 }
             } catch (e) {
-                console.warn("[CASE] Error resolving cards:", e);
             }
         })();
 
@@ -439,7 +432,6 @@ export default function Market() {
                 body: JSON.stringify({ case_id: c.id, tx_hash: txHash }),
             });
 
-            console.log("[MARKET] Case open response:", JSON.stringify(open));
 
             var cards = open.cards || [];
             if (cards.length === 0) {
