@@ -4419,3 +4419,8 @@ img {
     -webkit-user-select: none;
     user-select: none;
 }
+
+/* Резерв места под турнирную сетку — чтобы заголовок «Сетка» не выпрыгивал и
+   не толкал контент, пока грузятся детали. */
+.t-bracket-wrap { min-height: 132px; }
+.t-bracket-ph { padding: 12px 4px; color: rgba(255, 255, 255, 0.4); font-size: 12px; }

@@ -303,11 +303,15 @@ function TournamentCard({ summary, token, me, amAdmin, onEnterMatch, onChanged, 
                         </>
                     )}
 
-                    {t && data.status !== "registration" && t.bracket && (
-                        <>
+                    {(data.status === "running" || data.status === "finished") && (
+                        <div className="t-bracket-wrap">
                             <div className="t-section-title">Сетка</div>
-                            <Bracket bracket={t.bracket} me={me} />
-                        </>
+                            {!t
+                                ? <div className="t-bracket-ph">Загрузка…</div>
+                                : t.bracket
+                                    ? <Bracket bracket={t.bracket} me={me} />
+                                    : <div className="t-bracket-ph">Сетка ещё не сформирована</div>}
+                        </div>
                     )}
                 </div>
             )}
